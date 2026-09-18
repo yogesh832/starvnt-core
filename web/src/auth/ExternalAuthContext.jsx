@@ -35,6 +35,43 @@ export function ExternalAuthProvider({ children }) {
     return data.user;
   }
 
+  async function loginWithGoogle(credential, extra = {}) {
+    const data = await externalApi.call('/auth/google', {
+      method: 'POST',
+      body: { credential, ...extra },
+    });
+    externalApi.setToken(data.accessToken);
+    setUser(data.user);
+    return data.user;
+  }
+
+  async function sendOtp(phone) {
+    return externalApi.call('/auth/otp/send', {
+      method: 'POST',
+      body: { phone },
+    });
+  }
+
+  async function loginWithOtp(phone, otp, extra = {}) {
+    const data = await externalApi.call('/auth/otp/verify', {
+      method: 'POST',
+      body: { phone, otp, ...extra },
+    });
+    externalApi.setToken(data.accessToken);
+    setUser(data.user);
+    return data.user;
+  }
+
+  async function loginWithWidgetOtp(accessToken, extra = {}) {
+    const data = await externalApi.call('/auth/otp/widget-verify', {
+      method: 'POST',
+      body: { accessToken, ...extra },
+    });
+    externalApi.setToken(data.accessToken);
+    setUser(data.user);
+    return data.user;
+  }
+
   async function logout() {
     await externalApi.call('/auth/logout', { method: 'POST' }).catch(() => {});
     externalApi.setToken(null);
@@ -42,7 +79,19 @@ export function ExternalAuthProvider({ children }) {
   }
 
   return (
-    <ExternalAuthContext.Provider value={{ user, ready, login, register, logout }}>
+    <ExternalAuthContext.Provider
+      value={{
+        user,
+        ready,
+        login,
+        register,
+        loginWithGoogle,
+        sendOtp,
+        loginWithOtp,
+        loginWithWidgetOtp,
+        logout,
+      }}
+    >
       {children}
     </ExternalAuthContext.Provider>
   );

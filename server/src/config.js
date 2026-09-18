@@ -45,4 +45,13 @@ export const config = {
   superAdminName: process.env.SUPER_ADMIN_NAME || 'STARVNT Super Admin',
   superAdminEmail: (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase(),
   superAdminPassword: process.env.SUPER_ADMIN_PASSWORD || '',
+
+  // ── Google OAuth ──
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+
+  // ── MSG91 OTP ──
+  msg91AuthKey: process.env.MSG91_AUTHKEY || '',
+  msg91WidgetId: process.env.MSG91_WIDGET_ID || '',
+  msg91WidgetToken: process.env.MSG91_WIDGET_TOKEN || '',
 };

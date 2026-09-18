@@ -8,6 +8,7 @@ import EventWorkspace from './EventWorkspace.jsx';
  * Payments / Operations / Reports / Settings) matching the Complete Screen
  * Set layout: search + add button, status tabs + filters, data table with
  * status chips, pagination. 
+ * 
  *  data until business modules land.
  */
 const MODULE_DATA = {

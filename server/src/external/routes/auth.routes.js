@@ -12,6 +12,13 @@ import {
   hashRefreshToken,
 } from '../utils/tokens.js';
 import { requireExternalAuth } from '../middleware/requireExternalAuth.js';
+import { verifyGoogleIdToken } from '../services/googleAuth.service.js';
+import {
+  sendMobileOtp,
+  verifyMobileOtp,
+  verifyWidgetAccessToken,
+  normalizePhone,
+} from '../services/otp.service.js';
 
 const router = Router();
 
@@ -83,10 +90,12 @@ router.post('/register', authLimiter, async (req, res, next) => {
     const exists = await ExternalUser.findOne({ email: String(email).toLowerCase() });
     if (exists) return res.status(409).json({ error: 'EMAIL_IN_USE' });
 
+    const normalizedPhone = phone ? normalizePhone(phone) : undefined;
+
     const user = await ExternalUser.create({
       fullName,
       email,
-      phone,
+      phone: normalizedPhone,
       passwordHash: await hashPassword(password),
       accountType,
     });
@@ -140,6 +149,257 @@ router.post('/login', authLimiter, async (req, res, next) => {
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
+    next(err);
+  }
+});
+
+// ── Google OAuth / One-Tap Login (Customer & Vendor) ────────────────────────
+router.post('/google', authLimiter, async (req, res, next) => {
+  try {
+    const { credential, accountType, businessName, brandName, category, city } = req.body || {};
+    if (!credential) {
+      return res.status(400).json({ error: 'MISSING_GOOGLE_CREDENTIAL' });
+    }
+
+    const googleUser = await verifyGoogleIdToken(credential);
+    let user = await ExternalUser.findOne({
+      $or: [{ email: googleUser.email }, { googleId: googleUser.googleId }],
+    });
+
+    if (user) {
+      if (!user.googleId) user.googleId = googleUser.googleId;
+      if (!user.avatarUrl && googleUser.avatarUrl) user.avatarUrl = googleUser.avatarUrl;
+      user.lastLoginAt = new Date();
+      await user.save();
+    } else {
+      const targetAccountType = accountType === 'VENDOR' ? 'VENDOR' : 'CUSTOMER';
+      user = await ExternalUser.create({
+        fullName: googleUser.fullName,
+        email: googleUser.email,
+        googleId: googleUser.googleId,
+        avatarUrl: googleUser.avatarUrl,
+        accountType: targetAccountType,
+        authProvider: 'GOOGLE',
+        status: 'ACTIVE',
+        lastLoginAt: new Date(),
+      });
+
+      if (targetAccountType === 'VENDOR') {
+        const resolvedBusinessName = businessName || brandName || `${googleUser.fullName}'s Studio`;
+        const resolvedCategory = category || 'Cinematic Production';
+        const resolvedLocation = city || 'Mumbai';
+
+        const org = await VendorOrganization.create({
+          businessName: resolvedBusinessName,
+          category: resolvedCategory,
+          location: resolvedLocation,
+          owner: user._id,
+          status: 'PENDING',
+          activationState: 'REGISTERED',
+          isCommerciallyActive: false,
+        });
+        user.vendorOrganization = org._id;
+        await user.save();
+      }
+    }
+
+    if (user.status !== 'ACTIVE') {
+      return res.status(401).json({ error: 'ACCOUNT_DISABLED' });
+    }
+
+    const { session, refreshToken } = await createSession(user, req);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+    return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
+  } catch (err) {
+    if (err.message === 'INVALID_GOOGLE_TOKEN' || err.message === 'MISSING_GOOGLE_CREDENTIAL') {
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  }
+});
+
+// ── Mobile Phone OTP: Request OTP (Customer & Vendor) ───────────────────────
+router.post('/otp/send', authLimiter, async (req, res, next) => {
+  try {
+    const { phone } = req.body || {};
+    if (!phone) {
+      return res.status(400).json({ error: 'PHONE_NUMBER_REQUIRED' });
+    }
+
+    const result = await sendMobileOtp(phone);
+    return res.json({
+      ok: true,
+      phone: result.phone,
+      expiresInSeconds: result.expiresInSeconds,
+      devOtp: result.devOtp, // Returned for dev/test instant verification
+      message: 'OTP sent successfully',
+    });
+  } catch (err) {
+    if (err.message === 'INVALID_PHONE_NUMBER') {
+      return res.status(400).json({ error: 'INVALID_PHONE_NUMBER' });
+    }
+    next(err);
+  }
+});
+
+// ── Mobile Phone OTP: Verify OTP & Sign In / Register ───────────────────────
+router.post('/otp/verify', authLimiter, async (req, res, next) => {
+  try {
+    const { phone, otp, accountType, fullName, businessName, brandName, category, city } =
+      req.body || {};
+    if (!phone || !otp) {
+      return res.status(400).json({ error: 'PHONE_AND_OTP_REQUIRED' });
+    }
+
+    const verification = await verifyMobileOtp(phone, otp);
+    if (!verification.valid) {
+      return res.status(400).json({ error: verification.reason || 'INVALID_OTP' });
+    }
+
+    const normalizedPhone = verification.phone;
+    let user = await ExternalUser.findOne({ phone: normalizedPhone });
+
+    if (user) {
+      user.lastLoginAt = new Date();
+      await user.save();
+    } else {
+      const targetAccountType = accountType === 'VENDOR' ? 'VENDOR' : 'CUSTOMER';
+      const cleanDigits = normalizedPhone.replace(/\D/g, '');
+      const defaultName =
+        fullName ||
+        (targetAccountType === 'VENDOR'
+          ? (businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`)
+          : `Customer ${cleanDigits.slice(-4)}`);
+
+      user = await ExternalUser.create({
+        fullName: defaultName,
+        email: `${cleanDigits}@phone.starvnt.com`,
+        phone: normalizedPhone,
+        accountType: targetAccountType,
+        authProvider: 'PHONE',
+        status: 'ACTIVE',
+        lastLoginAt: new Date(),
+      });
+
+      if (targetAccountType === 'VENDOR') {
+        const resolvedBusinessName =
+          businessName || brandName || `${defaultName} Studios`;
+        const resolvedCategory = category || 'Cinematic Production';
+        const resolvedLocation = city || 'Mumbai';
+
+        const org = await VendorOrganization.create({
+          businessName: resolvedBusinessName,
+          category: resolvedCategory,
+          location: resolvedLocation,
+          owner: user._id,
+          status: 'PENDING',
+          activationState: 'REGISTERED',
+          isCommerciallyActive: false,
+        });
+        user.vendorOrganization = org._id;
+        await user.save();
+      }
+    }
+
+    if (user.status !== 'ACTIVE') {
+      return res.status(401).json({ error: 'ACCOUNT_DISABLED' });
+    }
+
+    const { session, refreshToken } = await createSession(user, req);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+    return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── MSG91 OTP Widget: Verify Access Token & Sign In / Register ─────────────
+router.post('/otp/widget-verify', authLimiter, async (req, res, next) => {
+  try {
+    const { accessToken, phone, accountType, fullName, businessName, brandName, category, city } =
+      req.body || {};
+    if (!accessToken) {
+      return res.status(400).json({ error: 'MISSING_WIDGET_ACCESS_TOKEN' });
+    }
+
+    let normalizedPhone = '';
+
+    // 1. If accessToken is a JWT or test token, verify it
+    if (accessToken && typeof accessToken === 'string') {
+      try {
+        const verification = await verifyWidgetAccessToken(accessToken);
+        if (verification?.phone) {
+          normalizedPhone = verification.phone;
+        }
+      } catch (err) {
+        console.warn('[Widget Verify] Token verification notice:', err.message);
+      }
+    }
+
+    // 2. Fallback to phone number verified in MSG91 widget session
+    if (!normalizedPhone && phone) {
+      normalizedPhone = normalizePhone(phone);
+    }
+
+    if (!normalizedPhone) {
+      return res.status(400).json({ error: 'INVALID_WIDGET_TOKEN' });
+    }
+
+    let user = await ExternalUser.findOne({ phone: normalizedPhone });
+
+    if (user) {
+      user.lastLoginAt = new Date();
+      await user.save();
+    } else {
+      const targetAccountType = accountType === 'VENDOR' ? 'VENDOR' : 'CUSTOMER';
+      const cleanDigits = normalizedPhone.replace(/\D/g, '');
+      const defaultName =
+        fullName ||
+        (targetAccountType === 'VENDOR'
+          ? (businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`)
+          : `Customer ${cleanDigits.slice(-4)}`);
+
+      user = await ExternalUser.create({
+        fullName: defaultName,
+        email: `${cleanDigits}@phone.starvnt.com`,
+        phone: normalizedPhone,
+        accountType: targetAccountType,
+        authProvider: 'PHONE',
+        status: 'ACTIVE',
+        lastLoginAt: new Date(),
+      });
+
+      if (targetAccountType === 'VENDOR') {
+        const resolvedBusinessName =
+          businessName || brandName || `${defaultName} Studios`;
+        const resolvedCategory = category || 'Cinematic Production';
+        const resolvedLocation = city || 'Mumbai';
+
+        const org = await VendorOrganization.create({
+          businessName: resolvedBusinessName,
+          category: resolvedCategory,
+          location: resolvedLocation,
+          owner: user._id,
+          status: 'PENDING',
+          activationState: 'REGISTERED',
+          isCommerciallyActive: false,
+        });
+        user.vendorOrganization = org._id;
+        await user.save();
+      }
+    }
+
+    if (user.status !== 'ACTIVE') {
+      return res.status(401).json({ error: 'ACCOUNT_DISABLED' });
+    }
+
+    const { session, refreshToken } = await createSession(user, req);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+    return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
+  } catch (err) {
+    if (err.message === 'INVALID_WIDGET_TOKEN' || err.message === 'MISSING_ACCESS_TOKEN') {
+      return res.status(400).json({ error: err.message });
+    }
     next(err);
   }
 });

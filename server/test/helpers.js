@@ -29,6 +29,7 @@ export async function setupTestApp() {
     AdminSession: (await import('../src/admin/models/AdminSession.js')).AdminSession,
     AdminAuditLog: (await import('../src/admin/models/AdminAuditLog.js')).AdminAuditLog,
     VendorReview: (await import('../src/external/models/VendorReview.js')).VendorReview,
+    OtpVerification: (await import('../src/external/models/OtpVerification.js')).OtpVerification,
   };
 
   await connectDB();

@@ -179,7 +179,7 @@ export default function AdminLogin() {
                 <div className="h-px flex-1 bg-gray-200" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <button
                   type="button"
                   className="rounded-xl border border-gray-200 py-2.5 px-3 text-xs font-bold text-navy hover:bg-lavender transition flex items-center justify-center gap-2 shadow-xs"
@@ -191,20 +191,7 @@ export default function AdminLogin() {
                     <path fill="#FBBC05" d="M5.28 14.27a7.22 7.22 0 0 1 0-4.54V6.58H1.25a11.98 11.98 0 0 0 0 10.84l4.03-3.15z"/>
                     <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                   </svg>
-                  Google
-                </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-gray-200 py-2.5 px-3 text-xs font-bold text-navy hover:bg-lavender transition flex items-center justify-center gap-2 shadow-xs"
-                  title="Continue with Microsoft"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24">
-                    <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
-                    <rect x="13" y="1" width="10" height="10" fill="#7FBA00"/>
-                    <rect x="1" y="13" width="10" height="10" fill="#00A4EF"/>
-                    <rect x="13" y="13" width="10" height="10" fill="#FFB900"/>
-                  </svg>
-                  Microsoft
+                  Continue with Google
                 </button>
               </div>
             </form>
