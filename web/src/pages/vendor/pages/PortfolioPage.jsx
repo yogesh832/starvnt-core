@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Page, Card, EmptyHint } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
+import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 
 // Video detection helpers
@@ -50,7 +51,7 @@ function readFileAsDataURL(file) {
 // Category configurations for tailoring project showcases and defaults across all trades
 const CATEGORY_CONFIGS = {
   'Catering': {
-    icon: '🍽️',
+    icon: 'services',
     defaultEventType: 'Grand Wedding Banquet',
     eventTypes: ['Grand Wedding Banquet', 'Sangeet Feast', 'Corporate Gala Dinner', 'Cocktail Reception', 'Private Celebration'],
     defaultStyle: 'Royal Buffet & Live Counters',
@@ -111,7 +112,7 @@ const CATEGORY_CONFIGS = {
     ],
   },
   'Decor & Styling': {
-    icon: '💐',
+    icon: 'star',
     defaultEventType: 'Wedding Mandap',
     eventTypes: ['Wedding Mandap', 'Sangeet & Cocktail', 'Reception Stage', 'Haldi & Mehendi Floral Setup', 'Corporate Stage Decor'],
     defaultStyle: 'Floral Mandap & Crystal Elegance',
@@ -172,7 +173,7 @@ const CATEGORY_CONFIGS = {
     ],
   },
   'DJ & Music': {
-    icon: '🎧',
+    icon: 'mic',
     defaultEventType: 'Sangeet Night Bash',
     eventTypes: ['Sangeet Night Bash', 'Cocktail After-Party', 'Wedding Baarat Live Dhol', 'Corporate Annual Gala', 'Private Pool Party'],
     defaultStyle: 'Bollywood & Punjabi Live DJ Set',
@@ -226,7 +227,7 @@ const CATEGORY_CONFIGS = {
     ],
   },
   'Makeup & Styling': {
-    icon: '💄',
+    icon: 'star',
     defaultEventType: 'Bridal Pheras',
     eventTypes: ['Bridal Pheras', 'Sangeet & Cocktail Glam', 'Reception Makeover', 'Engagement Look', 'Editorial Fashion Styling'],
     defaultStyle: 'Bridal HD & Airbrush Glow',
@@ -280,7 +281,7 @@ const CATEGORY_CONFIGS = {
     ],
   },
   'Venue': {
-    icon: '🏰',
+    icon: 'mapPin',
     defaultEventType: 'Grand Wedding & Reception',
     eventTypes: ['Grand Wedding & Reception', 'Sangeet Lawn Gala', 'Corporate Convention', 'Intimate Luxury Gathering', 'Poolside Sundowner'],
     defaultStyle: 'Illuminated Night Lawn & Canopies',
@@ -334,7 +335,7 @@ const CATEGORY_CONFIGS = {
     ],
   },
   'Photography': {
-    icon: '📸',
+    icon: 'camera',
     defaultEventType: 'Wedding',
     eventTypes: ['Wedding', 'Pre-wedding Shoot', 'Engagement', 'Cocktail Night', 'Maternity / Portrait'],
     defaultStyle: 'Candid Photography',
@@ -395,7 +396,7 @@ const CATEGORY_CONFIGS = {
     ],
   },
   'Cinematic Production': {
-    icon: '🎬',
+    icon: 'video',
     defaultEventType: 'Wedding',
     eventTypes: ['Wedding', 'Pre-wedding Shoot', 'Corporate Gala', 'Cinematic Film', 'Music Video'],
     defaultStyle: 'Cinematic',
@@ -696,7 +697,7 @@ export default function PortfolioPage() {
       });
 
       if (res.ok) {
-        setFeedback(`✓ Added ${isVid ? 'video' : 'photo'} to portfolio media library.`);
+        setFeedback(`Added ${isVid ? 'video' : 'photo'} to portfolio media library.`);
         setShowStandaloneUrlModal(false);
         setStandaloneUrl('');
         setStandaloneTitle('');
@@ -752,7 +753,7 @@ export default function PortfolioPage() {
       if (res.ok) {
         const pct = res.activation?.completionPercentage;
         setFeedback(
-          `✓ Project "${projectName}" successfully published with ${formattedItems.length} media files! Profile completion increased${
+          `Project "${projectName}" successfully published with ${formattedItems.length} media files! Profile completion increased${
             pct ? ` to ${pct}%` : ''
           }.`
         );
@@ -765,7 +766,7 @@ export default function PortfolioPage() {
         setFeedback(res.error || 'Failed to create project. Please try again.');
       }
     } catch (err) {
-      setFeedback(`✓ Project "${projectName}" created.`);
+      setFeedback(`Project "${projectName}" created.`);
       setShowProjectModal(false);
     } finally {
       setCreatingProject(false);
@@ -779,7 +780,7 @@ export default function PortfolioPage() {
       await externalApi.call(`/vendor/portfolio/projects/${encodeURIComponent(pName)}`, {
         method: 'DELETE',
       });
-      setFeedback(`✓ Project "${pName}" deleted.`);
+      setFeedback(`Project "${pName}" deleted.`);
       setSelectedProjectShowcase(null);
       await loadPortfolioData();
     } catch (err) {
@@ -792,7 +793,7 @@ export default function PortfolioPage() {
     if (!confirm('Are you sure you want to delete this media item?')) return;
     try {
       await externalApi.call(`/vendor/portfolio/items/${itemId}`, { method: 'DELETE' });
-      setFeedback('✓ Media item removed.');
+      setFeedback('Media item removed.');
       await loadPortfolioData();
       if (selectedProjectShowcase) {
         setSelectedProjectShowcase((prev) => ({
@@ -831,7 +832,8 @@ export default function PortfolioPage() {
             onClick={() => setShowStandaloneUrlModal(true)}
             className="rounded-xl bg-lavender hover:bg-lavender/80 text-navy text-xs font-bold px-3.5 py-2.5 transition border border-gray-200 flex items-center gap-1.5"
           >
-            <span>🔗</span> Add Video / Media URL
+            <Icon name="link" size={14} />
+            <span>Add Video / Media URL</span>
           </button>
         </div>
       }
@@ -860,19 +862,28 @@ export default function PortfolioPage() {
             <span className="font-bold text-navy">
               Profile Completion:{' '}
               <span className={activation.is100Percent ? 'text-emerald-600' : 'text-primary'}>
-                {activation.completionPercentage || 20}%
+                {activation.completionPercentage ?? 0}%
               </span>
             </span>
             <span className="text-muted text-[11px]">·</span>
-            <span className="text-muted text-[11px]">
-              {projects.length === 0
-                ? '⚠️ 1 Project showcase required for 100% profile activation'
-                : '✓ Portfolio project showcase complete (+20% granted)'}
+            <span className="text-muted text-[11px] inline-flex items-center gap-1">
+              {projects.length === 0 ? (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>1 Project showcase required for 100% profile activation</span>
+                </>
+              ) : (
+                <>
+                  <Icon name="check" size={12} className="text-emerald-600" />
+                  <span>Portfolio project showcase complete (+20% granted)</span>
+                </>
+              )}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-navy/70 bg-lavender px-2.5 py-1 rounded-lg">
-              {currCategoryConfig.icon} {vendorCategory}
+            <span className="text-[11px] font-bold text-navy/70 bg-lavender px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+              <Icon name={currCategoryConfig.icon || 'camera'} size={13} />
+              <span>{vendorCategory}</span>
             </span>
             {projects.length === 0 && (
               <button
@@ -887,8 +898,9 @@ export default function PortfolioPage() {
       )}
 
       {feedback && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs font-semibold mb-4 animate-[pop_.18s_ease-out]">
-          {feedback}
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs font-semibold mb-4 animate-[pop_.18s_ease-out] flex items-center gap-2">
+          <Icon name="check" size={14} className="shrink-0 text-emerald-600" />
+          <span>{feedback.replace(/^✓\s*/, '')}</span>
         </div>
       )}
 
@@ -897,23 +909,25 @@ export default function PortfolioPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setActiveTab('PROJECTS')}
-            className={`text-sm font-extrabold pb-2 transition relative ${
+            className={`text-sm font-extrabold pb-2 transition relative flex items-center gap-1.5 ${
               activeTab === 'PROJECTS'
                 ? 'text-primary border-b-2 border-primary'
                 : 'text-muted hover:text-navy'
             }`}
           >
-            📁 Projects & Showcases ({projects.length})
+            <Icon name="folder" size={15} />
+            <span>Projects & Showcases ({projects.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('ALL_MEDIA')}
-            className={`text-sm font-extrabold pb-2 transition relative ${
+            className={`text-sm font-extrabold pb-2 transition relative flex items-center gap-1.5 ${
               activeTab === 'ALL_MEDIA'
                 ? 'text-primary border-b-2 border-primary'
                 : 'text-muted hover:text-navy'
             }`}
           >
-            🖼 All Media Library ({items.length})
+            <Icon name="image" size={15} />
+            <span>All Media Library ({items.length})</span>
           </button>
         </div>
         <span className="text-xs text-muted font-medium hidden sm:inline">
@@ -957,11 +971,13 @@ export default function PortfolioPage() {
                     {/* Multi-media counter pill */}
                     <div className="absolute bottom-10 left-3 flex items-center gap-2">
                       <span className="text-[10px] font-bold bg-black/60 backdrop-blur-xs text-white px-2 py-0.5 rounded-md flex items-center gap-1">
-                        📷 {photoCount} Photos
+                        <Icon name="camera" size={11} />
+                        <span>{photoCount} Photos</span>
                       </span>
                       {videoCount > 0 && (
                         <span className="text-[10px] font-bold bg-red-600/90 backdrop-blur-xs text-white px-2 py-0.5 rounded-md flex items-center gap-1">
-                          🎬 {videoCount} Videos
+                          <Icon name="video" size={11} />
+                          <span>{videoCount} Videos</span>
                         </span>
                       )}
                     </div>
@@ -969,8 +985,9 @@ export default function PortfolioPage() {
                     <div className="absolute bottom-3 left-3 right-3 text-white">
                       <div className="font-extrabold text-sm truncate">{p.projectName}</div>
                       <div className="text-[11px] text-white/80 mt-0.5 flex items-center gap-2">
-                        <span>
-                          📍 {p.location?.venue || 'Venue'}, {p.location?.city || city}
+                        <span className="inline-flex items-center gap-1">
+                          <Icon name="mapPin" size={11} />
+                          <span>{p.location?.venue || 'Venue'}, {p.location?.city || city}</span>
                         </span>
                         <span>·</span>
                         <span>{p.items?.length || 1} total items</span>
@@ -1005,8 +1022,8 @@ export default function PortfolioPage() {
 
           {projects.length === 0 && !loading && (
             <div className="text-center py-14 bg-white rounded-3xl border border-gray-100 p-8 space-y-4 shadow-xs">
-              <div className="w-16 h-16 rounded-3xl bg-primary-soft text-primary text-3xl grid place-items-center mx-auto shadow-2xs">
-                {currCategoryConfig.icon}
+              <div className="w-16 h-16 rounded-3xl bg-primary-soft text-primary grid place-items-center mx-auto shadow-2xs">
+                <Icon name={currCategoryConfig.icon || 'camera'} size={28} />
               </div>
               <div className="space-y-1">
                 <div className="font-extrabold text-base text-navy">No Projects Created Yet</div>
@@ -1059,15 +1076,17 @@ export default function PortfolioPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => standaloneFileInputRef.current?.click()}
-                className="rounded-xl bg-white text-navy border border-gray-200 px-3 py-1.5 text-xs font-bold hover:bg-lavender transition flex items-center gap-1"
+                className="rounded-xl bg-white text-navy border border-gray-200 px-3 py-1.5 text-xs font-bold hover:bg-lavender transition flex items-center gap-1.5"
               >
-                <span>☁</span> Upload Photos/Videos
+                <Icon name="upload" size={14} />
+                <span>Upload Photos/Videos</span>
               </button>
               <button
                 onClick={() => setShowStandaloneUrlModal(true)}
-                className="rounded-xl bg-primary-soft text-primary px-3 py-1.5 text-xs font-bold hover:bg-primary/20 transition flex items-center gap-1"
+                className="rounded-xl bg-primary-soft text-primary px-3 py-1.5 text-xs font-bold hover:bg-primary/20 transition flex items-center gap-1.5"
               >
-                <span>🔗</span> Add URL / Video
+                <Icon name="link" size={14} />
+                <span>Add URL / Video</span>
               </button>
             </div>
           </div>
@@ -1095,8 +1114,8 @@ export default function PortfolioPage() {
                     {/* Play button overlay on videos */}
                     {isVid && (
                       <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition">
-                        <div className="w-9 h-9 rounded-full bg-white/90 text-red-600 grid place-items-center shadow-md font-extrabold text-xs pl-0.5">
-                          ▶
+                        <div className="w-9 h-9 rounded-full bg-white/90 text-red-600 grid place-items-center shadow-md font-extrabold text-xs">
+                          <Icon name="play" size={12} />
                         </div>
                       </div>
                     )}
@@ -1116,10 +1135,11 @@ export default function PortfolioPage() {
                         e.stopPropagation();
                         handleDeleteItem(item._id);
                       }}
-                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 hover:bg-red-600 text-white text-[11px] grid place-items-center opacity-0 group-hover:opacity-100 transition"
+                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 hover:bg-red-600 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition"
                       title="Delete item"
+                      aria-label="Delete item"
                     >
-                      ✕
+                      <Icon name="close" size={12} />
                     </button>
                   </div>
 
@@ -1140,8 +1160,8 @@ export default function PortfolioPage() {
 
           {filteredItems.length === 0 && !loading && (
             <div className="text-center py-14 bg-white rounded-3xl border border-gray-100 p-8 space-y-4 shadow-xs">
-              <div className="w-16 h-16 rounded-3xl bg-primary-soft text-primary text-3xl grid place-items-center mx-auto shadow-2xs">
-                🖼️
+              <div className="w-16 h-16 rounded-3xl bg-primary-soft text-primary grid place-items-center mx-auto shadow-2xs">
+                <Icon name="image" size={28} />
               </div>
               <div className="space-y-1">
                 <div className="font-extrabold text-base text-navy">No Media Uploaded Yet</div>
@@ -1152,15 +1172,17 @@ export default function PortfolioPage() {
               <div className="pt-2 flex justify-center gap-2">
                 <button
                   onClick={() => standaloneFileInputRef.current?.click()}
-                  className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-5 py-2.5 shadow-md shadow-primary/25 transition transform active:scale-95"
+                  className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-5 py-2.5 shadow-md shadow-primary/25 transition transform active:scale-95 flex items-center gap-1.5"
                 >
-                  + Upload Multiple Photos/Videos
+                  <Icon name="upload" size={14} />
+                  <span>Upload Multiple Photos/Videos</span>
                 </button>
                 <button
                   onClick={() => setShowStandaloneUrlModal(true)}
-                  className="rounded-xl bg-lavender text-navy text-xs font-bold px-4 py-2.5 border border-gray-200 hover:bg-lavender/80 transition"
+                  className="rounded-xl bg-lavender text-navy text-xs font-bold px-4 py-2.5 border border-gray-200 hover:bg-lavender/80 transition flex items-center gap-1.5"
                 >
-                  🔗 Add Media via URL
+                  <Icon name="link" size={14} />
+                  <span>Add Media via URL</span>
                 </button>
               </div>
             </div>
@@ -1175,7 +1197,7 @@ export default function PortfolioPage() {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h3 className="font-extrabold text-lg text-navy flex items-center gap-2">
-                  <span>{currCategoryConfig.icon}</span>
+                  <Icon name={currCategoryConfig.icon || 'camera'} size={18} />
                   <span>Create {vendorCategory} Project (Multi-Media)</span>
                 </h3>
                 <p className="text-xs text-muted">
@@ -1184,9 +1206,10 @@ export default function PortfolioPage() {
               </div>
               <button
                 onClick={() => setShowProjectModal(false)}
-                className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center font-bold"
+                className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
+                aria-label="Close dialog"
               >
-                ✕
+                <Icon name="close" size={16} />
               </button>
             </div>
 
@@ -1196,7 +1219,8 @@ export default function PortfolioPage() {
               onClick={handleQuickFillDemo}
               className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-primary/10 via-lavender to-primary/10 border border-primary/20 text-primary font-bold text-xs flex items-center justify-center gap-2 hover:bg-primary/20 transition shadow-2xs"
             >
-              <span>⚡</span> 1-Click Suggestion (Multi-Media Demo with Photos + Video)
+              <Icon name="bolt" size={13} />
+              <span>1-Click Suggestion (Multi-Media Demo with Photos + Video)</span>
             </button>
 
             <form onSubmit={handleCreateProject} className="space-y-4 text-xs">
@@ -1284,7 +1308,8 @@ export default function PortfolioPage() {
                       onClick={() => setShowUrlInput(!showUrlInput)}
                       className="text-[11px] text-primary font-bold hover:underline flex items-center gap-1"
                     >
-                      <span>🔗</span> + Add via URL (YouTube/MP4)
+                      <Icon name="link" size={13} />
+                      <span>+ Add via URL (YouTube/MP4)</span>
                     </button>
                     <span className="text-[10px] text-primary font-bold bg-primary-soft px-2 py-0.5 rounded-full flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Cloudinary Enabled
@@ -1381,7 +1406,8 @@ export default function PortfolioPage() {
                   ) : (
                     <div className="py-2 space-y-1">
                       <div className="flex items-center justify-center gap-2 text-primary font-bold text-xs">
-                        <span>☁</span> Drag & drop multiple photos and videos here
+                        <Icon name="upload" size={15} />
+                        <span>Drag & drop multiple photos and videos here</span>
                       </div>
                       <div className="text-[11px] text-navy font-semibold">
                         or tap to Browse (Select multiple files from computer or mobile)
@@ -1431,8 +1457,8 @@ export default function PortfolioPage() {
                                   onClick={() => setActiveVideoModal({ url: item.url, title: item.title })}
                                   className="absolute inset-0 bg-black/25 flex items-center justify-center cursor-pointer hover:bg-black/40 transition"
                                 >
-                                  <span className="w-6 h-6 rounded-full bg-white text-red-600 grid place-items-center text-[10px] font-bold pl-0.5">
-                                    ▶
+                                  <span className="w-6 h-6 rounded-full bg-white text-red-600 grid place-items-center text-[10px]">
+                                    <Icon name="play" size={10} />
                                   </span>
                                 </div>
                               )}
@@ -1450,15 +1476,17 @@ export default function PortfolioPage() {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveMediaItem(item.id)}
-                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-red-600 text-white text-[9px] grid place-items-center transition"
+                                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-red-600 text-white grid place-items-center transition"
                                 title="Remove"
+                                aria-label="Remove item"
                               >
-                                ✕
+                                <Icon name="close" size={10} />
                               </button>
 
                               {isCover && (
-                                <div className="absolute bottom-1 left-1 bg-primary text-white text-[8px] font-bold px-1.5 py-0.2 rounded shadow-xs">
-                                  ★ Main Cover
+                                <div className="absolute bottom-1 left-1 bg-primary text-white text-[8px] font-bold px-1.5 py-0.2 rounded shadow-xs inline-flex items-center gap-0.5">
+                                  <Icon name="star" size={8} />
+                                  <span>Main Cover</span>
                                 </div>
                               )}
                             </div>
@@ -1505,7 +1533,7 @@ export default function PortfolioPage() {
                       }}
                       className="bg-lavender hover:bg-primary/15 rounded-lg px-2 py-1 font-bold text-primary shrink-0 transition flex items-center gap-1"
                     >
-                      <span>{preset.type === 'VIDEO' ? '🎬' : '📷'}</span>
+                      <Icon name={preset.type === 'VIDEO' ? 'video' : 'camera'} size={11} />
                       <span>+ {preset.label}</span>
                     </button>
                   ))}
@@ -1553,8 +1581,9 @@ export default function PortfolioPage() {
               <button
                 onClick={() => setShowStandaloneUrlModal(false)}
                 className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center font-bold"
+                aria-label="Close"
               >
-                ✕
+                <Icon name="close" size={14} />
               </button>
             </div>
             <div className="space-y-3 text-xs">
@@ -1628,8 +1657,8 @@ export default function PortfolioPage() {
                   <span className="text-[10px] font-bold bg-lavender text-navy px-2.5 py-0.5 rounded-md">
                     {selectedProjectShowcase.style}
                   </span>
-                  <span className="text-[11px] text-muted">
-                    📍 {selectedProjectShowcase.location?.venue || 'Venue'},{' '}
+                  <span className="text-[11px] text-muted inline-flex items-center gap-1">
+                    <Icon name="mapPin" size={12} className="text-muted" /> {selectedProjectShowcase.location?.venue || 'Venue'},{' '}
                     {selectedProjectShowcase.location?.city || city}
                   </span>
                 </div>
@@ -1645,8 +1674,9 @@ export default function PortfolioPage() {
               <button
                 onClick={() => setSelectedProjectShowcase(null)}
                 className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center font-bold"
+                aria-label="Close"
               >
-                ✕
+                <Icon name="close" size={14} />
               </button>
             </div>
 
@@ -1663,11 +1693,12 @@ export default function PortfolioPage() {
                 </button>
                 <button
                   onClick={() => setProjectDetailFilter('IMAGE')}
-                  className={`px-3 py-1.5 rounded-xl font-bold transition ${
+                  className={`px-3 py-1.5 rounded-xl font-bold transition inline-flex items-center gap-1.5 ${
                     projectDetailFilter === 'IMAGE' ? 'bg-primary text-white' : 'bg-lavender text-muted'
                   }`}
                 >
-                  📷 Photos (
+                  <Icon name="camera" size={12} />
+                  Photos (
                   {
                     (selectedProjectShowcase.items || []).filter(
                       (i) => !isVideoUrl(i.url, i.mediaType)
@@ -1677,11 +1708,12 @@ export default function PortfolioPage() {
                 </button>
                 <button
                   onClick={() => setProjectDetailFilter('VIDEO')}
-                  className={`px-3 py-1.5 rounded-xl font-bold transition ${
+                  className={`px-3 py-1.5 rounded-xl font-bold transition inline-flex items-center gap-1.5 ${
                     projectDetailFilter === 'VIDEO' ? 'bg-primary text-white' : 'bg-lavender text-muted'
                   }`}
                 >
-                  🎬 Videos (
+                  <Icon name="video" size={12} />
+                  Videos (
                   {
                     (selectedProjectShowcase.items || []).filter((i) =>
                       isVideoUrl(i.url, i.mediaType)
@@ -1727,8 +1759,8 @@ export default function PortfolioPage() {
                         />
                         {isVid && (
                           <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition">
-                            <span className="w-9 h-9 rounded-full bg-white text-red-600 grid place-items-center font-extrabold text-xs pl-0.5 shadow-md">
-                              ▶
+                            <span className="w-9 h-9 rounded-full bg-white text-navy grid place-items-center shadow-md">
+                              <Icon name="play" size={12} className="fill-current translate-x-0.5" />
                             </span>
                           </div>
                         )}
@@ -1765,8 +1797,8 @@ export default function PortfolioPage() {
           >
             <div className="flex items-center justify-between p-3.5 sm:p-4 bg-zinc-900/90 text-white border-b border-white/10">
               <div className="flex items-center gap-2">
-                <span className="text-xs bg-red-600 text-white font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider">
-                  ▶ Video
+                <span className="text-xs bg-red-600 text-white font-bold px-2 py-0.5 rounded-md uppercase tracking-wider inline-flex items-center gap-1">
+                  <Icon name="play" size={10} className="fill-current" /> Video
                 </span>
                 <h4 className="font-bold text-sm truncate max-w-[280px] sm:max-w-md">
                   {activeVideoModal.title || 'Video Showcase'}
@@ -1775,8 +1807,9 @@ export default function PortfolioPage() {
               <button
                 onClick={() => setActiveVideoModal(null)}
                 className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white grid place-items-center font-bold text-sm transition"
+                aria-label="Close"
               >
-                ✕
+                <Icon name="close" size={14} />
               </button>
             </div>
 
@@ -1827,9 +1860,10 @@ export default function PortfolioPage() {
           >
             <button
               onClick={() => setActivePhotoModal(null)}
-              className="absolute top-2 right-2 z-10 w-9 h-9 rounded-full bg-black/70 hover:bg-black text-white grid place-items-center font-bold text-base transition shadow-md"
+              className="absolute top-2 right-2 z-10 w-9 h-9 rounded-full bg-black/70 hover:bg-black text-white grid place-items-center transition shadow-md"
+              aria-label="Close"
             >
-              ✕
+              <Icon name="close" size={16} />
             </button>
             <img
               src={activePhotoModal.url}

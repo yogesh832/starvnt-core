@@ -9,9 +9,9 @@ const STATS = [
 ];
 
 const ACTIVITIES = [
-  { text: 'New booking confirmed — Riya & Arjun Wedding · Photography', ago: '2 min ago', icon: '✓', cls: 'bg-emerald-50 text-emerald-600' },
-  { text: 'Vendor payment released — Studio Pixel · ₹15,000', ago: '12 min ago', icon: '₹', cls: 'bg-primary-soft text-primary' },
-  { text: 'New customer registered — Anil Verma', ago: '20 min ago', icon: '+', cls: 'bg-sky-50 text-sky-600' },
+  { text: 'New booking confirmed — Riya & Arjun Wedding · Photography', ago: '2 min ago', icon: 'check', cls: 'bg-emerald-50 text-emerald-600' },
+  { text: 'Vendor payment released — Studio Pixel · ₹15,000', ago: '12 min ago', icon: 'payments', cls: 'bg-primary-soft text-primary' },
+  { text: 'New customer registered — Anil Verma', ago: '20 min ago', icon: 'customers', cls: 'bg-sky-50 text-sky-600' },
 ];
 
 const ATTENTION = [
@@ -115,7 +115,7 @@ export default function Dashboard() {
     <div className="space-y-5 max-w-6xl">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">Good morning, {admin.fullName.split(' ')[0]}! 👋</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-navy">Good morning, {admin.fullName.split(' ')[0]}</h1>
           <p className="text-sm text-muted mt-0.5">Here's what's happening across STARVNT today.</p>
         </div>
         <span className="text-xs text-muted bg-white rounded-xl px-3 py-2 shadow-sm">16 Sep 2025</span>
@@ -127,7 +127,7 @@ export default function Dashboard() {
             <div className={`w-9 h-9 rounded-xl grid place-items-center ${s.iconBg}`}><Icon name={s.icon} size={17} /></div>
             <div className="mt-3 text-xl sm:text-2xl font-extrabold truncate">{s.value}</div>
             <div className="text-xs text-muted mt-0.5">{s.label}</div>
-            <div className="text-[11px] mt-1.5 font-medium text-emerald-600">▲ {s.delta}</div>
+            <div className="text-[11px] mt-1.5 font-medium text-emerald-600">{s.delta}</div>
           </div>
         ))}
       </div>
@@ -143,7 +143,9 @@ export default function Dashboard() {
           <ul className="space-y-3">
             {ACTIVITIES.map((a, i) => (
               <li key={i} className="flex items-center gap-3">
-                <span className={`w-8 h-8 rounded-full grid place-items-center text-sm font-bold shrink-0 ${a.cls}`}>{a.icon}</span>
+                <span className={`w-8 h-8 rounded-full grid place-items-center shrink-0 ${a.cls}`}>
+                  <Icon name={a.icon} size={15} />
+                </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-medium truncate">{a.text}</div>
                   <div className="text-[11px] text-muted">{a.ago}</div>

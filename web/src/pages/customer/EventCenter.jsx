@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StatusChip } from '../../components/ui.jsx';
+import Icon from '../../components/Icon.jsx';
 import VendorRecommendations from './VendorRecommendations.jsx';
 import BookingPayment from './BookingPayment.jsx';
 import EventExecution from './EventExecution.jsx';
@@ -19,19 +20,16 @@ export function Card({ title, action, className = '', children }) {
 }
 
 const REQ_STATUS = {
-  'Decision needed': 'bg-red-50 text-red-500',
-  'Quotes ready': 'bg-amber-50 text-amber-600',
-  Booked: 'bg-emerald-50 text-emerald-600',
-  Confirmed: 'bg-emerald-50 text-emerald-600',
-  'Finding options': 'bg-primary-soft text-primary',
-  'Clarify needed': 'bg-orange-50 text-orange-500',
-  Completed: 'bg-emerald-50 text-emerald-600',
+  Confirmed: 'bg-emerald-100 text-emerald-800',
+  'Quotes Ready': 'bg-primary-soft text-primary',
+  'In Progress': 'bg-amber-100 text-amber-800',
+  'Action Needed': 'bg-rose-100 text-rose-800',
 };
 
-export function ReqChip({ status }) {
+export function RequirementBadge({ status }) {
   return (
     <span
-      className={`inline-block text-[10px] font-bold rounded-full px-2.5 py-1 whitespace-nowrap ${
+      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
         REQ_STATUS[status] || 'bg-gray-100 text-gray-500'
       }`}
     >
@@ -39,13 +37,14 @@ export function ReqChip({ status }) {
     </span>
   );
 }
+export const ReqChip = RequirementBadge;
 
 const REQ_ICONS = {
-  Venue: '🏰',
-  Photography: '📸',
-  Decoration: '🌸',
-  Catering: '🍽️',
-  Payment: '💳',
+  Venue: 'mapPin',
+  Photography: 'camera',
+  Decoration: 'star',
+  Catering: 'services',
+  Payment: 'wallet',
 };
 
 /**
@@ -148,12 +147,12 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
                 Planning
               </span>
             </div>
-            <div className="text-xs text-muted mt-1 flex items-center gap-2">
-              <span>📅 {event.date}</span>
+            <div className="text-xs text-muted mt-1 flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1"><Icon name="calendar" size={12} /> {event.date}</span>
               <span>•</span>
-              <span>📍 {event.place}</span>
+              <span className="inline-flex items-center gap-1"><Icon name="mapPin" size={12} /> {event.place}</span>
               <span>•</span>
-              <span>👥 {event.guests} guests</span>
+              <span className="inline-flex items-center gap-1"><Icon name="customers" size={12} /> {event.guests} guests</span>
             </div>
           </div>
         </div>
@@ -226,11 +225,13 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
           {/* Venue Card */}
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex flex-col justify-between">
-            <div className="text-2xl">{REQ_ICONS.Venue}</div>
+            <div className="w-10 h-10 rounded-2xl bg-lavender text-navy flex items-center justify-center">
+              <Icon name={REQ_ICONS.Venue} size={18} />
+            </div>
             <div className="mt-3">
               <div className="text-xs font-extrabold text-navy">Venue</div>
               <div className="mt-1 flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-                <span>✓</span>
+                <Icon name="check" size={11} />
                 <span>Confirmed</span>
               </div>
             </div>
@@ -242,7 +243,9 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
             className="bg-white rounded-2xl p-4 border-2 border-primary ring-2 ring-primary/10 shadow-xs cursor-pointer hover:shadow-md transition flex flex-col justify-between"
           >
             <div className="flex items-center justify-between">
-              <span className="text-2xl">{REQ_ICONS.Photography}</span>
+              <div className="w-10 h-10 rounded-2xl bg-primary text-white flex items-center justify-center shadow-xs">
+                <Icon name={REQ_ICONS.Photography} size={18} />
+              </div>
               <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
             </div>
             <div className="mt-3">
@@ -256,7 +259,9 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
 
           {/* Decoration Card */}
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex flex-col justify-between">
-            <div className="text-2xl">{REQ_ICONS.Decoration}</div>
+            <div className="w-10 h-10 rounded-2xl bg-lavender text-navy flex items-center justify-center">
+              <Icon name={REQ_ICONS.Decoration} size={18} />
+            </div>
             <div className="mt-3">
               <div className="text-xs font-extrabold text-navy">Decoration</div>
               <div className="mt-1 text-[11px] font-bold text-muted">4 options ready</div>
@@ -265,7 +270,9 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
 
           {/* Catering Card */}
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex flex-col justify-between">
-            <div className="text-2xl">{REQ_ICONS.Catering}</div>
+            <div className="w-10 h-10 rounded-2xl bg-lavender text-navy flex items-center justify-center">
+              <Icon name={REQ_ICONS.Catering} size={18} />
+            </div>
             <div className="mt-3">
               <div className="text-xs font-extrabold text-navy">Catering</div>
               <div className="mt-1 text-[11px] font-bold text-muted">5 options ready</div>
@@ -274,7 +281,9 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
 
           {/* Payment Card */}
           <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs flex flex-col justify-between">
-            <div className="text-2xl">{REQ_ICONS.Payment}</div>
+            <div className="w-10 h-10 rounded-2xl bg-lavender text-navy flex items-center justify-center">
+              <Icon name={REQ_ICONS.Payment} size={18} />
+            </div>
             <div className="mt-3">
               <div className="text-xs font-extrabold text-navy">Payment</div>
               <div className="mt-1 text-[11px] font-bold text-muted">₹0 paid</div>
@@ -312,7 +321,7 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
                   <span>{item.q}</span>
                 </div>
                 <div className="text-ink/80 leading-relaxed pl-4 flex items-start gap-1.5">
-                  <span className="text-primary font-bold">✨</span>
+                  <Icon name="bolt" size={13} className="text-primary mt-0.5 shrink-0" />
                   <span>{item.a}</span>
                 </div>
               </div>
@@ -330,10 +339,11 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
           />
           <button
             type="button"
-            className="w-10 h-10 rounded-2xl bg-lavender text-muted hover:text-primary grid place-items-center"
+            className="w-10 h-10 rounded-2xl bg-lavender text-muted hover:text-primary grid place-items-center transition"
             title="Voice input"
+            aria-label="Voice input"
           >
-            🎙
+            <Icon name="mic" size={16} />
           </button>
           <button
             type="submit"

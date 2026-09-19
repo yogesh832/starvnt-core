@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Page, Card, EmptyHint } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
+import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 
 const PIPELINE = [
@@ -75,9 +76,9 @@ export default function Quotes() {
       action={
         <a
           href="/vendor/enquiries"
-          className="rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2.5 inline-block"
+          className="rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2.5 inline-flex items-center gap-1.5"
         >
-          + Prepare from Enquiry
+          <Icon name="plus" size={14} /> Prepare from Enquiry
         </a>
       }
     >
@@ -129,7 +130,11 @@ export default function Quotes() {
                       </button>
                     )}
                     {stage === 'Submitted' && <span className="text-[11px] text-muted">Awaiting Customer</span>}
-                    {stage === 'Approved' && <span className="text-[11px] text-emerald-600 font-semibold">Booking created ✓</span>}
+                    {stage === 'Approved' && (
+                      <span className="text-[11px] text-emerald-600 font-semibold inline-flex items-center gap-1">
+                        <Icon name="check" size={12} /> Booking created
+                      </span>
+                    )}
                     {['Rejected', 'Expired'].includes(stage) && <span className="text-[11px] text-muted">—</span>}
                   </td>
                 </tr>

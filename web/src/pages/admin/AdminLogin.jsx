@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import { LogoWord } from '../../components/ui.jsx';
+import Icon from '../../components/Icon.jsx';
 
 /**
  * Core login — matches the "Login" screen of the Complete Screen Set:
@@ -137,10 +138,10 @@ export default function AdminLogin() {
                   <button
                     type="button"
                     onClick={() => setShowPw(!showPw)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-navy text-xs"
-                    aria-label="Toggle password visibility"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-navy p-1 transition"
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
                   >
-                    {showPw ? '🙈' : '👁'}
+                    <Icon name={showPw ? 'eyeOff' : 'eye'} size={16} />
                   </button>
                 </div>
                 <div className="flex justify-end mt-1.5">

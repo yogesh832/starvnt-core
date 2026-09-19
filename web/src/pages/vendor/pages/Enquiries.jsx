@@ -1,45 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Page, Card } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
+import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
-
-const INITIAL_OPPORTUNITIES = [
-  {
-    id: 'ENQ-1042', service: 'Wedding Photography', status: 'New', ago: '2h ago',
-    date: '26 Nov 2026', location: 'Kisan Palace, New Town', guests: 500,
-    capability: '2 photographers · Candid + Traditional · Full day',
-    coverage: 'Serves New Town ✓', availability: 'Eligible slot found ✓',
-    travel: 'Barasat → New Town', travelCost: '₹2,000 est.',
-    basePrice: 48000,
-    fit: 96,
-  },
-  {
-    id: 'ENQ-1043', service: 'Pre-wedding Shoot', status: 'Interested', ago: '5h ago',
-    date: '14 Dec 2026', location: 'Eco Park, New Town', guests: 2,
-    capability: '1 photographer · Candid · 4 hours · Outdoor',
-    coverage: 'Serves New Town ✓', availability: 'Eligible slot found ✓',
-    travel: 'Barasat → New Town', travelCost: '₹800 est.',
-    basePrice: 18000,
-    fit: 88,
-  },
-  {
-    id: 'ENQ-1044', service: 'Corporate Event Coverage', status: 'Hot lead', ago: '1d ago',
-    date: '10 Jan 2027', location: 'ITC Royal Bengal', guests: 300,
-    capability: '2 photographers · Conference + Candid · Half day',
-    coverage: 'Serves East Kolkata ✓', availability: 'Conflict check pending',
-    travel: 'Barasat → EM Bypass', travelCost: '₹1,500 est.',
-    basePrice: 50000,
-    fit: 74,
-  },
-];
 
 export default function Enquiries() {
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [quoteModalOpp, setQuoteModalOpp] = useState(null);
-  const [basePrice, setBasePrice] = useState(48000);
-  const [travelFee, setTravelFee] = useState(2000);
+  const [basePrice, setBasePrice] = useState(0);
+  const [travelFee, setTravelFee] = useState(0);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -57,17 +28,17 @@ export default function Enquiries() {
             serviceId: o.vendorService,
             service: o.serviceName,
             status: o.status === 'NEW' ? 'New' : o.status,
-            ago: 'Matched by Aura+',
+            ago: 'Matched opportunity',
             date: o.eventDate,
-            location: `${o.serviceLocation?.address || ''} ${o.serviceLocation?.locality || 'New Town'}`.trim(),
-            guests: o.guestCount || 500,
-            capability: o.requiredCapability || '2 photographers · Candid + Traditional · Full day',
-            coverage: `Serves ${o.serviceLocation?.locality || 'Kolkata'} ✓`,
-            availability: 'Eligible slot verified ✓',
-            travel: o.estimatedTravel || 'Barasat → New Town',
-            travelCost: `₹${(o.travelCost || 2000).toLocaleString()}`,
-            basePrice: 48000,
-            fit: 95,
+            location: `${o.serviceLocation?.address || ''} ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Venue'}`.trim(),
+            guests: o.guestCount || 'As required',
+            capability: o.requiredCapability || 'Standard Service Execution',
+            coverage: `Serves ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Zone'} (Verified)`,
+            availability: 'Eligible slot verified',
+            travel: o.estimatedTravel || 'Local Transit',
+            travelCost: o.travelCost ? `₹${Number(o.travelCost).toLocaleString()}` : 'Included',
+            basePrice: o.basePrice || 0,
+            fit: o.fit || 95,
           }));
           setOpportunities(mapped);
           if (mapped[0]) setExpanded(mapped[0].id);
@@ -116,7 +87,7 @@ export default function Enquiries() {
       setOpportunities((prev) =>
         prev.map((o) => (o.id === quoteModalOpp.id ? { ...o, status: 'Responded' } : o))
       );
-      setFeedback(`✓ Quote of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. Saved to backend with Central Automation event.`);
+      setFeedback(`Quote of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. Saved to backend with Central Automation event.`);
       setQuoteModalOpp(null);
     } catch (err) {
       setFeedback(`Notice: ${err.message}`);
@@ -129,11 +100,16 @@ export default function Enquiries() {
     <Page
       title="Enquiries & Structured Opportunities"
       sub="Spec §9: Pre-qualified opportunities with service, location, date, guests, capability, coverage, availability, and travel."
-      action={<button className="rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2.5">Filters ▾</button>}
+      action={
+        <button className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2.5">
+          Filters <Icon name="chevronDown" size={13} />
+        </button>
+      }
     >
       {feedback && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs font-semibold mb-4">
-          {feedback}
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs font-semibold mb-4 inline-flex items-center gap-2 w-full">
+          <Icon name="check" size={16} className="text-emerald-600 shrink-0" />
+          <span>{feedback}</span>
         </div>
       )}
 
@@ -156,7 +132,11 @@ export default function Enquiries() {
                 <div className="text-lg font-extrabold text-primary">{o.fit}%</div>
                 <div className="text-[9px] text-muted">match</div>
               </div>
-              <span className="text-muted">{expanded === o.id ? '▴' : '▾'}</span>
+              <Icon
+                name="chevronDown"
+                size={16}
+                className={`text-muted transition-transform duration-200 shrink-0 ${expanded === o.id ? 'rotate-180' : ''}`}
+              />
             </button>
 
             {expanded === o.id && (
@@ -200,8 +180,8 @@ export default function Enquiries() {
 
         {opportunities.length === 0 && !loading && (
           <Card className="text-center py-12 px-6">
-            <div className="w-14 h-14 rounded-2xl bg-primary-soft text-primary grid place-items-center text-2xl mx-auto mb-3 shadow-xs">
-              📩
+            <div className="w-14 h-14 rounded-2xl bg-primary-soft text-primary grid place-items-center mx-auto mb-3 shadow-xs">
+              <Icon name="message" size={26} />
             </div>
             <h3 className="text-base font-extrabold text-navy">No Enquiries Yet</h3>
             <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
@@ -220,7 +200,13 @@ export default function Enquiries() {
                 <h2 className="text-base font-extrabold text-navy">Submit Official Quote</h2>
                 <p className="text-xs text-muted">{quoteModalOpp.service} · {quoteModalOpp.date}</p>
               </div>
-              <button onClick={() => setQuoteModalOpp(null)} className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center font-bold">✕</button>
+              <button
+                onClick={() => setQuoteModalOpp(null)}
+                className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
+                aria-label="Close"
+              >
+                <Icon name="close" size={14} />
+              </button>
             </div>
 
             <div className="space-y-3 text-xs">

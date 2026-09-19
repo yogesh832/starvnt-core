@@ -44,7 +44,16 @@ export default function AdminShell() {
 
       {/* Sidebar — light, per screen set */}
       <aside className={`fixed md:sticky top-0 h-screen z-40 w-56 bg-white flex flex-col transform transition-transform md:translate-x-0 ${navOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
-        <div className="px-5 py-5"><LogoWord sub="Core" /></div>
+        <div className="px-5 py-5 flex items-center justify-between">
+          <LogoWord sub="Core" />
+          <button
+            onClick={() => setNavOpen(false)}
+            className="md:hidden w-8 h-8 rounded-lg text-ink/60 hover:bg-lavender grid place-items-center transition"
+            aria-label="Close navigation"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
         <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-1">
           {visible.map((m) => (
             <NavLink
@@ -58,17 +67,28 @@ export default function AdminShell() {
               }
             >
               <Icon name={m.icon} size={17} />
-              {m.label}
+              <span>{m.label}</span>
             </NavLink>
           ))}
         </nav>
+        <div className="p-3 border-t border-gray-100">
+          <button onClick={logout} className="w-full rounded-xl px-3.5 py-2 text-xs text-ink/60 hover:bg-lavender flex items-center gap-2">
+            <span>Sign out</span>
+          </button>
+        </div>
       </aside>
 
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Topbar */}
         <header className="bg-white/80 backdrop-blur sticky top-0 z-20 border-b border-gray-100 px-4 sm:px-6 py-3 flex items-center gap-3">
-          <button className="md:hidden text-ink/60" onClick={() => setNavOpen(true)} aria-label="Menu">☰</button>
+          <button
+            className="md:hidden text-ink/70 hover:text-ink p-1"
+            onClick={() => setNavOpen(true)}
+            aria-label="Open menu"
+          >
+            <Icon name="menu" size={20} />
+          </button>
           <div className="flex-1 max-w-lg flex items-center gap-2 bg-lavender rounded-xl px-3.5 py-2 text-sm text-muted">
             <Icon name="search" size={16} />
             <input className="bg-transparent flex-1 outline-none placeholder:text-muted/70" placeholder="Search anything..." />

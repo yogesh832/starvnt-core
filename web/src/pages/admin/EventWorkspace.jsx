@@ -85,12 +85,12 @@ export default function EventWorkspace({ onBack }) {
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, paymentStatus: 'PAYMENT_VERIFIED', executionStatus: 'SERVICE_SCHEDULED' } : b))
       );
-      setAdminFeedback('✓ Payment verified by Core Platform.');
+      setAdminFeedback('Payment verified by Core Platform.');
     } catch (err) {
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, paymentStatus: 'PAYMENT_VERIFIED', executionStatus: 'SERVICE_SCHEDULED' } : b))
       );
-      setAdminFeedback('✓ Payment verified locally.');
+      setAdminFeedback('Payment verified locally.');
     }
   }
 
@@ -100,12 +100,12 @@ export default function EventWorkspace({ onBack }) {
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, executionStatus: 'COMPLETION_VERIFIED', settlementStatus: 'SETTLEMENT_ELIGIBLE' } : b))
       );
-      setAdminFeedback('✓ Completion validated! Settlement unlocked.');
+      setAdminFeedback('Completion validated! Settlement unlocked.');
     } catch (err) {
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, executionStatus: 'COMPLETION_VERIFIED', settlementStatus: 'SETTLEMENT_ELIGIBLE' } : b))
       );
-      setAdminFeedback('✓ Completion validated locally! Settlement unlocked.');
+      setAdminFeedback('Completion validated locally! Settlement unlocked.');
     }
   }
 
@@ -115,12 +115,12 @@ export default function EventWorkspace({ onBack }) {
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, settlementStatus: 'SETTLED' } : b))
       );
-      setAdminFeedback('✓ Settlement released to vendor.');
+      setAdminFeedback('Settlement released to vendor.');
     } catch (err) {
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, settlementStatus: 'SETTLED' } : b))
       );
-      setAdminFeedback('✓ Settlement released locally.');
+      setAdminFeedback('Settlement released locally.');
     }
   }
 
@@ -150,7 +150,7 @@ export default function EventWorkspace({ onBack }) {
           </p>
         </div>
         <button className="inline-flex items-center gap-2 rounded-xl bg-white border border-gray-200 hover:bg-lavender text-navy font-bold text-xs px-4 py-2.5 transition shadow-2xs self-start sm:self-auto">
-          <span>✏️</span>
+          <Icon name="edit" size={14} />
           <span>Edit Event</span>
         </button>
       </div>
@@ -284,13 +284,13 @@ export default function EventWorkspace({ onBack }) {
                   className="flex items-center gap-3 p-3 rounded-2xl border border-gray-100 hover:bg-lavender/40 cursor-pointer transition"
                 >
                   <span
-                    className={`w-5 h-5 rounded-full border-2 grid place-items-center text-[10px] font-bold transition ${
+                    className={`w-5 h-5 rounded-full border-2 grid place-items-center transition ${
                       item.done
                         ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : 'border-gray-300 text-transparent'
+                        : 'border-gray-300'
                     }`}
                   >
-                    ✓
+                    {item.done && <Icon name="check" size={11} strokeWidth={2.5} />}
                   </span>
                   <span className={`font-semibold ${item.done ? 'line-through text-muted' : 'text-navy'}`}>
                     {item.text}
@@ -361,8 +361,14 @@ export default function EventWorkspace({ onBack }) {
 
                   <div className="flex items-center gap-2 flex-wrap">
                     <StatusChip status={b.bookingStatus} />
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${b.paymentStatus === 'PAYMENT_VERIFIED' ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800'}`}>
-                      {b.paymentStatus === 'PAYMENT_VERIFIED' ? '✓ Payment Verified' : 'Payment Pending'}
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1 ${b.paymentStatus === 'PAYMENT_VERIFIED' ? 'bg-emerald-100 text-emerald-800' : 'bg-orange-100 text-orange-800'}`}>
+                      {b.paymentStatus === 'PAYMENT_VERIFIED' ? (
+                        <>
+                          <Icon name="check" size={11} /> Payment Verified
+                        </>
+                      ) : (
+                        'Payment Pending'
+                      )}
                     </span>
                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${b.executionStatus === 'COMPLETION_VERIFIED' ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800'}`}>
                       {b.executionStatus}
@@ -415,8 +421,8 @@ export default function EventWorkspace({ onBack }) {
                     )}
 
                     {b.settlementStatus === 'SETTLED' && (
-                      <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg">
-                        ✓ Settled to Vendor
+                      <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
+                        <Icon name="check" size={11} /> Settled to Vendor
                       </span>
                     )}
                   </div>
@@ -429,8 +435,8 @@ export default function EventWorkspace({ onBack }) {
 
       {activeTab !== 'Overview' && activeTab !== 'Requirements' && activeTab !== 'Bookings' && (
         <div className="bg-white rounded-3xl p-10 text-center shadow-xs border border-gray-100">
-          <div className="w-12 h-12 rounded-2xl bg-lavender grid place-items-center text-xl mx-auto mb-3">
-            📁
+          <div className="w-12 h-12 rounded-2xl bg-lavender flex items-center justify-center text-primary mx-auto mb-3">
+            <Icon name="folder" size={24} />
           </div>
           <h3 className="font-extrabold text-navy text-sm">{activeTab} Details</h3>
           <p className="text-xs text-muted mt-1">

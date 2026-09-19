@@ -45,6 +45,7 @@ const vendorOrganizationSchema = new Schema(
       index: true,
     },
     isCommerciallyActive: { type: Boolean, default: false, index: true },
+    isProfileCompleted: { type: Boolean, default: false, index: true },
     location: { type: String, trim: true, default: '' },
     phone: { type: String, trim: true, default: '' },
     website: { type: String, trim: true, default: '' },
@@ -60,6 +61,18 @@ const vendorOrganizationSchema = new Schema(
     rating: {
       average: { type: Number, default: 0, min: 0, max: 5 },
       count: { type: Number, default: 0 },
+    },
+    workingHours: {
+      type: Schema.Types.Mixed,
+      default: {
+        Monday: { isOpen: true, hours: '9 AM – 7 PM' },
+        Tuesday: { isOpen: true, hours: '9 AM – 7 PM' },
+        Wednesday: { isOpen: true, hours: '9 AM – 7 PM' },
+        Thursday: { isOpen: true, hours: '9 AM – 7 PM' },
+        Friday: { isOpen: true, hours: '9 AM – 9 PM' },
+        Saturday: { isOpen: true, hours: 'Full day' },
+        Sunday: { isOpen: false, hours: 'Off' },
+      },
     },
   },
   { timestamps: true }

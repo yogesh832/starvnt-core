@@ -11,7 +11,7 @@ const vendorResourceSchema = new Schema(
     vendor: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', required: true, index: true },
     type: {
       type: String,
-      enum: ['TEAM_MEMBER', 'EQUIPMENT', 'INVENTORY', 'VEHICLE', 'SPACE'],
+      enum: ['TEAM_MEMBER', 'STAFF', 'TEAM', 'EQUIPMENT', 'INVENTORY', 'VEHICLE', 'SPACE', 'FACILITY'],
       required: true,
       index: true,
     },

@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { StatusChip } from '../../components/ui.jsx';
+import Icon from '../../components/Icon.jsx';
 import { Card, ReqChip } from './EventCenter.jsx';
 
 /* ══════════════ Reference-style Event Dashboard (screen set 2) ═══════════ */
 
 const JOURNEY = [
-  { label: 'Planning', icon: '✏️' },
-  { label: 'Vendors', icon: '🏪' },
-  { label: 'Booking', icon: '📋' },
-  { label: 'Payment', icon: '💳' },
-  { label: 'Execution', icon: '🎬' },
+  { label: 'Planning', icon: 'edit' },
+  { label: 'Vendors', icon: 'vendors' },
+  { label: 'Booking', icon: 'bookings' },
+  { label: 'Payment', icon: 'payments' },
+  { label: 'Execution', icon: 'operations' },
 ];
 
 const OPTIONS = [
@@ -58,7 +59,11 @@ function Stepper() {
                       ? 'bg-primary text-white shadow-md shadow-primary/40 ring-4 ring-primary/15'
                       : 'bg-lavender text-muted'
                 }`}>
-                  {state === 'done' ? '✓' : s.icon}
+                  {state === 'done' ? (
+                    <Icon name="check" size={14} strokeWidth={2.5} />
+                  ) : (
+                    <Icon name={s.icon} size={14} />
+                  )}
                 </div>
                 <span className={`text-[10px] font-bold ${state === 'todo' ? 'text-muted' : state === 'current' ? 'text-primary' : 'text-ink'}`}>
                   {s.label}
@@ -80,17 +85,19 @@ function Stepper() {
 /* ── Requirement tiles ────────────────────────────────────────────────────── */
 function ReqTiles({ selectedPrice }) {
   const tiles = [
-    { icon: '🏛', bg: 'bg-emerald-50', name: 'Venue', status: 'Confirmed', dot: 'bg-emerald-500' },
-    { icon: '📷', bg: 'bg-primary-soft', name: 'Photography', status: '3 options found', dot: 'bg-amber-400' },
-    { icon: '🎀', bg: 'bg-violet-50', name: 'Decoration', status: 'In progress', dot: 'bg-violet-400' },
-    { icon: '🍽', bg: 'bg-orange-50', name: 'Catering', status: 'Quotes ready', dot: 'bg-amber-400' },
-    { icon: '💳', bg: 'bg-red-50', name: 'Payment', status: `${inr(selectedPrice)} due`, dot: 'bg-red-400' },
+    { icon: 'mapPin', bg: 'bg-emerald-50 text-emerald-600', name: 'Venue', status: 'Confirmed', dot: 'bg-emerald-500' },
+    { icon: 'camera', bg: 'bg-primary-soft text-primary', name: 'Photography', status: '3 options found', dot: 'bg-amber-400' },
+    { icon: 'star', bg: 'bg-violet-50 text-violet-600', name: 'Decoration', status: 'In progress', dot: 'bg-violet-400' },
+    { icon: 'services', bg: 'bg-orange-50 text-orange-600', name: 'Catering', status: 'Quotes ready', dot: 'bg-amber-400' },
+    { icon: 'payments', bg: 'bg-rose-50 text-rose-600', name: 'Payment', status: `${inr(selectedPrice)} due`, dot: 'bg-rose-400' },
   ];
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
       {tiles.map((r) => (
         <button key={r.name} className="bg-white rounded-xl shadow-sm px-3 py-3 text-left hover:shadow-md hover:-translate-y-0.5 transition">
-          <div className={`w-8 h-8 rounded-lg ${r.bg} grid place-items-center text-base mb-2`}>{r.icon}</div>
+          <div className={`w-8 h-8 rounded-lg ${r.bg} flex items-center justify-center mb-2`}>
+            <Icon name={r.icon} size={16} />
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold truncate">{r.name}</span>
             <span className={`ml-auto w-1.5 h-1.5 rounded-full shrink-0 ${r.dot}`} />
@@ -136,15 +143,17 @@ function AskCard({ onOpenAura }) {
       <div className="bg-white rounded-[15px] p-4 sm:p-5 flex items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-lg bg-primary text-white grid place-items-center text-xs">✨</span>
-            <div className="font-bold text-sm">Ask STARVNT anything</div>
+            <span className="w-6 h-6 rounded-lg bg-primary text-white grid place-items-center">
+              <Icon name="bolt" size={13} />
+            </span>
+            <div className="font-bold text-sm text-navy">Ask STARVNT anything</div>
           </div>
           <button
             onClick={onOpenAura}
             className="mt-3 w-full flex items-center justify-between rounded-xl bg-lavender px-4 py-3 text-xs text-muted hover:ring-2 hover:ring-primary/30 transition"
           >
             <span>Ask something…</span>
-            <span className="text-primary">🎙</span>
+            <span className="text-primary"><Icon name="mic" size={15} /></span>
           </button>
           <div className="flex flex-wrap gap-1.5 mt-3">
             {qs.map((q) => (
@@ -173,30 +182,39 @@ function VendorOptions({ selected, onSelect }) {
           <div className="text-[10px] font-bold uppercase tracking-wide text-primary">Vendor recommendations</div>
           <h2 className="font-bold text-sm sm:text-[15px]">Photography options</h2>
         </div>
-        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded-full px-2.5 py-1 shrink-0">✓ Aura+ recommended</span>
+        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded-full px-2.5 py-1 shrink-0 inline-flex items-center gap-1">
+          <Icon name="check" size={11} /> Aura+ recommended
+        </span>
       </div>
       <div className="grid sm:grid-cols-3 gap-3">
         {OPTIONS.map((o, i) => {
           const isSel = selected === i;
           return (
             <div key={o.name} className={`rounded-xl border-2 overflow-hidden transition ${isSel ? 'border-primary shadow-lg shadow-primary/10' : 'border-gray-100 hover:border-gray-200'}`}>
-              <div className="relative h-20 bg-gradient-to-br from-primary/30 via-[#9b6dff]/30 to-[#c4b5fd]/40 grid place-items-center text-2xl">
-                📸
+              <div className="relative h-20 bg-gradient-to-br from-primary/20 via-lavender to-primary/10 flex items-center justify-center text-primary">
+                <Icon name="camera" size={24} />
                 {isSel && <span className="absolute top-2 right-2 text-[9px] font-bold bg-primary text-white rounded-full px-2 py-0.5">Selected</span>}
               </div>
               <div className="p-3">
-                <div className="font-bold text-[13px] leading-tight">{o.name}</div>
-                <div className="text-[10px] text-muted mt-0.5">⭐ <b className="text-amber-500">{o.rating}</b> · {o.reviews} reviews</div>
+                <div className="font-bold text-[13px] leading-tight text-navy">{o.name}</div>
+                <div className="text-[10px] text-muted mt-0.5 inline-flex items-center gap-1">
+                  <Icon name="star" size={11} className="text-amber-500 fill-amber-500" />
+                  <b className="text-amber-600">{o.rating}</b> · {o.reviews} reviews
+                </div>
                 <div className="flex items-baseline gap-1.5 mt-1.5">
                   <span className="font-extrabold text-base text-navy">{inr(o.price)}</span>
                   <span className="text-[9px] text-muted">validated total</span>
                 </div>
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {o.tags.map((t) => (
-                    <span key={t} className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-1.5 py-0.5">✓ {t}</span>
+                    <span key={t} className="text-[9px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-1.5 py-0.5 inline-flex items-center gap-0.5">
+                      <Icon name="check" size={9} /> {t}
+                    </span>
                   ))}
                 </div>
-                <div className="mt-2 text-[9.5px] leading-snug text-primary/90 bg-primary-soft/60 rounded-lg px-2 py-1.5">💡 {o.note}</div>
+                <div className="mt-2 text-[9.5px] leading-snug text-primary/90 bg-primary-soft/60 rounded-lg px-2 py-1.5">
+                  {o.note}
+                </div>
                 <div className="flex gap-1.5 mt-2.5">
                   <button className="flex-1 rounded-lg border border-gray-200 text-[11px] font-bold py-1.5 text-ink/70 hover:bg-lavender transition">
                     Details
@@ -207,7 +225,7 @@ function VendorOptions({ selected, onSelect }) {
                       isSel ? 'bg-primary text-white shadow-sm shadow-primary/30' : 'border border-primary/40 text-primary hover:bg-primary hover:text-white'
                     }`}
                   >
-                    {isSel ? 'Selected ✓' : 'Select'}
+                    {isSel ? 'Selected' : 'Select'}
                   </button>
                 </div>
               </div>
@@ -265,7 +283,7 @@ function CompareTable({ selected, onSelect }) {
                       selected === i ? 'bg-primary text-white' : 'border border-gray-200 text-muted hover:border-primary/40 hover:text-primary'
                     }`}
                   >
-                    {selected === i ? 'Selected ✓' : 'Choose'}
+                    {selected === i ? 'Selected' : 'Choose'}
                   </button>
                 </td>
               ))}
@@ -274,7 +292,7 @@ function CompareTable({ selected, onSelect }) {
         </table>
       </div>
       <div className="px-5 pb-4 text-[10px] text-muted leading-relaxed">
-        💡 Premium Moments offers the best validated total with the strongest reviews.{' '}
+        Premium Moments offers the best validated total with the strongest reviews.{' '}
         <span className="text-primary font-semibold">Why this one?</span>
       </div>
     </Card>
@@ -291,16 +309,18 @@ function BookingPayment({ opt }) {
   return (
     <Card>
       <div className="flex items-center justify-between">
-        <div className="font-bold text-sm">Booking &amp; payment</div>
+        <div className="font-bold text-sm text-navy">Booking &amp; payment</div>
         <StatusChip status={state === 'done' ? 'Confirmed' : 'Pending'} />
       </div>
       <div className="text-[11px] text-muted mt-0.5">You're almost done — confirm your photography booking.</div>
 
       <div className="mt-3 border border-gray-100 rounded-xl p-3 flex gap-3">
-        <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-primary/30 to-[#9b6dff]/30 grid place-items-center text-lg shrink-0">📸</div>
+        <div className="w-11 h-11 rounded-lg bg-primary-soft text-primary flex items-center justify-center shrink-0">
+          <Icon name="camera" size={20} />
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex justify-between gap-2 text-sm">
-            <span className="font-semibold">Photography</span>
+            <span className="font-semibold text-navy">Photography</span>
             <span className="font-extrabold text-navy">{inr(opt.price)}</span>
           </div>
           <div className="text-[11px] text-muted truncate">{opt.name}</div>
@@ -308,10 +328,16 @@ function BookingPayment({ opt }) {
       </div>
 
       <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]">
-        {[['📅', 'Date', '26 November'], ['📍', 'Venue', 'Kisar Palace'], ['👥', 'Guests', '500']].map(([i, k, v]) => (
-          <div key={k} className="bg-lavender/60 rounded-lg px-2.5 py-2">
-            <div className="text-muted">{i} {k}</div>
-            <div className="font-bold mt-0.5">{v}</div>
+        {[
+          { icon: 'calendar', label: 'Date', val: '26 November' },
+          { icon: 'mapPin', label: 'Venue', val: 'Kisar Palace' },
+          { icon: 'customers', label: 'Guests', val: '500' },
+        ].map((item) => (
+          <div key={item.label} className="bg-lavender/60 rounded-lg px-2.5 py-2">
+            <div className="text-muted inline-flex items-center gap-1">
+              <Icon name={item.icon} size={11} /> {item.label}
+            </div>
+            <div className="font-bold mt-0.5 text-navy">{item.val}</div>
           </div>
         ))}
       </div>
@@ -331,7 +357,9 @@ function BookingPayment({ opt }) {
           <div className="font-extrabold text-lg text-navy">{inr(opt.price)}</div>
         </div>
         {state === 'done' ? (
-          <span className="rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold px-4 py-3">✓ Verified &amp; booked</span>
+          <span className="rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold px-4 py-3 inline-flex items-center gap-1">
+            <Icon name="check" size={12} /> Verified &amp; booked
+          </span>
         ) : (
           <button
             onClick={pay}
@@ -342,8 +370,9 @@ function BookingPayment({ opt }) {
           </button>
         )}
       </div>
-      <p className="text-[9px] text-muted mt-2 leading-relaxed">
-        🔒 100% secure — payment shows as confirmed only after provider-side verification. Booking status is tracked separately from payment.
+      <p className="text-[9px] text-muted mt-2 leading-relaxed inline-flex items-center gap-1">
+        <Icon name="shieldCheck" size={12} className="text-emerald-600 shrink-0" />
+        <span>100% secure — payment shows as confirmed only after provider-side verification.</span>
       </p>
     </Card>
   );
@@ -353,9 +382,9 @@ function BookingPayment({ opt }) {
 function ExecutionCard() {
   return (
     <Card>
-      <div className="font-bold text-sm">Event execution</div>
+      <div className="font-bold text-sm text-navy">Event execution</div>
       <div className="mt-2 flex items-center gap-2 bg-emerald-50 rounded-xl px-3 py-2.5">
-        <span className="text-sm">🎉</span>
+        <span className="w-2 h-2 rounded-full bg-emerald-500" />
         <div className="text-[11px] font-bold text-emerald-700">Your event is on track!</div>
       </div>
       <div className="space-y-2.5 mt-3">
@@ -368,15 +397,19 @@ function ExecutionCard() {
               {n.split(' ').map((w) => w[0]).join('')}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold truncate">{n}</div>
+              <div className="text-xs font-bold truncate text-navy">{n}</div>
               <div className="text-[10px] text-muted truncate">{d} · {t}</div>
             </div>
-            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5 shrink-0">✓ On track</span>
+            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5 shrink-0 inline-flex items-center gap-1">
+              <Icon name="check" size={9} /> On track
+            </span>
           </div>
         ))}
       </div>
       <div className="mt-3 bg-lavender/60 rounded-xl p-3 flex gap-2.5">
-        <div className="w-7 h-7 rounded-full bg-primary text-white grid place-items-center text-[10px] shrink-0">✨</div>
+        <div className="w-7 h-7 rounded-full bg-primary text-white grid place-items-center shrink-0">
+          <Icon name="bolt" size={12} />
+        </div>
         <div>
           <p className="text-[11px] leading-snug text-ink/80">"Your photography team is scheduled and will arrive by <b>9:30 AM</b>. I'll keep you posted on the day."</p>
           <div className="text-[9px] text-muted mt-1">Aura+ · verified from vendor status</div>
@@ -404,11 +437,13 @@ export function HomeView({ firstName, events, onOpenEvent, onOpenAura }) {
             <StatusChip status="Planning" />
           </div>
           <div className="text-[11px] text-muted mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-            <span>📅 {e.date}</span><span>📍 {e.place}</span><span>👥 {e.guests} guests</span>
+            <span className="inline-flex items-center gap-1"><Icon name="calendar" size={11} /> {e.date}</span>
+            <span className="inline-flex items-center gap-1"><Icon name="mapPin" size={11} /> {e.place}</span>
+            <span className="inline-flex items-center gap-1"><Icon name="customers" size={11} /> {e.guests} guests</span>
           </div>
         </div>
-        <button onClick={onOpenAura} className="hidden sm:block rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 hover:bg-primary-dark transition shadow-sm shadow-primary/30">
-          + Plan another event
+        <button onClick={onOpenAura} className="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 hover:bg-primary-dark transition shadow-sm shadow-primary/30">
+          <Icon name="plus" size={13} /> Plan another event
         </button>
       </div>
 
@@ -435,8 +470,8 @@ export function HomeView({ firstName, events, onOpenEvent, onOpenAura }) {
                 <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-lavender to-primary-soft border-2 border-white grid place-items-center text-[9px] font-bold text-navy">{i}</div>
               ))}
             </div>
-            <button className="mt-3 w-full rounded-xl border border-dashed border-gray-300 text-xs font-semibold text-muted hover:text-primary hover:border-primary/40 py-2.5 transition">
-              + Invite to circle
+            <button className="mt-3 w-full rounded-xl border border-dashed border-gray-300 text-xs font-semibold text-muted hover:text-primary hover:border-primary/40 py-2.5 transition inline-flex items-center justify-center gap-1">
+              <Icon name="plus" size={13} /> Invite to circle
             </button>
           </Card>
         </div>
@@ -487,7 +522,9 @@ export function MeView({ user, logout }) {
         <div className="min-w-0">
           <div className="font-extrabold text-base truncate">{user?.fullName || 'Guest'}</div>
           <div className="text-xs text-muted truncate">{user?.email}</div>
-          <div className="text-[10px] text-emerald-600 font-bold mt-1">✓ Verified customer</div>
+          <div className="text-[10px] text-emerald-600 font-bold mt-1 inline-flex items-center gap-1">
+            <Icon name="check" size={11} /> Verified customer
+          </div>
         </div>
       </Card>
 
@@ -513,9 +550,15 @@ export function MeView({ user, logout }) {
 
       <Card title="Support">
         <div className="grid grid-cols-2 gap-2.5 text-center">
-          {[['💬', 'Chat with us'], ['📞', 'Request a call'], ['🛡️', 'Report an issue'], ['❓', 'How STARVNT works']].map(([i, l]) => (
-            <button key={l} className="rounded-xl border border-gray-100 py-3.5 text-xs font-semibold hover:bg-lavender transition">
-              <div className="text-base mb-1">{i}</div>{l}
+          {[
+            { icon: 'message', label: 'Chat with us' },
+            { icon: 'help', label: 'Request a call' },
+            { icon: 'shield', label: 'Report an issue' },
+            { icon: 'help', label: 'How STARVNT works' },
+          ].map((item) => (
+            <button key={item.label} className="rounded-xl border border-gray-100 py-3 text-xs font-semibold hover:bg-lavender transition flex flex-col items-center gap-1 text-navy">
+              <Icon name={item.icon} size={18} className="text-primary" />
+              <span>{item.label}</span>
             </button>
           ))}
         </div>

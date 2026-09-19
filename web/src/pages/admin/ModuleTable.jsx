@@ -182,7 +182,7 @@ export default function ModuleTable({ kind }) {
             <div key={l} className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="text-xl font-extrabold">{v}</div>
               <div className="text-xs text-muted">{l}</div>
-              <div className="text-[11px] text-emerald-600 font-medium mt-1">▲ {d}</div>
+              <div className="text-[11px] text-emerald-600 font-medium mt-1">{d}</div>
             </div>
           ))}
         </div>
@@ -203,8 +203,12 @@ export default function ModuleTable({ kind }) {
             </button>
           ))}
           {m.filters.map((f) => (
-            <button key={f} className="text-xs font-medium bg-white rounded-full px-3.5 py-1.5 text-ink/60 hover:bg-lavender">
-              {f} ▾
+            <button
+              key={f}
+              className="inline-flex items-center gap-1.5 text-xs font-medium bg-white rounded-full px-3.5 py-1.5 text-ink/60 hover:bg-lavender transition"
+            >
+              <span>{f}</span>
+              <Icon name="chevronDown" size={11} className="text-muted" />
             </button>
           ))}
         </div>
@@ -243,7 +247,11 @@ export default function ModuleTable({ kind }) {
                     )}
                   </td>
                 ))}
-                <td className="px-5 py-3 text-right text-muted">⋮</td>
+                <td className="px-5 py-3 text-right text-muted">
+                  <button className="p-1 rounded-lg hover:bg-lavender text-muted hover:text-navy inline-flex items-center justify-center">
+                    <Icon name="dotsVertical" size={15} strokeWidth={2.5} />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -253,13 +261,17 @@ export default function ModuleTable({ kind }) {
         <div className="flex items-center justify-between px-5 py-3 text-xs text-muted">
           <span>Showing 1–{m.rows.length} of {m.total}</span>
           <div className="flex items-center gap-1">
-            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">‹</button>
+            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender" aria-label="Previous page">
+              <Icon name="chevronLeft" size={13} />
+            </button>
             <button className="w-7 h-7 grid place-items-center rounded-lg bg-primary text-white font-bold">1</button>
             <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">2</button>
             <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">3</button>
             <span className="px-1">…</span>
             <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">{m.pages}</button>
-            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">›</button>
+            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender" aria-label="Next page">
+              <Icon name="chevronRight" size={13} />
+            </button>
           </div>
         </div>
       </div>

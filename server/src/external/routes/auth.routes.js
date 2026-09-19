@@ -57,6 +57,36 @@ function issueTokens(user, session) {
   return { accessToken: signExternalAccessToken(user, session._id) };
 }
 
+async function ensureVendorOrganization(user, { businessName, brandName, category, city, location } = {}) {
+  if (!user) return;
+  if (!user.vendorOrganization) {
+    let org = await VendorOrganization.findOne({ owner: user._id });
+    if (!org) {
+      const defaultName = user.fullName || 'Vendor';
+      const resolvedBusinessName = businessName?.trim() || brandName?.trim() || `${defaultName}'s Studio`;
+      const resolvedCategory = category?.trim() || 'Cinematic Production';
+      const resolvedLocation = city?.trim() || location?.trim() || '';
+      const hasExplicitBrand = Boolean(businessName?.trim() || brandName?.trim());
+      const hasExplicitLoc = Boolean(resolvedLocation);
+      const isProfileCompleted = Boolean(hasExplicitBrand && resolvedCategory && hasExplicitLoc);
+
+      org = await VendorOrganization.create({
+        businessName: resolvedBusinessName,
+        category: resolvedCategory,
+        location: resolvedLocation,
+        owner: user._id,
+        status: 'PENDING',
+        activationState: 'REGISTERED',
+        isCommerciallyActive: false,
+        isProfileCompleted,
+      });
+    }
+    user.vendorOrganization = org._id;
+  }
+  user.accountType = 'VENDOR';
+  await user.save();
+}
+
 // ── Register (single external auth: CUSTOMER or VENDOR) ─────────────────────
 router.post('/register', authLimiter, async (req, res, next) => {
   try {
@@ -103,6 +133,9 @@ router.post('/register', authLimiter, async (req, res, next) => {
     if (accountType === 'VENDOR') {
       const resolvedLocation = city || location || '';
       const resolvedCategory = category || 'Cinematic Production';
+      const hasExplicitBrand = Boolean(resolvedBusinessName && resolvedBusinessName.trim());
+      const hasExplicitLoc = Boolean(resolvedLocation && resolvedLocation.trim());
+      const isProfileCompleted = Boolean(hasExplicitBrand && resolvedCategory && hasExplicitLoc);
 
       const org = await VendorOrganization.create({
         businessName: resolvedBusinessName,
@@ -112,6 +145,7 @@ router.post('/register', authLimiter, async (req, res, next) => {
         status: 'PENDING',
         activationState: 'REGISTERED',
         isCommerciallyActive: false,
+        isProfileCompleted,
       });
       user.vendorOrganization = org._id;
       await user.save();
@@ -128,7 +162,8 @@ router.post('/register', authLimiter, async (req, res, next) => {
 // ── Login ────────────────────────────────────────────────────────────────────
 router.post('/login', authLimiter, async (req, res, next) => {
   try {
-    const { email, password } = req.body || {};
+    const { email, password, accountType, businessName, brandName, category, city, location } =
+      req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'MISSING_FIELDS' });
 
     const user = await ExternalUser.findOne({ email: String(email).toLowerCase() }).select(
@@ -140,6 +175,10 @@ router.post('/login', authLimiter, async (req, res, next) => {
     }
     if (user.status !== 'ACTIVE') {
       return res.status(401).json({ error: 'ACCOUNT_DISABLED' });
+    }
+
+    if (accountType === 'VENDOR') {
+      await ensureVendorOrganization(user, { businessName, brandName, category, city, location });
     }
 
     user.lastLoginAt = new Date();
@@ -156,7 +195,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
 // ── Google OAuth / One-Tap Login (Customer & Vendor) ────────────────────────
 router.post('/google', authLimiter, async (req, res, next) => {
   try {
-    const { credential, accountType, businessName, brandName, category, city } = req.body || {};
+    const { credential, accountType, businessName, brandName, category, city, location } = req.body || {};
     if (!credential) {
       return res.status(400).json({ error: 'MISSING_GOOGLE_CREDENTIAL' });
     }
@@ -169,6 +208,9 @@ router.post('/google', authLimiter, async (req, res, next) => {
     if (user) {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl) user.avatarUrl = googleUser.avatarUrl;
+      if (accountType === 'VENDOR') {
+        await ensureVendorOrganization(user, { businessName, brandName, category, city, location });
+      }
       user.lastLoginAt = new Date();
       await user.save();
     } else {
@@ -185,9 +227,15 @@ router.post('/google', authLimiter, async (req, res, next) => {
       });
 
       if (targetAccountType === 'VENDOR') {
-        const resolvedBusinessName = businessName || brandName || `${googleUser.fullName}'s Studio`;
-        const resolvedCategory = category || 'Cinematic Production';
-        const resolvedLocation = city || 'Mumbai';
+        const hasExplicitBrand = Boolean(businessName?.trim() || brandName?.trim());
+        const hasExplicitCity = Boolean(city?.trim() || location?.trim());
+        const isProfileCompleted = Boolean(hasExplicitBrand && category?.trim() && hasExplicitCity);
+
+        const resolvedBusinessName = hasExplicitBrand
+          ? (businessName || brandName).trim()
+          : `${googleUser.fullName}'s Studio`;
+        const resolvedCategory = category?.trim() || 'Cinematic Production';
+        const resolvedLocation = hasExplicitCity ? (city || location).trim() : '';
 
         const org = await VendorOrganization.create({
           businessName: resolvedBusinessName,
@@ -197,6 +245,7 @@ router.post('/google', authLimiter, async (req, res, next) => {
           status: 'PENDING',
           activationState: 'REGISTERED',
           isCommerciallyActive: false,
+          isProfileCompleted,
         });
         user.vendorOrganization = org._id;
         await user.save();
@@ -245,7 +294,7 @@ router.post('/otp/send', authLimiter, async (req, res, next) => {
 // ── Mobile Phone OTP: Verify OTP & Sign In / Register ───────────────────────
 router.post('/otp/verify', authLimiter, async (req, res, next) => {
   try {
-    const { phone, otp, accountType, fullName, businessName, brandName, category, city } =
+    const { phone, otp, accountType, fullName, businessName, brandName, category, city, location } =
       req.body || {};
     if (!phone || !otp) {
       return res.status(400).json({ error: 'PHONE_AND_OTP_REQUIRED' });
@@ -260,6 +309,9 @@ router.post('/otp/verify', authLimiter, async (req, res, next) => {
     let user = await ExternalUser.findOne({ phone: normalizedPhone });
 
     if (user) {
+      if (accountType === 'VENDOR') {
+        await ensureVendorOrganization(user, { businessName, brandName, category, city, location });
+      }
       user.lastLoginAt = new Date();
       await user.save();
     } else {
@@ -282,10 +334,15 @@ router.post('/otp/verify', authLimiter, async (req, res, next) => {
       });
 
       if (targetAccountType === 'VENDOR') {
-        const resolvedBusinessName =
-          businessName || brandName || `${defaultName} Studios`;
-        const resolvedCategory = category || 'Cinematic Production';
-        const resolvedLocation = city || 'Mumbai';
+        const hasExplicitBrand = Boolean(businessName?.trim() || brandName?.trim());
+        const hasExplicitCity = Boolean(city?.trim());
+        const isProfileCompleted = Boolean(hasExplicitBrand && category?.trim() && hasExplicitCity);
+
+        const resolvedBusinessName = hasExplicitBrand
+          ? (businessName || brandName).trim()
+          : `${defaultName} Studios`;
+        const resolvedCategory = category?.trim() || 'Cinematic Production';
+        const resolvedLocation = hasExplicitCity ? city.trim() : '';
 
         const org = await VendorOrganization.create({
           businessName: resolvedBusinessName,
@@ -295,6 +352,7 @@ router.post('/otp/verify', authLimiter, async (req, res, next) => {
           status: 'PENDING',
           activationState: 'REGISTERED',
           isCommerciallyActive: false,
+          isProfileCompleted,
         });
         user.vendorOrganization = org._id;
         await user.save();
@@ -316,7 +374,7 @@ router.post('/otp/verify', authLimiter, async (req, res, next) => {
 // ── MSG91 OTP Widget: Verify Access Token & Sign In / Register ─────────────
 router.post('/otp/widget-verify', authLimiter, async (req, res, next) => {
   try {
-    const { accessToken, phone, accountType, fullName, businessName, brandName, category, city } =
+    const { accessToken, phone, accountType, fullName, businessName, brandName, category, city, location } =
       req.body || {};
     if (!accessToken) {
       return res.status(400).json({ error: 'MISSING_WIDGET_ACCESS_TOKEN' });
@@ -348,6 +406,9 @@ router.post('/otp/widget-verify', authLimiter, async (req, res, next) => {
     let user = await ExternalUser.findOne({ phone: normalizedPhone });
 
     if (user) {
+      if (accountType === 'VENDOR') {
+        await ensureVendorOrganization(user, { businessName, brandName, category, city, location });
+      }
       user.lastLoginAt = new Date();
       await user.save();
     } else {
@@ -370,10 +431,15 @@ router.post('/otp/widget-verify', authLimiter, async (req, res, next) => {
       });
 
       if (targetAccountType === 'VENDOR') {
-        const resolvedBusinessName =
-          businessName || brandName || `${defaultName} Studios`;
-        const resolvedCategory = category || 'Cinematic Production';
-        const resolvedLocation = city || 'Mumbai';
+        const hasExplicitBrand = Boolean(businessName?.trim() || brandName?.trim());
+        const hasExplicitCity = Boolean(city?.trim());
+        const isProfileCompleted = Boolean(hasExplicitBrand && category?.trim() && hasExplicitCity);
+
+        const resolvedBusinessName = hasExplicitBrand
+          ? (businessName || brandName).trim()
+          : `${defaultName} Studios`;
+        const resolvedCategory = category?.trim() || 'Cinematic Production';
+        const resolvedLocation = hasExplicitCity ? city.trim() : '';
 
         const org = await VendorOrganization.create({
           businessName: resolvedBusinessName,
@@ -383,6 +449,7 @@ router.post('/otp/widget-verify', authLimiter, async (req, res, next) => {
           status: 'PENDING',
           activationState: 'REGISTERED',
           isCommerciallyActive: false,
+          isProfileCompleted,
         });
         user.vendorOrganization = org._id;
         await user.save();

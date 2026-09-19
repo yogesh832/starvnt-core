@@ -64,6 +64,44 @@ test('Multi-Option Auth: Google OAuth and Mobile Phone OTP for Customers & Vendo
     assert.equal(vendorProf.status, 200);
     assert.equal(vendorProf.body.vendor.businessName, 'Malhotra Cine Works');
 
+    // ── 2b. Google Auth for VENDOR without details (0% initial completion) ───
+    const blankVendorRes = await request(app)
+      .post('/api/auth/google')
+      .send({
+        credential: 'test:leeladhar.google@example.com:Yogesh Upadhayay:google-sub-33441',
+        accountType: 'VENDOR',
+      });
+    assert.equal(blankVendorRes.status, 200);
+    const blankToken = blankVendorRes.body.accessToken;
+
+    const blankOrg = await models.VendorOrganization.findById(
+      blankVendorRes.body.user.vendorOrganization
+    );
+    assert.ok(blankOrg);
+    assert.equal(blankOrg.isProfileCompleted, false);
+
+    // Initial activation-status must be 0% with profile incomplete
+    const blankStatusRes = await request(app)
+      .get('/api/vendor/activation-status')
+      .set('Authorization', `Bearer ${blankToken}`);
+    assert.equal(blankStatusRes.status, 200);
+    assert.equal(blankStatusRes.body.status.completionPercentage, 0);
+    assert.equal(blankStatusRes.body.status.checklist.profile, false);
+    assert.equal(blankStatusRes.body.status.is100Percent, false);
+
+    // Updating profile completes step 1 (Brand & City) to 20%
+    const updateProfRes = await request(app)
+      .put('/api/vendor/profile')
+      .set('Authorization', `Bearer ${blankToken}`)
+      .send({
+        businessName: "Yogesh Films",
+        category: 'Cinematic Production',
+        city: 'Mumbai',
+      });
+    assert.equal(updateProfRes.status, 200);
+    assert.equal(updateProfRes.body.activation.completionPercentage, 20);
+    assert.equal(updateProfRes.body.activation.checklist.profile, true);
+
     // ── 3. Google Re-login (Idempotency) ────────────────────────────────────
     const googleRelogin = await request(app)
       .post('/api/auth/google')
@@ -187,6 +225,26 @@ test('Multi-Option Auth: Google OAuth and Mobile Phone OTP for Customers & Vendo
     assert.equal(widgetMatchRes.status, 200);
     assert.equal(widgetMatchRes.body.user.email, 'simran.kaur@example.com');
     assert.equal(widgetMatchRes.body.user.id, emailWithPhoneRes.body.user.id);
+
+    // ── 11. Existing CUSTOMER logging in as VENDOR via MSG91 OTP widget ────────
+    // Auto-promotes user and creates VendorOrganization seamlessly
+    const widgetVendorRes = await request(app)
+      .post('/api/auth/otp/widget-verify')
+      .send({
+        accessToken: 'test:widget:+919988776655',
+        accountType: 'VENDOR',
+        businessName: 'Simran Cine Creations',
+      });
+    assert.equal(widgetVendorRes.status, 200);
+    assert.equal(widgetVendorRes.body.user.accountType, 'VENDOR');
+    assert.ok(widgetVendorRes.body.user.vendorOrganization);
+
+    // Vendor profile access works immediately
+    const vendorCheckRes = await request(app)
+      .get('/api/vendor/profile')
+      .set('Authorization', `Bearer ${widgetVendorRes.body.accessToken}`);
+    assert.equal(vendorCheckRes.status, 200);
+    assert.equal(vendorCheckRes.body.vendor.businessName, 'Simran Cine Creations');
   } finally {
     await disconnectDB();
     await mongod.stop();

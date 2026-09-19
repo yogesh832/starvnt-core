@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
+import PublicNavbar from '../../components/PublicNavbar.jsx';
+import PublicFooter from '../../components/PublicFooter.jsx';
+import { LogoWord } from '../../components/ui.jsx';
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -51,8 +54,8 @@ export default function ExternalLogin() {
     phone: '',
     otp: '',
     businessName: '',
-    category: 'Cinematic Production',
-    city: 'Mumbai',
+    category: '',
+    city: '',
   });
 
   // Phone OTP States
@@ -162,10 +165,10 @@ export default function ExternalLogin() {
     try {
       const u = await loginWithGoogle(response.credential, {
         accountType,
-        businessName: form.businessName,
-        brandName: form.businessName,
-        category: form.category,
-        city: form.city,
+        businessName: mode === 'register' && form.businessName?.trim() ? form.businessName.trim() : undefined,
+        brandName: mode === 'register' && form.businessName?.trim() ? form.businessName.trim() : undefined,
+        category: mode === 'register' && form.category?.trim() ? form.category.trim() : undefined,
+        city: mode === 'register' && form.city?.trim() ? form.city.trim() : undefined,
       });
       navigate(u.accountType === 'VENDOR' ? '/vendor' : '/customer', { replace: true });
     } catch (err) {
@@ -212,14 +215,27 @@ export default function ExternalLogin() {
               typeof data === 'string'
                 ? data
                 : data?.message || data?.['access-token'] || data?.token || JSON.stringify(data);
+
+            const verifiedIdentifier =
+              data?.identifier ||
+              data?.data?.identifier ||
+              data?.mobile ||
+              data?.data?.mobile ||
+              formattedIdentifier ||
+              form.phone;
+            const cleanPhone = verifiedIdentifier ? String(verifiedIdentifier).replace(/[^\d+]/g, '') : '';
+            const normalizedPhone = cleanPhone
+              ? (cleanPhone.startsWith('+') ? cleanPhone : `+${cleanPhone}`)
+              : undefined;
+
             const u = await loginWithWidgetOtp(token, {
               accountType,
-              phone: formattedIdentifier ? `+${formattedIdentifier}` : form.phone,
-              fullName: form.fullName,
-              businessName: form.businessName,
-              brandName: form.businessName,
-              category: form.category,
-              city: form.city,
+              phone: normalizedPhone,
+              fullName: form.fullName?.trim() || undefined,
+              businessName: form.businessName?.trim() || undefined,
+              brandName: form.businessName?.trim() || undefined,
+              category: form.category?.trim() || undefined,
+              city: form.city?.trim() || undefined,
             });
             navigate(u.accountType === 'VENDOR' ? '/vendor' : '/customer', { replace: true });
           } catch (err) {
@@ -279,11 +295,11 @@ export default function ExternalLogin() {
     try {
       const u = await loginWithOtp(form.phone, form.otp, {
         accountType,
-        fullName: form.fullName,
-        businessName: form.businessName,
-        brandName: form.businessName,
-        category: form.category,
-        city: form.city,
+        fullName: form.fullName?.trim() || undefined,
+        businessName: mode === 'register' && form.businessName?.trim() ? form.businessName.trim() : undefined,
+        brandName: mode === 'register' && form.businessName?.trim() ? form.businessName.trim() : undefined,
+        category: mode === 'register' && form.category?.trim() ? form.category.trim() : undefined,
+        city: mode === 'register' && form.city?.trim() ? form.city.trim() : undefined,
       });
       navigate(u.accountType === 'VENDOR' ? '/vendor' : '/customer', { replace: true });
     } catch (err) {
@@ -299,134 +315,151 @@ export default function ExternalLogin() {
   }
 
   const inputCls =
-    'w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition';
+    'w-full rounded-xl border border-gray-200/90 bg-gray-50/40 px-4 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition';
 
   return (
-    <div className="min-h-screen bg-[#f3f6fb] flex flex-col items-center justify-center p-3 sm:p-6 md:p-8">
-      {/* Header bar */}
-      <div className="w-full max-w-4xl mb-3 flex items-center justify-between px-1">
-        <h1 className="text-base font-extrabold text-navy tracking-tight flex items-center gap-2">
-          <span className="text-primary font-bold">1.</span> {mode === 'login' ? 'Login' : 'Signup'}
-        </h1>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-primary bg-primary-soft px-3 py-1 rounded-full">
-            {mode === 'login' ? 'Customer & Vendor Access' : 'New Registration'}
-          </span>
-          <Link
-            to="/admin/login"
-            className="text-[11px] font-bold text-muted hover:text-navy px-2 py-1 transition"
-          >
-            Core Admin →
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white flex flex-col justify-between">
+      {/* Integrated Navigation Bar matching Landing */}
+      <PublicNavbar activePage="login" onPlanClick={() => navigate('/')} />
 
       {/* Main Container */}
-      <div className="w-full max-w-4xl bg-white rounded-3xl border border-gray-200/90 shadow-xl overflow-hidden grid md:grid-cols-[38%_1fr]">
-        {/* Left: Brand Panel */}
-        <aside
-          className="relative p-6 sm:p-8 text-white flex flex-col justify-between overflow-hidden min-h-[220px] md:min-h-[580px]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to bottom, rgba(10, 14, 32, 0.88) 0%, rgba(10, 14, 32, 0.55) 35%, rgba(10, 14, 32, 0.12) 65%, rgba(10, 14, 32, 0.75) 100%), url('https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1600&q=80')",
-            backgroundSize: 'cover',
-            backgroundPosition: 'center bottom',
-          }}
-        >
-          <div className="relative">
-            <div className="flex items-center gap-2 text-white">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-white">
-                <path
-                  d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <div>
-                <div className="font-extrabold tracking-tight text-lg leading-tight">STARVNT</div>
-                <div className="text-[9px] text-white/80 leading-tight">Events. Simplified.</div>
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <div className="w-full max-w-4xl lg:max-w-5xl bg-white rounded-3xl sm:rounded-[32px] border border-gray-100/90 shadow-2xl shadow-primary/10 overflow-hidden grid md:grid-cols-[42%_1fr]">
+          {/* Left: Brand & Luxury Visual Panel */}
+          <aside
+            className="relative p-7 sm:p-9 text-white flex flex-col justify-between overflow-hidden min-h-[300px] md:min-h-[620px] transition-all duration-700"
+            style={{
+              backgroundImage: `linear-gradient(to bottom, rgba(14, 19, 48, 0.92) 0%, rgba(14, 19, 48, 0.65) 45%, rgba(14, 19, 48, 0.40) 70%, rgba(14, 19, 48, 0.94) 100%), url('${
+                accountType === 'VENDOR'
+                  ? 'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1600&q=85'
+                  : 'https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1600&q=85'
+              }')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          >
+            {/* Top Brand Logo */}
+            <div className="relative z-10 flex items-center justify-between">
+              <LogoWord light={true} sub={accountType === 'VENDOR' ? 'Vendor OS' : 'Events. Simplified.'} />
+              <span className="text-[11px] font-bold text-white/90 bg-white/15 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
+                {accountType === 'VENDOR' ? 'Studio OS' : 'Host & Client'}
+              </span>
+            </div>
+
+            {/* Center Content */}
+            <div className="relative z-10 my-auto py-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[11px] font-medium tracking-wide uppercase text-white/90 mb-4">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>{accountType === 'VENDOR' ? 'Event Studio Operating System' : 'Event Coordination Platform'}</span>
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-snug">
+                {mode === 'login'
+                  ? (accountType === 'VENDOR' ? 'Welcome back to Vendor OS.' : 'Welcome back.')
+                  : (accountType === 'VENDOR' ? 'Scale your Event Studio.' : 'Join STARVNT.')}
+              </h2>
+
+              <p className="mt-2.5 text-white/85 text-xs sm:text-sm leading-relaxed max-w-sm">
+                {accountType === 'VENDOR'
+                  ? 'Manage incoming verified client leads, send instant calendar quotes, and secure milestone payouts.'
+                  : 'Sign in to access your AI event planner Aura+, verified vendor quotes, and 100% escrow-protected bookings.'}
+              </p>
+
+              {/* Trust highlights */}
+              <div className="mt-6 space-y-2.5 hidden sm:block">
+                <div className="flex items-center gap-3 text-xs text-white/90 bg-white/10 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-white/10">
+                  <svg className="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span><b className="font-semibold text-white">100% Core Escrow</b> payment protection</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-white/90 bg-white/10 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-white/10">
+                  <svg className="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>{accountType === 'VENDOR' ? <><b className="font-semibold text-white">Direct Client Requests</b> with verified budgets</> : <><b className="font-semibold text-white">Top 1% Verified Vendors</b> and studios</>}</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-white/90 bg-white/10 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-white/10">
+                  <svg className="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span><b className="font-semibold text-white">Zero Hidden Charges</b> · Verified reviews only</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="relative my-auto py-4 md:py-8">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-snug">
-              {mode === 'login' ? 'Welcome back.' : 'Join STARVNT.'}
-            </h2>
-            <p className="mt-2 text-white/85 text-xs sm:text-sm leading-relaxed max-w-xs">
-              Sign in with your Google account, Mobile OTP, or Email & Password.
-            </p>
-            <div className="mt-5 space-y-2 hidden md:block">
-              <div className="flex items-center gap-2 text-xs text-white/90">
-                <span className="text-emerald-400 font-bold">✓</span> Real-time client lead matching
-              </div>
-              <div className="flex items-center gap-2 text-xs text-white/90">
-                <span className="text-emerald-400 font-bold">✓</span> Core Escrow payment protection
-              </div>
-              <div className="flex items-center gap-2 text-xs text-white/90">
-                <span className="text-emerald-400 font-bold">✓</span> Authentic verified reviews only
-              </div>
+            {/* Script Overlay Quote */}
+            <div className="relative z-10 pt-4 border-t border-white/15">
+              <p className="text-sm font-serif italic text-white/90 drop-shadow-sm">
+                "Beautiful events create happier people."
+              </p>
+              <span className="text-[10px] uppercase tracking-widest text-white/70 font-bold mt-0.5 block">
+                — STARVNT
+              </span>
             </div>
-          </div>
+          </aside>
 
-          <div className="relative text-white/50 text-[10px] hidden md:block">
-            customers.starvnt.com · vendors.starvnt.com
-          </div>
-        </aside>
+          {/* Right: Auth Form Panel */}
+          <main className="p-6 sm:p-10 flex flex-col justify-center bg-white">
+            <div className="w-full">
+              {/* Persona Switcher: Customer vs Vendor */}
+              <div className="flex items-center justify-between pb-4 border-b border-gray-100 gap-4">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-navy tracking-tight">
+                    {mode === 'login' ? 'Sign in to STARVNT' : 'Create an Account'}
+                  </h2>
+                  <p className="text-xs text-muted mt-0.5">
+                    {accountType === 'VENDOR' ? 'Operating as Verified Vendor / Brand' : 'Planning Events as Host & Client'}
+                  </p>
+                </div>
 
-        {/* Right: Auth Form Panel */}
-        <main className="p-6 sm:p-8 flex flex-col justify-center bg-white">
-          <div className="w-full">
-            {/* Persona Switcher: Customer vs Vendor */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div>
-                <h2 className="text-xl font-extrabold text-navy tracking-tight">
-                  {mode === 'login' ? 'Sign in to STARVNT' : 'Create an Account'}
-                </h2>
-                <p className="text-xs text-muted mt-0.5">
-                  {accountType === 'VENDOR' ? 'Operating as Vendor / Brand' : 'Planning Events as Customer'}
-                </p>
+                {/* Persona Pill Switcher */}
+                <div className="flex bg-gray-100/90 p-1 rounded-2xl text-xs font-bold shrink-0 border border-gray-200/50">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountType('CUSTOMER');
+                      setError('');
+                    }}
+                    className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
+                      accountType === 'CUSTOMER' ? 'bg-navy text-white shadow-sm' : 'text-muted hover:text-navy'
+                    }`}
+                  >
+                    Customer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountType('VENDOR');
+                      setError('');
+                    }}
+                    className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
+                      accountType === 'VENDOR' ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-navy'
+                    }`}
+                  >
+                    Vendor OS
+                  </button>
+                </div>
               </div>
-
-              {/* Persona Pill */}
-              <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setAccountType('CUSTOMER')}
-                  className={`px-3 py-1.5 rounded-lg transition ${
-                    accountType === 'CUSTOMER' ? 'bg-white text-navy shadow-xs' : 'text-muted hover:text-navy'
-                  }`}
-                >
-                  Customer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountType('VENDOR')}
-                  className={`px-3 py-1.5 rounded-lg transition ${
-                    accountType === 'VENDOR' ? 'bg-primary text-white shadow-xs' : 'text-muted hover:text-navy'
-                  }`}
-                >
-                  Vendor OS
-                </button>
-              </div>
-            </div>
 
             {/* 3 Authentication Option Tabs */}
-            <div className="mt-4 grid grid-cols-3 gap-1.5 p-1 bg-lavender/70 rounded-2xl">
+            <div className="mt-4 grid grid-cols-3 gap-1.5 p-1 bg-lavender/80 rounded-2xl border border-gray-200/50">
               <button
                 type="button"
                 onClick={() => {
                   setAuthMethod('EMAIL');
                   setError('');
                 }}
-                className={`py-2 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition ${
+                className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                   authMethod === 'EMAIL'
-                    ? 'bg-white text-navy shadow-xs border border-gray-200/60'
-                    : 'text-muted hover:text-navy'
+                    ? 'bg-white text-navy shadow-xs border border-gray-200/80 font-bold'
+                    : 'text-muted hover:text-navy hover:bg-white/40'
                 }`}
               >
-                <span>✉️</span> Email
+                <svg className="w-3.5 h-3.5 text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span>Email</span>
               </button>
               <button
                 type="button"
@@ -434,13 +467,16 @@ export default function ExternalLogin() {
                   setAuthMethod('PHONE');
                   setError('');
                 }}
-                className={`py-2 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition ${
+                className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                   authMethod === 'PHONE'
-                    ? 'bg-white text-navy shadow-xs border border-gray-200/60'
-                    : 'text-muted hover:text-navy'
+                    ? 'bg-white text-navy shadow-xs border border-gray-200/80 font-bold'
+                    : 'text-muted hover:text-navy hover:bg-white/40'
                 }`}
               >
-                <span>📱</span> Mobile OTP
+                <svg className="w-3.5 h-3.5 text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <span>Mobile OTP</span>
               </button>
               <button
                 type="button"
@@ -448,10 +484,10 @@ export default function ExternalLogin() {
                   setAuthMethod('GOOGLE');
                   setError('');
                 }}
-                className={`py-2 px-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition ${
+                className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                   authMethod === 'GOOGLE'
-                    ? 'bg-white text-navy shadow-xs border border-gray-200/60'
-                    : 'text-muted hover:text-navy'
+                    ? 'bg-white text-navy shadow-xs border border-gray-200/80 font-bold'
+                    : 'text-muted hover:text-navy hover:bg-white/40'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" className="shrink-0">
@@ -460,14 +496,16 @@ export default function ExternalLogin() {
                   <path fill="#FBBC05" d="M5.28 14.27a7.22 7.22 0 0 1 0-4.54V6.58H1.25a11.98 11.98 0 0 0 0 10.84l4.03-3.15z"/>
                   <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                 </svg>
-                Google
+                <span>Google</span>
               </button>
             </div>
 
             {/* Error Banner */}
             {error && (
-              <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 flex items-start gap-2 animate-fade">
-                <span>⚠️</span>
+              <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5 flex items-start gap-2 animate-fade">
+                <svg className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
                 <span>{error}</span>
               </div>
             )}
@@ -509,6 +547,7 @@ export default function ExternalLogin() {
                           onChange={set('category')}
                           required
                         >
+                          <option value="">Select Category...</option>
                           <option value="Cinematic Production">Cinematic Production</option>
                           <option value="Photography">Photography</option>
                           <option value="Videography">Videography</option>
@@ -587,10 +626,19 @@ export default function ExternalLogin() {
                     <button
                       type="button"
                       onClick={() => setShowPw(!showPw)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-navy text-xs"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition p-1 cursor-pointer"
                       aria-label="Toggle password visibility"
                     >
-                      {showPw ? '🙈' : '👁'}
+                      {showPw ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -598,7 +646,7 @@ export default function ExternalLogin() {
                 <button
                   type="submit"
                   disabled={busy}
-                  className="w-full rounded-xl bg-[#5244e8] hover:bg-[#4335d6] text-white font-bold py-2.5 text-sm shadow-md shadow-primary/25 transition disabled:opacity-60 cursor-pointer mt-1"
+                  className="w-full rounded-xl bg-primary hover:bg-primary-dark active:scale-[0.99] text-white font-bold py-3 text-sm shadow-md shadow-primary/25 transition disabled:opacity-60 cursor-pointer mt-1"
                 >
                   {busy ? 'Please wait…' : mode === 'login' ? `Sign In as ${accountType === 'VENDOR' ? 'Vendor' : 'Customer'}` : 'Create Account'}
                 </button>
@@ -643,6 +691,7 @@ export default function ExternalLogin() {
                               value={form.category}
                               onChange={set('category')}
                             >
+                              <option value="">Select Category...</option>
                               <option value="Cinematic Production">Cinematic Production</option>
                               <option value="Photography">Photography</option>
                               <option value="Decor & Styling">Decor & Styling</option>
@@ -654,7 +703,7 @@ export default function ExternalLogin() {
                             <label className="block text-xs font-semibold text-ink/80 mb-1">City</label>
                             <input
                               className={inputCls}
-                              placeholder="Mumbai"
+                              placeholder="e.g. Mumbai, Kolkata..."
                               value={form.city}
                               onChange={set('city')}
                             />
@@ -685,7 +734,7 @@ export default function ExternalLogin() {
                     <button
                       type="submit"
                       disabled={busy}
-                      className="w-full rounded-xl bg-[#5244e8] hover:bg-[#4335d6] text-white font-bold py-2.5 text-sm shadow-md shadow-primary/25 transition disabled:opacity-60 cursor-pointer"
+                      className="w-full rounded-xl bg-primary hover:bg-primary-dark active:scale-[0.99] text-white font-bold py-2.5 text-sm shadow-md shadow-primary/25 transition disabled:opacity-60 cursor-pointer"
                     >
                       {busy ? 'Connecting to MSG91…' : 'Send Real OTP via MSG91 →'}
                     </button>
@@ -700,16 +749,19 @@ export default function ExternalLogin() {
                         type="button"
                         onClick={() => openMsg91Widget()}
                         disabled={busy}
-                        className="w-full mt-1 rounded-xl border-2 border-[#5244e8]/30 hover:border-[#5244e8] bg-lavender/30 hover:bg-lavender/60 text-primary font-bold py-2 text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+                        className="w-full mt-1 rounded-xl border border-primary/30 hover:border-primary bg-lavender/40 hover:bg-lavender/80 text-primary font-bold py-2.5 text-xs flex items-center justify-center gap-2 transition cursor-pointer"
                       >
-                        <span>🛡️</span>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
                         <span>Launch MSG91 OTP Widget</span>
                       </button>
-                      <p className="text-[10px] text-center text-muted mt-2">
-                        🔒 Verified live SMS / WhatsApp OTP delivered by MSG91 Gateway
-                      </p>
-                      <p className="text-[10px] text-center text-ink/70 mt-1 bg-amber-50 border border-amber-200/60 rounded-lg p-1.5">
-                        💡 <b>Tip:</b> If telecom SMS is delayed, select <b>"WhatsApp"</b> or <b>"Get Via Call"</b> inside the widget popup for instant delivery.
+                      <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted mt-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                        <span>Encrypted live SMS & WhatsApp OTP via MSG91 Gateway</span>
+                      </div>
+                      <p className="text-[10px] text-ink/70 mt-1.5 bg-gray-50 border border-gray-200/70 rounded-xl p-2 leading-relaxed">
+                        <b className="font-semibold text-ink">Tip:</b> If telecom SMS is delayed, select <b>"WhatsApp"</b> or <b>"Get Via Call"</b> inside the widget popup for instant delivery.
                       </p>
                     </div>
                   </form>
@@ -798,6 +850,7 @@ export default function ExternalLogin() {
                           value={form.category}
                           onChange={set('category')}
                         >
+                          <option value="">Select Category...</option>
                           <option value="Cinematic Production">Cinematic Production</option>
                           <option value="Photography">Photography</option>
                           <option value="Decor & Styling">Decor & Styling</option>
@@ -809,7 +862,7 @@ export default function ExternalLogin() {
                         <label className="block text-xs font-semibold text-ink/80 mb-1">City</label>
                         <input
                           className={inputCls}
-                          placeholder="Mumbai"
+                          placeholder="e.g. Mumbai, Kolkata..."
                           value={form.city}
                           onChange={set('city')}
                         />
@@ -843,40 +896,33 @@ export default function ExternalLogin() {
             )}
 
             {/* Bottom Toggle between Login & Register */}
-            <div className="mt-5 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-muted">
-              {mode === 'login' ? (
-                <>
-                  <span>New to STARVNT?</span>
-                  <button
-                    onClick={() => {
-                      setMode('register');
-                      setError('');
-                      setOtpSent(false);
-                    }}
-                    className="text-primary hover:underline font-bold cursor-pointer"
-                  >
-                    Create an account →
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span>Already have an account?</span>
-                  <button
-                    onClick={() => {
-                      setMode('login');
-                      setError('');
-                      setOtpSent(false);
-                    }}
-                    className="text-primary hover:underline font-bold cursor-pointer"
-                  >
-                    Sign in here →
-                  </button>
-                </>
-              )}
+            <div className="mt-6 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-muted">
+              <div className="flex items-center gap-1.5">
+                <span>{mode === 'login' ? 'New to STARVNT?' : 'Already have an account?'}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode(mode === 'login' ? 'register' : 'login');
+                    setError('');
+                    setOtpSent(false);
+                  }}
+                  className="text-primary hover:underline font-bold cursor-pointer"
+                >
+                  {mode === 'login' ? 'Create an account →' : 'Sign in here →'}
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-muted">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Protected by Core Escrow</span>
+              </div>
             </div>
           </div>
         </main>
       </div>
     </div>
-  );
+
+    {/* Integrated Public Footer with Trust Strip */}
+    <PublicFooter showTrustStrip={true} />
+  </div>
+);
 }

@@ -14,6 +14,8 @@ import { Opportunity } from '../models/Opportunity.js';
 import { Quote } from '../models/Quote.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
+import { VendorMessageThread } from '../models/VendorMessageThread.js';
+import { VendorDocument } from '../models/VendorDocument.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { generateVendorInsights } from '../services/auraIntelligence.service.js';
 
@@ -45,13 +47,20 @@ router.get('/profile', async (req, res) => {
 
 router.put('/profile', async (req, res, next) => {
   try {
-    const { businessName, category, location, phone, website, bio } = req.body || {};
-    if (businessName) req.vendor.businessName = businessName;
-    if (category) req.vendor.category = category;
-    if (location !== undefined) req.vendor.location = location;
-    if (phone !== undefined) req.vendor.phone = phone;
-    if (website !== undefined) req.vendor.website = website;
+    const { businessName, category, location, city, phone, website, bio } = req.body || {};
+    if (businessName) req.vendor.businessName = businessName.trim();
+    if (category) req.vendor.category = category.trim();
+    const resolvedLoc = location !== undefined ? location : city;
+    if (resolvedLoc !== undefined) req.vendor.location = resolvedLoc.trim();
+    if (phone !== undefined) req.vendor.phone = phone.trim();
+    if (website !== undefined) req.vendor.website = website.trim();
     if (bio !== undefined) req.vendor.bio = bio;
+
+    // A profile is completed when brand name, category, and operating city/location are all provided
+    const hasBrand = Boolean(req.vendor.businessName && req.vendor.businessName.trim());
+    const hasCat = Boolean(req.vendor.category && req.vendor.category.trim());
+    const hasLoc = Boolean(req.vendor.location && req.vendor.location.trim());
+    req.vendor.isProfileCompleted = Boolean(hasBrand && hasCat && hasLoc);
 
     await req.vendor.save();
     const activation = await evaluateVendorActivation(req.vendorId);
@@ -200,7 +209,7 @@ router.post('/capabilities', async (req, res, next) => {
 // ── Operating Locations ────────────────────────────────────────────────────
 router.get('/locations', async (req, res, next) => {
   try {
-    const locations = await OperatingLocation.find({ vendor: req.vendorId });
+    const locations = await OperatingLocation.find({ vendor: req.vendorId }).sort({ isPrimary: -1, createdAt: -1 });
     res.json({ ok: true, locations });
   } catch (err) {
     next(err);
@@ -214,25 +223,99 @@ router.post('/locations', async (req, res, next) => {
       return res.status(400).json({ error: 'MISSING_LOCATION_FIELDS' });
     }
 
-    if (isPrimary) {
+    const existingCount = await OperatingLocation.countDocuments({ vendor: req.vendorId });
+    const shouldBePrimary = Boolean(isPrimary || existingCount === 0);
+
+    if (shouldBePrimary) {
       await OperatingLocation.updateMany({ vendor: req.vendorId }, { isPrimary: false });
     }
 
     const location = await OperatingLocation.create({
       vendor: req.vendorId,
-      label,
+      label: label.trim(),
       type: type || 'STUDIO',
-      address,
-      locality: locality || '',
-      city,
-      state: state || 'West Bengal',
-      postalCode: postalCode || '',
-      coordinates: coordinates || { lat: 0, lng: 0 },
-      isPrimary: Boolean(isPrimary),
+      address: address.trim(),
+      locality: locality ? locality.trim() : '',
+      city: city.trim(),
+      state: state ? state.trim() : 'Maharashtra',
+      postalCode: postalCode ? postalCode.trim() : '',
+      coordinates: coordinates && typeof coordinates.lat === 'number' && typeof coordinates.lng === 'number'
+        ? { lat: Number(coordinates.lat), lng: Number(coordinates.lng) }
+        : { lat: 0, lng: 0 },
+      isPrimary: shouldBePrimary,
     });
+
+    if (shouldBePrimary || !req.vendor.location) {
+      req.vendor.location = `${location.locality ? location.locality + ', ' : ''}${location.city}`;
+      if (req.vendor.businessName && req.vendor.category) {
+        req.vendor.isProfileCompleted = true;
+      }
+      await req.vendor.save();
+    }
 
     const activation = await evaluateVendorActivation(req.vendorId);
     res.status(201).json({ ok: true, location, activation });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/locations/:id', async (req, res, next) => {
+  try {
+    const loc = await OperatingLocation.findOne({ _id: req.params.id, vendor: req.vendorId });
+    if (!loc) {
+      return res.status(404).json({ error: 'LOCATION_NOT_FOUND' });
+    }
+
+    const { label, type, address, locality, city, state, postalCode, coordinates, isPrimary } = req.body || {};
+    if (label) loc.label = label.trim();
+    if (type) loc.type = type;
+    if (address) loc.address = address.trim();
+    if (locality !== undefined) loc.locality = locality.trim();
+    if (city) loc.city = city.trim();
+    if (state !== undefined) loc.state = state.trim();
+    if (postalCode !== undefined) loc.postalCode = postalCode.trim();
+    if (coordinates && typeof coordinates.lat === 'number' && typeof coordinates.lng === 'number') {
+      loc.coordinates = { lat: Number(coordinates.lat), lng: Number(coordinates.lng) };
+    }
+
+    if (isPrimary !== undefined) {
+      if (isPrimary) {
+        await OperatingLocation.updateMany({ vendor: req.vendorId }, { isPrimary: false });
+      }
+      loc.isPrimary = Boolean(isPrimary);
+    }
+
+    await loc.save();
+
+    if (loc.isPrimary || !req.vendor.location) {
+      req.vendor.location = `${loc.locality ? loc.locality + ', ' : ''}${loc.city}`;
+      await req.vendor.save();
+    }
+
+    const activation = await evaluateVendorActivation(req.vendorId);
+    res.json({ ok: true, location: loc, activation });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/locations/:id/primary', async (req, res, next) => {
+  try {
+    const loc = await OperatingLocation.findOne({ _id: req.params.id, vendor: req.vendorId });
+    if (!loc) {
+      return res.status(404).json({ error: 'LOCATION_NOT_FOUND' });
+    }
+
+    await OperatingLocation.updateMany({ vendor: req.vendorId }, { isPrimary: false });
+    loc.isPrimary = true;
+    await loc.save();
+
+    req.vendor.location = `${loc.locality ? loc.locality + ', ' : ''}${loc.city}`;
+    await req.vendor.save();
+
+    const activation = await evaluateVendorActivation(req.vendorId);
+    res.json({ ok: true, location: loc, activation });
   } catch (err) {
     next(err);
   }
@@ -244,6 +327,17 @@ router.delete('/locations/:id', async (req, res, next) => {
     if (!deleted) {
       return res.status(404).json({ error: 'LOCATION_NOT_FOUND' });
     }
+
+    if (deleted.isPrimary) {
+      const remaining = await OperatingLocation.findOne({ vendor: req.vendorId }).sort({ createdAt: 1 });
+      if (remaining) {
+        remaining.isPrimary = true;
+        await remaining.save();
+        req.vendor.location = `${remaining.locality ? remaining.locality + ', ' : ''}${remaining.city}`;
+        await req.vendor.save();
+      }
+    }
+
     const activation = await evaluateVendorActivation(req.vendorId);
     res.json({ ok: true, deleted: true, activation });
   } catch (err) {
@@ -269,17 +363,28 @@ router.post('/coverage', async (req, res, next) => {
       return res.status(404).json({ error: 'SERVICE_NOT_FOUND' });
     }
 
-    const coverage = await ServiceCoverage.create({
-      vendor: req.vendorId,
-      vendorService: service._id,
-      coverageType: coverageType || 'RADIUS',
-      localities: localities || [],
-      city: city || '',
-      state: state || '',
-      radiusKm: radiusKm !== undefined ? Number(radiusKm) : 40,
-      confidence: 'SELF_DECLARED',
-      outstationAllowed: Boolean(outstationAllowed),
-    });
+    let coverage = await ServiceCoverage.findOne({ vendor: req.vendorId, vendorService: service._id });
+    if (coverage) {
+      coverage.coverageType = coverageType || 'RADIUS';
+      if (localities !== undefined) coverage.localities = localities;
+      if (city !== undefined) coverage.city = city.trim();
+      if (state !== undefined) coverage.state = state.trim();
+      if (radiusKm !== undefined) coverage.radiusKm = Number(radiusKm);
+      if (outstationAllowed !== undefined) coverage.outstationAllowed = Boolean(outstationAllowed);
+      await coverage.save();
+    } else {
+      coverage = await ServiceCoverage.create({
+        vendor: req.vendorId,
+        vendorService: service._id,
+        coverageType: coverageType || 'RADIUS',
+        localities: localities || [],
+        city: city ? city.trim() : '',
+        state: state ? state.trim() : '',
+        radiusKm: radiusKm !== undefined ? Number(radiusKm) : 40,
+        confidence: 'SELF_DECLARED',
+        outstationAllowed: Boolean(outstationAllowed),
+      });
+    }
 
     const activation = await evaluateVendorActivation(req.vendorId);
     res.status(201).json({ ok: true, coverage, activation });
@@ -316,8 +421,14 @@ router.get('/travel-policy', async (req, res, next) => {
 
 router.put('/travel-policy', async (req, res, next) => {
   try {
-    const { freeRadiusKm, perKmRate, equipmentTransitFee, tollAndParkingIncluded, outstationDailyAllowance } =
-      req.body || {};
+    const {
+      freeRadiusKm,
+      perKmRate,
+      equipmentTransitFee,
+      tollAndParkingIncluded,
+      outstationDailyAllowance,
+      accommodationRequiredBeyondKm,
+    } = req.body || {};
 
     let policy = await TravelPolicy.findOne({ vendor: req.vendorId });
     if (!policy) {
@@ -329,6 +440,8 @@ router.put('/travel-policy', async (req, res, next) => {
     if (equipmentTransitFee !== undefined) policy.equipmentTransitFee = Number(equipmentTransitFee);
     if (tollAndParkingIncluded !== undefined) policy.tollAndParkingIncluded = Boolean(tollAndParkingIncluded);
     if (outstationDailyAllowance !== undefined) policy.outstationDailyAllowance = Number(outstationDailyAllowance);
+    if (accommodationRequiredBeyondKm !== undefined)
+      policy.accommodationRequiredBeyondKm = Number(accommodationRequiredBeyondKm);
 
     await policy.save();
     res.json({ ok: true, travelPolicy: policy });
@@ -354,23 +467,85 @@ router.post('/resources', async (req, res, next) => {
       return res.status(400).json({ error: 'MISSING_RESOURCE_FIELDS' });
     }
 
+    const typeMapping = {
+      STAFF: 'TEAM_MEMBER',
+      TEAM: 'TEAM_MEMBER',
+      FACILITY: 'SPACE',
+    };
+    const upperType = String(type).toUpperCase().trim();
+    const resolvedType = typeMapping[upperType] || upperType;
+
     const resource = await VendorResource.create({
       vendor: req.vendorId,
-      type,
-      name,
-      identifier: identifier || '',
-      capacityUnits: capacityUnits || 1,
+      type: resolvedType,
+      name: String(name).trim(),
+      identifier: identifier ? String(identifier).trim() : '',
+      capacityUnits: Number(capacityUnits) || 1,
       status: status || 'AVAILABLE',
-      notes: notes || '',
+      notes: notes ? String(notes).trim() : '',
     });
 
     res.status(201).json({ ok: true, resource });
+  } catch (err) {
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: err.message });
+    }
+    next(err);
+  }
+});
+
+router.delete('/resources/:id', async (req, res, next) => {
+  try {
+    const deleted = await VendorResource.findOneAndDelete({ _id: req.params.id, vendor: req.vendorId });
+    if (!deleted) {
+      return res.status(404).json({ error: 'RESOURCE_NOT_FOUND' });
+    }
+    res.json({ ok: true, deleted: true });
   } catch (err) {
     next(err);
   }
 });
 
 // ── Vendor Availability & Calendar Management ──────────────────────────────
+router.get('/availability/hours', async (req, res, next) => {
+  try {
+    const defaultHours = {
+      Monday: { isOpen: true, hours: '9 AM – 7 PM' },
+      Tuesday: { isOpen: true, hours: '9 AM – 7 PM' },
+      Wednesday: { isOpen: true, hours: '9 AM – 7 PM' },
+      Thursday: { isOpen: true, hours: '9 AM – 7 PM' },
+      Friday: { isOpen: true, hours: '9 AM – 9 PM' },
+      Saturday: { isOpen: true, hours: 'Full day' },
+      Sunday: { isOpen: false, hours: 'Off' },
+    };
+    const vendor = await VendorOrganization.findById(req.vendorId);
+    res.json({ ok: true, workingHours: vendor?.workingHours || defaultHours });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/availability/hours', async (req, res, next) => {
+  try {
+    const { workingHours } = req.body || {};
+    if (!workingHours) {
+      return res.status(400).json({ error: 'WORKING_HOURS_REQUIRED' });
+    }
+    const updated = await VendorOrganization.findByIdAndUpdate(
+      req.vendorId,
+      { $set: { workingHours } },
+      { new: true, runValidators: true }
+    );
+    if (!updated) {
+      return res.status(404).json({ error: 'VENDOR_NOT_FOUND' });
+    }
+    req.vendor = updated;
+    res.json({ ok: true, workingHours: updated.workingHours });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/availability/blockouts', async (req, res, next) => {
   try {
     const blockouts = await VendorBlockout.find({ vendor: req.vendorId }).sort({ date: 1 });
@@ -624,6 +799,236 @@ router.post('/reviews/:id/reply', async (req, res, next) => {
     await review.save();
 
     res.json({ ok: true, review });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Real-Time Messaging & Direct Client Communications (Spec §9, §14, §19) ─
+router.get('/messages/threads', async (req, res, next) => {
+  try {
+    let threads = await VendorMessageThread.find({ vendor: req.vendorId, status: { $ne: 'BLOCKED' } })
+      .sort({ lastMessageAt: -1 })
+      .lean();
+
+    // If no threads exist yet, check if there are opportunities that can seed initial threads
+    if (threads.length === 0) {
+      const opportunities = await Opportunity.find({ vendor: req.vendorId })
+        .populate('customer', 'fullName phone email')
+        .sort({ createdAt: -1 })
+        .limit(5);
+
+      if (opportunities.length > 0) {
+        for (const opp of opportunities) {
+          const clientName = opp.customer?.fullName || 'Prospective Client';
+          await VendorMessageThread.create({
+            vendor: req.vendorId,
+            customer: opp.customer?._id || null,
+            opportunity: opp._id,
+            clientName,
+            clientPhone: opp.customer?.phone || '',
+            clientEmail: opp.customer?.email || '',
+            eventName: opp.serviceName || 'Service Request',
+            eventType: opp.requiredCapability || 'Enquiry',
+            eventDate: opp.eventDate || '',
+            venueLocation: opp.serviceLocation?.address || opp.serviceLocation?.locality || opp.serviceLocation?.city || '',
+            lastMessageText: `Hi! We sent an enquiry regarding ${opp.serviceName} on ${opp.eventDate}.`,
+            lastMessageAt: opp.createdAt || new Date(),
+            unreadVendorCount: 1,
+            messages: [
+              {
+                sender: 'SYSTEM',
+                senderName: 'STARVNT Core',
+                text: `Opportunity matched for ${opp.serviceName} at ${opp.serviceLocation?.locality || opp.serviceLocation?.city || 'Venue'}.`,
+                createdAt: opp.createdAt || new Date(),
+                isRead: true,
+              },
+              {
+                sender: 'CLIENT',
+                senderName: clientName,
+                text: `Hi! We sent an enquiry regarding ${opp.serviceName} on ${opp.eventDate}. Could you share your availability and a formal quote?`,
+                createdAt: opp.createdAt || new Date(),
+                isRead: false,
+              },
+            ],
+          });
+        }
+        threads = await VendorMessageThread.find({ vendor: req.vendorId, status: { $ne: 'BLOCKED' } })
+          .sort({ lastMessageAt: -1 })
+          .lean();
+      }
+    }
+
+    res.json({ ok: true, threads });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/messages/threads/:id', async (req, res, next) => {
+  try {
+    const thread = await VendorMessageThread.findOne({
+      _id: req.params.id,
+      vendor: req.vendorId,
+    });
+
+    if (!thread) {
+      return res.status(404).json({ error: 'THREAD_NOT_FOUND' });
+    }
+
+    // Mark client messages as read
+    let updated = false;
+    for (const msg of thread.messages) {
+      if (msg.sender === 'CLIENT' && !msg.isRead) {
+        msg.isRead = true;
+        updated = true;
+      }
+    }
+    if (thread.unreadVendorCount > 0) {
+      thread.unreadVendorCount = 0;
+      updated = true;
+    }
+    if (updated) {
+      await thread.save();
+    }
+
+    res.json({ ok: true, thread });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/messages/threads/:id', async (req, res, next) => {
+  try {
+    const { text } = req.body || {};
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'MESSAGE_TEXT_REQUIRED' });
+    }
+
+    const thread = await VendorMessageThread.findOne({
+      _id: req.params.id,
+      vendor: req.vendorId,
+    });
+
+    if (!thread) {
+      return res.status(404).json({ error: 'THREAD_NOT_FOUND' });
+    }
+
+    const newMsg = {
+      sender: 'VENDOR',
+      senderName: req.vendor.businessName || 'Vendor',
+      text: text.trim(),
+      isRead: true,
+      createdAt: new Date(),
+    };
+
+    thread.messages.push(newMsg);
+    thread.lastMessageText = text.trim();
+    thread.lastMessageAt = new Date();
+    await thread.save();
+
+    res.status(201).json({ ok: true, thread, message: newMsg });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/messages/threads', async (req, res, next) => {
+  try {
+    const { opportunityId, bookingId, clientName, eventName, eventType, eventDate, venueLocation, text } = req.body || {};
+
+    if (!clientName || !clientName.trim()) {
+      return res.status(400).json({ error: 'CLIENT_NAME_REQUIRED' });
+    }
+
+    // Check if thread already exists for this opportunity
+    let thread = null;
+    if (opportunityId) {
+      thread = await VendorMessageThread.findOne({ vendor: req.vendorId, opportunity: opportunityId });
+    } else if (bookingId) {
+      thread = await VendorMessageThread.findOne({ vendor: req.vendorId, booking: bookingId });
+    }
+
+    if (!thread) {
+      thread = new VendorMessageThread({
+        vendor: req.vendorId,
+        opportunity: opportunityId || null,
+        booking: bookingId || null,
+        clientName: clientName.trim(),
+        eventName: eventName || 'Event Service',
+        eventType: eventType || 'Service',
+        eventDate: eventDate || '',
+        venueLocation: venueLocation || '',
+        messages: [],
+      });
+    }
+
+    if (text && text.trim()) {
+      const newMsg = {
+        sender: 'VENDOR',
+        senderName: req.vendor.businessName || 'Vendor',
+        text: text.trim(),
+        isRead: true,
+        createdAt: new Date(),
+      };
+      thread.messages.push(newMsg);
+      thread.lastMessageText = text.trim();
+      thread.lastMessageAt = new Date();
+    }
+
+    await thread.save();
+    res.status(201).json({ ok: true, thread });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Vendor Documents & KYC Verification (Working Section) ──────────────────
+router.get('/documents', async (req, res, next) => {
+  try {
+    const documents = await VendorDocument.find({ vendor: req.vendorId }).sort({ createdAt: -1 });
+    res.json({ ok: true, documents });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/documents', async (req, res, next) => {
+  try {
+    const { title, type, documentNumber, fileName, fileUrl, fileSize, notes, expiryDate } = req.body || {};
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'TITLE_REQUIRED' });
+    }
+
+    const doc = await VendorDocument.create({
+      vendor: req.vendorId,
+      title: title.trim(),
+      type: type || 'OTHER',
+      documentNumber: documentNumber ? documentNumber.trim() : '',
+      fileName: fileName ? fileName.trim() : `${title.trim().replace(/\s+/g, '_')}.pdf`,
+      fileUrl: fileUrl || '',
+      fileSize: fileSize || '1.2 MB',
+      status: 'SUBMITTED',
+      notes: notes ? notes.trim() : '',
+      expiryDate: expiryDate || '',
+    });
+
+    res.status(201).json({ ok: true, document: doc });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/documents/:id', async (req, res, next) => {
+  try {
+    const doc = await VendorDocument.findOneAndDelete({
+      _id: req.params.id,
+      vendor: req.vendorId,
+    });
+    if (!doc) {
+      return res.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
+    }
+    res.json({ ok: true, message: 'Document deleted successfully' });
   } catch (err) {
     next(err);
   }

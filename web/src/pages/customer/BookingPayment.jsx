@@ -14,28 +14,28 @@ export default function BookingPayment({ vendor, event, onBack, onPaymentSuccess
       name: 'UPI (Recommended)',
       detail: 'Google Pay, PhonePe, Paytm, BHIM',
       badge: 'Instant & Zero Fee',
-      icon: '⚡',
+      icon: 'bolt',
     },
     {
       id: 'card',
       name: 'Credit / Debit Card',
       detail: 'Visa, Mastercard, RuPay, Maestro',
       badge: null,
-      icon: '💳',
+      icon: 'payments',
     },
     {
       id: 'netbanking',
       name: 'Net Banking',
       detail: 'HDFC, ICICI, SBI, Axis & all major banks',
       badge: null,
-      icon: '🏦',
+      icon: 'wallet',
     },
     {
       id: 'wallet',
       name: 'Wallet',
       detail: 'Paytm, Amazon Pay, Mobikwik',
       badge: null,
-      icon: '👛',
+      icon: 'wallet',
     },
   ];
 
@@ -111,8 +111,8 @@ export default function BookingPayment({ vendor, event, onBack, onPaymentSuccess
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-emerald-700 bg-emerald-50 rounded-xl p-3">
-            <span>🛡</span>
+          <div className="flex items-center gap-2.5 text-[11px] text-emerald-700 bg-emerald-50 rounded-xl p-3">
+            <Icon name="shieldCheck" size={16} className="text-emerald-600 shrink-0" />
             <span>Covered by STARVNT 100% Money-Back & Fulfillment Guarantee</span>
           </div>
         </div>
@@ -142,7 +142,9 @@ export default function BookingPayment({ vendor, event, onBack, onPaymentSuccess
                   onChange={() => setMethod(pm.id)}
                   className="w-4 h-4 text-primary accent-primary"
                 />
-                <span className="text-xl">{pm.icon}</span>
+                <span className="w-8 h-8 rounded-xl bg-lavender flex items-center justify-center text-primary shrink-0">
+                  <Icon name={pm.icon} size={16} />
+                </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm text-navy">{pm.name}</span>
@@ -188,12 +190,12 @@ export default function BookingPayment({ vendor, event, onBack, onPaymentSuccess
               ) : (
                 <>
                   <span>Confirm & Pay {vendor?.price || '₹48,000'}</span>
-                  <span>🔒</span>
+                  <Icon name="lock" size={14} className="inline ml-1" />
                 </>
               )}
             </button>
-            <div className="flex items-center justify-center gap-4 text-[11px] text-muted mt-3">
-              <span>🔒 256-Bit SSL Encryption</span>
+            <div className="flex items-center justify-center gap-4 text-[11px] text-muted mt-3 flex-wrap">
+              <span className="inline-flex items-center gap-1"><Icon name="shieldCheck" size={13} className="text-emerald-600" /> 256-Bit SSL Encryption</span>
               <span>•</span>
               <span>100% Secure Payments</span>
             </div>

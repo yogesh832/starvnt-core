@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
+import PublicNavbar from '../../components/PublicNavbar.jsx';
+import PublicFooter from '../../components/PublicFooter.jsx';
 
 const SUGGESTIONS = [
   "My daughter's wedding",
@@ -70,46 +72,17 @@ export default function Landing() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white flex flex-col">
-      {/* Header */}
-      <header className="px-6 sm:px-12 py-4 flex items-center justify-between gap-8 border-b border-white/60">
-        <LogoWord />
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-ink/70">
-          <a className="hover:text-primary transition cursor-pointer">Explore</a>
-          <a className="hover:text-primary transition cursor-pointer">How it works</a>
-          <a className="hover:text-primary transition cursor-pointer">For Vendors</a>
-        </nav>
-        <div className="flex items-center gap-3">
-          {user ? (
-            <button
-              onClick={() => navigate(user.accountType === 'VENDOR' ? '/vendor' : '/customer')}
-              className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-4 py-2.5 transition shadow-sm shadow-primary/20"
-            >
-              My Dashboard
-            </button>
-          ) : (
-            <>
-              <Link to="/login" className="text-xs sm:text-sm font-bold text-ink/70 hover:text-primary px-2">
-                Sign in
-              </Link>
-              <button
-                onClick={() => beginPlan('')}
-                className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-4 sm:px-5 py-2.5 transition shadow-md shadow-primary/20"
-              >
-                Plan an Event
-              </button>
-            </>
-          )}
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white flex flex-col justify-between">
+      {/* Reusable Brand Header */}
+      <PublicNavbar onPlanClick={beginPlan} activePage="landing" />
 
       {/* Main Split Hero */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 sm:px-12 py-8 sm:py-12 grid lg:grid-cols-[1.1fr_0.9fr] gap-12 items-center">
         {/* Left Column: Heading + Interactive AI Input */}
         <div>
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-primary bg-white/80 rounded-full px-3.5 py-1.5 shadow-2xs border border-primary/10">
-            <span>✨</span>
-            <span>Events made simple, with AI</span>
+          <span className="inline-flex items-center gap-2 text-[11px] font-bold tracking-wide text-primary bg-white/90 rounded-full px-3.5 py-1.5 shadow-2xs border border-primary/10">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+            <span>Events made simple with AI</span>
           </span>
 
           <h1 className="mt-5 text-4xl sm:text-5xl font-extrabold leading-tight text-navy">
@@ -138,15 +111,19 @@ export default function Landing() {
               placeholder="Tell us what you want to arrange..."
               className="flex-1 outline-none text-sm sm:text-base placeholder:text-muted/60"
             />
-            <button type="button" className="text-muted hover:text-primary text-lg" aria-label="Voice">
-              🎙
+            <button type="button" className="text-muted hover:text-primary p-1 cursor-pointer transition" aria-label="Voice input">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M19 11a7 7 0 01-14 0m14 0a7 7 0 00-14 0m14 0v1a7 7 0 01-14 0v-1m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
             </button>
             <button
               type="submit"
-              className="w-10 h-10 grid place-items-center rounded-xl bg-primary text-white hover:bg-primary-dark transition shadow-md shadow-primary/25"
-              aria-label="Search"
+              className="w-10 h-10 grid place-items-center rounded-xl bg-primary text-white hover:bg-primary-dark transition shadow-md shadow-primary/25 cursor-pointer"
+              aria-label="Submit search"
             >
-              ➤
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
             </button>
           </form>
 
@@ -180,27 +157,8 @@ export default function Landing() {
         </div>
       </main>
 
-      {/* Trust Strip */}
-      <div className="bg-white/80 backdrop-blur-xs border-t border-gray-100 py-6 px-6 sm:px-12">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-6">
-          <div className="text-xs font-bold text-muted uppercase tracking-wider">
-            Trusted by thousands across India
-          </div>
-          <div className="flex flex-wrap gap-8 sm:gap-14">
-            {[
-              ['10K+', 'Events Planned'],
-              ['4.8/5', 'Customer Rating'],
-              ['5K+', 'Verified Vendors'],
-              ['100%', 'Secure Payments'],
-            ].map(([v, l]) => (
-              <div key={l}>
-                <div className="text-lg sm:text-xl font-extrabold text-navy">{v}</div>
-                <div className="text-[11px] text-muted">{l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Unified Public Footer with Trust Strip */}
+      <PublicFooter showTrustStrip={true} />
 
       {popup !== null && <LoginPopup text={popup} onClose={() => setPopup(null)} />}
     </div>

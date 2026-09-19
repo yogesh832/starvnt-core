@@ -138,7 +138,11 @@ export default function CustomerPortal() {
               >
                 <span className="grid place-items-center shrink-0 lg:shrink"><Icon name={n.icon} size={17} /></span>
                 <span className="hidden lg:inline">{n.label}</span>
-                {n.key === 'aura' && <span className="hidden lg:inline ml-auto text-[13px]">✨</span>}
+                {n.key === 'aura' && (
+                  <span className="hidden lg:inline ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary-soft text-primary uppercase tracking-wider">
+                    AI
+                  </span>
+                )}
               </button>
             );
           })}
@@ -152,7 +156,7 @@ export default function CustomerPortal() {
             <div className="text-[9px] text-muted truncate">Customer</div>
           </div>
           <button onClick={logout} title="Sign out" className="hidden lg:grid w-7 h-7 place-items-center rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition">
-            ⏻
+            <Icon name="logout" size={15} />
           </button>
         </div>
       </aside>

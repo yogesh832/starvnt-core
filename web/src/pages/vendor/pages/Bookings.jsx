@@ -1,46 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Page, Card, EmptyHint } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
+import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
-
-const INITIAL_BOOKINGS = [
-  {
-    id: 'BK-2210',
-    title: 'Riya & Arjun Wedding',
-    date: '26 Nov 2026',
-    location: 'Kisan Palace, Kolkata',
-    guests: 500,
-    amount: '₹50,000',
-    status: 'Confirmed',
-    payment: 'Payment Verified (Core)',
-    team: 'Team A · 2 photographers',
-    checklist: [
-      { item: 'Payment verified (Core)', done: true },
-      { item: 'Service scheduled', done: true },
-      { item: 'Team assigned', done: true },
-      { item: 'Equipment list confirmed', done: false },
-      { item: 'Venue access notes reviewed', done: false },
-    ],
-  },
-  {
-    id: 'BK-2214',
-    title: 'Mehta Corporate Event',
-    date: '10 Jan 2027',
-    location: 'ITC Royal Bengal',
-    guests: 300,
-    amount: '₹52,000',
-    status: 'Scheduled',
-    payment: 'Payment Verified (Core)',
-    team: 'Team B · 2 photographers',
-    checklist: [
-      { item: 'Payment verified (Core)', done: true },
-      { item: 'Service scheduled', done: true },
-      { item: 'Team assigned', done: false },
-      { item: 'Equipment list confirmed', done: false },
-      { item: 'Venue access notes reviewed', done: false },
-    ],
-  },
-];
 
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
@@ -53,30 +15,29 @@ export default function Bookings() {
   const [feedback, setFeedback] = useState(null);
 
   useEffect(() => {
-    async function loadLiveBookings() {
+    async function loadBookings() {
+      setLoading(true);
       try {
-        setLoading(true);
         const res = await externalApi.call('/vendor/bookings');
-        if (res.ok && Array.isArray(res.bookings)) {
-          const mapped = res.bookings.map((b) => ({
-            id: b.bookingReference,
+        if (Array.isArray(res)) {
+          const mapped = res.map((b) => ({
+            id: b.bookingReference || `BK-${b._id?.slice(-4)}`,
             dbId: b._id,
-            title: `${b.serviceName} (${b.customerName || 'Client'})`,
-            date: b.eventDate,
-            location: `${b.serviceLocation?.address || ''} ${b.serviceLocation?.locality || 'Kolkata'}`.trim(),
-            guests: 500,
+            title: `${b.serviceName || 'Wedding Service'} (${b.customerName || 'Direct Booking'})`,
+            date: b.eventDate ? new Date(b.eventDate).toLocaleDateString() : 'Scheduled',
+            location: b.location?.venue || b.location?.city || 'Selected Venue',
             amount: `₹${(b.totalAmount || 0).toLocaleString()}`,
-            status: b.bookingStatus === 'CONFIRMED' ? (b.executionStatus === 'SERVICE_STARTED' ? 'In Progress' : 'Confirmed') : b.bookingStatus,
-            executionStatus: b.executionStatus,
-            payment: b.paymentStatus === 'PAYMENT_VERIFIED' ? 'Payment Verified (Core)' : 'Pending Verification',
-            team: 'Assigned Camera Crew',
-            checklist: [
-              { item: 'Payment verified (Core)', done: b.paymentStatus === 'PAYMENT_VERIFIED' },
-              { item: 'Service scheduled', done: ['SERVICE_SCHEDULED', 'SERVICE_STARTED', 'COMPLETION_SUBMITTED', 'COMPLETION_VERIFIED'].includes(b.executionStatus) },
-              { item: 'Service started', done: ['SERVICE_STARTED', 'COMPLETION_SUBMITTED', 'COMPLETION_VERIFIED'].includes(b.executionStatus) },
-              { item: 'Completion evidence submitted', done: ['COMPLETION_SUBMITTED', 'COMPLETION_VERIFIED'].includes(b.executionStatus) },
-              { item: 'Completion verified by Core', done: b.executionStatus === 'COMPLETION_VERIFIED' },
-            ],
+            status: b.executionStatus === 'SERVICE_STARTED' ? 'In Progress' : (b.executionStatus === 'COMPLETION_SUBMITTED' ? 'Completion Submitted' : (b.status || 'Confirmed')),
+            executionStatus: b.executionStatus || 'SCHEDULED',
+            payment: b.paymentStatus || 'PAYMENT_VERIFIED',
+            team: b.assignedTeam || 'Lead Team Scheduled',
+            checklist: (b.checklist && b.checklist.length > 0)
+              ? b.checklist
+              : [
+                  { item: 'Service Commenced / Check-in', done: b.executionStatus === 'SERVICE_STARTED' || b.executionStatus === 'COMPLETION_SUBMITTED' },
+                  { item: 'On-site Execution Complete', done: b.executionStatus === 'COMPLETION_SUBMITTED' },
+                  { item: 'Deliverables & Evidence Uploaded', done: b.executionStatus === 'COMPLETION_SUBMITTED' },
+                ],
           }));
           setBookings(mapped);
           if (mapped[0]) setOpen(mapped[0].id);
@@ -87,7 +48,7 @@ export default function Bookings() {
         setLoading(false);
       }
     }
-    loadLiveBookings();
+    loadBookings();
   }, []);
 
   async function handleStartService(booking) {
@@ -98,7 +59,7 @@ export default function Bookings() {
       setBookings((prev) =>
         prev.map((b) => (b.id === booking.id ? { ...b, status: 'In Progress', executionStatus: 'SERVICE_STARTED' } : b))
       );
-      setFeedback(`✓ Service started for ${booking.title}. Status updated to In Progress.`);
+      setFeedback(`Service started for ${booking.title}. Status updated to In Progress.`);
     } catch (err) {
       setFeedback(`Notice: ${err.message}`);
     }
@@ -129,7 +90,7 @@ export default function Bookings() {
             : b
         )
       );
-      setFeedback(`✓ Completion evidence submitted for ${evidenceModalBooking.id}. Core Platform will now validate and unlock settlement.`);
+      setFeedback(`Completion evidence submitted for ${evidenceModalBooking.id}. Core Platform will now validate and unlock settlement.`);
       setEvidenceModalBooking(null);
       setDeliverablesUrl('');
       setNotes('');
@@ -146,8 +107,9 @@ export default function Bookings() {
       sub="Spec §11: Confirmed via Core after quote approval. Submit execution progress & completion evidence here."
     >
       {feedback && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs font-semibold mb-4">
-          {feedback}
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs font-semibold mb-4 inline-flex items-center gap-2 w-full">
+          <Icon name="check" size={16} className="text-emerald-600 shrink-0" />
+          <span>{feedback}</span>
         </div>
       )}
 
@@ -163,7 +125,11 @@ export default function Bookings() {
                 </div>
                 <div className="text-xs text-muted mt-1">{b.date} · {b.location} · <b className="text-ink">{b.amount}</b></div>
               </div>
-              <span className="text-muted">{open === b.id ? '▴' : '▾'}</span>
+              <Icon
+                name="chevronDown"
+                size={16}
+                className={`text-muted transition-transform duration-200 shrink-0 ${open === b.id ? 'rotate-180' : ''}`}
+              />
             </button>
 
             {open === b.id && (
@@ -173,8 +139,8 @@ export default function Bookings() {
                   <ul className="mt-2 space-y-2 text-sm">
                     {b.checklist.map(({ item, done }) => (
                       <li key={item} className="flex items-center gap-2.5">
-                        <span className={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold ${done ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
-                          {done ? '✓' : '·'}
+                        <span className={`w-5 h-5 rounded-full grid place-items-center ${done ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
+                          {done ? <Icon name="check" size={11} /> : <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />}
                         </span>
                         <span className={done ? 'text-ink font-medium' : 'text-muted'}>{item}</span>
                       </li>
@@ -216,8 +182,8 @@ export default function Bookings() {
 
         {bookings.length === 0 && !loading && (
           <Card className="text-center py-12 px-6">
-            <div className="w-14 h-14 rounded-2xl bg-primary-soft text-primary grid place-items-center text-2xl mx-auto mb-3 shadow-xs">
-              📅
+            <div className="w-14 h-14 rounded-2xl bg-primary-soft text-primary grid place-items-center mx-auto mb-3 shadow-xs">
+              <Icon name="calendar" size={26} />
             </div>
             <h3 className="text-base font-extrabold text-navy">No Bookings Yet</h3>
             <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
@@ -238,7 +204,13 @@ export default function Bookings() {
                 <h2 className="text-base font-extrabold text-navy">Submit Completion Evidence</h2>
                 <p className="text-xs text-muted">{evidenceModalBooking.title} · {evidenceModalBooking.id}</p>
               </div>
-              <button onClick={() => setEvidenceModalBooking(null)} className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center font-bold">✕</button>
+              <button
+                onClick={() => setEvidenceModalBooking(null)}
+                className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
+                aria-label="Close"
+              >
+                <Icon name="close" size={14} />
+              </button>
             </div>
 
             <div className="space-y-3 text-xs">

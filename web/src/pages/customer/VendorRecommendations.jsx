@@ -25,7 +25,7 @@ const VENDORS = [
       travel: 'Included',
       photographers: '2',
       coverage: 'Full-day',
-      experience: '4.8 ★',
+      experience: '4.8 / 5.0',
       bestFor: 'Best value',
     },
   },
@@ -50,7 +50,7 @@ const VENDORS = [
       travel: 'Extra',
       photographers: '2',
       coverage: 'Full-day',
-      experience: '4.6 ★',
+      experience: '4.6 / 5.0',
       bestFor: 'Higher experience',
     },
   },
@@ -75,7 +75,7 @@ const VENDORS = [
       travel: 'Extra',
       photographers: '2',
       coverage: 'Half-day',
-      experience: '4.4 ★',
+      experience: '4.4 / 5.0',
       bestFor: 'Budget option',
     },
   },
@@ -105,9 +105,10 @@ export function CompareModal({ onClose, onSelectVendor }) {
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center font-bold"
           >
-            ✕
+            <Icon name="close" size={14} />
           </button>
         </div>
 
@@ -163,7 +164,7 @@ export function CompareModal({ onClose, onSelectVendor }) {
         {/* Why is Premium Moments better banner */}
         <div className="mt-5 p-4 rounded-2xl bg-primary-soft/60 border border-primary/20 flex items-start gap-3">
           <div className="w-6 h-6 rounded-full bg-primary text-white grid place-items-center text-xs shrink-0 mt-0.5">
-            ✨
+            <Icon name="bolt" size={13} />
           </div>
           <div>
             <div className="text-xs font-bold text-primary">Why is Premium Moments better?</div>
@@ -193,16 +194,18 @@ export default function VendorRecommendations({ onBack, onSelectVendor }) {
             onClick={onBack}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline mb-1"
           >
-            ← Back to Event
+            <Icon name="chevronLeft" size={13} />
+            <span>Back to Event</span>
           </button>
           <h1 className="text-2xl font-extrabold text-navy">Vendor Recommendations</h1>
           <p className="text-xs text-muted">Photography Options · 3 pre-qualified vendors available</p>
         </div>
         <button
           onClick={() => setShowCompare(true)}
-          className="rounded-xl border border-primary/40 text-primary bg-white hover:bg-primary-soft px-4 py-2 text-xs font-bold transition shadow-xs"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-primary/40 text-primary bg-white hover:bg-primary-soft px-4 py-2 text-xs font-bold transition shadow-xs"
         >
-          Compare All ▾
+          <span>Compare All</span>
+          <Icon name="chevronDown" size={12} />
         </button>
       </div>
 
@@ -224,8 +227,8 @@ export default function VendorRecommendations({ onBack, onSelectVendor }) {
               />
               <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap">
                 {v.recommended && (
-                  <span className="bg-emerald-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-xs">
-                    ★ Recommended
+                  <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-xs">
+                    <Icon name="check" size={11} /> Recommended
                   </span>
                 )}
                 <span className="bg-white/90 backdrop-blur-xs text-navy text-[10px] font-bold px-2.5 py-1 rounded-full shadow-xs">
@@ -241,7 +244,10 @@ export default function VendorRecommendations({ onBack, onSelectVendor }) {
                   <div>
                     <h3 className="font-bold text-base text-navy">{v.name}</h3>
                     <div className="flex items-center gap-1 text-xs text-muted mt-0.5">
-                      <span className="text-amber-500 font-bold">★ {v.rating}</span>
+                      <span className="inline-flex items-center gap-0.5 text-amber-600 font-bold">
+                        <Icon name="star" size={11} className="fill-amber-500 text-amber-500" />
+                        <span>{v.rating}</span>
+                      </span>
                       <span>({v.reviews} reviews)</span>
                     </div>
                   </div>
@@ -255,7 +261,7 @@ export default function VendorRecommendations({ onBack, onSelectVendor }) {
                 <ul className="mt-4 space-y-1.5 text-xs text-ink/80">
                   {v.bullets.map((b, i) => (
                     <li key={i} className="flex items-center gap-2">
-                      <span className="text-emerald-500 font-bold">✓</span>
+                      <Icon name="check" size={11} className="text-emerald-500 shrink-0" />
                       <span>{b}</span>
                     </li>
                   ))}

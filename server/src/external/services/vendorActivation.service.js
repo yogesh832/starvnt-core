@@ -24,10 +24,24 @@ export async function evaluateVendorActivation(vendorId) {
 
   const missingRequirements = [];
 
-  // 1. Profile completeness check
-  const hasProfile = Boolean(vendor.businessName && vendor.category);
+  // 1. Profile completeness check (Brand & City)
+  let hasProfile = false;
+  if (vendor.isProfileCompleted === true) {
+    hasProfile = true;
+  } else if (vendor.isProfileCompleted === false) {
+    hasProfile = false;
+  } else {
+    // For legacy/unmigrated documents: verify non-placeholder brand, category and operating location
+    const isAutoPlaceholder =
+      !vendor.businessName ||
+      vendor.businessName.endsWith("'s Studio") ||
+      vendor.businessName.endsWith(" Studios") ||
+      vendor.businessName.startsWith("Vendor ");
+    hasProfile = Boolean(vendor.businessName && !isAutoPlaceholder && vendor.category && vendor.location);
+  }
+
   if (!hasProfile) {
-    missingRequirements.push('Business profile details (name, category)');
+    missingRequirements.push('Brand profile details (brand name, primary category, base city)');
   }
 
   // 2. Services check (must have at least one service with valid pricing)

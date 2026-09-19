@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Icon from '../../components/Icon.jsx';
 import { externalApi } from '../../lib/api.js';
 
 const BUDGET_CHIPS = ['₹8 - 10 Lakh', '₹10 - 15 Lakh', '₹15 - 20 Lakh', '₹20 Lakh+', 'Set my own budget'];
@@ -26,7 +27,7 @@ function UnderstoodCard({ onConfirm }) {
   return (
     <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-sm mt-2 w-full max-w-xl">
       <div className="text-xs font-bold text-navy flex items-center gap-1.5 pb-3 border-b border-gray-100">
-        <span className="text-emerald-500 font-bold">✓</span>
+        <Icon name="check" size={13} className="text-emerald-500 shrink-0" />
         <span>Here's what I understood:</span>
       </div>
 
@@ -36,7 +37,7 @@ function UnderstoodCard({ onConfirm }) {
             <div className="text-[10px] text-muted flex items-center justify-between">
               <span>{f.label}</span>
               {f.status === 'stated' ? (
-                <span className="text-[9px] font-bold text-emerald-600">✓</span>
+                <Icon name="check" size={10} className="text-emerald-600 shrink-0" />
               ) : (
                 <span className="text-[9px] font-bold text-orange-500">missing</span>
               )}
@@ -69,7 +70,7 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
   const [messages, setMessages] = useState([
     {
       from: 'aura',
-      text: `✨ Hi ${firstName}! I'm Aura+. Tell me what you're planning — type, date, guests, venue, or budget — anything you have so far.`,
+      text: `Hi ${firstName}! I'm Aura+. Tell me what you're planning — event type, date, guest count, venue, or budget — anything you have in mind.`,
     },
   ]);
   const bottomRef = useRef(null);
@@ -88,7 +89,7 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
       setMessages((prev) => [
         ...prev,
         { from: 'user', text: msg },
-        { from: 'aura', text: "Got it, I'll help you plan this. 😊" },
+        { from: 'aura', text: "Got it, I'll structure your requirements and match verified vendors." },
         { kind: 'understood' },
       ]);
       setStage(1);
@@ -163,8 +164,8 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
         {messages.map((m, i) =>
           m.kind === 'understood' ? (
             <div key={i} className="flex gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-primary-soft text-primary grid place-items-center text-xs shrink-0 mt-0.5">
-                ✨
+              <div className="w-8 h-8 rounded-full bg-primary text-white grid place-items-center text-xs shrink-0 mt-0.5 shadow-xs">
+                <Icon name="bolt" size={13} />
               </div>
               <div className="max-w-full sm:max-w-[85%] w-full">
                 <UnderstoodCard onConfirm={handleUnderstoodConfirm} />
@@ -173,8 +174,8 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
           ) : (
             <div key={i} className={`flex ${m.from === 'user' ? 'justify-end' : 'gap-2.5'}`}>
               {m.from === 'aura' && (
-                <div className="w-8 h-8 rounded-full bg-primary-soft text-primary grid place-items-center text-xs shrink-0 mt-0.5">
-                  ✨
+                <div className="w-8 h-8 rounded-full bg-primary text-white grid place-items-center text-xs shrink-0 mt-0.5 shadow-xs">
+                  <Icon name="bolt" size={13} />
                 </div>
               )}
               <div
@@ -218,15 +219,21 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
             placeholder="Type a message or describe your event..."
             className="flex-1 outline-none text-xs sm:text-sm placeholder:text-muted/60"
           />
-          <button type="button" className="text-muted hover:text-primary text-base" title="Voice">
-            🎙
+          <button
+            type="button"
+            className="text-muted hover:text-primary transition p-1"
+            title="Voice"
+            aria-label="Voice input"
+          >
+            <Icon name="mic" size={16} />
           </button>
           <button
             type="submit"
-            className="w-9 h-9 grid place-items-center rounded-full bg-primary text-white hover:bg-primary-dark transition text-sm shadow-sm"
+            className="w-9 h-9 grid place-items-center rounded-full bg-primary text-white hover:bg-primary-dark transition shadow-sm cursor-pointer"
             title="Send"
+            aria-label="Send message"
           >
-            ➤
+            <Icon name="send" size={14} className="-translate-y-px translate-x-px" />
           </button>
         </div>
         <p className="text-[10px] text-muted text-center mt-1.5">

@@ -221,15 +221,23 @@ export function ReviewsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-navy">{r.customerName}</span>
                       {r.isVerified && (
-                        <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
-                          ✓ Verified Booking
+                        <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
+                          <Icon name="check" size={10} />
+                          <span>Verified Booking</span>
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-muted mt-0.5">
-                      {r.serviceName || r.eventType || 'Event'} · {r.eventDate || new Date(r.createdAt).toLocaleDateString()} ·{' '}
-                      <span className="text-amber-500">
-                        {'★'.repeat(stars)}{'☆'.repeat(Math.max(0, 5 - stars))}
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted mt-0.5">
+                      <span>{r.serviceName || r.eventType || 'Event'} · {r.eventDate || new Date(r.createdAt).toLocaleDateString()} ·</span>
+                      <span className="inline-flex items-center gap-0.5 text-amber-500">
+                        {Array.from({ length: 5 }).map((_, idx) => (
+                          <Icon
+                            key={idx}
+                            name="star"
+                            size={11}
+                            className={idx < stars ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}
+                          />
+                        ))}
                       </span>
                     </div>
                   </div>
@@ -300,15 +308,16 @@ export function ReviewsPage() {
 
         {reviews.length === 0 && !loading && (
           <Card className="text-center py-12 px-6">
-            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-500 grid place-items-center text-2xl mx-auto mb-3 shadow-xs">
-              ★
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-500 grid place-items-center mx-auto mb-3 shadow-xs">
+              <Icon name="star" size={24} className="fill-amber-500 text-amber-500" />
             </div>
             <h3 className="text-base font-extrabold text-navy">No Reviews Yet</h3>
             <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
               Reviews are strictly verified from completed client bookings. When clients experience your service and confirm delivery, their authenticated ratings and feedback will appear here.
             </p>
             <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-primary bg-primary-soft/50 px-3 py-1.5 rounded-xl">
-              <span>💡</span> Tip: High verified ratings boost your placement in Aura+ client match rankings.
+              <Icon name="bolt" size={13} className="text-primary shrink-0" />
+              <span>Tip: High verified ratings boost your placement in Aura+ client match rankings.</span>
             </div>
           </Card>
         )}

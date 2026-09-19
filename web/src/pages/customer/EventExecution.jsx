@@ -57,7 +57,13 @@ export default function EventExecution({ event, onBack }) {
                         : 'bg-white border-gray-300 text-gray-400'
                     }`}
                   >
-                    {isDone ? '✓' : isCurrent ? '●' : i + 1}
+                    {isDone ? (
+                      <Icon name="check" size={12} strokeWidth={2.5} />
+                    ) : isCurrent ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    ) : (
+                      i + 1
+                    )}
                   </span>
                   <div>
                     <div className="flex items-center gap-2">
@@ -114,8 +120,8 @@ export default function EventExecution({ event, onBack }) {
 
           {/* Decoration Card */}
           <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex gap-4 items-center">
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 grid place-items-center text-2xl shrink-0">
-              🌸
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <Icon name="star" size={24} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -132,8 +138,8 @@ export default function EventExecution({ event, onBack }) {
 
           {/* Catering Card */}
           <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex gap-4 items-center">
-            <div className="w-16 h-16 rounded-2xl bg-sky-50 text-sky-600 grid place-items-center text-2xl shrink-0">
-              🍽️
+            <div className="w-16 h-16 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+              <Icon name="services" size={24} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">

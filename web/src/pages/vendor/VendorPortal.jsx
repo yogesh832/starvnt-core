@@ -26,8 +26,8 @@ export default function VendorPortal() {
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef(null);
-  const [businessName, setBusinessName] = useState('Premium Moments');
-  const [category, setCategory] = useState('Photography');
+  const [businessName, setBusinessName] = useState(user?.fullName ? `${user.fullName}'s Brand` : 'My Brand');
+  const [category, setCategory] = useState('');
 
   useEffect(() => {
     async function loadProfile() {
@@ -133,7 +133,6 @@ export default function VendorPortal() {
     { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: badgeCounts.enquiriesCount || null },
     { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: badgeCounts.quotesCount || null },
     { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: badgeCounts.bookingsCount || null },
-    { to: 'calendar', label: 'Calendar', icon: 'calendar' },
     { to: 'portfolio', label: 'Portfolio', icon: 'gallery' },
     { to: 'services', label: 'Services', icon: 'services' },
     { to: 'availability', label: 'Availability', icon: 'availability' },
@@ -141,19 +140,26 @@ export default function VendorPortal() {
     { to: 'reviews', label: 'Reviews', icon: 'star' },
     { to: 'analytics', label: 'Analytics', icon: 'reports' },
     { to: 'messages', label: 'Messages', icon: 'message' },
-    { to: 'documents', label: 'Documents', icon: 'documents' },
-    { to: 'profile', label: 'Profile', icon: 'profile' },
-    { to: 'settings', label: 'Settings', icon: 'settings' },
+    { to: 'profile', label: 'Profile & Hub', icon: 'profile' },
   ];
 
   return (
-    <div className="min-h-screen bg-lavender flex">
+    <div className="h-screen w-screen flex overflow-hidden bg-lavender">
       {navOpen && <div className="fixed inset-0 bg-navy/40 z-30 lg:hidden" onClick={() => setNavOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 h-screen z-40 w-60 bg-white flex flex-col transform transition-transform lg:translate-x-0 ${navOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
-        <div className="px-5 py-5"><LogoWord sub="Vendor OS" /></div>
-        <nav className="flex-1 overflow-y-auto px-3 pb-4 space-y-1">
+      <aside className={`fixed lg:static top-0 left-0 h-screen z-40 w-64 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-transform duration-200 ease-in-out ${navOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100 lg:border-none">
+          <LogoWord sub="Vendor OS" />
+          <button
+            onClick={() => setNavOpen(false)}
+            className="lg:hidden w-8 h-8 rounded-xl text-muted hover:bg-lavender grid place-items-center transition"
+            aria-label="Close menu"
+          >
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -178,16 +184,6 @@ export default function VendorPortal() {
           ))}
         </nav>
 
-        <div className="m-3 p-4 rounded-2xl bg-[#5244e8] text-white shadow-md">
-          <div className="text-sm font-extrabold tracking-tight">Grow with STARVNT</div>
-          <p className="text-[11px] text-white/80 mt-1 leading-relaxed">
-            Get more visibility & qualified leads and upgrade bookings.
-          </p>
-          <button className="mt-3 w-full text-xs font-extrabold bg-white text-primary rounded-xl py-2 shadow-xs hover:bg-lavender transition">
-            Upgrade to Pro
-          </button>
-        </div>
-
         {/* Account + logout */}
         <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-full bg-primary text-white grid place-items-center text-xs font-bold shrink-0">
@@ -210,25 +206,48 @@ export default function VendorPortal() {
       </aside>
 
       {/* Main Container */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top bar with Dynamic Notification Bell */}
-        <header className="bg-white/80 backdrop-blur sticky top-0 z-20 border-b border-gray-100 px-4 sm:px-6 py-3 flex items-center gap-3">
-          <button className="lg:hidden text-ink/60" onClick={() => setNavOpen(true)} aria-label="Menu">☰</button>
-          <div className="flex-1 max-w-xl flex items-center gap-2 bg-lavender rounded-xl px-3.5 py-2 text-sm text-muted">
-            <Icon name="search" size={16} />
-            <input className="bg-transparent flex-1 outline-none placeholder:text-muted/70" placeholder="Search enquiries, bookings, events..." />
+      <div className="flex-1 min-w-0 h-full flex flex-col overflow-y-auto overflow-x-hidden pb-16 lg:pb-0 w-full">
+        {/* Top bar with Dynamic Notification Bell & Mobile Search */}
+        <header className="bg-white/95 backdrop-blur-md sticky top-0 z-20 border-b border-gray-100 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-4 shadow-xs shrink-0 w-full">
+          <button
+            className="lg:hidden w-9 h-9 grid place-items-center rounded-xl text-ink/70 hover:bg-lavender transition shrink-0"
+            onClick={() => setNavOpen(true)}
+            aria-label="Open navigation menu"
+          >
+            <Icon name="menu" size={20} />
+          </button>
+          <div className="flex-1 max-w-xs sm:max-w-sm md:max-w-md flex items-center gap-2 bg-lavender/80 rounded-xl px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-muted min-w-0">
+            <Icon name="search" size={15} className="shrink-0 text-muted/80" />
+            <input
+              className="bg-transparent flex-1 outline-none placeholder:text-muted/70 text-xs sm:text-sm w-full min-w-0"
+              placeholder="Search enquiries, bookings, events..."
+            />
           </div>
 
-          <div className="flex items-center gap-2 ml-auto relative" ref={notifRef}>
-            <button className="hidden sm:grid w-9 h-9 place-items-center rounded-xl hover:bg-lavender text-ink/60">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 ml-auto shrink-0 relative" ref={notifRef}>
+            <button
+              className="hidden sm:grid w-9 h-9 place-items-center rounded-xl hover:bg-lavender text-ink/60 transition shrink-0"
+              title="Help & Support"
+            >
               <Icon name="help" size={18} />
+            </button>
+
+            {/* Calendar Header Button */}
+            <button
+              onClick={() => navigate('/vendor/calendar')}
+              className="w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer shrink-0"
+              title="Vendor Calendar & Blocked Dates"
+              aria-label="Vendor Calendar"
+            >
+              <Icon name="calendar" size={18} />
             </button>
 
             {/* Notification Bell with Dynamic Dot & Dropdown */}
             <button
               onClick={() => setNotifOpen(!notifOpen)}
-              className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer"
+              className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer shrink-0"
               title="Notifications"
+              aria-label="Notifications"
             >
               <Icon name="bell" size={18} />
               {badgeCounts.unreadNotificationsCount > 0 && (
@@ -238,7 +257,7 @@ export default function VendorPortal() {
 
             {/* Notification Dropdown Panel */}
             {notifOpen && (
-              <div className="absolute right-0 top-12 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 z-50 animate-[pop_.18s_ease-out]">
+              <div className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 z-50 animate-[pop_.18s_ease-out]">
                 <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                   <div className="flex items-center gap-2">
                     <h3 className="font-extrabold text-sm text-navy">Notifications</h3>
@@ -267,8 +286,19 @@ export default function VendorPortal() {
                         !n.isRead ? 'bg-primary-soft/30' : ''
                       }`}
                     >
-                      <div className="w-8 h-8 rounded-xl bg-white shadow-2xs border border-gray-100 grid place-items-center shrink-0 mt-0.5 text-xs">
-                        {n.type === 'ENQUIRY' ? '📩' : n.type === 'QUOTE' ? '📑' : n.type === 'PAYMENT' ? '💰' : '🔔'}
+                      <div className="w-8 h-8 rounded-xl bg-lavender/70 text-primary grid place-items-center shrink-0 mt-0.5">
+                        <Icon
+                          name={
+                            n.type === 'ENQUIRY'
+                              ? 'message'
+                              : n.type === 'QUOTE'
+                              ? 'quotes'
+                              : n.type === 'PAYMENT'
+                              ? 'wallet'
+                              : 'bell'
+                          }
+                          size={14}
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
@@ -289,20 +319,26 @@ export default function VendorPortal() {
             )}
 
             {/* Profile Avatar */}
-            <div className="flex items-center gap-2.5 pl-2">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-sm font-bold shadow-xs">
-                {businessName.slice(0, 2).toUpperCase()}
+            <div
+              onClick={() => navigate('/vendor/profile')}
+              className="flex items-center gap-2 pl-1 sm:pl-2 shrink-0 cursor-pointer hover:opacity-85 transition"
+              title="View Business Profile & Hub"
+              role="button"
+              tabIndex={0}
+            >
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-xs sm:text-sm font-bold shadow-xs">
+                {(businessName || user?.fullName || 'VN').slice(0, 2).toUpperCase()}
               </div>
               <div className="hidden sm:block">
-                <div className="text-[13px] font-bold leading-tight">{businessName}</div>
-                <div className="text-[10px] text-muted">Vendor • {category}</div>
+                <div className="text-[13px] font-bold leading-tight truncate max-w-[150px]">{businessName || user?.fullName || 'Vendor'}</div>
+                <div className="text-[10px] text-muted truncate max-w-[150px]">Vendor • {category || 'Profile Incomplete'}</div>
               </div>
             </div>
           </div>
         </header>
 
         {/* Workspace Routes */}
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 w-full min-w-0">
           <Routes>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardHome business={businessName} />} />
@@ -317,16 +353,85 @@ export default function VendorPortal() {
             <Route path="reviews" element={<ReviewsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="messages" element={<Messages />} />
-            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="documents" element={<DocumentsPage user={user} business={businessName} />} />
             <Route path="profile" element={<ProfilePage user={user} business={businessName} />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings" element={<SettingsPage user={user} business={businessName} />} />
           </Routes>
         </div>
 
-        <footer className="px-6 py-3 flex items-center justify-between text-[10px] text-muted/70">
+        <footer className="px-6 py-3 hidden sm:flex items-center justify-between text-[10px] text-muted/70">
           <span>© 2026 STARVNT Universal Vendor OS. Authoritative Core Platform.</span>
-          <span className="hidden sm:flex gap-4">Privacy · Terms · Help</span>
+          <span className="flex gap-4">Privacy · Terms · Help</span>
         </footer>
+
+        {/* Mobile Bottom Navigation Bar (Phone Screens) */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-gray-200/80 px-2 py-1.5 flex items-center justify-around shadow-lg">
+          <NavLink
+            to="dashboard"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+              }`
+            }
+          >
+            <Icon name="dashboard" size={19} />
+            <span>Dashboard</span>
+          </NavLink>
+
+          <NavLink
+            to="enquiries"
+            className={({ isActive }) =>
+              `relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+              }`
+            }
+          >
+            <Icon name="message" size={19} />
+            <span>Leads</span>
+            {badgeCounts.enquiriesCount > 0 && (
+              <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                {badgeCounts.enquiriesCount}
+              </span>
+            )}
+          </NavLink>
+
+          <NavLink
+            to="bookings"
+            className={({ isActive }) =>
+              `relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+              }`
+            }
+          >
+            <Icon name="bookings" size={19} />
+            <span>Bookings</span>
+            {badgeCounts.bookingsCount > 0 && (
+              <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                {badgeCounts.bookingsCount}
+              </span>
+            )}
+          </NavLink>
+
+          <NavLink
+            to="calendar"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+              }`
+            }
+          >
+            <Icon name="calendar" size={19} />
+            <span>Calendar</span>
+          </NavLink>
+
+          <button
+            onClick={() => setNavOpen(true)}
+            className="flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold text-muted hover:text-navy transition"
+          >
+            <Icon name="menu" size={19} />
+            <span>More</span>
+          </button>
+        </div>
       </div>
     </div>
   );
