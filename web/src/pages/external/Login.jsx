@@ -42,9 +42,7 @@ export default function ExternalLogin() {
     params.get('mode') === 'register';
 
   const [mode, setMode] = useState(isRegisterPath ? 'register' : 'login');
-  const [accountType, setAccountType] = useState(
-    params.get('as') === 'vendor' ? 'VENDOR' : 'CUSTOMER'
-  );
+  const [accountType, setAccountType] = useState('VENDOR');
   // Auth Method: 'GOOGLE' | 'PHONE' | 'EMAIL'
   const [authMethod, setAuthMethod] = useState('EMAIL');
 
@@ -425,11 +423,11 @@ export default function ExternalLogin() {
                     {mode === 'login' ? 'Sign in to STARVNT' : 'Create an Account'}
                   </h2>
                   <p className="text-xs text-muted mt-0.5">
-                    {accountType === 'VENDOR' ? 'Operating as Verified Vendor / Brand' : 'Planning Events as Host & Client'}
+                    Operating as Verified Vendor / Brand
                   </p>
                 </div>
 
-                {/* Persona Pill Switcher */}
+                {/* Persona Pill Switcher (Hidden for Vendor-only Launch) 
                 <div className="flex bg-gray-100/90 p-1 rounded-2xl text-xs font-bold shrink-0 border border-gray-200/50">
                   <button
                     type="button"
@@ -450,12 +448,13 @@ export default function ExternalLogin() {
                       setError('');
                     }}
                     className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
-                      accountType === 'VENDOR' ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-navy'
+                      accountType === 'VENDOR' ? 'bg-navy text-white shadow-sm' : 'text-muted hover:text-navy'
                     }`}
                   >
-                    Vendor OS
+                    Vendor
                   </button>
                 </div>
+                */}
               </div>
 
             {/* 3 Authentication Option Tabs */}
