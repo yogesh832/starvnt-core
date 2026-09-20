@@ -24,6 +24,7 @@ const adminUserSchema = new Schema(
       match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     },
     passwordHash: { type: String, required: true, select: false },
+    avatarUrl: { type: String, trim: true, default: '' },
     role: { type: String, enum: ADMIN_ROLES, default: 'ADMIN', index: true },
     permissions: {
       type: [String],
@@ -50,6 +51,7 @@ adminUserSchema.methods.toSafeJSON = function toSafeJSON() {
     id: this._id,
     fullName: this.fullName,
     email: this.email,
+    avatarUrl: this.avatarUrl,
     role: this.role,
     permissions: this.permissions,
     // SUPER_ADMIN effectively holds every permission.

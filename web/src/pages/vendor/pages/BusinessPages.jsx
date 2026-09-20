@@ -2301,6 +2301,44 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     }
   }
 
+
+  async function handleProfilePicUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (JPG, PNG, WebP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5 MB');
+      return;
+    }
+    try {
+      setUploadingPic(true);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const res = await externalApi.call('/vendor/profile/picture', {
+            method: 'PUT',
+            body: { image: reader.result },
+          });
+          if (res.ok && res.profilePicUrl) {
+            setProfilePicUrl(res.profilePicUrl);
+            window.dispatchEvent(new Event('vendorProfileUpdated'));
+          }
+        } catch (err) {
+          alert(`Could not upload profile picture: ${err.message}`);
+        } finally {
+          setUploadingPic(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setUploadingPic(false);
+      alert(`Error reading file: ${err.message}`);
+    }
+  }
+
   function handleOpenAddLocation() {
     setEditingLocationId(null);
     const hasExisting = locations.length > 0;

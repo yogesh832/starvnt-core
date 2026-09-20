@@ -18,6 +18,7 @@ import { VendorMessageThread } from '../models/VendorMessageThread.js';
 import { VendorDocument } from '../models/VendorDocument.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { generateVendorInsights } from '../services/auraIntelligence.service.js';
+import { v2 as cloudinary } from 'cloudinary';
 
 const router = Router();
 
@@ -65,6 +66,43 @@ router.put('/profile', async (req, res, next) => {
     await req.vendor.save();
     const activation = await evaluateVendorActivation(req.vendorId);
     res.json({ ok: true, vendor: req.vendor, activation });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/profile/picture', async (req, res, next) => {
+  try {
+    const { image } = req.body || {};
+    if (image === undefined || image === null) {
+      return res.status(400).json({ error: 'IMAGE_DATA_REQUIRED' });
+    }
+
+    let profilePicUrl = image;
+
+    // Upload to Cloudinary if configured
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (image && cloudName && apiKey && apiSecret) {
+      try {
+        cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret, secure: true });
+        const uploadResult = await cloudinary.uploader.upload(image, {
+          folder: `starvnt_vendors/${req.vendorId}/profile`,
+          resource_type: 'auto',
+          public_id: `profile_${Date.now()}`,
+          transformation: [{ width: 400, height: 400, crop: 'fill', gravity: 'face' }],
+        });
+        profilePicUrl = uploadResult.secure_url;
+      } catch (cErr) {
+        console.warn('[Cloudinary] Profile pic upload failed, using data URL:', cErr.message);
+      }
+    }
+
+    req.vendor.profilePicUrl = profilePicUrl;
+    await req.vendor.save();
+    res.json({ ok: true, profilePicUrl });
   } catch (err) {
     next(err);
   }

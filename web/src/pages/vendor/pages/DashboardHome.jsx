@@ -529,7 +529,7 @@ export default function DashboardHome({ business = 'Your Brand' }) {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [activation, setActivation] = useState(null);
   const [vendorProfile, setVendorProfile] = useState(null);
-  const [gotItAcknowledged, setGotItAcknowledged] = useState(false);
+  const [gotItAcknowledged, setGotItAcknowledged] = useState(() => localStorage.getItem('vendorOnboardingDismissed') === 'true');
   const [completingProfile, setCompletingProfile] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -1143,9 +1143,12 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     <span>{completingProfile ? 'Verifying...' : 'Quick Auto-Fill'}</span>
                   </button>
                 )}
-                <button
-                  onClick={() => setGotItAcknowledged(true)}
-                  className={`rounded-xl text-xs font-bold px-3.5 sm:px-4 py-2.5 transition border ${
+                  <button
+                    onClick={() => {
+                      setGotItAcknowledged(true);
+                      if (is100Percent) localStorage.setItem('vendorOnboardingDismissed', 'true');
+                    }}
+                    className={`rounded-xl text-xs font-bold px-3.5 sm:px-4 py-2.5 transition border ${
                     is100Percent
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-sm'
                       : 'bg-white hover:bg-lavender text-navy border-gray-200'

@@ -1,9 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useExternalAuth } from '../auth/ExternalAuthContext.jsx';
+import { useTheme } from '../lib/ThemeContext.jsx';
 import { LogoWord } from './ui.jsx';
+import Icon from './Icon.jsx';
 
 export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
   const { user } = useExternalAuth();
+  const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   function handlePlan() {
@@ -34,12 +37,21 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
 
       <div className="flex items-center gap-3">
         {user ? (
-          <button
-            onClick={() => navigate(user.accountType === 'VENDOR' ? '/vendor' : '/customer')}
-            className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-4 py-2.5 transition shadow-sm shadow-primary/20 cursor-pointer"
-          >
-            My Dashboard
-          </button>
+          <>
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-full bg-gray-100 text-muted grid place-items-center hover:bg-lavender transition cursor-pointer"
+              title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              <Icon name={dark ? 'sun' : 'moon'} size={14} />
+            </button>
+            <button
+              onClick={() => navigate(user.accountType === 'VENDOR' ? '/vendor' : '/customer')}
+              className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-4 py-2.5 transition shadow-sm shadow-primary/20 cursor-pointer"
+            >
+              My Dashboard
+            </button>
+          </>
         ) : (
           <>
             {activePage === 'login' ? (
@@ -57,6 +69,13 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
                 Sign in
               </Link>
             )}
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-full bg-gray-100 text-muted grid place-items-center hover:bg-lavender transition cursor-pointer"
+              title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              <Icon name={dark ? 'sun' : 'moon'} size={14} />
+            </button>
             <button
               onClick={handlePlan}
               className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-4 sm:px-5 py-2.5 transition shadow-md shadow-primary/20 cursor-pointer"

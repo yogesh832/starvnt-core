@@ -1,6 +1,7 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
+import { useTheme } from '../../lib/ThemeContext.jsx';
 import Icon from '../../components/Icon.jsx';
 import { LogoWord } from '../../components/ui.jsx';
 import Dashboard from './Dashboard.jsx';
@@ -30,6 +31,7 @@ const MODULES = [
 
 export default function AdminShell() {
   const { admin, logout, can } = useAdminAuth();
+  const { dark, toggle: toggleTheme } = useTheme();
   const [navOpen, setNavOpen] = useState(false);
 
   const visible = MODULES.filter((m) => {
@@ -71,8 +73,17 @@ export default function AdminShell() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-gray-100">
-          <button onClick={logout} className="w-full rounded-xl px-3.5 py-2 text-xs text-ink/60 hover:bg-lavender flex items-center gap-2">
+        <div className="p-3 border-t border-gray-100 flex flex-col gap-1">
+          <button
+            onClick={toggleTheme}
+            className="w-full rounded-xl px-3.5 py-2 text-xs text-ink/60 hover:bg-lavender flex items-center gap-2 transition cursor-pointer"
+            title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            <Icon name={dark ? 'sun' : 'moon'} size={16} />
+            <span>{dark ? 'Light Mode' : 'Dark Mode'}</span>
+          </button>
+          <button onClick={logout} className="w-full rounded-xl px-3.5 py-2 text-xs text-ink/60 hover:bg-lavender flex items-center gap-2 cursor-pointer transition">
+            <Icon name="logout" size={16} />
             <span>Sign out</span>
           </button>
         </div>
@@ -99,9 +110,13 @@ export default function AdminShell() {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
             </button>
             <div className="flex items-center gap-2.5 pl-2">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-sm font-bold">
-                {admin.fullName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
-              </div>
+              {admin.avatarUrl ? (
+                <img src={admin.avatarUrl} alt="Admin" className="w-9 h-9 rounded-full object-cover shrink-0 border border-gray-200" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-sm font-bold shrink-0">
+                  {admin.fullName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+              )}
               <div className="hidden sm:block">
                 <div className="text-[13px] font-bold leading-tight">{admin.fullName}</div>
                 <div className="text-[10px] text-muted">{admin.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}</div>

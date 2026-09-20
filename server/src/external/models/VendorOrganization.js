@@ -50,6 +50,7 @@ const vendorOrganizationSchema = new Schema(
     phone: { type: String, trim: true, default: '' },
     website: { type: String, trim: true, default: '' },
     bio: { type: String, trim: true, default: '' },
+    profilePicUrl: { type: String, trim: true, default: '' },
     verification: {
       isVerified: { type: Boolean, default: false },
       verifiedAt: { type: Date, default: null },

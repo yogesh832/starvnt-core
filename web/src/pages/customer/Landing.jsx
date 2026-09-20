@@ -72,7 +72,7 @@ export default function Landing() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white flex flex-col justify-between">
+    <div className="min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white dark:from-[#0e1330] dark:via-[#141a3c] dark:to-[#1a1d2e] flex flex-col justify-between">
       {/* Reusable Brand Header */}
       <PublicNavbar onPlanClick={beginPlan} activePage="landing" />
 

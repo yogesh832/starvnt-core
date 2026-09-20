@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
+import { useTheme } from '../../lib/ThemeContext.jsx';
 import Icon from '../../components/Icon.jsx';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import AuraChat from './AuraChat.jsx';
@@ -89,6 +90,7 @@ const NAV = [
 /* ── Portal shell: 5 primary nav items (§9.1) ────────────────────────────── */
 export default function CustomerPortal() {
   const { user, logout } = useExternalAuth();
+  const { dark, toggle: toggleTheme } = useTheme();
   const firstName = user?.fullName?.split(' ')[0] || 'there';
   const [tab, setTab] = useState('home');
   const [activeEvent, setActiveEvent] = useState(null); // index into EVENTS, or null
@@ -147,6 +149,29 @@ export default function CustomerPortal() {
             );
           })}
         </nav>
+        
+        <div className="px-2 mt-4 lg:block hidden">
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-ink/70 hover:bg-lavender hover:text-navy transition cursor-pointer"
+            title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            <span className="w-8 h-8 rounded-xl bg-gray-100 text-muted grid place-items-center shrink-0">
+              <Icon name={dark ? 'sun' : 'moon'} size={16} />
+            </span>
+            <span>{dark ? 'Light Mode' : 'Dark Mode'}</span>
+          </button>
+        </div>
+        <div className="mt-2 lg:hidden flex justify-center">
+          <button
+            onClick={toggleTheme}
+            className="w-10 h-10 rounded-xl bg-gray-100 text-muted grid place-items-center hover:bg-lavender transition cursor-pointer"
+            title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            <Icon name={dark ? 'sun' : 'moon'} size={18} />
+          </button>
+        </div>
+
         <div className="mt-auto flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-lavender transition">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold shrink-0">
             {firstName[0]?.toUpperCase()}

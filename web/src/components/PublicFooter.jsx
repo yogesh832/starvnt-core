@@ -6,7 +6,7 @@ export default function PublicFooter({ showTrustStrip = true }) {
     <footer className="w-full mt-auto">
       {/* Trust Strip */}
       {showTrustStrip && (
-        <div className="bg-white/85 backdrop-blur-xs border-t border-b border-gray-100 py-6 px-6 sm:px-12">
+        <div className="bg-white/85 dark:bg-[#1a1d2e]/85 backdrop-blur-xs border-t border-b border-gray-100 dark:border-gray-800 py-6 px-6 sm:px-12">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-6">
             <div className="text-xs font-bold text-muted uppercase tracking-wider">
               Trusted by thousands across India
@@ -29,7 +29,7 @@ export default function PublicFooter({ showTrustStrip = true }) {
       )}
 
       {/* Main Footer Links */}
-      <div className="bg-white/95 border-t border-gray-100/80 py-12 px-6 sm:px-12">
+      <div className="bg-white/95 dark:bg-[#1a1d2e]/95 border-t border-gray-100/80 dark:border-gray-800/80 py-12 px-6 sm:px-12">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-5 gap-8 lg:gap-12">
           {/* Brand Column */}
           <div className="md:col-span-2 space-y-4">

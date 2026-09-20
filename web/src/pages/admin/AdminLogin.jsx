@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import { LogoWord } from '../../components/ui.jsx';
 import Icon from '../../components/Icon.jsx';
+import { useTheme } from '../../lib/ThemeContext.jsx';
 
 /**
  * Core login — matches the "Login" screen of the Complete Screen Set:
@@ -11,6 +12,7 @@ import Icon from '../../components/Icon.jsx';
  */
 export default function AdminLogin() {
   const { login } = useAdminAuth();
+  const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPw, setShowPw] = useState(false);
@@ -44,9 +46,18 @@ export default function AdminLogin() {
         <h1 className="text-base font-extrabold text-navy tracking-tight flex items-center gap-2">
           <span className="text-primary font-bold">1.</span> Login
         </h1>
-        <span className="text-[11px] font-bold text-primary bg-primary-soft px-3 py-1 rounded-full">
-          STARVNT Core Platform
-        </span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className="w-8 h-8 rounded-full bg-white border border-gray-200 text-muted grid place-items-center hover:bg-lavender transition cursor-pointer"
+            title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            <Icon name={dark ? 'sun' : 'moon'} size={14} />
+          </button>
+          <span className="text-[11px] font-bold text-primary bg-primary-soft px-3 py-1 rounded-full">
+            STARVNT Core Platform
+          </span>
+        </div>
       </div>
 
       {/* Main Card */}
