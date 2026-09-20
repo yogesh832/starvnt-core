@@ -56,8 +56,11 @@ export function makeApi(base, refreshPath) {  let token = null;
   return { call, refresh, setToken, getToken: () => token };
 }
 
-/** Backend base URL — direct calls to the server, no dev-proxy dependency. */
-const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+/** Backend base URL — direct calls to the server in prod, dev-proxy in local. */
+const defaultProdUrl = 'https://starvnt-core.onrender.com';
+const API_BASE = import.meta.env.VITE_API_URL 
+  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
+  : (import.meta.env.MODE === 'production' ? defaultProdUrl : '');
 
 export const externalApi = makeApi(`${API_BASE}/api`, `${API_BASE}/api/auth/refresh`);
 export const adminApi = makeApi(`${API_BASE}/api/admin`, `${API_BASE}/api/admin/auth/refresh`);
