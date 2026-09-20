@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Icon from '../../../components/Icon.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import { externalApi } from '../../../lib/api.js';
+import { useExternalAuth } from '../../../auth/ExternalAuthContext.jsx';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = [
@@ -516,6 +517,7 @@ function NotificationsCard({
 }
 
 export default function DashboardHome({ business = 'Your Brand' }) {
+  const { user } = useExternalAuth();
   const [selectedEnquiry, setSelectedEnquiry] = useState(null);
   const [quoteEnquiry, setQuoteEnquiry] = useState(null);
   const [quotes, setQuotes] = useState([]);
@@ -1017,9 +1019,17 @@ export default function DashboardHome({ business = 'Your Brand' }) {
         {/* Executive Welcome Banner */}
         <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-xs border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative overflow-hidden">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white font-extrabold text-base sm:text-lg grid place-items-center shadow-md shadow-primary/20 shrink-0">
-              {(business || 'B')[0].toUpperCase()}
-            </div>
+            {vendorProfile?.profilePicUrl || user?.avatarUrl ? (
+              <img
+                src={vendorProfile?.profilePicUrl || user?.avatarUrl}
+                alt="Profile"
+                className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl object-cover shrink-0 shadow-md border border-gray-100"
+              />
+            ) : (
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white font-extrabold text-base sm:text-lg grid place-items-center shadow-md shadow-primary/20 shrink-0">
+                {(business || 'B')[0].toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-base sm:text-xl md:text-2xl font-extrabold text-navy tracking-tight truncate max-w-full sm:max-w-md">
