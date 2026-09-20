@@ -5,6 +5,7 @@ import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 import MapLocationPicker from '../../../components/MapLocationPicker.jsx';
+import { useTheme } from '../../../lib/ThemeContext.jsx';
 
 /* ── Services ─────────────────────────────────────────────────────────────── */
 export function ServicesPage() {
@@ -2082,6 +2083,7 @@ export function DocumentsManager({ isTab = false }) {
 
 /* ── Working Settings Manager ────────────────────────────────────────────── */
 export function SettingsManager({ isTab = false }) {
+  const { dark, toggle: toggleTheme } = useTheme();
   const [settings, setSettings] = useState({
     enquiryAlerts: true,
     quoteUpdates: true,
@@ -2183,6 +2185,23 @@ export function SettingsManager({ isTab = false }) {
         </ul>
       </Card>
 
+      <Card title="Display & Theme">
+        <ul className="divide-y divide-gray-50 text-xs">
+          <li className="flex items-center justify-between py-3">
+            <div>
+              <div className="font-bold text-navy">Dark Mode</div>
+              <div className="text-muted text-[11px]">Toggle the application theme for the entire site</div>
+            </div>
+            <button
+              onClick={toggleTheme}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${dark ? 'bg-primary' : 'bg-gray-200'}`}
+            >
+              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${dark ? 'left-6' : 'left-1'}`} />
+            </button>
+          </li>
+        </ul>
+      </Card>
+
       {saved && (
         <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold border border-emerald-200 animate-fadeIn">
           ✓ Preferences saved successfully.
@@ -2206,6 +2225,7 @@ export function SettingsManager({ isTab = false }) {
 export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || defaultTab || 'profile';
+  const { dark, toggle: toggleTheme } = useTheme();
 
   function handleTabChange(tabKey) {
     const next = new URLSearchParams(searchParams);
@@ -2214,12 +2234,17 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   }
 
   const [profile, setProfile] = useState({
-    businessName: business || '',
+    businessName: business,
     category: '',
     location: '',
     phone: user?.phone || '',
     bio: '',
   });
+
+  const [profilePicUrl, setProfilePicUrl] = useState('');
+  const [uploadingPic, setUploadingPic] = useState(false);
+  const picInputRef = useRef(null);
+
   const [activation, setActivation] = useState(null);
   const [saved, setSaved] = useState(false);
 
@@ -2256,6 +2281,9 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           phone: profRes.vendor.phone || user?.phone || '',
           bio: profRes.vendor.bio || '',
         });
+        if (profRes.vendor.profilePicUrl) {
+          setProfilePicUrl(profRes.vendor.profilePicUrl);
+        }
       }
       if (actRes.ok && actRes.status) {
         setActivation(actRes.status);
@@ -2301,6 +2329,43 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     }
   }
 
+
+  async function handleProfilePicUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (JPG, PNG, WebP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be under 5 MB');
+      return;
+    }
+    try {
+      setUploadingPic(true);
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const res = await externalApi.call('/vendor/profile/picture', {
+            method: 'PUT',
+            body: { image: reader.result },
+          });
+          if (res.ok && res.profilePicUrl) {
+            setProfilePicUrl(res.profilePicUrl);
+            window.dispatchEvent(new Event('vendorProfileUpdated'));
+          }
+        } catch (err) {
+          alert(`Could not upload profile picture: ${err.message}`);
+        } finally {
+          setUploadingPic(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setUploadingPic(false);
+      alert(`Error reading file: ${err.message}`);
+    }
+  }
 
   async function handleProfilePicUpload(e) {
     const file = e.target.files?.[0];
@@ -2506,6 +2571,102 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           {/* TAB 1: Business Profile */}
           {activeTab === 'profile' && (
             <div className="space-y-5">
+              {/* Display & Theme Toggle */}
+              <Card title="Display Settings">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-navy">Dark Mode</h3>
+                    <p className="text-xs text-muted mt-0.5">Toggle the application theme for the entire site</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className={`w-11 h-6 rounded-full relative transition cursor-pointer ${dark ? 'bg-primary' : 'bg-gray-200'}`}
+                  >
+                    <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${dark ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+              </Card>
+
+              {/* Profile Picture */}
+              <Card title="Profile Picture">
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                  <div className="relative group shrink-0">
+                    {profilePicUrl ? (
+                      <img
+                        src={profilePicUrl}
+                        alt="Profile"
+                        className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-4 border-white shadow-md dark:border-[#1a1d2e]"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-3xl font-extrabold shadow-md border-4 border-white dark:border-[#1a1d2e]">
+                        {(profile.businessName || 'B')[0].toUpperCase()}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => picInputRef.current?.click()}
+                      disabled={uploadingPic}
+                      className="absolute -bottom-2 -right-2 w-9 h-9 rounded-full bg-primary text-white grid place-items-center shadow-lg hover:bg-primary-dark transition cursor-pointer disabled:opacity-60 border-2 border-white dark:border-[#1a1d2e]"
+                      title="Change profile picture"
+                    >
+                      <Icon name="edit" size={15} />
+                    </button>
+                    <input
+                      ref={picInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleProfilePicUpload}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 text-center sm:text-left">
+                    <h3 className="font-extrabold text-base text-navy">
+                      {profile.businessName || 'Your Brand'}
+                    </h3>
+                    <p className="text-sm text-muted mt-0.5">
+                      {profile.category || 'Setup Pending'} &middot; {profile.location || 'City not set'}
+                    </p>
+                    <div className="mt-4 flex items-center justify-center sm:justify-start gap-4">
+                      <button
+                        type="button"
+                        onClick={() => picInputRef.current?.click()}
+                        disabled={uploadingPic}
+                        className="text-xs font-bold bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary-dark transition shadow-sm cursor-pointer disabled:opacity-60"
+                      >
+                        {uploadingPic ? 'Uploading...' : profilePicUrl ? 'Change Photo' : 'Upload Photo'}
+                      </button>
+                      {profilePicUrl && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm('Remove profile picture?')) return;
+                            try {
+                              const res = await externalApi.call('/vendor/profile/picture', {
+                                method: 'PUT',
+                                body: { image: '' },
+                              });
+                              if (res.ok) {
+                                setProfilePicUrl('');
+                                window.dispatchEvent(new Event('vendorProfileUpdated'));
+                              }
+                            } catch (err) {
+                              alert(`Could not remove picture: ${err.message}`);
+                            }
+                          }}
+                          className="text-xs font-bold text-rose-500 bg-rose-50 px-4 py-2 rounded-xl hover:bg-rose-100 dark:bg-rose-950/40 transition cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted mt-2.5">
+                      Recommended: Square image, at least 400x400px. Max 5 MB.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
               <Card title="Business Profile Details">
                 <form onSubmit={handleSaveProfile} className="space-y-4">
                   <div className="grid sm:grid-cols-2 gap-3">
