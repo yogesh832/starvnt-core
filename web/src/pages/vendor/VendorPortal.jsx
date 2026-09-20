@@ -25,9 +25,11 @@ export default function VendorPortal() {
   const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const notifRef = useRef(null);
   const [businessName, setBusinessName] = useState(user?.fullName ? `${user.fullName}'s Brand` : 'My Brand');
   const [category, setCategory] = useState('');
+  const [profilePicUrl, setProfilePicUrl] = useState('');
 
   useEffect(() => {
     async function loadProfile() {
@@ -36,6 +38,7 @@ export default function VendorPortal() {
         if (res.ok && res.vendor) {
           if (res.vendor.businessName) setBusinessName(res.vendor.businessName);
           if (res.vendor.category) setCategory(res.vendor.category);
+          setProfilePicUrl(res.vendor.profilePicUrl || '');
         }
       } catch (err) {
         if (user?.vendorOrganization?.businessName) {
@@ -44,6 +47,10 @@ export default function VendorPortal() {
       }
     }
     loadProfile();
+
+    const handleProfileUpdate = () => loadProfile();
+    window.addEventListener('vendorProfileUpdated', handleProfileUpdate);
+    return () => window.removeEventListener('vendorProfileUpdated', handleProfileUpdate);
   }, [user]);
 
   const [badgeCounts, setBadgeCounts] = useState({
@@ -186,9 +193,13 @@ export default function VendorPortal() {
 
         {/* Account + logout */}
         <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full bg-primary text-white grid place-items-center text-xs font-bold shrink-0">
-            {user?.fullName?.[0]?.toUpperCase()}
-          </div>
+          {profilePicUrl || user?.avatarUrl ? (
+            <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className="w-9 h-9 rounded-full object-cover shrink-0 border border-gray-200" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-primary text-white grid place-items-center text-xs font-bold shrink-0">
+              {user?.fullName?.[0]?.toUpperCase()}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="text-xs font-bold truncate">{user?.fullName}</div>
             <div className="text-[10px] text-muted truncate">{user?.email}</div>
@@ -321,14 +332,17 @@ export default function VendorPortal() {
             {/* Profile Avatar */}
             <div
               onClick={() => navigate('/vendor/profile')}
-              className="flex items-center gap-2 pl-1 sm:pl-2 shrink-0 cursor-pointer hover:opacity-85 transition"
-              title="View Business Profile & Hub"
+              className="flex items-center gap-2 hover:bg-gray-50 p-1.5 rounded-full sm:rounded-xl transition select-none cursor-pointer"
               role="button"
               tabIndex={0}
             >
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-xs sm:text-sm font-bold shadow-xs">
-                {(businessName || user?.fullName || 'VN').slice(0, 2).toUpperCase()}
-              </div>
+              {profilePicUrl || user?.avatarUrl ? (
+                <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover shadow-xs" />
+              ) : (
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-xs sm:text-sm font-bold shadow-xs">
+                  {(businessName || user?.fullName || 'VN').slice(0, 2).toUpperCase()}
+                </div>
+              )}
               <div className="hidden sm:block">
                 <div className="text-[13px] font-bold leading-tight truncate max-w-[150px]">{businessName || user?.fullName || 'Vendor'}</div>
                 <div className="text-[10px] text-muted truncate max-w-[150px]">Vendor • {category || 'Profile Incomplete'}</div>
