@@ -34,7 +34,7 @@ function refreshCookieOptions() {
   return {
     httpOnly: true,
     secure: config.cookieSecure,
-    sameSite: 'lax',
+    sameSite: config.cookieSecure ? 'none' : 'lax',
     maxAge: config.refreshTtlDays * 24 * 60 * 60 * 1000,
     path: '/api/auth',
   };
