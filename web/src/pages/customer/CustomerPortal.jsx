@@ -173,9 +173,13 @@ export default function CustomerPortal() {
         </div>
 
         <div className="mt-auto flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-lavender transition">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold shrink-0">
-            {firstName[0]?.toUpperCase()}
-          </div>
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="Profile" className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold shrink-0">
+              {firstName[0]?.toUpperCase()}
+            </div>
+          )}
           <div className="hidden lg:block flex-1 min-w-0">
             <div className="text-xs font-bold truncate">{firstName}</div>
             <div className="text-[9px] text-muted truncate">Customer</div>
@@ -191,9 +195,13 @@ export default function CustomerPortal() {
         {/* Mobile top bar */}
         <header className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shrink-0">
           <LogoWord size="text-base" />
-          <div className="ml-auto w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold">
-            {firstName[0]?.toUpperCase()}
-          </div>
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="Profile" className="ml-auto w-8 h-8 rounded-full object-cover border border-gray-200" />
+          ) : (
+            <div className="ml-auto w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold">
+              {firstName[0]?.toUpperCase()}
+            </div>
+          )}
         </header>
 
         {tab === 'aura' ? (
