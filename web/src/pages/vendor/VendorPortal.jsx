@@ -227,11 +227,11 @@ export default function VendorPortal() {
           >
             <Icon name="menu" size={20} />
           </button>
-          <div className="flex-1 max-w-xs sm:max-w-sm md:max-w-md flex items-center gap-2 bg-lavender/80 rounded-xl px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-muted min-w-0">
-            <Icon name="search" size={15} className="shrink-0 text-muted/80" />
+          <div className="flex-1 max-w-xs sm:max-w-sm md:max-w-md flex items-center gap-2.5 bg-gray-50 border border-gray-200/80 rounded-xl px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-navy min-w-0 shadow-inner focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/40 transition-all dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:focus-within:bg-gray-900">
+            <Icon name="search" size={15} className="shrink-0 text-muted" />
             <input
-              className="bg-transparent flex-1 outline-none placeholder:text-muted/70 text-xs sm:text-sm w-full min-w-0"
-              placeholder="Search enquiries, bookings, events..."
+              className="bg-transparent flex-1 outline-none placeholder:text-muted/60 text-xs sm:text-sm w-full min-w-0 font-medium"
+              placeholder="Search enquiries, bookings..."
             />
           </div>
 
