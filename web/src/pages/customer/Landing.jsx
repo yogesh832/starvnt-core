@@ -77,7 +77,7 @@ export default function Landing() {
       <PublicNavbar onPlanClick={beginPlan} activePage="landing" />
 
       {/* Main Split Hero */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 sm:px-12 py-8 sm:py-12 grid lg:grid-cols-[1.1fr_0.9fr] gap-12 items-center">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 lg:px-12 py-8 sm:py-12 grid lg:grid-cols-[1.1fr_0.9fr] gap-8 lg:gap-12 items-center">
         {/* Left Column: Heading + Interactive AI Input */}
         <div>
           <span className="inline-flex items-center gap-2 text-[11px] font-bold tracking-wide text-primary bg-white/90 rounded-full px-3.5 py-1.5 shadow-2xs border border-primary/10">
@@ -85,7 +85,7 @@ export default function Landing() {
             <span>Events made simple with AI</span>
           </span>
 
-          <h1 className="mt-5 text-4xl sm:text-5xl font-extrabold leading-tight text-navy">
+          <h1 className="mt-5 text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight text-navy">
             Tell us what you're planning.
             <br />
             <span className="bg-gradient-to-r from-primary to-[#9b6dff] bg-clip-text text-transparent">
@@ -103,22 +103,22 @@ export default function Landing() {
               e.preventDefault();
               beginPlan(input.trim());
             }}
-            className="mt-8 w-full flex items-center gap-2 bg-white rounded-2xl shadow-xl shadow-primary/10 px-4 py-3 border border-gray-100"
+            className="mt-6 sm:mt-8 w-full flex items-center gap-2 bg-white rounded-2xl shadow-xl shadow-primary/10 px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-100"
           >
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Tell us what you want to arrange..."
-              className="flex-1 outline-none text-sm sm:text-base placeholder:text-muted/60"
+              className="flex-1 outline-none text-sm sm:text-base placeholder:text-muted/60 min-w-0"
             />
-            <button type="button" className="text-muted hover:text-primary p-1 cursor-pointer transition" aria-label="Voice input">
+            <button type="button" className="text-muted hover:text-primary p-1 cursor-pointer transition shrink-0" aria-label="Voice input">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M19 11a7 7 0 01-14 0m14 0a7 7 0 00-14 0m14 0v1a7 7 0 01-14 0v-1m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
             </button>
             <button
               type="submit"
-              className="w-10 h-10 grid place-items-center rounded-xl bg-primary text-white hover:bg-primary-dark transition shadow-md shadow-primary/25 cursor-pointer"
+              className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 grid place-items-center rounded-xl bg-primary text-white hover:bg-primary-dark transition shadow-md shadow-primary/25 cursor-pointer"
               aria-label="Submit search"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,7 +133,7 @@ export default function Landing() {
               <button
                 key={s}
                 onClick={() => beginPlan(s)}
-                className="text-xs sm:text-sm bg-white hover:bg-primary-soft hover:text-primary text-ink/80 border border-gray-100 rounded-full px-4 py-2 transition shadow-2xs font-medium"
+                className="text-xs sm:text-sm bg-white hover:bg-primary-soft hover:text-primary text-ink/80 border border-gray-100 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 transition shadow-2xs font-medium"
               >
                 {s}
               </button>
@@ -141,18 +141,17 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Right Column: Hero Image with Script Overlay */}
-        <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white aspect-4/3 lg:aspect-square">
+        {/* Right Column: Hero Image — hidden on small mobile */}
+        <div className="relative hidden sm:block rounded-3xl overflow-hidden shadow-2xl border-4 border-white aspect-4/3 lg:aspect-square">
           <img
             src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80"
             alt="Beautiful Wedding Setup"
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-navy/60 via-transparent to-transparent flex flex-col justify-end p-8 text-white">
-            <p className="text-xl sm:text-2xl font-serif italic drop-shadow-md">
+          <div className="absolute inset-0 bg-gradient-to-t from-navy/60 via-transparent to-transparent flex flex-col justify-end p-6 sm:p-8 text-white">
+            <p className="text-lg sm:text-2xl font-serif italic drop-shadow-md">
               "Beautiful events create happier people."
             </p>
-            <span className="text-xs uppercase tracking-widest text-white/80 font-bold mt-1">— STARVNT</span>
           </div>
         </div>
       </main>

@@ -18,8 +18,8 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
   }
 
   return (
-    <header className="w-full px-6 sm:px-12 py-4 flex items-center justify-between gap-8 border-b border-white/60 dark:border-white/10 bg-white/60 dark:bg-navy/80 backdrop-blur-md sticky top-0 z-40 transition-all">
-      <Link to="/" className="hover:opacity-90 transition flex items-center">
+    <header className="w-full px-4 sm:px-8 lg:px-12 py-3 sm:py-4 flex items-center justify-between gap-3 sm:gap-8 border-b border-white/60 dark:border-white/10 bg-white/60 dark:bg-navy/80 backdrop-blur-md sticky top-0 z-40 transition-all">
+      <Link to="/" className="hover:opacity-90 transition flex items-center shrink-0">
         <LogoWord />
       </Link>
 
@@ -35,7 +35,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
         </Link>
       </nav>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {user ? (
           <>
             <button
@@ -47,7 +47,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
             </button>
             <button
               onClick={() => navigate(user.accountType === 'VENDOR' ? '/vendor' : '/customer')}
-              className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-4 py-2.5 transition shadow-sm shadow-primary/20 cursor-pointer"
+              className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-3 sm:px-4 py-2 sm:py-2.5 transition shadow-sm shadow-primary/20 cursor-pointer whitespace-nowrap"
             >
               My Dashboard
             </button>
@@ -57,7 +57,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
             {activePage === 'login' ? (
               <Link
                 to="/"
-                className="text-xs sm:text-sm font-bold text-ink/70 dark:text-gray-300 hover:text-primary px-2 transition"
+                className="text-xs sm:text-sm font-bold text-ink/70 dark:text-gray-300 hover:text-primary px-2 transition hidden sm:block"
               >
                 Explore
               </Link>
@@ -78,7 +78,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
             </button>
             <button
               onClick={handlePlan}
-              className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-4 sm:px-5 py-2.5 transition shadow-md shadow-primary/20 cursor-pointer"
+              className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-3 sm:px-5 py-2 sm:py-2.5 transition shadow-md shadow-primary/20 cursor-pointer whitespace-nowrap"
             >
               Plan an Event
             </button>

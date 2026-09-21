@@ -82,10 +82,10 @@ export default function Quotes() {
         </a>
       }
     >
-      {/* Pipeline strip */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      {/* Pipeline strip — 2-col on mobile, 5-col on sm+ */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {PIPELINE.map((p) => (
-          <div key={p.stage} className="bg-white rounded-xl px-4 py-3 shadow-xs min-w-[130px] flex-1 border border-gray-100">
+          <div key={p.stage} className="bg-white rounded-xl px-3 py-3 shadow-xs border border-gray-100">
             <div className="text-lg font-extrabold text-navy">{(stages[p.stage] || []).length}</div>
             <div className="text-xs font-semibold text-navy mt-0.5">{p.stage}</div>
             <div className="text-[10px] text-muted">{p.hint}</div>
@@ -93,12 +93,12 @@ export default function Quotes() {
         ))}
       </div>
 
-      <Card className="!p-0 overflow-x-auto">
-        <table className="w-full text-[13px] min-w-[720px]">
+      <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-xs bg-white">
+        <table className="w-full text-[13px] min-w-[680px]">
           <thead>
-            <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100">
+            <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100 bg-gray-50/60">
               {['Quote', 'Client', 'Service', 'Event Date', 'Base', 'Travel', 'Total', 'Status', 'Action'].map((h) => (
-                <th key={h} className="px-5 py-3 font-semibold">{h}</th>
+                <th key={h} className="px-4 py-3 font-semibold whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -112,15 +112,15 @@ export default function Quotes() {
 
               return (
                 <tr key={q._id} className="border-b border-gray-50 last:border-0 hover:bg-lavender/40 transition">
-                  <td className="px-5 py-3 font-semibold text-primary">{q.quoteReference || q._id.slice(-6)}</td>
-                  <td className="px-5 py-3 font-medium text-navy">{clientName}</td>
-                  <td className="px-5 py-3 text-muted">{q.serviceName}</td>
-                  <td className="px-5 py-3 text-muted">{q.eventDate}</td>
-                  <td className="px-5 py-3 text-ink">₹{base.toLocaleString()}</td>
-                  <td className="px-5 py-3 text-ink">₹{travel.toLocaleString()}</td>
-                  <td className="px-5 py-3 font-bold text-navy">₹{total.toLocaleString()}</td>
-                  <td className="px-5 py-3"><StatusChip status={stage} /></td>
-                  <td className="px-5 py-3">
+                  <td className="px-4 py-3 font-semibold text-primary whitespace-nowrap">{q.quoteReference || q._id.slice(-6)}</td>
+                  <td className="px-4 py-3 font-medium text-navy whitespace-nowrap">{clientName}</td>
+                  <td className="px-4 py-3 text-muted max-w-[140px] truncate">{q.serviceName}</td>
+                  <td className="px-4 py-3 text-muted whitespace-nowrap">{q.eventDate}</td>
+                  <td className="px-4 py-3 text-ink whitespace-nowrap">₹{base.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-ink whitespace-nowrap">₹{travel.toLocaleString()}</td>
+                  <td className="px-4 py-3 font-bold text-navy whitespace-nowrap">₹{total.toLocaleString()}</td>
+                  <td className="px-4 py-3"><StatusChip status={stage} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap">
                     {stage === 'Draft' && (
                       <button
                         onClick={() => handleSendQuote(q._id)}
@@ -149,9 +149,10 @@ export default function Quotes() {
             )}
           </tbody>
         </table>
-      </Card>
+      </div>
 
       <EmptyHint text="Invalid transitions are blocked server-side with audit — e.g. a Rejected quote cannot be re-submitted without creating a new revision." />
     </Page>
+
   );
 }
