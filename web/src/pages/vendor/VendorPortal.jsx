@@ -25,7 +25,7 @@ export default function VendorPortal() {
   const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarMini, setIsSidebarMini] = useState(false);
   const notifRef = useRef(null);
   const [businessName, setBusinessName] = useState(user?.fullName ? `${user.fullName}'s Brand` : 'My Brand');
   const [category, setCategory] = useState('');
@@ -155,15 +155,26 @@ export default function VendorPortal() {
       {navOpen && <div className="fixed inset-0 bg-navy/40 z-30 lg:hidden" onClick={() => setNavOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static top-0 left-0 h-screen z-40 w-64 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-transform duration-200 ease-in-out ${navOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100 lg:border-none">
-          <LogoWord sub="Vendor OS" />
+      <aside className={`fixed lg:static top-0 left-0 h-screen z-40 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-all duration-300 ease-in-out ${isSidebarMini ? 'lg:w-20 w-64' : 'w-64'} ${navOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className={`px-4 py-4 flex items-center ${isSidebarMini ? 'lg:justify-center' : 'justify-between'} border-b border-gray-100 lg:border-none relative h-[68px]`}>
+          <div className={`${isSidebarMini ? 'lg:hidden' : 'block'}`}>
+            <LogoWord sub="Vendor OS" />
+          </div>
+          {isSidebarMini && <div className="hidden lg:grid w-8 h-8 rounded-xl bg-primary text-white place-items-center font-bold text-sm shrink-0">V</div>}
           <button
             onClick={() => setNavOpen(false)}
             className="lg:hidden w-8 h-8 rounded-xl text-muted hover:bg-lavender grid place-items-center transition"
             aria-label="Close menu"
           >
             <Icon name="close" size={18} />
+          </button>
+          
+          <button 
+            onClick={() => setIsSidebarMini(!isSidebarMini)}
+            className={`hidden lg:grid w-6 h-6 rounded-full bg-white border border-gray-200 text-muted hover:text-navy hover:bg-gray-50 place-items-center transition absolute top-1/2 -translate-y-1/2 -right-3 z-50`}
+            title="Toggle Sidebar"
+          >
+            <Icon name={isSidebarMini ? 'chevronRight' : 'chevronLeft'} size={14} />
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
@@ -172,19 +183,20 @@ export default function VendorPortal() {
               key={item.to}
               to={item.to}
               onClick={() => setNavOpen(false)}
+              title={isSidebarMini ? item.label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[13px] transition ${
+                `relative flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[13px] transition ${
                   isActive
                     ? 'bg-[#ede9fe] text-primary font-bold shadow-xs'
                     : 'text-ink/70 font-medium hover:bg-lavender hover:text-navy'
-                }`
+                } ${isSidebarMini ? 'lg:justify-center' : ''}`
               }
             >
               <Icon name={item.icon} size={17} className="shrink-0" />
-              <span className="flex-1 text-left">{item.label}</span>
+              <span className={`flex-1 text-left ${isSidebarMini ? 'lg:hidden' : 'block'}`}>{item.label}</span>
               {item.badge && item.badge > 0 && (
-                <span className="w-5 h-5 min-w-[20px] rounded-full bg-[#e62e2e] text-white font-extrabold text-[11px] flex items-center justify-center shrink-0 shadow-xs">
-                  {item.badge}
+                <span className={`min-w-[20px] h-5 rounded-full bg-[#e62e2e] text-white font-extrabold text-[11px] flex items-center justify-center shrink-0 shadow-xs ${isSidebarMini ? 'lg:absolute lg:top-1 lg:right-1 lg:w-4 lg:h-4 lg:min-w-0 lg:text-[9px]' : 'w-5'}`}>
+                  {isSidebarMini ? '' : item.badge}
                 </span>
               )}
             </NavLink>
@@ -192,22 +204,22 @@ export default function VendorPortal() {
         </nav>
 
         {/* Account + logout */}
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2.5">
+        <div className={`p-4 border-t border-gray-100 flex items-center gap-2.5 ${isSidebarMini ? 'lg:flex-col lg:p-2' : ''}`}>
           {profilePicUrl || user?.avatarUrl ? (
-            <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className="w-9 h-9 rounded-full object-cover shrink-0 border border-gray-200" />
+            <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className={`rounded-full object-cover shrink-0 border border-gray-200 ${isSidebarMini ? 'lg:w-10 lg:h-10 w-9 h-9' : 'w-9 h-9'}`} />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-primary text-white grid place-items-center text-xs font-bold shrink-0">
-              {user?.fullName?.[0]?.toUpperCase()}
+            <div className={`rounded-full bg-primary text-white grid place-items-center text-xs font-bold shrink-0 ${isSidebarMini ? 'lg:w-10 lg:h-10 w-9 h-9' : 'w-9 h-9'}`}>
+              {user?.fullName?.[0]?.toUpperCase() || 'V'}
             </div>
           )}
-          <div className="flex-1 min-w-0">
+          <div className={`flex-1 min-w-0 ${isSidebarMini ? 'lg:hidden' : 'block'}`}>
             <div className="text-xs font-bold truncate">{user?.fullName}</div>
             <div className="text-[10px] text-muted truncate">{user?.email}</div>
           </div>
           <button
             onClick={handleLogout}
             title="Sign out"
-            className="w-8 h-8 grid place-items-center rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition"
+            className={`w-8 h-8 grid place-items-center rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition shrink-0 ${isSidebarMini ? 'lg:w-full lg:mt-1' : ''}`}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
@@ -373,8 +385,7 @@ export default function VendorPortal() {
           </Routes>
         </div>
 
-        <footer className="px-6 py-3 hidden sm:flex items-center justify-between text-[10px] text-muted/70">
-          <span>© 2026 STARVNT Universal Vendor OS. Authoritative Core Platform.</span>
+        <footer className="px-6 py-3 hidden sm:flex items-center justify-end text-[10px] text-muted/70">
           <span className="flex gap-4">Privacy · Terms · Help</span>
         </footer>
 

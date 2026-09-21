@@ -147,10 +147,7 @@ export default function PublicFooter({ showTrustStrip = true }) {
         </div>
 
         {/* Bottom Bar */}
-        <div className="max-w-7xl mx-auto mt-10 pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted">
-          <div>
-            © {new Date().getFullYear()} STARVNT Technologies Inc. All rights reserved.
-          </div>
+        <div className="max-w-7xl mx-auto mt-10 pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-end gap-4 text-xs text-muted">
           <div className="flex items-center gap-6">
             <span>Mumbai · Bengaluru · Delhi NCR · Goa</span>
             <span className="text-primary font-semibold">Events. Simplified.</span>

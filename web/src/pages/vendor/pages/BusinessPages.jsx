@@ -2367,43 +2367,6 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     }
   }
 
-  async function handleProfilePicUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (JPG, PNG, WebP)');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be under 5 MB');
-      return;
-    }
-    try {
-      setUploadingPic(true);
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const res = await externalApi.call('/vendor/profile/picture', {
-            method: 'PUT',
-            body: { image: reader.result },
-          });
-          if (res.ok && res.profilePicUrl) {
-            setProfilePicUrl(res.profilePicUrl);
-            window.dispatchEvent(new Event('vendorProfileUpdated'));
-          }
-        } catch (err) {
-          alert(`Could not upload profile picture: ${err.message}`);
-        } finally {
-          setUploadingPic(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      setUploadingPic(false);
-      alert(`Error reading file: ${err.message}`);
-    }
-  }
-
   function handleOpenAddLocation() {
     setEditingLocationId(null);
     const hasExisting = locations.length > 0;
@@ -2516,38 +2479,47 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
       title="Vendor Profile & Business Hub"
       sub={`${profile.businessName || 'Your Brand'} — ${profile.category || 'Setup Pending'} · Central administration for brand profile, operational locations, KYC documents, and account settings.`}
     >
-      <div className="grid lg:grid-cols-[240px_1fr] gap-6 items-start">
-        {/* Profile Sub-Sidebar Navigation */}
-        <div className="bg-white rounded-2xl p-2.5 border border-gray-100 shadow-xs space-y-1 sticky top-20">
-          <div className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider text-muted">
-            Profile Sections
+      <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
+      {/* Profile Sub-Sidebar Navigation */}
+        <div className="bg-white rounded-2xl p-2 md:p-2.5 border border-gray-100 shadow-xs lg:sticky lg:top-20 shrink-0">
+          {/* Header row: label + toggle for dark mode on mobile */}
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">Profile Sections</span>
+            {/* Mobile readiness badge */}
+            {activation && (
+              <span className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.is100Percent ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                {activation.completionPercentage ?? 0}% {activation.is100Percent ? '✓ Active' : 'Setup'}
+              </span>
+            )}
           </div>
+          <div className="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-1 lg:pb-0 scrollbar-hide snap-x snap-mandatory">
           {SUB_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
+                className={`flex-none lg:w-full flex items-center gap-2 md:gap-3 px-3 py-2 md:py-2.5 rounded-xl text-left transition cursor-pointer snap-start min-w-[130px] lg:min-w-0 ${
                   isActive
                     ? 'bg-primary-soft text-primary font-bold shadow-xs'
                     : 'text-ink/70 hover:bg-lavender hover:text-navy font-medium'
                 }`}
               >
-                <div className={`w-8 h-8 rounded-lg grid place-items-center shrink-0 ${
+                <div className={`w-7 h-7 md:w-8 md:h-8 rounded-lg grid place-items-center shrink-0 ${
                   isActive ? 'bg-primary text-white' : 'bg-gray-100 text-muted'
                 }`}>
                   <Icon name={tab.icon === 'mapPin' ? 'availability' : tab.icon} size={15} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-bold truncate leading-tight">{tab.label}</div>
-                  <div className="text-[10px] text-muted truncate leading-tight mt-0.5">{tab.desc}</div>
+                  <div className="text-[10px] text-muted truncate leading-tight mt-0.5 hidden md:block">{tab.desc}</div>
                 </div>
               </button>
             );
           })}
+          </div>
 
-          <div className="pt-3 mt-2 border-t border-gray-100 px-3 pb-1">
+          <div className="pt-3 mt-1 md:mt-2 border-t border-gray-100 px-3 pb-1 hidden lg:block">
             <div className="text-[11px] font-semibold text-muted">Profile Readiness</div>
             <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
               <span>{activation?.completionPercentage ?? 0}% Complete</span>
@@ -2573,15 +2545,16 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
             <div className="space-y-5">
               {/* Display & Theme Toggle */}
               <Card title="Display Settings">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <h3 className="text-sm font-bold text-navy">Dark Mode</h3>
                     <p className="text-xs text-muted mt-0.5">Toggle the application theme for the entire site</p>
                   </div>
                   <button
                     type="button"
                     onClick={toggleTheme}
-                    className={`w-11 h-6 rounded-full relative transition cursor-pointer ${dark ? 'bg-primary' : 'bg-gray-200'}`}
+                    className={`w-11 h-6 rounded-full relative transition cursor-pointer shrink-0 ${dark ? 'bg-primary' : 'bg-gray-200'}`}
+                    aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
                   >
                     <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${dark ? 'left-6' : 'left-1'}`} />
                   </button>
@@ -2590,8 +2563,9 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
               {/* Profile Picture */}
               <Card title="Profile Picture">
-                <div className="flex flex-col sm:flex-row items-center gap-6">
-                  <div className="relative group shrink-0">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
+                  {/* Avatar + edit overlay */}
+                  <div className="relative shrink-0 mx-auto sm:mx-0">
                     {profilePicUrl ? (
                       <img
                         src={profilePicUrl}
@@ -2620,14 +2594,15 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                       onChange={handleProfilePicUpload}
                     />
                   </div>
-                  <div className="flex-1 min-w-0 text-center sm:text-left">
-                    <h3 className="font-extrabold text-base text-navy">
+                  {/* Info + actions */}
+                  <div className="flex-1 min-w-0 text-center sm:text-left w-full">
+                    <h3 className="font-extrabold text-base text-navy truncate">
                       {profile.businessName || 'Your Brand'}
                     </h3>
-                    <p className="text-sm text-muted mt-0.5">
+                    <p className="text-sm text-muted mt-0.5 truncate">
                       {profile.category || 'Setup Pending'} &middot; {profile.location || 'City not set'}
                     </p>
-                    <div className="mt-4 flex items-center justify-center sm:justify-start gap-4">
+                    <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-3">
                       <button
                         type="button"
                         onClick={() => picInputRef.current?.click()}
@@ -2661,11 +2636,12 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                       )}
                     </div>
                     <p className="text-[10px] text-muted mt-2.5">
-                      Recommended: Square image, at least 400x400px. Max 5 MB.
+                      Recommended: Square image, at least 400×400px. Max 5 MB.
                     </p>
                   </div>
                 </div>
               </Card>
+
 
               <Card title="Business Profile Details">
                 <form onSubmit={handleSaveProfile} className="space-y-4">
@@ -2732,7 +2708,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between pt-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                     <button
                       type="submit"
                       className="rounded-xl bg-primary text-white text-xs font-bold px-5 py-2.5 shadow-sm hover:bg-primary-dark transition cursor-pointer"
@@ -2776,18 +2752,18 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                     {locations.map((loc) => (
                       <div
                         key={loc._id}
-                        className={`p-4 rounded-2xl border transition-all ${
+                        className={`p-3 sm:p-4 rounded-2xl border transition-all ${
                           loc.isPrimary ? 'border-primary/40 bg-primary-soft/20 shadow-xs' : 'border-gray-100 bg-white hover:border-gray-200'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
                             <div className={`w-9 h-9 rounded-xl grid place-items-center text-sm font-bold shrink-0 mt-0.5 ${
                               loc.isPrimary ? 'bg-primary text-white shadow-xs' : 'bg-gray-100 text-muted'
                             }`}>
                               <Icon name="availability" size={16} />
                             </div>
-                            <div>
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-extrabold text-sm text-navy">{loc.label}</span>
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-lavender text-muted uppercase">
@@ -2799,7 +2775,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-ink/80 mt-1">
+                              <p className="text-xs text-ink/80 mt-1 break-words">
                                 {loc.address}, {loc.locality ? `${loc.locality}, ` : ''}{loc.city}, {loc.state} {loc.postalCode}
                               </p>
                               {loc.coordinates?.lat && loc.coordinates?.lng && (
@@ -2810,13 +2786,13 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-3 sm:gap-2 sm:shrink-0 pl-12 sm:pl-0">
                             {!loc.isPrimary && (
                               <button
                                 onClick={() => handleSetPrimary(loc._id)}
                                 className="text-[11px] font-bold text-muted hover:text-primary transition cursor-pointer"
                               >
-                                Set as Primary
+                                Set Primary
                               </button>
                             )}
                             <button

@@ -144,8 +144,7 @@ export default function AdminShell() {
           </Routes>
         </main>
 
-        <footer className="px-6 py-3 flex items-center justify-between text-[10px] text-muted/70">
-          <span>© 2025 STARVNT. All rights reserved.</span>
+        <footer className="px-6 py-3 flex items-center justify-end text-[10px] text-muted/70">
           <span className="hidden sm:block">One Platform. Every Event. A Brighter Tomorrow.</span>
         </footer>
       </div>
