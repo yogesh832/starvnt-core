@@ -2479,47 +2479,49 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
       title="Vendor Profile & Business Hub"
       sub={`${profile.businessName || 'Your Brand'} — ${profile.category || 'Setup Pending'} · Central administration for brand profile, operational locations, KYC documents, and account settings.`}
     >
-      <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
+    <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
       {/* Profile Sub-Sidebar Navigation */}
-        <div className="bg-white rounded-2xl p-2 md:p-2.5 border border-gray-100 shadow-xs lg:sticky lg:top-20 shrink-0">
-          {/* Header row: label + toggle for dark mode on mobile */}
-          <div className="flex items-center justify-between px-3 py-2">
+        <div className="bg-white rounded-2xl p-2 border border-gray-100 shadow-xs lg:sticky lg:top-20 shrink-0">
+          {/* Header row: label + readiness badge on mobile */}
+          <div className="flex items-center justify-between px-2 py-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">Profile Sections</span>
-            {/* Mobile readiness badge */}
             {activation && (
               <span className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.is100Percent ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                 {activation.completionPercentage ?? 0}% {activation.is100Percent ? '✓ Active' : 'Setup'}
               </span>
             )}
           </div>
-          <div className="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-1 lg:pb-0 scrollbar-hide snap-x snap-mandatory">
+
+          {/* Tabs: 2-col grid on mobile, vertical list on desktop */}
+          <div className="grid grid-cols-2 lg:grid-cols-1 gap-1">
           {SUB_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex-none lg:w-full flex items-center gap-2 md:gap-3 px-3 py-2 md:py-2.5 rounded-xl text-left transition cursor-pointer snap-start min-w-[130px] lg:min-w-0 ${
+                className={`w-full flex items-center gap-2 px-2.5 py-2 lg:px-3 lg:py-2.5 rounded-xl text-left transition cursor-pointer ${
                   isActive
                     ? 'bg-primary-soft text-primary font-bold shadow-xs'
                     : 'text-ink/70 hover:bg-lavender hover:text-navy font-medium'
                 }`}
               >
-                <div className={`w-7 h-7 md:w-8 md:h-8 rounded-lg grid place-items-center shrink-0 ${
+                <div className={`w-7 h-7 rounded-lg grid place-items-center shrink-0 ${
                   isActive ? 'bg-primary text-white' : 'bg-gray-100 text-muted'
                 }`}>
                   <Icon name={tab.icon === 'mapPin' ? 'availability' : tab.icon} size={15} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold truncate leading-tight">{tab.label}</div>
-                  <div className="text-[10px] text-muted truncate leading-tight mt-0.5 hidden md:block">{tab.desc}</div>
+                  <div className="text-xs font-bold leading-tight truncate">{tab.label}</div>
+                  <div className="text-[10px] text-muted leading-tight mt-0.5 hidden lg:block truncate">{tab.desc}</div>
                 </div>
               </button>
             );
           })}
           </div>
 
-          <div className="pt-3 mt-1 md:mt-2 border-t border-gray-100 px-3 pb-1 hidden lg:block">
+          {/* Desktop-only readiness bar */}
+          <div className="pt-3 mt-2 border-t border-gray-100 px-2 pb-1 hidden lg:block">
             <div className="text-[11px] font-semibold text-muted">Profile Readiness</div>
             <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
               <span>{activation?.completionPercentage ?? 0}% Complete</span>
@@ -2537,6 +2539,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
             </div>
           </div>
         </div>
+
 
         {/* Tab Content Area */}
         <div className="min-w-0 space-y-5">
@@ -2564,8 +2567,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
               {/* Profile Picture */}
               <Card title="Profile Picture">
                 <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
-                  {/* Avatar + edit overlay */}
-                  <div className="relative shrink-0 mx-auto sm:mx-0">
+                  {/* Avatar + edit overlay — pb-3 gives space for the absolute edit button */}
+                  <div className="relative shrink-0 mx-auto sm:mx-0 pb-3 pr-3">
                     {profilePicUrl ? (
                       <img
                         src={profilePicUrl}
@@ -2581,7 +2584,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                       type="button"
                       onClick={() => picInputRef.current?.click()}
                       disabled={uploadingPic}
-                      className="absolute -bottom-2 -right-2 w-9 h-9 rounded-full bg-primary text-white grid place-items-center shadow-lg hover:bg-primary-dark transition cursor-pointer disabled:opacity-60 border-2 border-white dark:border-[#1a1d2e]"
+                      className="absolute bottom-1 right-1 w-9 h-9 rounded-full bg-primary text-white grid place-items-center shadow-lg hover:bg-primary-dark transition cursor-pointer disabled:opacity-60 border-2 border-white dark:border-[#1a1d2e]"
                       title="Change profile picture"
                     >
                       <Icon name="edit" size={15} />
@@ -2641,6 +2644,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   </div>
                 </div>
               </Card>
+
 
 
               <Card title="Business Profile Details">

@@ -16,10 +16,10 @@ export function Page({ title, sub, action, children }) {
 
 export function Card({ title, extra, children, className = '' }) {
   return (
-    <div className={`bg-white rounded-2xl p-4 sm:p-5 shadow-sm overflow-hidden ${className}`}>
+    <div className={`bg-white rounded-2xl p-4 sm:p-5 shadow-sm ${className}`}>
       {(title || extra) && (
         <div className="flex items-center justify-between mb-3 gap-2">
-          {title && <h2 className="font-bold text-[15px] truncate">{title}</h2>}
+          {title && <h2 className="font-bold text-[15px]">{title}</h2>}
           {extra}
         </div>
       )}
