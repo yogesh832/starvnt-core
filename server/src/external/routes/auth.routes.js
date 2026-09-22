@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { sendEmailOtp, verifyEmailOtp } from '../services/emailOtp.service.js';
 import rateLimit from 'express-rate-limit';
 import { config } from '../../config.js';
 import { ExternalUser } from '../models/ExternalUser.js';

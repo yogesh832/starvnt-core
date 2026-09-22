@@ -54,4 +54,8 @@ export const config = {
   msg91AuthKey: process.env.MSG91_AUTHKEY || '',
   msg91WidgetId: process.env.MSG91_WIDGET_ID || '',
   msg91WidgetToken: process.env.MSG91_WIDGET_TOKEN || '',
+
+  // ── Resend Email OTP ──
+  resendApiKey: process.env.RESEND_API_KEY || '',
+  resendSenderEmail: process.env.RESEND_SENDER_EMAIL || 'noreply@starvnt.com',
 };

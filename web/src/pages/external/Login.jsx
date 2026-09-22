@@ -513,148 +513,132 @@ export default function ExternalLogin() {
 
             {/* ───────── OPTION 1: EMAIL & PASSWORD ───────── */}
             {authMethod === 'EMAIL' && (
-              <form onSubmit={handleEmailSubmit} className="mt-4 space-y-3">
-                {mode === 'register' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-ink/80 mb-1">Full name</label>
-                    <input
-                      className={inputCls}
-                      placeholder="Aarav Mehta"
-                      value={form.fullName}
-                      onChange={set('fullName')}
-                      required
-                    />
-                  </div>
-                )}
-
-                {mode === 'register' && accountType === 'VENDOR' && (
-                  <>
-                    <div>
-                      <label className="block text-xs font-semibold text-ink/80 mb-1">Brand name</label>
-                      <input
-                        className={inputCls}
-                        placeholder="CineMandap Studios"
-                        value={form.businessName}
-                        onChange={set('businessName')}
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2.5">
+              <div className="mt-4 space-y-3">
+                {!otpSent ? (
+                  <form onSubmit={handleEmailSubmit} className="space-y-3">
+                    {mode === 'register' && (
                       <div>
-                        <label className="block text-xs font-semibold text-ink/80 mb-1">Category</label>
-                        <select
-                          className={inputCls}
-                          value={form.category}
-                          onChange={set('category')}
-                          required
-                        >
-                          <option value="">Select Category...</option>
-                          <option value="Cinematic Production">Cinematic Production</option>
-                          <option value="Photography">Photography</option>
-                          <option value="Videography">Videography</option>
-                          <option value="Decor & Styling">Decor & Styling</option>
-                          <option value="Catering">Catering</option>
-                          <option value="Makeup & Styling">Makeup & Styling</option>
-                          <option value="DJ & Music">DJ & Music</option>
-                          <option value="Venue">Venue</option>
-                          <option value="Event Planning">Event Planning</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-ink/80 mb-1">City</label>
+                        <label className="block text-xs font-semibold text-ink/80 mb-1">Full name</label>
                         <input
                           className={inputCls}
-                          placeholder="Mumbai"
-                          value={form.city}
-                          onChange={set('city')}
+                          placeholder="Aarav Mehta"
+                          value={form.fullName}
+                          onChange={set('fullName')}
                           required
                         />
                       </div>
-                    </div>
-                  </>
-                )}
+                    )}
+    
+                    {mode === 'register' && accountType === 'VENDOR' && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-semibold text-ink/80 mb-1">Brand name</label>
+                          <input
+                            className={inputCls}
+                            placeholder="CineMandap Studios"
+                            value={form.businessName}
+                            onChange={set('businessName')}
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-xs font-semibold text-ink/80 mb-1">Category</label>
+                            <select
+                              className={inputCls}
+                              value={form.category}
+                              onChange={set('category')}
+                              required
+                            >
+                              <option value="">Select Category...</option>
+                              <option value="Cinematic Production">Cinematic Production</option>
+                              <option value="Photography">Photography</option>
+                              <option value="Videography">Videography</option>
+                              <option value="Decor & Styling">Decor & Styling</option>
+                              <option value="Catering">Catering</option>
+                              <option value="DJ & Music">DJ & Music</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-ink/80 mb-1">City</label>
+                            <input
+                              className={inputCls}
+                              placeholder="e.g. Mumbai, Kolkata..."
+                              value={form.city}
+                              onChange={set('city')}
+                              required
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
 
-                <div>
-                  <label className="block text-xs font-semibold text-ink/80 mb-1">Email address</label>
-                  <input
-                    type="email"
-                    className={inputCls}
-                    placeholder="you@starvnt.com"
-                    value={form.email}
-                    onChange={set('email')}
-                    required
-                  />
-                </div>
-
-                {mode === 'register' && (
-                  <div>
-                    <label className="block text-xs font-semibold text-ink/80 mb-1">Mobile Number</label>
-                    <div className="flex gap-2">
-                      <span className="px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-navy grid place-items-center">
-                        +91
-                      </span>
+                    <div>
+                      <label className="block text-xs font-semibold text-ink/80 mb-1">Email address</label>
                       <input
-                        type="tel"
+                        type="email"
                         className={inputCls}
-                        placeholder="98765 43210"
-                        value={form.phone}
-                        onChange={set('phone')}
+                        placeholder="you@example.com"
+                        value={form.email}
+                        onChange={set('email')}
                         required
                       />
                     </div>
-                    <p className="text-[10px] text-muted mt-1">Links your phone for instant Mobile OTP login anytime.</p>
-                  </div>
-                )}
-
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-xs font-semibold text-ink/80">Password</label>
-                    {mode === 'login' && (
-                      <span className="text-[11px] text-primary hover:underline cursor-pointer">
-                        Forgot password?
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <input
-                      type={showPw ? 'text' : 'password'}
-                      className={`${inputCls} pr-10`}
-                      placeholder="••••••••"
-                      value={form.password}
-                      onChange={set('password')}
-                      required
-                    />
+    
                     <button
-                      type="button"
-                      onClick={() => setShowPw(!showPw)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition p-1 cursor-pointer"
-                      aria-label="Toggle password visibility"
+                      type="submit"
+                      disabled={busy}
+                      className="w-full rounded-xl bg-navy hover:bg-navy/90 text-white font-bold py-2.5 text-sm shadow-md transition disabled:opacity-60 cursor-pointer mt-2"
                     >
-                      {showPw ? (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      )}
+                      {busy ? 'Sending OTP...' : 'Send OTP to Email'}
                     </button>
-                  </div>
-                </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleEmailOtpVerify} className="space-y-4 animate-fade-up">
+                    <div className="p-3 bg-lavender rounded-xl border border-primary/20 flex items-center justify-between">
+                      <div className="text-xs">
+                        <span className="text-muted">OTP sent to: </span>
+                        <b className="text-navy">{form.email}</b>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtpSent(false);
+                          setForm({ ...form, otp: '' });
+                          setError('');
+                        }}
+                        className="text-[11px] font-bold text-primary hover:underline"
+                      >
+                        Change
+                      </button>
+                    </div>
 
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="w-full rounded-xl bg-primary hover:bg-primary-dark active:scale-[0.99] text-white font-bold py-3 text-sm shadow-md shadow-primary/25 transition disabled:opacity-60 cursor-pointer mt-1"
-                >
-                  {busy ? 'Please wait…' : mode === 'login' ? `Sign In as ${accountType === 'VENDOR' ? 'Vendor' : 'Customer'}` : 'Create Account'}
-                </button>
-              </form>
+                    <div>
+                      <label className="block text-xs font-semibold text-ink/80 mb-1">6-Digit Verification Code</label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        className={`${inputCls} tracking-widest text-center text-lg font-extrabold text-navy`}
+                        placeholder="------"
+                        value={form.otp}
+                        onChange={set('otp')}
+                        required
+                        autoFocus
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={busy}
+                      className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 text-sm shadow-md transition disabled:opacity-60 cursor-pointer"
+                    >
+                      {busy ? 'Verifying OTP...' : `Verify & Sign In as ${accountType === 'VENDOR' ? 'Vendor' : 'Customer'}`}
+                    </button>
+                  </form>
+                )}
+              </div>
             )}
-
-            {/* ───────── OPTION 2: MOBILE PHONE OTP ───────── */}
+            
             {authMethod === 'PHONE' && (
               <div className="mt-4 space-y-3.5">
                 {!otpSent ? (
