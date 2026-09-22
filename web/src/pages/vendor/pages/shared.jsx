@@ -27,7 +27,3 @@ export function Card({ title, extra, children, className = '' }) {
     </div>
   );
 }
-
-    </div>
-  );
-}
