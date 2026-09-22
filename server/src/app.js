@@ -9,6 +9,7 @@ import vendorRoutes from './external/routes/vendor.routes.js';
 import commercialRoutes from './external/routes/commercial.routes.js';
 import transactionRoutes from './external/routes/transaction.routes.js';
 import portfolioRoutes from './external/routes/portfolio.routes.js';
+import aiRoutes from './external/routes/ai.routes.js';
 import { requireExternalAuth, requireAccountType } from './external/middleware/requireExternalAuth.js';
 
 import adminAuthRoutes from './admin/routes/auth.routes.js';
@@ -47,6 +48,7 @@ export function createApp() {
   app.use('/api/commercial', commercialRoutes);
   app.use('/api', transactionRoutes);
   app.use('/api', portfolioRoutes);
+  app.use('/api/ai', aiRoutes);
 
   // ── INTERNAL ADMIN domain: separate auth + RBAC ───────────────────────────
   app.use('/api/admin/auth', adminAuthRoutes);
@@ -66,10 +68,9 @@ export function createApp() {
 
   // 404 + error handler — no stack leakage.
   app.use((req, res) => res.status(404).json({ error: 'NOT_FOUND' }));
-  // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     console.error('[server]', err);
-    res.status(err.status || 500).json({ error: 'INTERNAL_ERROR' });
+    res.status(err.status || 500).json({ error: 'INTERNAL_ERROR', details: err.message, stack: err.stack });
   });
 
   return app;

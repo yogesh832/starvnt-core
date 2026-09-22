@@ -423,12 +423,133 @@ function ExecutionCard() {
 }
 
 /* ══════════════ Dashboard home ══════════════ */
-export function HomeView({ firstName, events, onOpenEvent, onOpenAura }) {
-  const [selected, setSelected] = useState(1); // Candid Stories pre-selected per reference
+export function HomeView({ firstName, events, onOpenEvent, onOpenAura, onOpenUpdates }) {
+  const [selected, setSelected] = useState(1);
+  const [mobileTab, setMobileTab] = useState('plan');
+  
+  if (!events || events.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full pt-20 pb-32 px-4 text-center">
+        <div className="w-16 h-16 bg-lavender rounded-full flex items-center justify-center text-primary mb-6">
+          <Icon name="star" size={32} />
+        </div>
+        <h1 className="text-2xl font-extrabold text-navy mb-2">Hey, what are you planning?</h1>
+        <p className="text-muted text-sm mb-8 max-w-sm mx-auto">
+          You don't have any events set up yet. Let's create your first celebration.
+        </p>
+        <button onClick={onOpenAura} className="bg-primary hover:bg-primary-dark text-white font-bold text-sm px-6 py-3 rounded-2xl shadow-sm shadow-primary/30 transition flex items-center gap-2">
+          <Icon name="bolt" size={16} />
+          Plan an Event
+        </button>
+      </div>
+    );
+  }
   const e = events[0];
   const opt = OPTIONS[selected];
   return (
-    <div className="max-w-6xl mx-auto space-y-4">
+    <>
+    {/* Mobile specific layout (Screen 7 of reference) */}
+    <div className="md:hidden space-y-4 pb-20">
+      {/* Header */}
+      <div className="text-center pt-2 pb-4 border-b border-gray-100">
+        <h1 className="text-lg font-extrabold text-navy leading-tight mb-1">{e.name}</h1>
+        <div className="text-[10px] text-muted flex items-center justify-center gap-1.5">
+          <span className="text-emerald-500 font-bold">{e.date}</span>
+          <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+          <span>{e.place.split(',')[0]}</span>
+        </div>
+      </div>
+
+      {/* Ring Chart & Status */}
+      <div className="flex items-center gap-4 px-2">
+        <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+          <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f3f4f6" strokeWidth="3.5" />
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#10b981" strokeWidth="3.5" strokeDasharray="68, 100" />
+          </svg>
+          <div className="absolute font-extrabold text-navy text-[13px]">68%</div>
+        </div>
+        <div>
+          <h2 className="text-[13px] font-extrabold text-navy mb-0.5">Your wedding is taking shape! <span className="text-base">🎉</span></h2>
+          <p className="text-[11px] text-muted">3 decisions need your attention.</p>
+        </div>
+      </div>
+
+      {/* Mobile Tabs */}
+      <div className="flex items-center justify-between border-b border-gray-100 px-2 mt-6">
+        {['plan', 'vendors', 'payments', 'timeline'].map((t) => (
+          <button
+            key={t}
+            onClick={() => setMobileTab(t)}
+            className={`pb-2 px-1 text-xs font-bold capitalize ${mobileTab === t ? 'border-b-2 border-primary text-primary' : 'text-muted'}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {mobileTab === 'plan' && (
+        <div className="mt-4 px-2">
+          <h3 className="text-xs font-bold text-navy mb-3">Arrangements</h3>
+          <div className="space-y-0.5">
+            {e.requirements.map((arr, i) => {
+              let type = 'gray';
+              if (arr.status.toLowerCase().includes('confirm') || arr.status.toLowerCase().includes('approve')) type = 'success';
+              else if (arr.status.toLowerCase().includes('option') || arr.status.toLowerCase().includes('new') || arr.status.toLowerCase().includes('decision')) type = 'info';
+              else if (arr.status.toLowerCase().includes('suggest')) type = 'warning';
+
+              let icon = 'star';
+              const nameL = arr.name.toLowerCase();
+              if (nameL.includes('venue')) icon = 'mapPin';
+              else if (nameL.includes('photo') || nameL.includes('video')) icon = 'camera';
+              else if (nameL.includes('cater') || nameL.includes('food')) icon = 'services';
+              else if (nameL.includes('makeup')) icon = 'customers';
+
+              return (
+                <div key={i} className="flex items-center justify-between py-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${type === 'success' ? 'bg-emerald-50 text-emerald-600' : type === 'info' ? 'bg-primary-soft text-primary' : type === 'warning' ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-500'}`}>
+                      <Icon name={icon} size={14} />
+                    </div>
+                    <span className="text-[13px] font-bold text-navy">{arr.name}</span>
+                  </div>
+                  <div className={`text-[10px] font-bold px-2.5 py-1 rounded-md flex items-center gap-1 ${type === 'success' ? 'bg-emerald-50 text-emerald-700' : type === 'info' ? 'bg-primary-soft text-primary' : 'bg-amber-50 text-amber-700'}`}>
+                    {type === 'success' && <Icon name="check" size={10} />}
+                    {type === 'info' && <Icon name="arrowRight" size={10} />}
+                    {arr.status}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button className="w-full mt-4 py-3 text-xs font-bold text-primary hover:bg-primary-soft rounded-xl transition">
+            View all (12)
+          </button>
+        </div>
+      )}
+
+      {mobileTab === 'vendors' && (
+        <div className="mt-4 px-2 space-y-4">
+          <VendorOptions onAction={onOpenAura} />
+          <div className="overflow-x-auto pb-4"><CompareTable /></div>
+        </div>
+      )}
+      
+      {mobileTab === 'payments' && (
+        <div className="mt-4 px-2 space-y-4">
+          <BookingPayment event={e} />
+        </div>
+      )}
+      
+      {mobileTab === 'timeline' && (
+        <div className="mt-4 px-2 space-y-4">
+          <ExecutionCard timeline={e.timeline} />
+        </div>
+      )}
+    </div>
+
+    {/* Desktop layout */}
+    <div className="hidden md:block max-w-6xl mx-auto space-y-4">
       {/* Event header */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex-1 min-w-0">
@@ -477,19 +598,59 @@ export function HomeView({ firstName, events, onOpenEvent, onOpenAura }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
 /* ── Updates — meaningful changes only (§9.3, no spam) ───────────────────── */
-export function UpdatesView() {
-  const items = [
-    { t: '2h', kind: 'Decision needed', text: 'Catering quote from SpiceRoute Caterers expires in 2 days — ₹1,12,000 validated total.', tone: 'amber' },
-    { t: '5h', kind: 'Payment verified', text: '₹15,000 advance for photography verified server-side. Your booking is confirmed.', tone: 'emerald' },
-    { t: 'Yesterday', kind: 'Schedule change', text: 'Decoration setup for the wedding moved to 7:00 AM on event day (team request, approved by coordinator).', tone: 'violet' },
-    { t: 'Yesterday', kind: 'Vendor ready', text: 'Sweet Moments confirmed cake design and delivery window for the birthday.', tone: 'primary' },
-    { t: '2d', kind: 'Clarification', text: 'Aura+ needs one answer: veg-only catering, or mixed? Your choice updates the shortlist.', tone: 'amber' },
-  ];
+export function UpdatesView({ events }) {
+  let items = [];
+  
+  if (events && events.length > 0) {
+    events.forEach((e) => {
+      e.requirements.forEach(req => {
+        const lower = req.status.toLowerCase();
+        if (lower.includes('option') || lower.includes('new') || lower.includes('finding')) {
+          items.push({
+            t: 'Just now',
+            kind: 'Vendor Match',
+            text: `Aura+ is analyzing verified vendors for your ${req.name} requirement for ${e.name}.`,
+            tone: 'primary'
+          });
+        } else if (lower.includes('confirm') || lower.includes('approve')) {
+          items.push({
+            t: 'Recently',
+            kind: 'Confirmed',
+            text: `Your ${req.name} arrangement for ${e.name} is verified and confirmed.`,
+            tone: 'emerald'
+          });
+        } else {
+          items.push({
+            t: 'Active',
+            kind: 'Status',
+            text: `Your ${req.name} for ${e.name} is marked as: ${req.status}.`,
+            tone: 'violet'
+          });
+        }
+      });
+    });
+  }
   const tone = { amber: 'bg-amber-50 text-amber-600', emerald: 'bg-emerald-50 text-emerald-600', violet: 'bg-violet-50 text-violet-600', primary: 'bg-primary-soft text-primary' };
+  
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full pt-20 pb-32 px-4 text-center">
+        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 mb-6">
+          <Icon name="bell" size={24} />
+        </div>
+        <h1 className="text-xl font-extrabold text-navy mb-2">No updates yet</h1>
+        <p className="text-muted text-sm max-w-xs mx-auto">
+          When there's a decision to make, a vendor matched, or a payment verified, it will show up here.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 max-w-2xl mx-auto">
       <div>

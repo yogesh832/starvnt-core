@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { useTheme } from '../../lib/ThemeContext.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -6,23 +7,19 @@ import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import AuraChat from './AuraChat.jsx';
 import EventCenter from './EventCenter.jsx';
 import { HomeView, UpdatesView, MeView, EventsView } from './views.jsx';
+import { externalApi } from '../../lib/api.js';
 
 /* ── Blueprint-shaped demo state (will bind to Core APIs as they land) ───── */
 const EVENTS = [
   {
     name: "My Daughter's Wedding",
-    date: '28 November 2026',
-    place: 'Kisar Palace, New Town',
+    date: '26 November 2025',
+    place: 'New Town, Kolkata',
     guests: 500,
     state: 'BOOKING_IN_PROGRESS',
-    readiness: 62,
+    readiness: 68,
     requirements: [
       { name: 'Catering', status: 'Decision needed', detail: '3 validated quotes ready — SpiceRoute is the best value at ₹1,12,000 (base + service + travel).', action: 'Compare quotes' },
-      { name: 'Photography', status: 'Booked', detail: 'ShutterCraft Studio · full day · advance verified.', action: 'View booking' },
-      { name: 'Venue', status: 'Confirmed', detail: 'Banquet hall reserved — exact address unlocks for guests closer to the date.', action: 'Details' },
-      { name: 'Decoration', status: 'Finding options', detail: 'Aura+ is shortlisting decorators who cover New Town on your date.', action: 'See progress' },
-      { name: 'Makeup artist', status: 'Clarify needed', detail: 'One answer needed: bridal only, or family too?', action: 'Answer' },
-      { name: 'Music & DJ', status: 'Finding options', detail: 'Optional — add when ready. Nothing is booked without you.', action: 'Ask Aura+' },
     ],
     timeline: [
       ['Intent captured', 'Wedding, 26 Nov, 500 guests — understood via Aura+', true],
@@ -81,7 +78,7 @@ const EVENTS = [
 
 const NAV = [
   { key: 'home', label: 'Home', icon: 'dashboard' },
-  { key: 'events', label: 'Events', icon: 'events' },
+  { key: 'events', label: 'Events', icon: 'calendar' },
   { key: 'aura', label: 'Aura+', icon: 'star' },
   { key: 'updates', label: 'Updates', icon: 'bell' },
   { key: 'me', label: 'Me', icon: 'profile' },
@@ -91,30 +88,82 @@ const NAV = [
 export default function CustomerPortal() {
   const { user, logout } = useExternalAuth();
   const { dark, toggle: toggleTheme } = useTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
+  
   const firstName = user?.fullName?.split(' ')[0] || 'there';
-  const [tab, setTab] = useState('home');
-  const [activeEvent, setActiveEvent] = useState(null); // index into EVENTS, or null
+  const [tab, setTab] = useState(location.state?.intent ? 'aura' : 'home');
+  const [activeEvent, setActiveEvent] = useState(null); // index into eventsList, or null
+  const [eventsList, setEventsList] = useState([]); // Empty until API load
+
+  useEffect(() => {
+    async function loadBackend() {
+      try {
+        const [oppsRes, quotesRes, bookingsRes] = await Promise.all([
+          externalApi.call('/opportunities').catch(() => ({ opportunities: [] })),
+          externalApi.call('/quotes').catch(() => ({ quotes: [] })),
+          externalApi.call('/bookings').catch(() => ({ bookings: [] }))
+        ]);
+        
+        // Group by event name/date
+        const groups = {};
+        for (const opp of (oppsRes.opportunities || [])) {
+          const key = opp.eventDate + '_' + opp.guestCount;
+          if (!groups[key]) {
+             groups[key] = {
+               name: opp.category + " Event",
+               date: new Date(opp.eventDate).toLocaleDateString(),
+               place: opp.serviceLocation?.locality || 'TBD',
+               guests: opp.guestCount || 500,
+               state: 'PLANNING',
+               readiness: 68,
+               requirements: [],
+               timeline: EVENTS[0].timeline, // mock timeline
+               budget: EVENTS[0].budget,
+               payments: EVENTS[0].payments,
+               vendors: []
+             };
+          }
+          groups[key].requirements.push({
+            name: opp.category,
+            status: opp.status === 'NEW' ? 'Finding options' : opp.status,
+            detail: `Need ${opp.category} for ${opp.guestCount} guests.`,
+            action: 'View'
+          });
+        }
+        
+        // Merge bookings
+        for (const bk of (bookingsRes.bookings || [])) {
+          // just mock linking
+        }
+        
+        const apiEvents = Object.values(groups);
+        setEventsList(apiEvents);
+      } catch (err) {}
+    }
+    loadBackend();
+  }, []);
 
   const openEvent = (i) => { setActiveEvent(i); setTab('events'); };
   const openAura = () => setTab('aura');
 
   function renderTab() {
     if (tab === 'home') {
-      return <HomeView firstName={firstName} events={EVENTS} onOpenEvent={openEvent} onOpenAura={openAura} onOpenUpdates={() => setTab('updates')} />;
+      return <HomeView firstName={firstName} events={eventsList} onOpenEvent={openEvent} onOpenAura={openAura} onOpenUpdates={() => setTab('updates')} />;
     }
     if (tab === 'events') {
       if (activeEvent != null) {
         return (
           <div className="max-w-5xl mx-auto">
             <button onClick={() => setActiveEvent(null)} className="text-xs font-bold text-muted hover:text-primary mb-3">← All events</button>
-            <EventCenter event={EVENTS[activeEvent]} onAskAura={openAura} />
+            <EventCenter event={eventsList[activeEvent]} onAskAura={openAura} />
           </div>
         );
       }
-      return <EventsView events={EVENTS} onOpenEvent={openEvent} onOpenAura={openAura} />;
+      return <EventsView events={eventsList} onOpenEvent={openEvent} onOpenAura={openAura} />;
     }
     if (tab === 'aura') return null; // full-height, handled below
-    if (tab === 'updates') return <UpdatesView />;
+    if (tab === 'updates') return <UpdatesView events={eventsList} />;
     return <MeView user={user} logout={logout} />;
   }
 
@@ -193,21 +242,24 @@ export default function CustomerPortal() {
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
-        <header className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shrink-0">
-          <LogoWord size="text-base" />
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt="Profile" className="ml-auto w-8 h-8 rounded-full object-cover border border-gray-200" />
-          ) : (
-            <div className="ml-auto w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold">
-              {firstName[0]?.toUpperCase()}
-            </div>
-          )}
-        </header>
+        {tab !== 'home' && (
+          <header className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shrink-0">
+            <LogoWord size="text-base" />
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt="Profile" className="ml-auto w-8 h-8 rounded-full object-cover border border-gray-200" />
+            ) : (
+              <div className="ml-auto w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold">
+                {firstName[0]?.toUpperCase()}
+              </div>
+            )}
+          </header>
+        )}
 
         {tab === 'aura' ? (
           <main className="flex-1 min-h-0 flex flex-col">
             <AuraChat
               firstName={firstName}
+              initialIntent={location.state?.intent}
               onEventCreated={() => {
                 setActiveEvent(0);
                 setTab('events');
@@ -222,16 +274,25 @@ export default function CustomerPortal() {
 
         {/* Mobile bottom tab bar */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 grid grid-cols-5 z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          {NAV.map((n) => (
-            <button
-              key={n.key}
-              onClick={() => { setTab(n.key); if (n.key !== 'events') setActiveEvent(null); }}
-              className={`flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold transition ${tab === n.key ? 'text-primary' : 'text-muted'}`}
-            >
-              <Icon name={n.icon} size={18} />
-              {n.label}
-            </button>
-          ))}
+          {NAV.map((n) => {
+            const isCenter = n.key === 'aura';
+            return (
+              <button
+                key={n.key}
+                onClick={() => { setTab(n.key); if (n.key !== 'events') setActiveEvent(null); }}
+                className={`relative flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-bold transition ${tab === n.key && !isCenter ? 'text-primary' : 'text-muted'}`}
+              >
+                {isCenter ? (
+                  <div className="absolute -top-6 w-[3.25rem] h-[3.25rem] rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 border-[5px] border-white z-30">
+                     <Icon name={n.icon} size={24} />
+                  </div>
+                ) : (
+                  <Icon name={n.icon} size={20} />
+                )}
+                {isCenter ? <span className="mt-8 text-primary">Ask</span> : <span>{n.label}</span>}
+              </button>
+            );
+          })}
         </nav>
       </div>
     </div>

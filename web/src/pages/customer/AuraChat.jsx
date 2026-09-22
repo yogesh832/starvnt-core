@@ -2,24 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '../../components/Icon.jsx';
 import { externalApi } from '../../lib/api.js';
 
-const BUDGET_CHIPS = ['₹8 - 10 Lakh', '₹10 - 15 Lakh', '₹15 - 20 Lakh', '₹20 Lakh+', 'Set my own budget'];
-const QUICK_PROMPTS = [
-  "My daughter's wedding",
-  'Plan a milestone birthday',
-  'Corporate event for 300 people',
-  'Arrange a Puja',
-  'Plan an anniversary',
-];
-
 /**
  * Structured "Here's what I understood" card matching Screen 2 of Reference Set.
  */
-function UnderstoodCard({ onConfirm }) {
+function UnderstoodCard({ parsed, onConfirm }) {
   const fields = [
-    { label: 'Event', value: 'Wedding', status: 'stated' },
-    { label: 'Date', value: '26 November', status: 'stated' },
-    { label: 'Guests', value: '500', status: 'stated' },
-    { label: 'Venue', value: 'Kisan Palace', status: 'stated' },
+    { label: 'Event', value: parsed.type || 'Wedding', status: parsed.type ? 'stated' : 'missing' },
+    { label: 'Date', value: parsed.dateStr || 'Not specified', status: parsed.dateStr ? 'stated' : 'missing' },
+    { label: 'Guests', value: parsed.guests ? parsed.guests.toString() : 'Not specified', status: parsed.guests ? 'stated' : 'missing' },
+    { label: 'Venue', value: parsed.venue || 'Not specified', status: parsed.venue ? 'stated' : 'missing' },
     { label: 'Services', value: 'Photography, Decoration, Catering', status: 'stated' },
     { label: 'Budget', value: 'Not specified', status: 'missing' },
   ];
@@ -64,55 +55,129 @@ function UnderstoodCard({ onConfirm }) {
   );
 }
 
-export default function AuraChat({ firstName, onEventCreated, embedded = false }) {
+export default function AuraChat({ firstName, onEventCreated, embedded = false, initialIntent = '' }) {
   const [input, setInput] = useState('');
   const [stage, setStage] = useState(0); // 0 initial, 1 understood, 2 budget select, 3 done
   const [messages, setMessages] = useState([
     {
       from: 'aura',
-      text: `Hi ${firstName}! I'm Aura+. Tell me what you're planning — event type, date, guest count, venue, or budget — anything you have in mind.`,
+      text: `Hi ${firstName}, I'm Aura+, your AI event planner. What are we celebrating?`,
     },
   ]);
   const bottomRef = useRef(null);
 
+  // Auto-scroll on new message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, stage]);
+  }, [messages]);
 
-  function send(text) {
+  // Initial intent
+  useEffect(() => {
+    if (initialIntent && stage === 0) {
+      send(initialIntent);
+    }
+  }, [initialIntent, stage]);
+
+  const [parsedDetails, setParsedDetails] = useState({ type: '', dateStr: '', isoDate: '', venue: '', guests: 0 });
+
+  const [chatHistory, setChatHistory] = useState([]);
+  const [isListening, setIsListening] = useState(false);
+
+  const startListening = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return alert('Voice input not supported in this browser.');
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      send(text);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
+  
+  const playVoice = async (text) => {
+    try {
+      const token = localStorage.getItem('starvnt_ext_token');
+      const res = await fetch('http://localhost:3000/api/ai/voice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ text })
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.play();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+  
+  async function send(text) {
     const msg = (text ?? input).trim();
     if (!msg) return;
     setInput('');
 
-    // Step 1: User enters requirement
-    if (stage === 0) {
+    // Optimistic user message
+    setMessages(prev => [...prev, { from: 'user', text: msg }]);
+    
+    if (stage === 2) {
       setMessages((prev) => [
         ...prev,
-        { from: 'user', text: msg },
-        { from: 'aura', text: "Got it, I'll structure your requirements and match verified vendors." },
-        { kind: 'understood' },
-      ]);
-      setStage(1);
-    } else if (stage === 2) {
-      setMessages((prev) => [
-        ...prev,
-        { from: 'user', text: msg },
         {
           from: 'aura',
-          text: `Perfect! Approximate budget set to ${msg}. I've created your event plan and matched 3 top verified photographers for Kisan Palace with the lowest validated total cost!`,
+          text: `Perfect! Approximate budget set to ${msg}. I've created your event plan and matched top verified vendors for ${parsedDetails.venue || 'your venue'} with the lowest validated total cost!`,
         },
       ]);
       setStage(3);
       onEventCreated?.();
-    } else {
-      setMessages((prev) => [
-        ...prev,
-        { from: 'user', text: msg },
-        {
-          from: 'aura',
-          text: "I've updated your event workspace with that requirement.",
-        },
-      ]);
+      return;
+    }
+
+    // Add to internal chat history for context
+    const newHistory = [...chatHistory, { role: 'user', content: msg }];
+    setChatHistory(newHistory);
+    
+    try {
+       const res = await externalApi.call('/ai/chat', {
+         method: 'POST',
+         body: { messages: newHistory }
+       });
+       
+       const reply = res.reply;
+       // Check if reply ends with the JSON block
+       const jsonMatch = reply.match(/```json\n([\s\S]*?)\n```/);
+       if (jsonMatch) {
+          const parsedStr = jsonMatch[1];
+          try {
+             const data = JSON.parse(parsedStr);
+             setParsedDetails(data);
+             // Get the text before the JSON block
+             const textOnly = reply.replace(/```json\n[\s\S]*?\n```/, '').trim();
+             
+             setMessages(prev => [
+                ...prev,
+                { from: 'aura', text: textOnly },
+                { kind: 'understood' }
+             ]);
+             setStage(1);
+          } catch(e) {
+             setMessages(prev => [...prev, { from: 'aura', text: reply }]);
+          }
+       } else {
+          // Standard conversational turn
+          setMessages(prev => [...prev, { from: 'aura', text: reply }]);
+          setChatHistory([...newHistory, { role: 'assistant', content: reply }]);
+       }
+    } catch(err) {
+       setMessages(prev => [...prev, { from: 'aura', text: "Sorry, I had trouble connecting to my AI brain. Let's try again!" }]);
     }
   }
 
@@ -121,10 +186,10 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
       await externalApi.call('/opportunities/generate', {
         method: 'POST',
         body: {
-          category: 'Photography',
-          date: '2026-11-26',
-          serviceLocation: { address: 'Kisan Palace', locality: 'New Town', city: 'Kolkata' },
-          guestCount: 500,
+          category: parsedDetails.type || 'Photography',
+          date: parsedDetails.isoDate,
+          serviceLocation: { address: parsedDetails.venue, locality: parsedDetails.venue, city: parsedDetails.venue },
+          guestCount: parsedDetails.guests || 500,
           durationHours: 8,
           requiredStyles: ['Candid', 'Traditional'],
         },
@@ -146,21 +211,6 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
   return (
     <div className={`flex flex-col ${embedded ? 'h-full' : 'h-full'}`}>
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto">
-        {/* Quick prompts before first message */}
-        {stage === 0 && messages.length === 1 && (
-          <div className="flex flex-wrap gap-2">
-            {QUICK_PROMPTS.map((p) => (
-              <button
-                key={p}
-                onClick={() => send(p === "My daughter's wedding" ? "My daughter's wedding is on 26 November at Kisan Palace for 500 guests. I need photography, decoration and catering within my budget." : p)}
-                className="text-xs sm:text-sm bg-white hover:bg-primary-soft hover:text-primary border border-gray-100 rounded-full px-4 py-2 transition shadow-xs font-medium"
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        )}
-
         {messages.map((m, i) =>
           m.kind === 'understood' ? (
             <div key={i} className="flex gap-2.5">
@@ -168,7 +218,7 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
                 <Icon name="bolt" size={13} />
               </div>
               <div className="max-w-full sm:max-w-[85%] w-full">
-                <UnderstoodCard onConfirm={handleUnderstoodConfirm} />
+                <UnderstoodCard parsed={parsedDetails} onConfirm={handleUnderstoodConfirm} />
               </div>
             </div>
           ) : (
@@ -186,27 +236,17 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
                 }`}
               >
                 {m.text}
+                {m.from === 'aura' && (
+                   <button onClick={() => playVoice(m.text)} className="block mt-2 text-[10px] text-primary font-bold hover:underline">
+                      <Icon name="mic" size={10} className="inline mr-1" /> Listen
+                   </button>
+                )}
               </div>
             </div>
           )
         )}
 
-        {/* Stage 2: Budget selection pills */}
-        {stage === 2 && (
-          <div className="pl-10 space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {BUDGET_CHIPS.map((chip) => (
-                <button
-                  key={chip}
-                  onClick={() => send(chip)}
-                  className="text-xs font-bold bg-white border border-primary/40 text-primary hover:bg-primary hover:text-white rounded-full px-4 py-2 transition shadow-xs"
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+
 
         <div ref={bottomRef} />
       </div>
@@ -221,9 +261,9 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false }
           />
           <button
             type="button"
-            className="text-muted hover:text-primary transition p-1"
-            title="Voice"
-            aria-label="Voice input"
+            onClick={startListening}
+            className={`p-2 transition cursor-pointer ${isListening ? 'text-red-500 animate-pulse' : 'text-muted hover:text-primary'}`}
+            title="Voice input"
           >
             <Icon name="mic" size={16} />
           </button>

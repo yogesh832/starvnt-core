@@ -12,6 +12,7 @@
     "seed:vendor": "node scripts/seed-vendor.js"
   },
   "dependencies": {
+    "@google/genai": "^2.24.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
@@ -21,7 +22,8 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.5"
+    "mongoose": "^8.9.5",
+    "openai": "^7.21.0"
   },
   "devDependencies": {
     "mongodb-memory-server": "^10.1.3",

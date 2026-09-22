@@ -93,6 +93,25 @@ router.post('/opportunities/generate', requireExternalAuth, async (req, res, nex
 });
 
 /**
+ * Customer retrieves their generated opportunities (arrangements).
+ */
+router.get('/opportunities', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
+  try {
+    const filter = { customer: req.externalUser._id };
+    if (req.query.status) filter.status = req.query.status;
+
+    const opportunities = await Opportunity.find(filter)
+      .populate('vendor', 'businessName category rating location')
+      .populate('vendorService', 'name description pricing')
+      .sort({ createdAt: -1 });
+
+    res.json({ ok: true, count: opportunities.length, opportunities });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
  * Vendor retrieves their structured opportunities.
  */
 router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
@@ -279,6 +298,20 @@ router.post('/quotes/:id/transition', requireExternalAuth, async (req, res) => {
 });
 
 // ── VENDOR EXECUTION WORKSPACE (Spec §11, §17, Golden Test J) ──────────────
+
+/**
+ * Customer retrieves their confirmed bookings.
+ */
+router.get('/bookings', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
+  try {
+    const bookings = await CoreBooking.find({ customerId: req.externalUser._id }).sort({ eventDate: 1 })
+      .populate('vendorId', 'businessName category')
+      .populate('quoteId');
+    res.json({ ok: true, count: bookings.length, bookings });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /**
  * Vendor retrieves their assigned bookings.

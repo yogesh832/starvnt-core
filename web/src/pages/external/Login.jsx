@@ -142,7 +142,11 @@ export default function ExternalLogin() {
               category: accountType === 'VENDOR' ? form.category : undefined,
               city: accountType === 'VENDOR' ? form.city : undefined,
             });
-      navigate(u.accountType === 'VENDOR' ? '/vendor' : '/customer', { replace: true });
+      if (u.accountType === 'VENDOR') {
+        navigate('/vendor', { replace: true });
+      } else {
+        navigate('/customer', { replace: true, state: { intent: location.state?.intent } });
+      }
     } catch (err) {
       const map = {
         INVALID_CREDENTIALS: 'Incorrect email or password.',
@@ -170,7 +174,11 @@ export default function ExternalLogin() {
         category: mode === 'register' && form.category?.trim() ? form.category.trim() : undefined,
         city: mode === 'register' && form.city?.trim() ? form.city.trim() : undefined,
       });
-      navigate(u.accountType === 'VENDOR' ? '/vendor' : '/customer', { replace: true });
+      if (u.accountType === 'VENDOR') {
+        navigate('/vendor', { replace: true });
+      } else {
+        navigate('/customer', { replace: true, state: { intent: location.state?.intent } });
+      }
     } catch (err) {
       setError(err.data?.error || err.message || 'Google sign-in failed.');
     } finally {
