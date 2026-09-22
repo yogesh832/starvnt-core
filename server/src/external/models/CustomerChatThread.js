@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { externalConn } from '../../db/index.js';
 
 const customerChatThreadSchema = new mongoose.Schema({
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExternalUser', required: true },
@@ -18,4 +19,4 @@ const customerChatThreadSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-export const CustomerChatThread = mongoose.model('CustomerChatThread', customerChatThreadSchema);
+export const CustomerChatThread = externalConn.model('CustomerChatThread', customerChatThreadSchema);
