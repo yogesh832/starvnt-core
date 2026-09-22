@@ -56,9 +56,9 @@ Do not output the final JSON block until you have enough information.`;
     const aiMessage = response.choices[0].message.content;
     
     // Save to DB
-    let thread = await CustomerChatThread.findOne({ customerId: req.user._id, threadId });
+    let thread = await CustomerChatThread.findOne({ customerId: req.externalUser._id, threadId });
     if (!thread) {
-       thread = new CustomerChatThread({ customerId: req.user._id, threadId, messages: [] });
+       thread = new CustomerChatThread({ customerId: req.externalUser._id, threadId, messages: [] });
     }
     
     thread.messages = [ ...messages, { role: 'assistant', content: aiMessage } ];
