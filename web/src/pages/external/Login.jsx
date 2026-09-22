@@ -413,7 +413,7 @@ export default function ExternalLogin() {
                   </p>
                 </div>
 
-                {/* Persona Pill Switcher (Hidden for Vendor-only Launch) 
+                {/* Persona Pill Switcher */}
                 <div className="flex bg-gray-100/90 p-1 rounded-2xl text-xs font-bold shrink-0 border border-gray-200/50">
                   <button
                     type="button"
@@ -440,7 +440,6 @@ export default function ExternalLogin() {
                     Vendor
                   </button>
                 </div>
-                */}
               </div>
 
             {/* 3 Authentication Option Tabs */}
