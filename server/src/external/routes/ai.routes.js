@@ -21,16 +21,26 @@ router.post('/chat', requireExternalAuth, async (req, res, next) => {
 
     const systemPrompt = `You are Aura+, an elite AI event planner for STARVNT.
 Your goal is to help users plan their events. Extract their event type, date, location, guest count, and budget.
+CRITICAL RULE: DO NOT ask for all missing details at once. Ask for ONLY ONE missing piece of information at a time.
+If you need to ask a question, and there are common options for the user to select, you MUST output a JSON block at the end of your response with those options.
+For example, if you need the Event Type, ask the question and output:
+\`\`\`json
+{ "options": ["Wedding", "Corporate Event", "Birthday", "Other"] }
+\`\`\`
+If you need the Budget, output:
+\`\`\`json
+{ "options": ["5-10 Lakh", "10-15 Lakh", "15-20 Lakh", "20 Lakh+"] }
+\`\`\`
 Here is some verified vendor data you can recommend: ${vendorContext}.
 Keep your responses short, professional, and friendly. 
 If the user provides all event details (Event Type, Date, Location, Guest Count), you MUST output a JSON block at the end of your response like this:
 \`\`\`json
 { "type": "Wedding", "dateStr": "26 November 2025", "isoDate": "2025-11-26", "venue": "New Town", "guests": 500 }
 \`\`\`
-Do not output the JSON block until you have enough information.`;
+Do not output the final JSON block until you have enough information.`;
 
     const response = await openai.chat.completions.create({
-      model: "gemini-1.5-flash",
+      model: "gemini-3.5-flash",
       messages: [
         { role: "system", content: systemPrompt },
         ...messages

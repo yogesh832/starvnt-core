@@ -158,18 +158,26 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
           const parsedStr = jsonMatch[1];
           try {
              const data = JSON.parse(parsedStr);
-             setParsedDetails(data);
-             // Get the text before the JSON block
              const textOnly = reply.replace(/```json\n[\s\S]*?\n```/, '').trim();
              
-             setMessages(prev => [
-                ...prev,
-                { from: 'aura', text: textOnly },
-                { kind: 'understood' }
-             ]);
-             setStage(1);
+             if (data.options) {
+                setMessages(prev => [
+                   ...prev,
+                   { from: 'aura', text: textOnly, options: data.options }
+                ]);
+             } else {
+                setParsedDetails(data);
+                setMessages(prev => [
+                   ...prev,
+                   { from: 'aura', text: textOnly },
+                   { kind: 'understood' }
+                ]);
+                setStage(1);
+             }
+             setChatHistory([...newHistory, { role: 'assistant', content: textOnly }]);
           } catch(e) {
              setMessages(prev => [...prev, { from: 'aura', text: reply }]);
+             setChatHistory([...newHistory, { role: 'assistant', content: reply }]);
           }
        } else {
           // Standard conversational turn
@@ -228,18 +236,33 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
                   <Icon name="bolt" size={13} />
                 </div>
               )}
-              <div
-                className={`max-w-[85%] sm:max-w-[75%] rounded-3xl px-4 py-3 text-xs sm:text-sm leading-relaxed ${
-                  m.from === 'user'
-                    ? 'bg-primary text-white rounded-br-xs shadow-xs'
-                    : 'bg-white border border-gray-100 rounded-tl-xs shadow-xs text-navy'
-                }`}
-              >
-                {m.text}
-                {m.from === 'aura' && (
-                   <button onClick={() => playVoice(m.text)} className="block mt-2 text-[10px] text-primary font-bold hover:underline">
-                      <Icon name="mic" size={10} className="inline mr-1" /> Listen
-                   </button>
+              <div className={`max-w-[85%] sm:max-w-[75%] flex flex-col gap-2`}>
+                <div
+                  className={`rounded-3xl px-4 py-3 text-xs sm:text-sm leading-relaxed ${
+                    m.from === 'user'
+                      ? 'bg-primary text-white rounded-br-xs shadow-xs ml-auto'
+                      : 'bg-white border border-gray-100 rounded-tl-xs shadow-xs text-navy'
+                  }`}
+                >
+                  {m.text}
+                  {m.from === 'aura' && (
+                     <button onClick={() => playVoice(m.text)} className="block mt-2 text-[10px] text-primary font-bold hover:underline">
+                        <Icon name="mic" size={10} className="inline mr-1" /> Listen
+                     </button>
+                  )}
+                </div>
+                {m.options && (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {m.options.map((opt, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => send(opt)}
+                        className="bg-lavender/50 text-navy hover:bg-lavender text-xs font-semibold px-3.5 py-2 rounded-full border border-primary/20 shadow-sm transition cursor-pointer"
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
