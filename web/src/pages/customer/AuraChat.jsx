@@ -62,6 +62,7 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
   const [activeOtherIndex, setActiveOtherIndex] = useState(null);
   const [otherInput, setOtherInput] = useState('');
   const [tempLocation, setTempLocation] = useState(null);
+  const [threadId] = useState(() => 'thread_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
   const [messages, setMessages] = useState([
     {
       from: 'aura',
@@ -153,7 +154,7 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
     try {
        const res = await externalApi.call('/ai/chat', {
          method: 'POST',
-         body: { messages: newHistory }
+         body: { messages: newHistory, threadId }
        });
        
        const reply = res.reply;

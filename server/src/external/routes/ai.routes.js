@@ -3,6 +3,7 @@ import { requireExternalAuth } from '../middleware/requireExternalAuth.js';
 import { OpenAI } from 'openai';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
+import { CustomerChatThread } from '../models/CustomerChatThread.js';
 
 const router = Router();
 
@@ -13,7 +14,7 @@ const openai = new OpenAI({
 
 router.post('/chat', requireExternalAuth, async (req, res, next) => {
   try {
-    const { messages } = req.body;
+    const { messages, threadId = 'default_thread' } = req.body;
     
     // Fetch some basic vendor data to provide to OpenAI as context
     const vendors = await VendorOrganization.find({ 'verification.isVerified': true }).limit(10);
@@ -54,6 +55,26 @@ Do not output the final JSON block until you have enough information.`;
 
     const aiMessage = response.choices[0].message.content;
     
+    // Save to DB
+    let thread = await CustomerChatThread.findOne({ customerId: req.user._id, threadId });
+    if (!thread) {
+       thread = new CustomerChatThread({ customerId: req.user._id, threadId, messages: [] });
+    }
+    
+    thread.messages = [ ...messages, { role: 'assistant', content: aiMessage } ];
+    
+    // Attempt to extract context if available
+    const jsonMatch = aiMessage.match(/```(?:json)?\n?([\s\S]*?)\n?```/i);
+    if (jsonMatch) {
+       try {
+         const data = JSON.parse(jsonMatch[1]);
+         if (!data.options && data.action !== 'request_location') {
+             thread.extractedContext = { ...thread.extractedContext, ...data };
+         }
+       } catch(e) {}
+    }
+    await thread.save();
+
     res.json({ reply: aiMessage });
   } catch (err) {
     next(err);
