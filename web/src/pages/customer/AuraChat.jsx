@@ -59,6 +59,8 @@ function UnderstoodCard({ parsed, onConfirm }) {
 export default function AuraChat({ firstName, onEventCreated, embedded = false, initialIntent = '' }) {
   const [input, setInput] = useState('');
   const [stage, setStage] = useState(0); // 0 initial, 1 understood, 2 budget select, 3 done
+  const [activeOtherIndex, setActiveOtherIndex] = useState(null);
+  const [otherInput, setOtherInput] = useState('');
   const [tempLocation, setTempLocation] = useState(null);
   const [messages, setMessages] = useState([
     {
@@ -270,6 +272,46 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
                         {opt}
                       </button>
                     ))}
+                    {activeOtherIndex === i ? (
+                      <div className="flex items-center gap-1 bg-white border border-primary/30 rounded-full px-2 py-1 shadow-sm">
+                        <input
+                           autoFocus
+                           className="text-xs bg-transparent outline-none px-2 w-28 text-navy"
+                           placeholder="Type here..."
+                           value={otherInput}
+                           onChange={e => setOtherInput(e.target.value)}
+                           onKeyDown={e => {
+                             if (e.key === 'Enter') {
+                               e.preventDefault();
+                               if (otherInput.trim()) {
+                                 send(otherInput);
+                                 setActiveOtherIndex(null);
+                                 setOtherInput('');
+                               }
+                             }
+                           }}
+                        />
+                        <button
+                          onClick={() => {
+                             if (otherInput.trim()) {
+                               send(otherInput);
+                               setActiveOtherIndex(null);
+                               setOtherInput('');
+                             }
+                          }}
+                          className="bg-primary text-white p-1 rounded-full w-6 h-6 grid place-items-center cursor-pointer hover:bg-primary-dark"
+                        >
+                          <Icon name="send" size={10} className="-translate-y-px translate-x-px" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setActiveOtherIndex(i)}
+                        className="bg-lavender/50 text-navy hover:bg-lavender text-xs font-semibold px-3.5 py-2 rounded-full border border-primary/20 shadow-sm transition cursor-pointer"
+                      >
+                        Other...
+                      </button>
+                    )}
                   </div>
                 )}
                 {m.action === 'request_location' && (
