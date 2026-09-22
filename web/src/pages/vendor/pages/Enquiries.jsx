@@ -99,7 +99,7 @@ export default function Enquiries() {
   return (
     <Page
       title="Enquiries & Structured Opportunities"
-      sub="Spec §9: Pre-qualified opportunities with service, location, date, guests, capability, coverage, availability, and travel."
+      sub="Pre-qualified opportunities with service, location, date, guests, capability, coverage, availability, and travel."
       action={
         <button className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2.5">
           Filters <Icon name="chevronDown" size={13} />

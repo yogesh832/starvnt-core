@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Page, Card, EmptyHint } from './shared.jsx';
+import { Page, Card} from './shared.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 
@@ -369,7 +369,6 @@ export default function Messages() {
         </div>
       )}
 
-      <EmptyHint text="Messaging is contextual to bookings & verified opportunities — payments and contracts are settled through Core authority." />
     </Page>
   );
 }

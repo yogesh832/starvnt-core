@@ -252,7 +252,7 @@ export function Performance({ enquiries = [], quotes = [], bookings = [] }) {
 }
 
 /**
- * Enquiry Detail Dialog matching Spec §9
+ * Enquiry Detail Dialog
  */
 function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
   if (!enquiry) return null;
@@ -332,7 +332,7 @@ function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
 }
 
 /**
- * Quote Builder Dialog matching Spec §9
+ * Quote Builder Dialog
  */
 function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
   const initialBase = enquiry?.budgetNumber || enquiry?.basePrice || 0;
@@ -1082,7 +1082,7 @@ export default function DashboardHome({ business = 'Your Brand' }) {
           </div>
         </div>
 
-        {/* 5-STEP MANDATORY ONBOARDING READINESS (Spec §3, §4) */}
+        {/* 5-STEP MANDATORY ONBOARDING READINESS */}
         {(!is100Percent || !gotItAcknowledged) && (
           <div className={`rounded-3xl p-5 sm:p-6 border transition shadow-sm ${
             is100Percent

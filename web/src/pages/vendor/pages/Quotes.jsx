@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Page, Card, EmptyHint } from './shared.jsx';
+import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
@@ -151,7 +151,6 @@ export default function Quotes() {
         </table>
       </div>
 
-      <EmptyHint text="Invalid transitions are blocked server-side with audit — e.g. a Rejected quote cannot be re-submitted without creating a new revision." />
     </Page>
 
   );

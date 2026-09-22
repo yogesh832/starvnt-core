@@ -112,16 +112,18 @@ router.post('/login', adminAuthLimiter, async (req, res, next) => {
 router.post('/refresh', async (req, res, next) => {
   try {
     const token = req.cookies?.[config.adminRefreshCookieName];
-    if (!token) return res.status(401).json({ error: 'NO_REFRESH_TOKEN' });
+    if (!token) return res.status(200).json({ ok: false, error: 'NO_REFRESH_TOKEN' });
 
     const session = await AdminSession.findOne({ refreshTokenHash: hashRefreshToken(token) });
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      return res.status(401).json({ error: 'SESSION_INVALID' });
+      res.clearCookie(config.adminRefreshCookieName, { path: '/api/admin/auth' });
+      return res.status(200).json({ ok: false, error: 'SESSION_INVALID' });
     }
 
     const admin = await AdminUser.findById(session.admin);
     if (!admin || admin.status !== 'ACTIVE') {
-      return res.status(401).json({ error: 'ACCOUNT_DISABLED_OR_MISSING' });
+      res.clearCookie(config.adminRefreshCookieName, { path: '/api/admin/auth' });
+      return res.status(200).json({ ok: false, error: 'ACCOUNT_DISABLED_OR_MISSING' });
     }
 
     session.revokedAt = new Date();

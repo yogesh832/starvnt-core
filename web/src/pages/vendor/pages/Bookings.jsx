@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Page, Card, EmptyHint } from './shared.jsx';
+import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
@@ -104,7 +104,7 @@ export default function Bookings() {
   return (
     <Page
       title="Bookings & Execution Workspace"
-      sub="Spec §11: Confirmed via Core after quote approval. Submit execution progress & completion evidence here."
+      sub="Confirmed via Core after quote approval. Submit execution progress & completion evidence here."
     >
       {feedback && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs font-semibold mb-4 inline-flex items-center gap-2 w-full">
@@ -193,7 +193,6 @@ export default function Bookings() {
         )}
       </div>
 
-      <EmptyHint text="Golden Test J Rule: You submit completion facts & deliverables evidence — PAYMENT_VERIFIED, COMPLETION_VERIFIED and SETTLEMENT_ELIGIBLE are decided strictly by Core authority." />
 
       {/* Completion Evidence Submission Modal */}
       {evidenceModalBooking && (

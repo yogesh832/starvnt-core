@@ -17,6 +17,7 @@ export function makeApi(base, refreshPath) {  let token = null;
         .then(async (r) => {
           if (!r.ok) return null;
           const data = await r.json();
+          if (!data || !data.accessToken) return null;
           setToken(data.accessToken);
           return data;
         })

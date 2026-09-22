@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Page, Card, EmptyHint } from './shared.jsx';
+import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
@@ -18,7 +18,7 @@ export function ServicesPage() {
   const [basePrice, setBasePrice] = useState(48000);
   const [leadTimeDays, setLeadTimeDays] = useState(7);
 
-  // Capability & Gear configuration state (Spec §3, §6, §10)
+  // Capability & Gear configuration state
   const [showGearModal, setShowGearModal] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
   const [gearFormat, setGearFormat] = useState('Full day');
@@ -29,7 +29,7 @@ export function ServicesPage() {
   const [savingGear, setSavingGear] = useState(false);
   const [gearFeedback, setGearFeedback] = useState('');
 
-  // Coverage & Transit configuration state (Spec §4, §5, §8)
+  // Coverage & Transit configuration state
   const [showCoverageModal, setShowCoverageModal] = useState(false);
   const [selectedServiceForCov, setSelectedServiceForCov] = useState(null);
   const [covCity, setCovCity] = useState('');
@@ -253,7 +253,7 @@ export function ServicesPage() {
         .map((s) => s.trim())
         .filter(Boolean);
 
-      // 1. Save Service Coverage Area (Spec §4, §5)
+      // 1. Save Service Coverage Area
       await externalApi.call('/vendor/coverage', {
         method: 'POST',
         body: {
@@ -267,7 +267,7 @@ export function ServicesPage() {
         },
       });
 
-      // 2. Save Travel & Transit Logistics Policy (Spec §8)
+      // 2. Save Travel & Transit Logistics Policy
       await externalApi.call('/vendor/travel-policy', {
         method: 'PUT',
         body: {
@@ -297,7 +297,7 @@ export function ServicesPage() {
   return (
     <Page
       title="Services & Capabilities"
-      sub="Declare services, gear inventory, crew capacity, and operational formats (Spec §3, §6)."
+      sub="Declare services, gear inventory, crew capacity, and operational formats."
       action={
         <button
           onClick={() => setShowAddModal(true)}
@@ -342,7 +342,7 @@ export function ServicesPage() {
               </div>
 
               <div className="mt-3 space-y-2.5 text-xs">
-                {/* Capability & Gear Configuration Block (Spec §3, §6, §10) */}
+                {/* Capability & Gear Configuration Block */}
                 <div
                   className={`rounded-xl p-3 border transition ${
                     hasCap
@@ -394,7 +394,7 @@ export function ServicesPage() {
                   )}
                 </div>
 
-                {/* Coverage & Transit Configuration Block (Spec §4, §5, §8) */}
+                {/* Coverage & Transit Configuration Block */}
                 {(() => {
                   const hasCov = s.coverage && s.coverage.length > 0;
                   const primaryCov = hasCov ? s.coverage[0] : null;
@@ -583,7 +583,7 @@ export function ServicesPage() {
         </div>
       )}
 
-      {/* Configure Capability & Gear Modal (Spec §3, §6, §10) */}
+      {/* Configure Capability & Gear Modal */}
       {showGearModal && selectedService && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs"
@@ -701,7 +701,7 @@ export function ServicesPage() {
         </div>
       )}
 
-      {/* Configure Coverage & Transit Modal (Spec §4, §5, §8) */}
+      {/* Configure Coverage & Transit Modal */}
       {showCoverageModal && selectedServiceForCov && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs"
@@ -731,7 +731,7 @@ export function ServicesPage() {
               <div className="space-y-3 bg-lavender/30 p-3.5 rounded-2xl border border-gray-100">
                 <div className="font-bold text-navy text-xs flex items-center gap-1.5">
                   <Icon name="mapPin" size={14} className="text-primary" />
-                  <span>1. Operational Base & Operating Radius (Spec §4)</span>
+                  <span>1. Operational Base & Operating Radius</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -819,11 +819,11 @@ export function ServicesPage() {
                 </label>
               </div>
 
-              {/* Section 2: Travel & Transit Cost Policy (Spec §8) */}
+              {/* Section 2: Travel & Transit Cost Policy */}
               <div className="space-y-3 bg-lavender/30 p-3.5 rounded-2xl border border-gray-100">
                 <div className="font-bold text-navy text-xs flex items-center gap-1.5">
                   <Icon name="truck" size={14} className="text-primary" />
-                  <span>2. Travel & Transit Policy (Spec §8)</span>
+                  <span>2. Travel & Transit Policy</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -928,7 +928,6 @@ export function ServicesPage() {
         </div>
       )}
 
-      <EmptyHint text="A service becomes commercially ACTIVE only when capability, coverage, availability and pricing are complete (spec §3)." />
     </Page>
   );
 }
@@ -944,7 +943,7 @@ export function AvailabilityPage() {
   const [blockDate, setBlockDate] = useState('');
   const [blockReason, setBlockReason] = useState('');
 
-  // Resource form (Spec §6, §7)
+  // Resource form
   const [resType, setResType] = useState('TEAM_MEMBER');
   const [resName, setResName] = useState('');
   const [resIdentifier, setResIdentifier] = useState('');
@@ -965,7 +964,7 @@ export function AvailabilityPage() {
   const [savingHours, setSavingHours] = useState(false);
   const [hoursFeedback, setHoursFeedback] = useState('');
 
-  // Travel & Transit Policy state (Spec §4, §8)
+  // Travel & Transit Policy state
   const [travelPolicy, setTravelPolicy] = useState({
     freeRadiusKm: 15,
     perKmRate: 40,
@@ -1163,7 +1162,7 @@ export function AvailabilityPage() {
   }
 
   return (
-    <Page title="Availability & Operations" sub="Availability = date + time + location + team + equipment (spec §5).">
+    <Page title="Availability & Operations" sub="Availability = date + time + location + team + equipment.">
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Weekly Working Hours - 100% User Maintained in DB */}
         <Card
@@ -1323,7 +1322,7 @@ export function AvailabilityPage() {
         }
       >
         <p className="text-xs text-muted mb-4 leading-relaxed">
-          Operational resources (teams, camera kits, post-production labs, vehicles) define your multi-event capability and equipment availability (Spec §5, §6).
+          Operational resources (teams, camera kits, post-production labs, vehicles) define your multi-event capability and equipment availability.
         </p>
 
         {resources.length > 0 ? (
@@ -1402,7 +1401,7 @@ export function AvailabilityPage() {
         )}
       </Card>
 
-      {/* Coverage Radius & Travel Policy Card (Spec §4, §8) */}
+      {/* Coverage Radius & Travel Policy Card */}
       <Card
         title="Coverage Radius & Travel Policy"
         action={
@@ -1440,7 +1439,7 @@ export function AvailabilityPage() {
         )}
 
         <p className="text-xs text-muted mb-4 leading-relaxed">
-          Configure default transit pricing and travel rules. The matching and quoting engines apply these rules automatically when events require travel (Spec §5, §8).
+          Configure default transit pricing and travel rules. The matching and quoting engines apply these rules automatically when events require travel.
         </p>
 
         <form onSubmit={handleSaveTravelPolicy} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs">
@@ -1587,7 +1586,7 @@ export function AvailabilityPage() {
         </div>
       )}
 
-      {/* Add Operational Resource Modal (Spec §6, §7) */}
+      {/* Add Operational Resource Modal */}
       {showAddResourceModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-[pop_.18s_ease-out]">
@@ -2248,7 +2247,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const [activation, setActivation] = useState(null);
   const [saved, setSaved] = useState(false);
 
-  // Operating Locations state (Spec §4)
+  // Operating Locations state
   const [locations, setLocations] = useState([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
@@ -2730,7 +2729,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           {activeTab === 'locations' && (
             <div className="space-y-5">
               <Card
-                title="Operating Locations & Hubs (Spec §4)"
+                title="Operating Locations & Hubs"
                 extra={
                   <button
                     onClick={handleOpenAddLocation}
@@ -2742,7 +2741,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                 }
               >
                 <p className="text-xs text-muted mb-4 leading-relaxed">
-                  According to the Universal Vendor OS specification, <b>location is an operational capability dimension</b>, not an address field. Your operational origins determine travel buffers, logistics costs, and authoritative client matching.
+                  Your operating locations define your service boundaries, travel logistics, and how you are matched with clients.
                 </p>
 
                 {locationFeedback && (

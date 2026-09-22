@@ -475,18 +475,20 @@ router.post('/otp/widget-verify', authLimiter, async (req, res, next) => {
 router.post('/refresh', async (req, res, next) => {
   try {
     const token = req.cookies?.[config.refreshCookieName];
-    if (!token) return res.status(401).json({ error: 'NO_REFRESH_TOKEN' });
+    if (!token) return res.status(200).json({ ok: false, error: 'NO_REFRESH_TOKEN' });
 
     const session = await ExternalSession.findOne({
       refreshTokenHash: hashRefreshToken(token),
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      return res.status(401).json({ error: 'SESSION_INVALID' });
+      res.clearCookie(config.refreshCookieName, { path: '/api/auth' });
+      return res.status(200).json({ ok: false, error: 'SESSION_INVALID' });
     }
 
     const user = await ExternalUser.findById(session.user);
     if (!user || user.status !== 'ACTIVE') {
-      return res.status(401).json({ error: 'ACCOUNT_DISABLED_OR_MISSING' });
+      res.clearCookie(config.refreshCookieName, { path: '/api/auth' });
+      return res.status(200).json({ ok: false, error: 'ACCOUNT_DISABLED_OR_MISSING' });
     }
 
     // Rotate: revoke old session, create new one.

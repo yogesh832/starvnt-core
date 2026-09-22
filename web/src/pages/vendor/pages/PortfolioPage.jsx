@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Page, Card, EmptyHint } from './shared.jsx';
+import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
@@ -1879,7 +1879,6 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      <EmptyHint text="Location-linked evidence automatically improves matching confidence for future customer requirements at similar venues and localities." />
     </Page>
   );
 }

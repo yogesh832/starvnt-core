@@ -28,10 +28,6 @@ export function Card({ title, extra, children, className = '' }) {
   );
 }
 
-export function EmptyHint({ text }) {
-  return (
-    <div className="text-xs text-muted/80 bg-lavender rounded-xl px-4 py-3 border border-dashed border-gray-200">
-      {text}
     </div>
   );
 }

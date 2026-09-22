@@ -334,8 +334,8 @@ export default function EventWorkspace({ onBack }) {
         <div className="bg-white rounded-3xl p-6 shadow-xs border border-gray-100 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100">
             <div>
-              <h2 className="text-base font-extrabold text-navy">Core Authoritative Bookings & Execution</h2>
-              <p className="text-xs text-muted">Spec §2, §11: Core Platform validates payment truth, completion evidence, and unlocks settlement.</p>
+              <h2 className="text-base font-extrabold text-navy">Bookings & Execution</h2>
+              <p className="text-xs text-muted">Manage payment verification, completion evidence, and settlement.</p>
             </div>
             {adminFeedback && (
               <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full shrink-0">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Page, Card, EmptyHint } from './shared.jsx';
+import { Page, Card} from './shared.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 
@@ -240,7 +240,7 @@ export default function CalendarPage() {
         <div className="space-y-4">
           <Card title={`Events — ${selectedDay} ${monthNames[month]} ${year}`}>
             {selectedEvents.length === 0 && (
-              <EmptyHint text="No bookings or blockouts on this day. Slot is commercially free." />
+              <div className="text-sm text-muted py-4 text-center">No events scheduled for this date.</div>
             )}
             <ul className="space-y-3">
               {selectedEvents.map((e) => (

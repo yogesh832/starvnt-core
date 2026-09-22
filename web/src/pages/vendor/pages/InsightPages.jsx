@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Page, Card, EmptyHint } from './shared.jsx';
+import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
@@ -112,7 +112,6 @@ export function PaymentsPage() {
         </table>
       </Card>
 
-      <EmptyHint text="Settlement is eligible only after Core validates completion. Vendors never self-declare payment truth." />
     </Page>
   );
 }
