@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from '../../components/Icon.jsx';
+import MapLocationPicker from '../../components/MapLocationPicker.jsx';
 import { externalApi } from '../../lib/api.js';
 
 /**
@@ -58,6 +59,7 @@ function UnderstoodCard({ parsed, onConfirm }) {
 export default function AuraChat({ firstName, onEventCreated, embedded = false, initialIntent = '' }) {
   const [input, setInput] = useState('');
   const [stage, setStage] = useState(0); // 0 initial, 1 understood, 2 budget select, 3 done
+  const [tempLocation, setTempLocation] = useState(null);
   const [messages, setMessages] = useState([
     {
       from: 'aura',
@@ -161,7 +163,12 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
              const data = JSON.parse(parsedStr);
              const textOnly = reply.replace(/```(?:json)?\n?[\s\S]*?\n?```/i, '').trim();
              
-             if (data.options) {
+             if (data.action === 'request_location') {
+                setMessages(prev => [
+                   ...prev,
+                   { from: 'aura', text: textOnly, action: 'request_location' }
+                ]);
+             } else if (data.options) {
                 setMessages(prev => [
                    ...prev,
                    { from: 'aura', text: textOnly, options: data.options }
@@ -263,6 +270,28 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
                         {opt}
                       </button>
                     ))}
+                  </div>
+                )}
+                {m.action === 'request_location' && (
+                  <div className="mt-1 rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col relative z-0">
+                    <MapLocationPicker
+                      height="220px"
+                      value={tempLocation || { lat: 22.5726, lng: 88.3639 }}
+                      onChange={setTempLocation}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (tempLocation && tempLocation.address) {
+                          send(tempLocation.address);
+                        } else {
+                          send("Kolkata");
+                        }
+                      }}
+                      className="w-full bg-primary text-white py-2.5 text-xs font-bold hover:bg-primary-dark transition cursor-pointer z-10 relative"
+                    >
+                      Confirm Pin Point
+                    </button>
                   </div>
                 )}
               </div>
