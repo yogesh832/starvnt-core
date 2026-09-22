@@ -61,7 +61,8 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
   const [messages, setMessages] = useState([
     {
       from: 'aura',
-      text: `Hi ${firstName}, I'm Aura+, your AI event planner. What are we celebrating?`,
+      text: `Hi ${firstName || 'there'}, I'm Aura+, your AI event planner. What are we celebrating?`,
+      options: ['Wedding', 'Corporate Event', 'Birthday', 'Anniversary']
     },
   ]);
   const bottomRef = useRef(null);
@@ -153,12 +154,12 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
        
        const reply = res.reply;
        // Check if reply ends with the JSON block
-       const jsonMatch = reply.match(/```json\n([\s\S]*?)\n```/);
+       const jsonMatch = reply.match(/```(?:json)?\n?([\s\S]*?)\n?```/i);
        if (jsonMatch) {
           const parsedStr = jsonMatch[1];
           try {
              const data = JSON.parse(parsedStr);
-             const textOnly = reply.replace(/```json\n[\s\S]*?\n```/, '').trim();
+             const textOnly = reply.replace(/```(?:json)?\n?[\s\S]*?\n?```/i, '').trim();
              
              if (data.options) {
                 setMessages(prev => [
