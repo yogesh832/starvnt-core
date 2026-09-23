@@ -35,6 +35,9 @@ async function main() {
         `  external domain  → aud=${config.audience}   db=starvnt_external\n` +
         `  admin domain     → aud=${config.adminAudience} db=starvnt_admin`
     );
+    setInterval(() => {
+      console.log(`[starvnt] server is running on :${config.port}`);
+    }, 8000);
     startProductionKeepAlive();
   });
 }
