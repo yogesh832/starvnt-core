@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from './auth/ExternalAuthContext.jsx';
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext.jsx';
+import { LogoWord } from './components/ui.jsx';
 import ExternalLogin from './pages/external/Login.jsx';
 import Landing from './pages/customer/Landing.jsx';
 import CustomerPortal from './pages/customer/CustomerPortal.jsx';
@@ -11,7 +12,9 @@ import AdminShell from './pages/admin/AdminShell.jsx';
 function FullScreenLoader() {
   return (
     <div className="min-h-screen grid place-items-center bg-lavender">
-      <div className="text-primary font-semibold animate-pulse">STARVNT</div>
+      <div className="animate-pulse">
+        <LogoWord sub="Loading..." />
+      </div>
     </div>
   );
 }

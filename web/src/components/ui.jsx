@@ -1,24 +1,45 @@
+export const BRAND_ASSETS = {
+  mark: '/brand/starvnt-icon.png',
+  wordmark: '/brand/starvnt-wordmark.jpg',
+  full: '/brand/starvnt-core-logo.jpg',
+};
+
 export function LogoMark({ size = 22, className = '' }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
-      <path
-        d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <img
+      src={BRAND_ASSETS.mark}
+      alt="StarVnt"
+      width={size}
+      height={size}
+      className={`rounded-lg object-cover shadow-[0_0_20px_rgba(14,165,233,0.34)] ring-1 ring-cyan-300/35 ${className}`}
+      style={{ width: size, height: size }}
+    />
   );
 }
 
-export function LogoWord({ light = false, sub = 'Events. Simplified.', size = 'text-lg' }) {
+export function LogoWord({
+  light = false,
+  sub = 'Events. Simplified.',
+  size = 'text-xl',
+  markSize = 34,
+}) {
   return (
-    <div className={`flex items-center gap-2 ${light ? 'text-white' : 'text-primary'}`}>
-      <LogoMark />
+    <div className={`flex items-center gap-3 ${light ? 'text-white' : 'text-primary'}`}>
+      <LogoMark size={markSize} />
       <div>
-        <div className={`font-extrabold tracking-tight leading-none ${size}`}>STARVNT</div>
         <div
-          className={`text-[9px] leading-tight ${light ? 'text-white/60' : 'text-muted'}`}
+          className={`font-extrabold tracking-tight leading-none ${size} ${
+            light
+              ? 'text-white drop-shadow-[0_1px_10px_rgba(14,165,233,0.35)]'
+              : 'bg-gradient-to-r from-primary via-[#2563eb] to-[#00a6ff] bg-clip-text text-transparent'
+          }`}
+        >
+          StarVnt
+        </div>
+        <div
+          className={`text-[9px] leading-tight font-semibold tracking-[0.18em] uppercase ${
+            light ? 'text-white/70' : 'text-muted'
+          }`}
         >
           {sub}
         </div>
