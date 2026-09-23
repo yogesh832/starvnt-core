@@ -106,6 +106,57 @@ test('wrong password → uniform 401 INVALID_CREDENTIALS', async () => {
   assert.equal(res.body.error, 'INVALID_CREDENTIALS');
 });
 
+test('email OTP login precheck rejects unknown email before sending code', async () => {
+  const res = await request(ctx.app)
+    .post('/api/auth/otp/email/send')
+    .send({ email: 'missing@example.com', mode: 'login' });
+  assert.equal(res.status, 404);
+  assert.equal(res.body.error, 'EMAIL_ACCOUNT_NOT_FOUND');
+
+  const storedOtp = await ctx.models.OtpVerification.findOne({
+    phone: 'missing@example.com',
+  });
+  assert.equal(storedOtp, null);
+});
+
+test('email OTP signup allows a brand-new email', async () => {
+  const res = await request(ctx.app)
+    .post('/api/auth/otp/email/send')
+    .send({
+      email: 'new-signup@example.com',
+      mode: 'register',
+      fullName: 'New Signup',
+      accountType: 'VENDOR',
+      businessName: 'New Studio',
+      category: 'Photography',
+      city: 'Kolkata',
+    });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.email, 'new-signup@example.com');
+
+  const storedOtp = await ctx.models.OtpVerification.findOne({
+    phone: 'new-signup@example.com',
+  });
+  assert.ok(storedOtp);
+});
+
+test('email OTP login precheck points non-password accounts to other login methods', async () => {
+  await ctx.models.ExternalUser.create({
+    fullName: 'Gina Google',
+    email: 'gina-google@example.com',
+    googleId: 'google-user-1',
+    authProvider: 'GOOGLE',
+    accountType: 'CUSTOMER',
+  });
+
+  const res = await request(ctx.app)
+    .post('/api/auth/otp/email/send')
+    .send({ email: 'gina-google@example.com', mode: 'login' });
+  assert.equal(res.status, 409);
+  assert.equal(res.body.error, 'EMAIL_LOGIN_NOT_AVAILABLE');
+  assert.equal(res.body.authProvider, 'GOOGLE');
+});
+
 test('external tokens are rejected by the ADMIN API (and vice versa is covered in admin suite)', async () => {
   const login = await request(ctx.app)
     .post('/api/auth/login')

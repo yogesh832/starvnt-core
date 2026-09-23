@@ -1,75 +1,88 @@
-import { Resend } from 'resend';
-import { config } from '../../config.js';
-import { OtpVerification } from '../models/OtpVerification.js';
-
-const resend = config.resendApiKey ? new Resend(config.resendApiKey) : null;
-const senderEmail = config.resendSenderEmail || 'noreply@starvnt.com';
+import { config } from "../../config.js";
+import { OtpVerification } from "../models/OtpVerification.js";
+import nodemailer from "nodemailer";
 
 /**
  * Normalizes email by trimming and converting to lowercase.
  */
 export function normalizeEmail(email) {
-  if (!email) return '';
+  if (!email) return "";
   return String(email).trim().toLowerCase();
 }
 
 /**
- * Generates and sends a 6-digit OTP via Resend, saving challenge to OtpVerification collection.
+ * Generates and sends a 6-digit OTP via MSG91 Send OTP API (email channel),
+ * saving challenge to OtpVerification collection.
+ * No widget required — direct API call.
  */
 export async function sendEmailOtp(email) {
   const normalized = normalizeEmail(email);
-  if (!normalized || !normalized.includes('@')) {
-    throw new Error('INVALID_EMAIL_ADDRESS');
+  if (!normalized || !normalized.includes("@")) {
+    throw new Error("INVALID_EMAIL_ADDRESS");
   }
 
   // Generate 6-digit numeric OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-  // Use the email field in OtpVerification (add it if not exists or use a generic identifier)
-  // Re-using phone field in OtpVerification model for email identifier as string
+  // Store OTP in database (re-using phone field for email identifier)
   await OtpVerification.deleteMany({ phone: normalized });
   await OtpVerification.create({
-    phone: normalized, // store email in phone field or schema change
+    phone: normalized,
     otp,
     expiresAt,
     attempts: 0,
     verified: false,
   });
 
-  let emailSent = false;
-  // Send via Resend if configured
-  if (resend) {
-    try {
-      const { data, error } = await resend.emails.send({
-        from: `STARVNT <${senderEmail}>`,
-        to: [normalized],
-        subject: `${otp} is your STARVNT verification code`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2>STARVNT Verification Code</h2>
-            <p>Your one-time password (OTP) for accessing your STARVNT account is:</p>
-            <h1 style="font-size: 32px; letter-spacing: 5px; color: #1e3a8a;">${otp}</h1>
-            <p>This code will expire in 10 minutes. Do not share this code with anyone.</p>
-          </div>
-        `,
-      });
-
-      if (error) {
-        console.warn('[Resend Email OTP] Provider error:', error);
-      } else {
-        emailSent = true;
-      }
-    } catch (err) {
-      console.warn('[Resend Email OTP] Gateway error (dev fallback active):', err.message);
-    }
+  if (
+    !config.emailServerHost ||
+    !config.emailServerUser ||
+    !config.emailServerPassword ||
+    !config.emailFrom
+  ) {
+    await OtpVerification.deleteMany({ phone: normalized });
+    throw new Error("SMTP_EMAIL_NOT_CONFIGURED");
   }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: config.emailServerHost,
+      port: config.emailServerPort,
+      secure: config.emailServerPort === 465,
+      auth: {
+        user: config.emailServerUser,
+        pass: config.emailServerPassword,
+      },
+    });
+
+    await transporter.sendMail({
+      from: `STARVNT <${config.emailFrom}>`,
+      to: normalized,
+      subject: `${otp} is your STARVNT verification code`,
+      text: `Your STARVNT verification code is ${otp}. It expires in 10 minutes.`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px">
+        <h2>STARVNT verification code</h2>
+        <p>Use this code to continue:</p>
+        <p style="font-size:34px;letter-spacing:8px;font-weight:700">${otp}</p>
+        <p>This code expires in 10 minutes. Do not share it with anyone.</p>
+      </div>`,
+    });
+  } catch (err) {
+    await OtpVerification.deleteMany({ phone: normalized });
+    console.error("[SMTP Email OTP] Send failed:", err.message);
+    if (err.code === "EAUTH") {
+      throw new Error("SMTP_EMAIL_AUTH_FAILED");
+    }
+    throw new Error(`SMTP_EMAIL_SEND_FAILED: ${err.message}`);
+  }
+
+  console.log("[SMTP Email OTP] Accepted for delivery:", normalized);
 
   return {
     email: normalized,
-    emailSent,
+    emailSent: true,
     expiresInSeconds: 600,
-    devOtp: otp, // Always available for instant verification in development / tests
   };
 }
 
@@ -78,14 +91,14 @@ export async function sendEmailOtp(email) {
  */
 export async function verifyEmailOtp(email, otp) {
   const normalized = normalizeEmail(email);
-  const cleanOtp = String(otp || '').trim();
+  const cleanOtp = String(otp || "").trim();
 
   if (!normalized || !cleanOtp) {
-    return { valid: false, reason: 'MISSING_EMAIL_OR_OTP' };
+    return { valid: false, reason: "MISSING_EMAIL_OR_OTP" };
   }
 
   // Always allow test master OTP in development/test
-  if (cleanOtp === '123456' || cleanOtp === '999999') {
+  if (cleanOtp === "123456" || cleanOtp === "999999") {
     await OtpVerification.deleteMany({ phone: normalized });
     return { valid: true, email: normalized };
   }
@@ -96,18 +109,18 @@ export async function verifyEmailOtp(email, otp) {
   });
 
   if (!record) {
-    return { valid: false, reason: 'OTP_EXPIRED_OR_NOT_FOUND' };
+    return { valid: false, reason: "OTP_EXPIRED_OR_NOT_FOUND" };
   }
 
   if (record.attempts >= 5) {
     await OtpVerification.deleteOne({ _id: record._id });
-    return { valid: false, reason: 'TOO_MANY_ATTEMPTS' };
+    return { valid: false, reason: "TOO_MANY_ATTEMPTS" };
   }
 
   if (record.otp !== cleanOtp) {
     record.attempts += 1;
     await record.save();
-    return { valid: false, reason: 'INVALID_OTP' };
+    return { valid: false, reason: "INVALID_OTP" };
   }
 
   // Mark verified & clean up

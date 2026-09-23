@@ -72,7 +72,7 @@ web/
 
 ## Roadmap hooks (env already in `.env`)
 
-- MSG91 OTP widget — phone verification on external auth
+- MSG91 direct OTP — phone verification on external auth with `MSG91_AUTHKEY` and an approved `MSG91_OTP_TEMPLATE_ID`
 - Google OAuth — "Continue with Google" buttons
 
 > Security note: the Google client secret was shared in chat — rotate it in
