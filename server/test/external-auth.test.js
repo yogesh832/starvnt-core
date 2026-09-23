@@ -106,6 +106,57 @@ test('wrong password → uniform 401 INVALID_CREDENTIALS', async () => {
   assert.equal(res.body.error, 'INVALID_CREDENTIALS');
 });
 
+test('Aura+ customer chat threads persist and remain account-scoped', async () => {
+  const login = await request(ctx.app)
+    .post('/api/auth/login')
+    .send({ email: 'cass@example.com', password: 'Passw0rd1' });
+  assert.equal(login.status, 200);
+  const token = login.body.accessToken;
+
+  const createThread = await request(ctx.app)
+    .post('/api/ai/threads')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ title: 'Wedding in Kolkata' });
+  assert.equal(createThread.status, 201);
+  assert.ok(createThread.body.thread.id);
+
+  const threadId = createThread.body.thread.id;
+  const userMessage = await request(ctx.app)
+    .post(`/api/ai/threads/${threadId}/messages`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ role: 'user', content: 'Plan my wedding for 500 guests' });
+  assert.equal(userMessage.status, 201);
+
+  const assistantMessage = await request(ctx.app)
+    .post(`/api/ai/threads/${threadId}/messages`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ role: 'assistant', content: 'Great. Which date are you planning for?' });
+  assert.equal(assistantMessage.status, 201);
+
+  const detail = await request(ctx.app)
+    .get(`/api/ai/threads/${threadId}`)
+    .set('Authorization', `Bearer ${token}`);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.messages.length, 2);
+  assert.equal(detail.body.messages[0].content, 'Plan my wedding for 500 guests');
+  assert.equal(detail.body.messages[1].content, 'Great. Which date are you planning for?');
+
+  const list = await request(ctx.app)
+    .get('/api/ai/threads')
+    .set('Authorization', `Bearer ${token}`);
+  assert.equal(list.status, 200);
+  assert.equal(list.body.threads.length, 1);
+  assert.equal(list.body.threads[0].id, threadId);
+
+  const vendorLogin = await request(ctx.app)
+    .post('/api/auth/login')
+    .send({ email: 'vin@example.com', password: 'Passw0rd1' });
+  const vendorThreadRead = await request(ctx.app)
+    .get(`/api/ai/threads/${threadId}`)
+    .set('Authorization', `Bearer ${vendorLogin.body.accessToken}`);
+  assert.equal(vendorThreadRead.status, 404);
+});
+
 test('external tokens are rejected by the ADMIN API (and vice versa is covered in admin suite)', async () => {
   const login = await request(ctx.app)
     .post('/api/auth/login')

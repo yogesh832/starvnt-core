@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireExternalAuth } from '../middleware/requireExternalAuth.js';
 import { OpenAI } from 'openai';
+import { randomUUID } from 'node:crypto';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
 import { CustomerChatThread } from '../models/CustomerChatThread.js';
@@ -12,9 +13,130 @@ const openai = new OpenAI({
   baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/" 
 });
 
+function cleanContent(value) {
+  return String(value || '').trim();
+}
+
+function titleFromMessage(message) {
+  const compact = cleanContent(message).replace(/\s+/g, ' ');
+  if (!compact) return 'New event plan';
+  return compact.length > 60 ? `${compact.slice(0, 57)}...` : compact;
+}
+
+async function getOrCreateThread(customerId, threadId, firstMessage = '') {
+  const resolvedThreadId =
+    cleanContent(threadId) || `thread_${Date.now()}_${randomUUID().slice(0, 8)}`;
+  let thread = await CustomerChatThread.findOne({ customerId, threadId: resolvedThreadId });
+  if (!thread) {
+    thread = new CustomerChatThread({
+      customerId,
+      threadId: resolvedThreadId,
+      title: titleFromMessage(firstMessage),
+      messages: [],
+      lastMessageAt: new Date(),
+    });
+  }
+  return thread;
+}
+
+function toThreadSummary(thread) {
+  const last = thread.messages?.[thread.messages.length - 1];
+  return {
+    id: thread.threadId,
+    title: thread.title,
+    lastMessageAt: thread.lastMessageAt || thread.updatedAt,
+    updatedAt: thread.updatedAt,
+    messageCount: thread.messages?.length || 0,
+    preview: last?.content ? titleFromMessage(last.content) : '',
+    extractedContext: thread.extractedContext || {},
+  };
+}
+
+router.get('/threads', requireExternalAuth, async (req, res, next) => {
+  try {
+    const threads = await CustomerChatThread.find({ customerId: req.externalUser._id })
+      .sort({ lastMessageAt: -1, updatedAt: -1 })
+      .limit(50);
+    res.json({ ok: true, threads: threads.map(toThreadSummary) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/threads', requireExternalAuth, async (req, res, next) => {
+  try {
+    const { title } = req.body || {};
+    const thread = await getOrCreateThread(
+      req.externalUser._id,
+      `thread_${Date.now()}_${randomUUID().slice(0, 8)}`,
+      title || 'New event plan',
+    );
+    if (title) thread.title = titleFromMessage(title);
+    await thread.save();
+    res.status(201).json({ ok: true, thread: toThreadSummary(thread), messages: [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/threads/:threadId', requireExternalAuth, async (req, res, next) => {
+  try {
+    const thread = await CustomerChatThread.findOne({
+      customerId: req.externalUser._id,
+      threadId: req.params.threadId,
+    });
+    if (!thread) return res.status(404).json({ error: 'CHAT_THREAD_NOT_FOUND' });
+    res.json({
+      ok: true,
+      thread: toThreadSummary(thread),
+      messages: thread.messages,
+      extractedContext: thread.extractedContext || {},
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/threads/:threadId/messages', requireExternalAuth, async (req, res, next) => {
+  try {
+    const { role = 'assistant', content, metadata = {} } = req.body || {};
+    const text = cleanContent(content);
+    if (!text) return res.status(400).json({ error: 'MESSAGE_REQUIRED' });
+    if (!['user', 'assistant'].includes(role)) {
+      return res.status(400).json({ error: 'INVALID_MESSAGE_ROLE' });
+    }
+
+    const thread = await getOrCreateThread(req.externalUser._id, req.params.threadId, text);
+    thread.messages.push({ role, content: text, metadata });
+    thread.lastMessageAt = new Date();
+    if (!thread.title || thread.title === 'New event plan') {
+      const firstUser = thread.messages.find((m) => m.role === 'user');
+      thread.title = titleFromMessage(firstUser?.content || text);
+    }
+    await thread.save();
+    res.status(201).json({ ok: true, thread: toThreadSummary(thread), message: thread.messages.at(-1) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/chat', requireExternalAuth, async (req, res, next) => {
   try {
-    const { messages, threadId = 'default_thread' } = req.body;
+    const { message, messages = [], threadId } = req.body || {};
+    const userMessage =
+      cleanContent(message) ||
+      cleanContent([...messages].reverse().find((m) => m?.role === 'user')?.content);
+    if (!userMessage) {
+      return res.status(400).json({ error: 'MESSAGE_REQUIRED' });
+    }
+
+    const thread = await getOrCreateThread(req.externalUser._id, threadId, userMessage);
+    thread.messages.push({ role: 'user', content: userMessage });
+    thread.lastMessageAt = new Date();
+    if (!thread.title || thread.title === 'New event plan') {
+      thread.title = titleFromMessage(userMessage);
+    }
+    await thread.save();
     
     // Fetch some basic vendor data to provide to OpenAI as context
     const vendors = await VendorOrganization.find({ 'verification.isVerified': true }).limit(10);
@@ -44,24 +166,23 @@ If the user provides all event details (Event Type, Date, Location, Guest Count)
 \`\`\`
 Do not output the final JSON block until you have enough information.`;
 
+    const conversationHistory = thread.messages
+      .filter((m) => ['user', 'assistant'].includes(m.role))
+      .slice(-24)
+      .map((m) => ({ role: m.role, content: m.content }));
+
     const response = await openai.chat.completions.create({
       model: "gemini-3.5-flash",
       messages: [
         { role: "system", content: systemPrompt },
-        ...messages
+        ...conversationHistory
       ],
       temperature: 0.7,
     });
 
     const aiMessage = response.choices[0].message.content;
-    
-    // Save to DB
-    let thread = await CustomerChatThread.findOne({ customerId: req.externalUser._id, threadId });
-    if (!thread) {
-       thread = new CustomerChatThread({ customerId: req.externalUser._id, threadId, messages: [] });
-    }
-    
-    thread.messages = [ ...messages, { role: 'assistant', content: aiMessage } ];
+    thread.messages.push({ role: 'assistant', content: aiMessage });
+    thread.lastMessageAt = new Date();
     
     // Attempt to extract context if available
     const jsonMatch = aiMessage.match(/```(?:json)?\n?([\s\S]*?)\n?```/i);
@@ -75,7 +196,12 @@ Do not output the final JSON block until you have enough information.`;
     }
     await thread.save();
 
-    res.json({ reply: aiMessage });
+    res.json({
+      ok: true,
+      reply: aiMessage,
+      thread: toThreadSummary(thread),
+      threadId: thread.threadId,
+    });
   } catch (err) {
     next(err);
   }

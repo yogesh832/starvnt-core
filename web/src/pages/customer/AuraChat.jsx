@@ -62,13 +62,17 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
   const [activeOtherIndex, setActiveOtherIndex] = useState(null);
   const [otherInput, setOtherInput] = useState('');
   const [tempLocation, setTempLocation] = useState(null);
-  const [threadId] = useState(() => 'thread_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+  const [activeThreadId, setActiveThreadId] = useState('');
+  const [savedThreads, setSavedThreads] = useState([]);
+  const [loadingThreads, setLoadingThreads] = useState(true);
+  const initialIntentSentRef = useRef(false);
+  const greetingMessage = {
+    from: 'aura',
+    text: `Hi ${firstName || 'there'}, I'm Aura+, your AI event planner. What are we celebrating?`,
+    options: ['Wedding', 'Corporate Event', 'Birthday', 'Anniversary']
+  };
   const [messages, setMessages] = useState([
-    {
-      from: 'aura',
-      text: `Hi ${firstName || 'there'}, I'm Aura+, your AI event planner. What are we celebrating?`,
-      options: ['Wedding', 'Corporate Event', 'Birthday', 'Anniversary']
-    },
+    greetingMessage,
   ]);
   const bottomRef = useRef(null);
 
@@ -77,9 +81,111 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  function parseAuraMessage(content) {
+    const jsonMatch = content.match(/```(?:json)?\n?([\s\S]*?)\n?```/i);
+    if (!jsonMatch) return { from: 'aura', text: content };
+    const textOnly = content.replace(/```(?:json)?\n?[\s\S]*?\n?```/i, '').trim();
+    try {
+      const data = JSON.parse(jsonMatch[1]);
+      if (data.action === 'request_location') {
+        return { from: 'aura', text: textOnly, action: 'request_location' };
+      }
+      if (data.options) {
+        return { from: 'aura', text: textOnly, options: data.options };
+      }
+      return { from: 'aura', text: textOnly || content };
+    } catch (err) {
+      return { from: 'aura', text: textOnly || content };
+    }
+  }
+
+  function toUiMessages(dbMessages = []) {
+    if (!dbMessages.length) return [greetingMessage];
+    return dbMessages.map((m) =>
+      m.role === 'user'
+        ? { from: 'user', text: m.content }
+        : parseAuraMessage(m.content)
+    );
+  }
+
+  async function refreshThreads() {
+    try {
+      const res = await externalApi.call('/ai/threads');
+      setSavedThreads(res.threads || []);
+      return res.threads || [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  async function loadThread(id) {
+    if (!id) return;
+    try {
+      const res = await externalApi.call(`/ai/threads/${id}`);
+      setActiveThreadId(id);
+      setMessages(toUiMessages(res.messages || []));
+      setChatHistory(
+        (res.messages || [])
+          .filter((m) => ['user', 'assistant'].includes(m.role))
+          .map((m) => ({ role: m.role, content: m.content }))
+      );
+      if (res.extractedContext) {
+        setParsedDetails(res.extractedContext);
+      }
+      setStage(0);
+    } catch (err) {
+      setMessages([greetingMessage]);
+    }
+  }
+
+  function startNewChat() {
+    setActiveThreadId('');
+    setMessages([greetingMessage]);
+    setChatHistory([]);
+    setParsedDetails({ type: '', dateStr: '', isoDate: '', venue: '', guests: 0 });
+    setStage(0);
+    setActiveOtherIndex(null);
+    setOtherInput('');
+  }
+
+  async function saveLocalTurn(role, content, metadata = {}) {
+    if (!activeThreadId || !content) return;
+    try {
+      const res = await externalApi.call(`/ai/threads/${activeThreadId}/messages`, {
+        method: 'POST',
+        body: { role, content, metadata },
+      });
+      if (res.thread) {
+        setSavedThreads((prev) => [
+          res.thread,
+          ...prev.filter((t) => t.id !== res.thread.id),
+        ]);
+      }
+    } catch (err) {
+      // Chat remains usable offline; the next AI turn will still persist context.
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadInitialThreads() {
+      const threads = await refreshThreads();
+      if (cancelled) return;
+      setLoadingThreads(false);
+      if (!initialIntent && threads[0]?.id) {
+        await loadThread(threads[0].id);
+      }
+    }
+    loadInitialThreads();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Initial intent
   useEffect(() => {
-    if (initialIntent && stage === 0) {
+    if (initialIntent && stage === 0 && !initialIntentSentRef.current) {
+      initialIntentSentRef.current = true;
       send(initialIntent);
     }
   }, [initialIntent, stage]);
@@ -135,13 +241,16 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
     setMessages(prev => [...prev, { from: 'user', text: msg }]);
     
     if (stage === 2) {
+      await saveLocalTurn('user', msg, { stage: 'budget' });
+      const finalText = `Perfect! Approximate budget set to ${msg}. I've created your event plan and matched top verified vendors for ${parsedDetails.venue || 'your venue'} with the lowest validated total cost!`;
       setMessages((prev) => [
         ...prev,
         {
           from: 'aura',
-          text: `Perfect! Approximate budget set to ${msg}. I've created your event plan and matched top verified vendors for ${parsedDetails.venue || 'your venue'} with the lowest validated total cost!`,
+          text: finalText,
         },
       ]);
+      await saveLocalTurn('assistant', finalText, { stage: 'event_plan_created' });
       setStage(3);
       onEventCreated?.();
       return;
@@ -154,8 +263,17 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
     try {
        const res = await externalApi.call('/ai/chat', {
          method: 'POST',
-         body: { messages: newHistory, threadId }
+         body: { message: msg, threadId: activeThreadId || undefined }
        });
+       if (res.threadId) {
+         setActiveThreadId(res.threadId);
+       }
+       if (res.thread) {
+         setSavedThreads((prev) => [
+           res.thread,
+           ...prev.filter((t) => t.id !== res.thread.id),
+         ]);
+       }
        
        const reply = res.reply;
        // Check if reply ends with the JSON block
@@ -224,11 +342,76 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
         text: "Before I start finding options, what's your approximate budget?",
       },
     ]);
+    await saveLocalTurn('assistant', "Before I start finding options, what's your approximate budget?", {
+      stage: 'budget_prompt',
+    });
     setStage(2);
   }
 
   return (
-    <div className={`flex flex-col ${embedded ? 'h-full' : 'h-full'}`}>
+    <div className={`flex ${embedded ? 'h-full' : 'h-full'} min-h-0`}>
+      <aside className="hidden lg:flex w-64 border-r border-gray-100 bg-white/70 flex-col shrink-0">
+        <div className="p-3 border-b border-gray-100 flex items-center justify-between gap-2">
+          <div>
+            <div className="text-xs font-extrabold text-navy">Aura+ Chats</div>
+            <div className="text-[10px] text-muted">Saved conversations</div>
+          </div>
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-2 hover:bg-primary-dark"
+          >
+            New
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {loadingThreads ? (
+            <div className="text-xs text-muted px-2 py-3">Loading chats...</div>
+          ) : savedThreads.length === 0 ? (
+            <div className="text-xs text-muted px-2 py-3">No saved chats yet.</div>
+          ) : (
+            savedThreads.map((thread) => (
+              <button
+                key={thread.id}
+                type="button"
+                onClick={() => loadThread(thread.id)}
+                className={`w-full text-left rounded-2xl px-3 py-2.5 transition ${
+                  activeThreadId === thread.id
+                    ? 'bg-primary-soft text-primary'
+                    : 'hover:bg-lavender text-ink/75'
+                }`}
+              >
+                <div className="text-xs font-bold truncate">{thread.title || 'New event plan'}</div>
+                <div className="text-[10px] text-muted truncate mt-0.5">{thread.preview || 'Saved chat'}</div>
+              </button>
+            ))
+          )}
+        </div>
+      </aside>
+
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+      <div className="lg:hidden px-3 pt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={startNewChat}
+          className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-2"
+        >
+          New Aura+ chat
+        </button>
+        <select
+          value={activeThreadId}
+          onChange={(e) => (e.target.value ? loadThread(e.target.value) : startNewChat())}
+          className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-navy"
+        >
+          <option value="">Current unsaved chat</option>
+          {savedThreads.map((thread) => (
+            <option key={thread.id} value={thread.id}>
+              {thread.title || 'New event plan'}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto">
         {messages.map((m, i) =>
           m.kind === 'understood' ? (
@@ -376,6 +559,7 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
           Aura+ recommends the lowest validated total cost across verified vendors.
         </p>
       </form>
+      </div>
     </div>
   );
 }
