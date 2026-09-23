@@ -1,14 +1,14 @@
-import { config } from './config.js';
-import { connectDB } from './db/index.js';
-import { createApp } from './app.js';
+import { config } from "./config.js";
+import { connectDB } from "./db/index.js";
+import { createApp } from "./app.js";
 
 function startProductionKeepAlive() {
-  if (process.env.NODE_ENV !== 'production' || !config.keepAliveUrl) {
+  if (process.env.NODE_ENV !== "production" || !config.keepAliveUrl) {
     return;
   }
 
   const intervalMs = Math.max(10000, config.keepAliveIntervalMs);
-  const healthUrl = `${config.keepAliveUrl.replace(/\/$/, '')}/api/health`;
+  const healthUrl = `${config.keepAliveUrl.replace(/\/$/, "")}/api/health`;
 
   async function ping() {
     try {
@@ -23,7 +23,9 @@ function startProductionKeepAlive() {
 
   setInterval(ping, intervalMs).unref();
   setTimeout(ping, 5000).unref();
-  console.log(`[keep-alive] production self-ping enabled every ${intervalMs}ms`);
+  console.log(
+    `[keep-alive] production self-ping enabled every ${intervalMs}ms`,
+  );
 }
 
 async function main() {
@@ -33,7 +35,7 @@ async function main() {
     console.log(
       `[starvnt] unified server on :${config.port}\n` +
         `  external domain  → aud=${config.audience}   db=starvnt_external\n` +
-        `  admin domain     → aud=${config.adminAudience} db=starvnt_admin`
+        `  admin domain     → aud=${config.adminAudience} db=starvnt_admin`,
     );
     setInterval(() => {
       console.log(`[starvnt] server is running on :${config.port}`);
@@ -43,6 +45,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('[starvnt] failed to start:', err.message);
+  console.error("[starvnt] failed to start:", err.message);
   process.exit(1);
 });
