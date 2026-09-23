@@ -3,7 +3,8 @@
  * context); refresh happens via HttpOnly cookie scoped to each domain's
  * auth path. On 401 we attempt exactly one refresh then retry once.
  */
-export function makeApi(base, refreshPath) {  let token = null;
+export function makeApi(base, refreshPath) {
+  let token = null;
   let refreshing = null;
 
   const setToken = (t) => {
@@ -28,33 +29,42 @@ export function makeApi(base, refreshPath) {  let token = null;
     return refreshing;
   }
 
-  async function call(path, { method = 'GET', body } = {}, retry = true) {
+  async function raw(path, { method = 'GET', body, headers = {} } = {}, retry = true) {
+    const hasBody = body !== undefined && body !== null;
+    const isJsonBody = hasBody && !(body instanceof FormData) && !(body instanceof Blob) && typeof body !== 'string';
     const res = await fetch(`${base}${path}`, {
       method,
       credentials: 'include',
       headers: {
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(isJsonBody ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: hasBody ? (isJsonBody ? JSON.stringify(body) : body) : undefined,
     });
 
     if (res.status === 401 && retry) {
       const refreshed = await refresh();
-      if (refreshed) return call(path, { method, body }, false);
+      if (refreshed) return raw(path, { method, body, headers }, false);
     }
 
-    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
       const err = new Error(data.error || `HTTP_${res.status}`);
       err.status = res.status;
       err.data = data;
       throw err;
     }
+    return res;
+  }
+
+  async function call(path, { method = 'GET', body } = {}) {
+    const res = await raw(path, { method, body });
+    const data = await res.json().catch(() => ({}));
     return data;
   }
 
-  return { call, refresh, setToken, getToken: () => token };
+  return { call, raw, refresh, setToken, getToken: () => token };
 }
 
 /** Backend base URL — direct calls to the server in prod, dev-proxy in local. */

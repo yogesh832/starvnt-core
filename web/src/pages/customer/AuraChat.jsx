@@ -211,22 +211,17 @@ export default function AuraChat({ firstName, onEventCreated, embedded = false, 
   };
   
   const playVoice = async (text) => {
+    if (!text) return;
     try {
-      const token = localStorage.getItem('starvnt_ext_token');
-      const res = await fetch('http://localhost:3000/api/ai/voice', {
+      const res = await externalApi.raw('/ai/voice', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ text })
+        body: { text }
       });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.play();
-      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      await audio.play();
     } catch (e) {
       console.error(e);
     }
