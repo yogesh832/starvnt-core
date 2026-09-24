@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test --test-concurrency=1",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
     "seed": "node scripts/seed-super-admin.js",
     "seed:vendor": "node scripts/seed-vendor.js",
     "seed:customer-demo": "node scripts/seed-customer-demo.js"

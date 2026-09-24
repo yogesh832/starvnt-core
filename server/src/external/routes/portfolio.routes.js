@@ -15,7 +15,7 @@ const router = express.Router();
 
 // Auto-configure Cloudinary with provided credentials or env variables
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'ei8znuga';
-const apiSecret = process.env.CLOUDINARY_API_SECRET || 'dGbNKpW4pCAP7nANEhIbJhb64uA';
+const apiSecret = process.env.CLOUDINARY_API_SECRET;
 const apiKey = process.env.CLOUDINARY_API_KEY;
 
 if (process.env.CLOUDINARY_URL) {

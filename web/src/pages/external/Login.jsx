@@ -593,11 +593,13 @@ export default function ExternalLogin() {
                       : "Create an Account"}
                   </h2>
                   <p className="text-xs text-muted mt-0.5">
-                    Operating as Verified Vendor / Brand
+                    {accountType === "VENDOR"
+                      ? "Operating as Verified Vendor / Brand"
+                      : "Plan and manage your events"}
                   </p>
                 </div>
 
-                {/* Persona Pill Switcher (Hidden for Vendor-only Launch) 
+                {/* Persona Pill Switcher */}
                 <div className="flex bg-gray-100/90 p-1 rounded-2xl text-xs font-bold shrink-0 border border-gray-200/50">
                   <button
                     type="button"
@@ -624,7 +626,6 @@ export default function ExternalLogin() {
                     Vendor
                   </button>
                 </div>
-                */}
               </div>
 
               {/* 3 Authentication Option Tabs */}

@@ -4,6 +4,7 @@ import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import PublicNavbar from '../../components/PublicNavbar.jsx';
 import PublicFooter from '../../components/PublicFooter.jsx';
+import { savePendingPrompt } from './pendingPrompt.js';
 
 const SUGGESTIONS = [
   "My daughter's wedding",
@@ -64,11 +65,15 @@ export default function Landing() {
   const [popup, setPopup] = useState(null);
 
   function beginPlan(text) {
+    const ask = typeof text === 'string' ? text.trim() : '';
     if (user) {
-      navigate(user.accountType === 'VENDOR' ? '/vendor' : '/customer');
+      if (user.accountType === 'VENDOR') navigate('/vendor');
+      else navigate(ask ? `/customer/aura?new=1&ask=${encodeURIComponent(ask)}` : '/customer');
       return;
     }
-    setPopup(text || '');
+    // Kept through sign-up, then opened in Aura+.
+    savePendingPrompt(ask);
+    setPopup(ask);
   }
 
   return (

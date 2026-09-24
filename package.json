@@ -12,6 +12,7 @@
     "dev:web": "npm run dev -w web",
     "seed:super-admin": "npm run seed -w server",
     "seed:vendor": "npm run seed:vendor -w server",
+    "seed:customer-demo": "npm run seed:customer-demo -w server",
     "test": "npm test -w server"
   },
   "engines": {

@@ -1,171 +1,79 @@
-import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { useTheme } from '../../lib/ThemeContext.jsx';
 import Icon from '../../components/Icon.jsx';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import AuraChat from './AuraChat.jsx';
-import EventCenter from './EventCenter.jsx';
-import { HomeView, UpdatesView, MeView, EventsView } from './views.jsx';
-import { externalApi } from '../../lib/api.js';
-
-/* ── Blueprint-shaped demo state (will bind to Core APIs as they land) ───── */
-const EVENTS = [
-  {
-    name: "My Daughter's Wedding",
-    date: '26 November 2025',
-    place: 'New Town, Kolkata',
-    guests: 500,
-    state: 'BOOKING_IN_PROGRESS',
-    readiness: 68,
-    requirements: [
-      { name: 'Catering', status: 'Decision needed', detail: '3 validated quotes ready — SpiceRoute is the best value at ₹1,12,000 (base + service + travel).', action: 'Compare quotes' },
-    ],
-    timeline: [
-      ['Intent captured', 'Wedding, 26 Nov, 500 guests — understood via Aura+', true],
-      ['Event plan drafted', 'Essentials first; recommendations marked clearly', true],
-      ['Booking in progress', '2 of 5 essentials confirmed; catering decision pending', true],
-      ['Ready for event', 'All essentials confirmed and scheduled', false],
-      ['Event day', 'Live status feed for you and your circle', false],
-      ['Memory', 'Your organized story: photos, videos, moments', false],
-    ],
-    budget: {
-      spent: '₹1,38,000', total: '₹3,00,000', pct: 46,
-      lines: [['Photography', '₹48,000'], ['Venue', '₹90,000'], ['Catering (pending)', '~₹1,12,000']],
-    },
-    payments: [
-      { label: 'Photography advance', amount: '₹15,000', status: 'Confirmed' },
-      { label: 'Venue reservation', amount: '₹20,000', status: 'Confirmed' },
-      { label: 'Catering', amount: '—', status: 'Finding options' },
-    ],
-    vendors: [
-      { name: 'ShutterCraft Studio', role: 'Photography', status: 'Booked' },
-      { name: 'SpiceRoute Caterers', role: 'Catering', status: 'Quotes ready' },
-      { name: 'New Town Banquets', role: 'Venue', status: 'Confirmed' },
-    ],
-  },
-  {
-    name: "Rahul's 30th Birthday",
-    date: '17 September 2026 · today',
-    place: 'Eco Park Lawns',
-    guests: 80,
-    state: 'LIVE',
-    readiness: 100,
-    requirements: [
-      { name: 'Decoration', status: 'Booked', detail: 'Team arrived 08:00 — setup verified.' },
-      { name: 'Photography', status: 'Booked', detail: 'Checked in 09:42.' },
-      { name: 'Cake', status: 'Confirmed', detail: 'Delivery window 17:30–18:00.' },
-    ],
-    timeline: [
-      ['Planned', 'All essentials confirmed', true],
-      ['Event day', 'Live now — everything on track', true],
-      ['Memory', 'Photos and story assembled after the event', false],
-    ],
-    budget: {
-      spent: '₹52,000', total: '₹60,000', pct: 87,
-      lines: [['Decoration', '₹22,000'], ['Photography', '₹18,000'], ['Cake & extras', '₹12,000']],
-    },
-    payments: [
-      { label: 'All payments', amount: '₹52,000', status: 'Confirmed' },
-    ],
-    vendors: [
-      { name: 'Bloom Decor', role: 'Decoration', status: 'Booked' },
-      { name: 'Lens & Light', role: 'Photography', status: 'Booked' },
-      { name: 'Sweet Moments', role: 'Cake', status: 'Confirmed' },
-    ],
-  },
-];
+import HomePage from './HomePage.jsx';
+import EventsPage from './EventsPage.jsx';
+import EventPage from './EventPage.jsx';
+import EventPlanPage from './EventPlanPage.jsx';
+import EventHistoryPage from './EventHistoryPage.jsx';
+import ServicesPage from './ServicesPage.jsx';
+import ServiceDetailPage from './ServiceDetailPage.jsx';
+import ComparePage from './ComparePage.jsx';
+import QuotesPage from './QuotesPage.jsx';
+import BookingsPage from './BookingsPage.jsx';
+import EventDayPage from './EventDayPage.jsx';
+import CirclePage from './CirclePage.jsx';
+import BudgetPage from './BudgetPage.jsx';
+import ManualPlanPage from './ManualPlanPage.jsx';
+import UpdatesPage from './UpdatesPage.jsx';
+import MePage from './MePage.jsx';
+import { customerApi } from './customerApi.js';
+import { takePendingPrompt } from './pendingPrompt.js';
 
 const NAV = [
-  { key: 'home', label: 'Home', icon: 'dashboard' },
-  { key: 'events', label: 'Events', icon: 'calendar' },
-  { key: 'aura', label: 'Aura+', icon: 'star' },
-  { key: 'updates', label: 'Updates', icon: 'bell' },
-  { key: 'me', label: 'Me', icon: 'profile' },
+  { key: 'home', label: 'Home', icon: 'dashboard', to: '/customer' },
+  { key: 'events', label: 'Events', icon: 'events', to: '/customer/events' },
+  { key: 'aura', label: 'Aura+', icon: 'star', to: '/customer/aura' },
+  { key: 'updates', label: 'Updates', icon: 'bell', to: '/customer/updates' },
+  { key: 'me', label: 'Me', icon: 'profile', to: '/customer/me' },
 ];
+
+function activeKey(pathname) {
+  const seg = pathname.replace(/^\/customer\/?/, '').split('/')[0];
+  return NAV.some((n) => n.key === seg) ? seg : 'home';
+}
+
+function Badge({ n }) {
+  if (!n) return null;
+  return (
+    <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold grid place-items-center leading-none">
+      {n > 9 ? '9+' : n}
+    </span>
+  );
+}
 
 /* ── Portal shell: 5 primary nav items (§9.1) ────────────────────────────── */
 export default function CustomerPortal() {
   const { user, logout } = useExternalAuth();
   const { dark, toggle: toggleTheme } = useTheme();
-  const location = useLocation();
   const navigate = useNavigate();
-  
+  const { pathname } = useLocation();
   const firstName = user?.fullName?.split(' ')[0] || 'there';
-  const [tab, setTab] = useState(location.state?.intent ? 'aura' : 'home');
-  const [activeEvent, setActiveEvent] = useState(null); // index into eventsList, or null
-  const [eventsList, setEventsList] = useState([]); // Empty until API load
+  const tab = activeKey(pathname);
 
-  useEffect(() => {
-    async function loadBackend() {
-      try {
-        const [oppsRes, quotesRes, bookingsRes] = await Promise.all([
-          externalApi.call('/opportunities').catch(() => ({ opportunities: [] })),
-          externalApi.call('/quotes').catch(() => ({ quotes: [] })),
-          externalApi.call('/bookings').catch(() => ({ bookings: [] }))
-        ]);
-        
-        // Group by event name/date
-        const groups = {};
-        for (const opp of (oppsRes.opportunities || [])) {
-          const key = opp.eventDate + '_' + opp.guestCount;
-          if (!groups[key]) {
-             groups[key] = {
-               name: opp.category + " Event",
-               date: new Date(opp.eventDate).toLocaleDateString(),
-               place: opp.serviceLocation?.locality || 'TBD',
-               guests: opp.guestCount || 500,
-               state: 'PLANNING',
-               readiness: 68,
-               requirements: [],
-               timeline: EVENTS[0].timeline, // mock timeline
-               budget: EVENTS[0].budget,
-               payments: EVENTS[0].payments,
-               vendors: []
-             };
-          }
-          groups[key].requirements.push({
-            name: opp.category,
-            status: opp.status === 'NEW' ? 'Finding options' : opp.status,
-            detail: `Need ${opp.category} for ${opp.guestCount} guests.`,
-            action: 'View'
-          });
-        }
-        
-        // Merge bookings
-        for (const bk of (bookingsRes.bookings || [])) {
-          // just mock linking
-        }
-        
-        const apiEvents = Object.values(groups);
-        setEventsList(apiEvents);
-      } catch (err) {}
-    }
-    loadBackend();
+  const [unread, setUnread] = useState(0);
+  const refreshUnread = useCallback(() => {
+    customerApi.home().then((h) => setUnread(h.unreadUpdates || 0)).catch(() => {});
   }, []);
 
-  const openEvent = (i) => { setActiveEvent(i); setTab('events'); };
-  const openAura = () => setTab('aura');
+  // What a visitor typed on the landing page before signing in.
+  useEffect(() => {
+    const pending = takePendingPrompt();
+    if (pending) navigate(`/customer/aura?new=1&ask=${encodeURIComponent(pending)}`, { replace: true });
+  }, [navigate]);
 
-  function renderTab() {
-    if (tab === 'home') {
-      return <HomeView firstName={firstName} events={eventsList} onOpenEvent={openEvent} onOpenAura={openAura} onOpenUpdates={() => setTab('updates')} />;
-    }
-    if (tab === 'events') {
-      if (activeEvent != null) {
-        return (
-          <div className="max-w-5xl mx-auto">
-            <button onClick={() => setActiveEvent(null)} className="text-xs font-bold text-muted hover:text-primary mb-3">← All events</button>
-            <EventCenter event={eventsList[activeEvent]} onAskAura={openAura} />
-          </div>
-        );
-      }
-      return <EventsView events={eventsList} onOpenEvent={openEvent} onOpenAura={openAura} />;
-    }
-    if (tab === 'aura') return null; // full-height, handled below
-    if (tab === 'updates') return <UpdatesView events={eventsList} />;
-    return <MeView user={user} logout={logout} />;
-  }
+  // Unread count for the Updates badge: on navigation and every minute.
+  useEffect(() => {
+    refreshUnread();
+  }, [tab, refreshUnread]);
+  useEffect(() => {
+    const t = setInterval(refreshUnread, 60000);
+    return () => clearInterval(t);
+  }, [refreshUnread]);
 
   return (
     <div className="h-screen bg-lavender flex overflow-hidden">
@@ -181,7 +89,7 @@ export default function CustomerPortal() {
             return (
               <button
                 key={n.key}
-                onClick={() => { setTab(n.key); if (n.key !== 'events') setActiveEvent(null); }}
+                onClick={() => navigate(n.to)}
                 title={n.label}
                 className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition ${
                   active ? 'bg-primary-soft text-primary' : 'text-ink/60 hover:bg-lavender'
@@ -194,11 +102,25 @@ export default function CustomerPortal() {
                     AI
                   </span>
                 )}
+                {n.key === 'updates' && <span className="ml-auto"><Badge n={unread} /></span>}
               </button>
             );
           })}
         </nav>
-        
+
+        <button
+          onClick={() => navigate('/customer/aura?new=1')}
+          className="hidden lg:flex mt-4 mx-1 items-center justify-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold py-2.5 hover:bg-primary-dark transition shadow-sm shadow-primary/25"
+        >
+          <Icon name="bolt" size={13} /> Plan with Aura+
+        </button>
+        <button
+          onClick={() => navigate('/customer/events/new')}
+          className="hidden lg:flex mt-2 mx-1 items-center justify-center gap-1.5 rounded-xl border border-primary/40 text-primary text-xs font-bold py-2.5 hover:bg-primary-soft transition"
+        >
+          <Icon name="edit" size={13} /> Fill details manually
+        </button>
+
         <div className="px-2 mt-4 lg:block hidden">
           <button
             onClick={toggleTheme}
@@ -231,7 +153,7 @@ export default function CustomerPortal() {
           )}
           <div className="hidden lg:block flex-1 min-w-0">
             <div className="text-xs font-bold truncate">{firstName}</div>
-            <div className="text-[9px] text-muted truncate">Customer</div>
+            <div className="text-[9px] text-muted truncate">{user?.email || 'Customer'}</div>
           </div>
           <button onClick={logout} title="Sign out" className="hidden lg:grid w-7 h-7 place-items-center rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition">
             <Icon name="logout" size={15} />
@@ -242,57 +164,71 @@ export default function CustomerPortal() {
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
-        {tab !== 'home' && (
-          <header className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shrink-0">
-            <LogoWord size="text-base" />
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="Profile" className="ml-auto w-8 h-8 rounded-full object-cover border border-gray-200" />
-            ) : (
-              <div className="ml-auto w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold">
-                {firstName[0]?.toUpperCase()}
-              </div>
-            )}
-          </header>
-        )}
+        <header className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shrink-0">
+          <LogoWord size="text-base" />
+          <button onClick={() => navigate('/customer/updates')} className="ml-auto text-muted relative" aria-label="Updates">
+            <Icon name="bell" size={18} />
+            <span className="absolute -top-1.5 -right-2"><Badge n={unread} /></span>
+          </button>
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="Profile" className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold">
+              {firstName[0]?.toUpperCase()}
+            </div>
+          )}
+        </header>
 
         {tab === 'aura' ? (
-          <main className="flex-1 min-h-0 flex flex-col">
-            <AuraChat
-              firstName={firstName}
-              initialIntent={location.state?.intent}
-              onEventCreated={() => {
-                setActiveEvent(0);
-                setTab('events');
-              }}
-            />
+          <main className="flex-1 min-h-0 flex flex-col pb-16 md:pb-0">
+            <AuraChat firstName={firstName} />
           </main>
         ) : (
           <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-24 md:pb-6">
-            {renderTab()}
+            <Routes>
+              <Route index element={<HomePage firstName={firstName} />} />
+              <Route path="events" element={<EventsPage />} />
+              <Route path="events/:id" element={<EventPage />} />
+              <Route path="events/:id/requirements" element={<EventPlanPage />} />
+              <Route path="events/:id/history" element={<EventHistoryPage />} />
+              <Route path="events/:id/services" element={<ServicesPage />} />
+              <Route path="events/:id/services/:serviceId" element={<ServiceDetailPage />} />
+              <Route path="events/:id/compare" element={<ComparePage />} />
+              <Route path="events/:id/quotes" element={<QuotesPage />} />
+              <Route path="events/:id/bookings" element={<BookingsPage />} />
+              <Route path="events/:id/event-day" element={<EventDayPage />} />
+              <Route path="events/:id/circle" element={<CirclePage />} />
+              <Route path="events/:id/budget" element={<BudgetPage />} />
+              <Route path="events/new" element={<ManualPlanPage />} />
+              <Route path="updates" element={<UpdatesPage onRead={refreshUnread} />} />
+              <Route path="me" element={<MePage user={user} logout={logout} />} />
+              <Route path="*" element={<Navigate to="/customer" replace />} />
+            </Routes>
           </main>
         )}
 
-        {/* Mobile bottom tab bar */}
+        {/* Mobile bottom tab bar with a raised centre Aura+ button */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 grid grid-cols-5 z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          {NAV.map((n) => {
-            const isCenter = n.key === 'aura';
-            return (
+          {NAV.map((n) =>
+            n.key === 'aura' ? (
+              <button key={n.key} onClick={() => navigate(n.to)} className="flex flex-col items-center -mt-5 text-[10px] font-semibold text-primary">
+                <span className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/30 border-4 border-white">
+                  <Icon name={n.icon} size={18} />
+                </span>
+                {n.label}
+              </button>
+            ) : (
               <button
                 key={n.key}
-                onClick={() => { setTab(n.key); if (n.key !== 'events') setActiveEvent(null); }}
-                className={`relative flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-bold transition ${tab === n.key && !isCenter ? 'text-primary' : 'text-muted'}`}
+                onClick={() => navigate(n.to)}
+                className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold transition ${tab === n.key ? 'text-primary' : 'text-muted'}`}
               >
-                {isCenter ? (
-                  <div className="absolute -top-6 w-[3.25rem] h-[3.25rem] rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 border-[5px] border-white z-30">
-                     <Icon name={n.icon} size={24} />
-                  </div>
-                ) : (
-                  <Icon name={n.icon} size={20} />
-                )}
-                {isCenter ? <span className="mt-8 text-primary">Ask</span> : <span>{n.label}</span>}
+                <Icon name={n.icon} size={18} />
+                {n.label}
+                {n.key === 'updates' && <span className="absolute top-1 left-1/2 ml-1.5"><Badge n={unread} /></span>}
               </button>
-            );
-          })}
+            )
+          )}
         </nav>
       </div>
     </div>
