@@ -46,7 +46,13 @@ function refreshCookieOptions() {
     sameSite: config.cookieSecure ? "none" : "lax",
     maxAge: config.refreshTtlDays * 24 * 60 * 60 * 1000,
     path: "/api/auth",
+    ...(config.cookieDomain ? { domain: config.cookieDomain } : {}),
   };
+}
+
+function clearRefreshCookie(res) {
+  const { maxAge, ...options } = refreshCookieOptions();
+  res.clearCookie(config.refreshCookieName, options);
 }
 
 async function createSession(user, req) {
@@ -728,13 +734,13 @@ router.post("/refresh", async (req, res, next) => {
       refreshTokenHash: hashRefreshToken(token),
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) {
-      res.clearCookie(config.refreshCookieName, { path: "/api/auth" });
+      clearRefreshCookie(res);
       return res.status(200).json({ ok: false, error: "SESSION_INVALID" });
     }
 
     const user = await ExternalUser.findById(session.user);
     if (!user || user.status !== "ACTIVE") {
-      res.clearCookie(config.refreshCookieName, { path: "/api/auth" });
+      clearRefreshCookie(res);
       return res
         .status(200)
         .json({ ok: false, error: "ACCOUNT_DISABLED_OR_MISSING" });
@@ -768,7 +774,7 @@ router.post("/logout", async (req, res, next) => {
         { $set: { revokedAt: new Date() } },
       );
     }
-    res.clearCookie(config.refreshCookieName, { path: "/api/auth" });
+    clearRefreshCookie(res);
     return res.json({ ok: true });
   } catch (err) {
     next(err);

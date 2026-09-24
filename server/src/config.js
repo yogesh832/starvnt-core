@@ -26,6 +26,7 @@ export const config = {
   port: Number(process.env.PORT || 4000),
   clientOrigins: parseOrigins(process.env.CLIENT_ORIGINS),
   cookieSecure,
+  cookieDomain: process.env.COOKIE_DOMAIN || "",
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS || 12),
 
   issuer: "starvnt",

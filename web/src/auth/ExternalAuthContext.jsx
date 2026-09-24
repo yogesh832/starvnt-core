@@ -9,10 +9,27 @@ export function ExternalAuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    externalApi
-      .refresh()
-      .then((data) => data && setUser(data.user))
-      .finally(() => setReady(true));
+    async function restoreSession() {
+      try {
+        if (externalApi.getToken()) {
+          const data = await externalApi.call("/auth/me");
+          if (data?.user) {
+            setUser(data.user);
+            return;
+          }
+        }
+
+        const data = await externalApi.refresh();
+        if (data?.user) setUser(data.user);
+      } catch {
+        externalApi.setToken(null);
+        setUser(null);
+      } finally {
+        setReady(true);
+      }
+    }
+
+    restoreSession();
   }, []);
 
   async function login(email, password) {

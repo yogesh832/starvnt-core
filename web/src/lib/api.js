@@ -3,12 +3,23 @@
  * context); refresh happens via HttpOnly cookie scoped to each domain's
  * auth path. On 401 we attempt exactly one refresh then retry once.
  */
-export function makeApi(base, refreshPath) {
+export function makeApi(base, refreshPath, options = {}) {
+  const storageKey = options.storageKey || "";
   let token = null;
   let refreshing = null;
 
+  if (storageKey && typeof window !== "undefined") {
+    token = window.localStorage.getItem(storageKey);
+  }
+
   const setToken = (t) => {
     token = t;
+    if (!storageKey || typeof window === "undefined") return;
+    if (t) {
+      window.localStorage.setItem(storageKey, t);
+    } else {
+      window.localStorage.removeItem(storageKey);
+    }
   };
 
   async function refresh() {
@@ -59,7 +70,7 @@ export function makeApi(base, refreshPath) {
 }
 
 /** Backend base URL — direct calls keep auth and OTP requests consistent. */
-const defaultProdUrl = "https://starvnt-core.onrender.com";
+const defaultProdUrl = "https://app.starvnt.com";
 const defaultDevUrl = "http://localhost:4000";
 const API_BASE = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/$/, "")
@@ -70,6 +81,7 @@ const API_BASE = import.meta.env.VITE_API_URL
 export const externalApi = makeApi(
   `${API_BASE}/api`,
   `${API_BASE}/api/auth/refresh`,
+  { storageKey: "starvnt_external_access_token" },
 );
 export const adminApi = makeApi(
   `${API_BASE}/api/admin`,
