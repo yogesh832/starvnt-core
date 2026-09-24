@@ -207,9 +207,16 @@ router.post("/login", authLimiter, async (req, res, next) => {
 
     const user = await ExternalUser.findOne({
       email: String(email).toLowerCase(),
-    }).select("+passwordHash");
+    }).select("+passwordHash authProvider");
     // Uniform failure — no account enumeration.
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    if (!user) {
+      return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+    }
+    if (typeof user.passwordHash === "string" && user.passwordHash) {
+      if (!(await verifyPassword(password, user.passwordHash))) {
+        return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+      }
+    } else {
       return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     }
     if (user.status !== "ACTIVE") {
@@ -399,7 +406,7 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
       });
     }
 
-    const result = await sendEmailOtp(normalizedEmail);
+    const result = await sendEmailOtp(normalizedEmail, intent);
     return res.json({
       ok: true,
       email: result.email,
@@ -410,14 +417,23 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
     if (err.message === "INVALID_EMAIL_ADDRESS") {
       return res.status(400).json({ error: "INVALID_EMAIL_ADDRESS" });
     }
-    if (err.message === "SMTP_EMAIL_NOT_CONFIGURED") {
-      return res.status(503).json({ error: "SMTP_EMAIL_NOT_CONFIGURED" });
+    if (
+      err.message === "EMAIL_OTP_NOT_CONFIGURED" ||
+      err.message === "SMTP_EMAIL_NOT_CONFIGURED"
+    ) {
+      return res.status(503).json({ error: "EMAIL_OTP_NOT_CONFIGURED" });
     }
     if (err.message === "SMTP_EMAIL_AUTH_FAILED") {
       return res.status(502).json({ error: "SMTP_EMAIL_AUTH_FAILED" });
     }
-    if (err.message.startsWith("SMTP_EMAIL_SEND_FAILED")) {
-      return res.status(502).json({ error: "SMTP_EMAIL_SEND_FAILED" });
+    if (err.message.startsWith("RESEND_EMAIL_SEND_FAILED")) {
+      return res.status(502).json({ error: "RESEND_EMAIL_SEND_FAILED" });
+    }
+    if (
+      err.message.startsWith("EMAIL_OTP_SEND_FAILED") ||
+      err.message.startsWith("SMTP_EMAIL_SEND_FAILED")
+    ) {
+      return res.status(502).json({ error: "EMAIL_OTP_SEND_FAILED" });
     }
     next(err);
   }

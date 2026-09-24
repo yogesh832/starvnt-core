@@ -74,9 +74,9 @@ export const config = {
   ),
   emailFrom: process.env.EMAIL_FROM || process.env.EMAIL_SERVER_USER || "",
 
-  // ── Resend Email OTP (legacy configuration) ──
-  resendApiKey: process.env.RESEND_API_KEY || "",
-  resendSenderEmail: process.env.RESEND_SENDER_EMAIL || "noreply@starvnt.com",
+  // ── Resend Email OTP ──
+  resendApiKey: process.env.RESEND_API_KEY || process.env.RESEND_KEY || "",
+  resendSenderEmail: process.env.RESEND_SENDER_EMAIL || "no-reply@starvnt.com",
 
   // ── Production keep-alive for Render free instances ──
   keepAliveUrl:

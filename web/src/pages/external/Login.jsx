@@ -213,6 +213,14 @@ export default function ExternalLogin() {
           "No account found with this email. Please create an account first.",
         EMAIL_LOGIN_NOT_AVAILABLE:
           "This email may be linked with Mobile OTP or Google. Please try Mobile or Google login.",
+        EMAIL_OTP_NOT_CONFIGURED:
+          "Email OTP is not configured yet. Please contact support.",
+        RESEND_EMAIL_SEND_FAILED:
+          "Email delivery failed. Please check the verified Resend domain and try again.",
+        EMAIL_OTP_SEND_FAILED:
+          "Email delivery failed. Please try again in a moment.",
+        SMTP_EMAIL_AUTH_FAILED:
+          "Email delivery login failed. Please check the mail provider settings.",
       };
       setError(
         map[err.data?.error] ||
@@ -1215,6 +1223,8 @@ export default function ExternalLogin() {
                       setMode(mode === "login" ? "register" : "login");
                       setError("");
                       setOtpSent(false);
+                      setEmailOtpSent(false);
+                      setEmailOtpVerified(false);
                     }}
                     className="text-primary hover:underline font-bold cursor-pointer"
                   >
