@@ -7,6 +7,9 @@ export function hashPassword(plain) {
 }
 
 export function verifyPassword(plain, hash) {
+  if (typeof plain !== 'string' || typeof hash !== 'string' || !hash) {
+    return false;
+  }
   return bcrypt.compare(plain, hash);
 }
 

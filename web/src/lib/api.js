@@ -3,18 +3,29 @@
  * context); refresh happens via HttpOnly cookie scoped to each domain's
  * auth path. On 401 we attempt exactly one refresh then retry once.
  */
-export function makeApi(base, refreshPath) {
+export function makeApi(base, refreshPath, options = {}) {
+  const storageKey = options.storageKey || "";
   let token = null;
   let refreshing = null;
 
+  if (storageKey && typeof window !== "undefined") {
+    token = window.localStorage.getItem(storageKey);
+  }
+
   const setToken = (t) => {
     token = t;
+    if (!storageKey || typeof window === "undefined") return;
+    if (t) {
+      window.localStorage.setItem(storageKey, t);
+    } else {
+      window.localStorage.removeItem(storageKey);
+    }
   };
 
   async function refresh() {
     refreshing =
       refreshing ||
-      fetch(refreshPath, { method: 'POST', credentials: 'include' })
+      fetch(refreshPath, { method: "POST", credentials: "include" })
         .then(async (r) => {
           if (!r.ok) return null;
           const data = await r.json();
@@ -29,14 +40,15 @@ export function makeApi(base, refreshPath) {
     return refreshing;
   }
 
-  async function raw(path, { method = 'GET', body, headers = {} } = {}, retry = true) {
+  /** Low-level request: supports JSON, FormData, Blob and string bodies; returns the Response. */
+  async function raw(path, { method = "GET", body, headers = {} } = {}, retry = true) {
     const hasBody = body !== undefined && body !== null;
-    const isJsonBody = hasBody && !(body instanceof FormData) && !(body instanceof Blob) && typeof body !== 'string';
+    const isJsonBody = hasBody && !(body instanceof FormData) && !(body instanceof Blob) && typeof body !== "string";
     const res = await fetch(`${base}${path}`, {
       method,
-      credentials: 'include',
+      credentials: "include",
       headers: {
-        ...(isJsonBody ? { 'Content-Type': 'application/json' } : {}),
+        ...(isJsonBody ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
@@ -58,20 +70,29 @@ export function makeApi(base, refreshPath) {
     return res;
   }
 
-  async function call(path, { method = 'GET', body } = {}) {
+  async function call(path, { method = "GET", body } = {}) {
     const res = await raw(path, { method, body });
-    const data = await res.json().catch(() => ({}));
-    return data;
+    return res.json().catch(() => ({}));
   }
 
   return { call, raw, refresh, setToken, getToken: () => token };
 }
 
-/** Backend base URL — direct calls to the server in prod, dev-proxy in local. */
-const defaultProdUrl = 'https://starvnt-core.onrender.com';
-const API_BASE = import.meta.env.VITE_API_URL 
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : (import.meta.env.MODE === 'production' ? defaultProdUrl : '');
+/** Backend base URL — direct calls keep auth and OTP requests consistent. */
+const defaultProdUrl = "https://app.starvnt.com";
+const defaultDevUrl = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace(/\/$/, "")
+  : import.meta.env.MODE === "production"
+    ? defaultProdUrl
+    : defaultDevUrl;
 
-export const externalApi = makeApi(`${API_BASE}/api`, `${API_BASE}/api/auth/refresh`);
-export const adminApi = makeApi(`${API_BASE}/api/admin`, `${API_BASE}/api/admin/auth/refresh`);
+export const externalApi = makeApi(
+  `${API_BASE}/api`,
+  `${API_BASE}/api/auth/refresh`,
+  { storageKey: "starvnt_external_access_token" },
+);
+export const adminApi = makeApi(
+  `${API_BASE}/api/admin`,
+  `${API_BASE}/api/admin/auth/refresh`,
+);

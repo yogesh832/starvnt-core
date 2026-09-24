@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import Icon from '../../../components/Icon.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import { externalApi } from '../../../lib/api.js';
@@ -419,7 +420,7 @@ function ScheduledEventsCard({ bookings = [] }) {
     <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-extrabold text-sm text-navy">{bookings.length} Scheduled Events</h3>
-        <a href="/vendor/bookings" className="text-[11px] font-bold text-primary hover:underline">View all</a>
+        <Link to="/vendor/bookings" className="text-[11px] font-bold text-primary hover:underline">View all</Link>
       </div>
       <ul className="space-y-2.5 text-xs">
         {bookings.slice(0, 3).map((b, idx) => (
@@ -1065,20 +1066,20 @@ export default function DashboardHome({ business = 'Your Brand' }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-            <a
-              href="/vendor/profile"
+            <Link
+              to="/vendor/profile"
               className="px-3 py-2 rounded-xl bg-lavender hover:bg-gray-200/70 text-navy text-xs font-bold transition flex items-center gap-1.5 shrink-0"
             >
               <Icon name="profile" size={14} />
               <span>Storefront</span>
-            </a>
-            <a
-              href="/vendor/availability"
+            </Link>
+            <Link
+              to="/vendor/availability"
               className="px-3 py-2 rounded-xl bg-lavender hover:bg-gray-200/70 text-navy text-xs font-bold transition flex items-center gap-1.5 shrink-0"
             >
               <Icon name="calendar" size={14} />
               <span>Calendar</span>
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -1125,8 +1126,8 @@ export default function DashboardHome({ business = 'Your Brand' }) {
 
               <div className="flex items-center gap-2 self-start lg:self-center shrink-0 flex-wrap">
                 {!is100Percent && (
-                  <a
-                    href={
+                  <Link
+                    to={
                       !checklist.profile
                         ? '/vendor/profile'
                         : !checklist.services
@@ -1141,7 +1142,7 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                   >
                     <Icon name="edit" size={13} />
                     <span>Complete Details</span>
-                  </a>
+                  </Link>
                 )}
                 {!is100Percent && (
                   <button
@@ -1219,15 +1220,15 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
-                    <a
-                      href="/vendor/profile"
+                    <Link
+                      to="/vendor/profile"
                       className={`text-xs font-bold hover:underline inline-flex items-center gap-1 max-w-full truncate ${
                         checklist.profile ? 'text-emerald-700' : 'text-primary'
                       }`}
                     >
                       <span className="truncate">{checklist.profile ? 'Edit Profile' : 'Add Details'}</span>
                       <Icon name="chevronRight" size={12} className="shrink-0" />
-                    </a>
+                    </Link>
                   </div>
                 </div>
 
@@ -1253,15 +1254,15 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
-                    <a
-                      href="/vendor/services"
+                    <Link
+                      to="/vendor/services"
                       className={`text-xs font-bold hover:underline inline-flex items-center gap-1 max-w-full truncate ${
                         checklist.services ? 'text-emerald-700' : 'text-primary'
                       }`}
                     >
                       <span className="truncate">{checklist.services ? 'Manage Services' : 'Add Service'}</span>
                       <Icon name="chevronRight" size={12} className="shrink-0" />
-                    </a>
+                    </Link>
                   </div>
                 </div>
 
@@ -1287,15 +1288,15 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
-                    <a
-                      href={checklist.capabilities ? "/vendor/services" : "/vendor/services?action=gear"}
+                    <Link
+                      to={checklist.capabilities ? "/vendor/services" : "/vendor/services?action=gear"}
                       className={`text-xs font-bold hover:underline inline-flex items-center gap-1 max-w-full truncate ${
                         checklist.capabilities ? 'text-emerald-700' : 'text-primary'
                       }`}
                     >
                       <span className="truncate">{checklist.capabilities ? 'View Gear' : 'Configure Gear'}</span>
                       <Icon name="chevronRight" size={12} className="shrink-0" />
-                    </a>
+                    </Link>
                   </div>
                 </div>
 
@@ -1321,15 +1322,15 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
-                    <a
-                      href="/vendor/services?action=coverage"
+                    <Link
+                      to="/vendor/services?action=coverage"
                       className={`text-xs font-bold hover:underline inline-flex items-center gap-1 max-w-full truncate ${
                         checklist.coverage ? 'text-emerald-700' : 'text-primary'
                       }`}
                     >
                       <span className="truncate">{checklist.coverage ? 'Coverage & Transit' : 'Set Radius & Transit'}</span>
                       <Icon name="chevronRight" size={12} className="shrink-0" />
-                    </a>
+                    </Link>
                   </div>
                 </div>
 
@@ -1355,15 +1356,15 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
-                    <a
-                      href="/vendor/portfolio"
+                    <Link
+                      to="/vendor/portfolio"
                       className={`text-xs font-bold hover:underline inline-flex items-center gap-1 max-w-full truncate ${
                         checklist.portfolio ? 'text-emerald-700' : 'text-primary'
                       }`}
                     >
                       <span className="truncate">{checklist.portfolio ? 'View Portfolio' : 'Add Project'}</span>
                       <Icon name="chevronRight" size={12} className="shrink-0" />
-                    </a>
+                    </Link>
                   </div>
                 </div>
 
@@ -1412,9 +1413,9 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     </span>
                   )}
                 </div>
-                <a href="/vendor/enquiries" className="text-xs font-bold text-primary hover:underline">
+                <Link to="/vendor/enquiries" className="text-xs font-bold text-primary hover:underline">
                   View all leads →
-                </a>
+                </Link>
               </div>
 
               <div className="space-y-3">
@@ -1463,12 +1464,12 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                         <p className="text-[11px] text-amber-800 leading-relaxed">
                           STARVNT matching engine activates when your brand reaches 100% profile readiness. Complete your 5 onboarding steps to start receiving direct client requests.
                         </p>
-                        <a
-                          href={!checklist.profile ? '/vendor/profile' : '/vendor/services'}
+                        <Link
+                          to={!checklist.profile ? '/vendor/profile' : '/vendor/services'}
                           className="inline-block text-xs font-bold text-primary underline"
                         >
                           Finish onboarding setup →
-                        </a>
+                        </Link>
                       </div>
                     ) : (
                       <div className="space-y-1.5">
@@ -1502,9 +1503,9 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     </span>
                   )}
                 </div>
-                <a href="/vendor/bookings" className="text-xs font-bold text-primary hover:underline">
+                <Link to="/vendor/bookings" className="text-xs font-bold text-primary hover:underline">
                   View all bookings →
-                </a>
+                </Link>
               </div>
 
               <div className="space-y-3">
@@ -1524,9 +1525,9 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                       <div className="text-[11px] text-muted truncate mt-0.5">{b.meta}</div>
                       <div className="mt-1.5 flex items-center justify-between">
                         <span className="text-[10px] font-bold text-emerald-600">Core Escrow Secured</span>
-                        <a href="/vendor/bookings" className="text-xs font-bold text-primary hover:underline">
+                        <Link to="/vendor/bookings" className="text-xs font-bold text-primary hover:underline">
                           View Details →
-                        </a>
+                        </Link>
                       </div>
                     </div>
                   </div>
@@ -1563,9 +1564,9 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                 </span>
               )}
             </div>
-            <a href="/vendor/quotes" className="text-xs font-bold text-primary hover:underline">
+            <Link to="/vendor/quotes" className="text-xs font-bold text-primary hover:underline">
               View all quotes →
-            </a>
+            </Link>
           </div>
 
           <div className="overflow-x-auto w-full">
@@ -1597,9 +1598,9 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                           Submit Quote
                         </button>
                       ) : (
-                        <a href="/vendor/quotes" className="text-[11px] font-semibold text-primary hover:underline">
+                        <Link to="/vendor/quotes" className="text-[11px] font-semibold text-primary hover:underline">
                           {q.action}
-                        </a>
+                        </Link>
                       )}
                     </td>
                   </tr>
@@ -1631,9 +1632,9 @@ export default function DashboardHome({ business = 'Your Brand' }) {
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             {quickActions.map((a) => (
-              <a
+              <Link
                 key={a.label}
-                href={a.to}
+                to={a.to}
                 className="rounded-2xl border border-gray-100 hover:border-primary/40 hover:bg-lavender/50 transition p-3 text-center relative group block"
               >
                 <div className={`w-9 h-9 mx-auto rounded-xl ${a.bg} grid place-items-center transition group-hover:scale-105`}>
@@ -1645,7 +1646,7 @@ export default function DashboardHome({ business = 'Your Brand' }) {
                     {a.badge}
                   </span>
                 )}
-              </a>
+              </Link>
             ))}
           </div>
         </div>

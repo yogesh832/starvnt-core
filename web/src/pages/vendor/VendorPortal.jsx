@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { NavLink, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import Icon from '../../components/Icon.jsx';
-import { LogoWord } from '../../components/ui.jsx';
+import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import { externalApi } from '../../lib/api.js';
 import DashboardHome from './pages/DashboardHome.jsx';
 import Enquiries from './pages/Enquiries.jsx';
@@ -160,7 +160,7 @@ export default function VendorPortal() {
           <div className={`${isSidebarMini ? 'lg:hidden' : 'block'}`}>
             <LogoWord sub="Vendor OS" />
           </div>
-          {isSidebarMini && <div className="hidden lg:grid w-8 h-8 rounded-xl bg-primary text-white place-items-center font-bold text-sm shrink-0">V</div>}
+          {isSidebarMini && <div className="hidden lg:grid place-items-center shrink-0"><LogoMark size={34} /></div>}
           <button
             onClick={() => setNavOpen(false)}
             className="lg:hidden w-8 h-8 rounded-xl text-muted hover:bg-lavender grid place-items-center transition"
