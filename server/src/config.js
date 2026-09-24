@@ -7,6 +7,12 @@ function parseOrigins(value) {
     .filter(Boolean);
 }
 
+const isProduction = process.env.NODE_ENV === "production";
+const cookieSecure =
+  process.env.COOKIE_SECURE === undefined
+    ? isProduction
+    : String(process.env.COOKIE_SECURE).toLowerCase() === "true";
+
 /**
  * ONE server, TWO identity domains.
  *
@@ -19,7 +25,7 @@ function parseOrigins(value) {
 export const config = {
   port: Number(process.env.PORT || 4000),
   clientOrigins: parseOrigins(process.env.CLIENT_ORIGINS),
-  cookieSecure: String(process.env.COOKIE_SECURE).toLowerCase() === "true",
+  cookieSecure,
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS || 12),
 
   issuer: "starvnt",

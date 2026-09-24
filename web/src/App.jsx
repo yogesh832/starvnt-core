@@ -24,7 +24,7 @@ function RequireExternal({ type, children }) {
   const { user, ready } = useExternalAuth();
   const loc = useLocation();
   if (!ready) return <FullScreenLoader />;
-  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname)}`} replace />;
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} replace />;
   if (type && user.accountType !== type) {
     return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
   }

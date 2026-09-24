@@ -36,6 +36,7 @@ export default function ExternalLogin() {
   const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const nextPath = params.get("next") || "";
 
   const isRegisterPath =
     window.location.pathname === "/signup" ||
@@ -70,13 +71,32 @@ export default function ExternalLogin() {
   const [busy, setBusy] = useState(false);
   const googleBtnRef = useRef(null);
 
+  function getDefaultPath(type) {
+    return type === "VENDOR" ? "/vendor" : "/customer";
+  }
+
+  function isRouteWithin(path, base) {
+    return path === base || path.startsWith(`${base}/`) || path.startsWith(`${base}?`);
+  }
+
+  function getSafeNextPath(type) {
+    if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
+      return getDefaultPath(type);
+    }
+    if (type === "VENDOR" && isRouteWithin(nextPath, "/vendor")) return nextPath;
+    if (type === "CUSTOMER" && isRouteWithin(nextPath, "/customer")) return nextPath;
+    return getDefaultPath(type);
+  }
+
+  function redirectAfterAuth(authUser) {
+    navigate(getSafeNextPath(authUser.accountType), { replace: true });
+  }
+
   useEffect(() => {
     if (user) {
-      navigate(user.accountType === "VENDOR" ? "/vendor" : "/customer", {
-        replace: true,
-      });
+      redirectAfterAuth(user);
     }
-  }, [user, navigate]);
+  }, [user, nextPath]);
 
   // OTP Countdown Timer
   useEffect(() => {
@@ -181,9 +201,7 @@ export default function ExternalLogin() {
               category: accountType === "VENDOR" ? form.category : undefined,
               city: accountType === "VENDOR" ? form.city : undefined,
             });
-      navigate(u.accountType === "VENDOR" ? "/vendor" : "/customer", {
-        replace: true,
-      });
+      redirectAfterAuth(u);
     } catch (err) {
       const map = {
         INVALID_CREDENTIALS: "Incorrect email or password.",
@@ -258,9 +276,7 @@ export default function ExternalLogin() {
             ? form.city.trim()
             : undefined,
       });
-      navigate(u.accountType === "VENDOR" ? "/vendor" : "/customer", {
-        replace: true,
-      });
+      redirectAfterAuth(u);
     } catch (err) {
       setError(err.data?.error || err.message || "Google sign-in failed.");
     } finally {
@@ -335,9 +351,7 @@ export default function ExternalLogin() {
               category: form.category?.trim() || undefined,
               city: form.city?.trim() || undefined,
             });
-            navigate(u.accountType === "VENDOR" ? "/vendor" : "/customer", {
-              replace: true,
-            });
+            redirectAfterAuth(u);
           } catch (err) {
             setError(
               err.data?.error || err.message || "OTP verification failed.",
@@ -398,9 +412,7 @@ export default function ExternalLogin() {
             ? form.city.trim()
             : undefined,
       });
-      navigate(u.accountType === "VENDOR" ? "/vendor" : "/customer", {
-        replace: true,
-      });
+      redirectAfterAuth(u);
     } catch (err) {
       const map = {
         INVALID_OTP: "Invalid OTP code. Please check and retry.",
