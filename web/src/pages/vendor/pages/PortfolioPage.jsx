@@ -466,6 +466,8 @@ export default function PortfolioPage() {
   const [activeTab, setActiveTab] = useState('PROJECTS'); // 'PROJECTS' | 'ALL_MEDIA'
   const [filter, setFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
   // New Project Form Modal State
@@ -532,18 +534,32 @@ export default function PortfolioPage() {
     }
   }
 
-  // Load portfolio data cleanly without injecting fake sample projects for new vendors
+  const loadMediaLibrary = useCallback(async () => {
+    if (mediaLoading) return;
+    setMediaLoading(true);
+    try {
+      const mediaRes = await externalApi.call('/vendor/portfolio');
+      if (mediaRes?.ok && Array.isArray(mediaRes.items)) {
+        setItems(mediaRes.items);
+        setMediaLoaded(true);
+      }
+    } catch (err) {
+      console.warn('[PortfolioPage] Failed to load media library:', err.message);
+    } finally {
+      setMediaLoading(false);
+    }
+  }, [mediaLoading]);
+
+  // Load the fast project summary first. The full media library is fetched only when opened.
   const loadPortfolioData = useCallback(async () => {
     setLoading(true);
     try {
-      const [mediaResult, projResult, profileResult, actResult] = await Promise.allSettled([
-        externalApi.call('/vendor/portfolio'),
+      const [projResult, profileResult, actResult] = await Promise.allSettled([
         externalApi.call('/vendor/portfolio/projects'),
         externalApi.call('/vendor/profile'),
         externalApi.call('/vendor/activation-status'),
       ]);
 
-      const mediaRes = mediaResult.status === 'fulfilled' ? mediaResult.value : null;
       const projRes = projResult.status === 'fulfilled' ? projResult.value : null;
       const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
       const actRes = actResult.status === 'fulfilled' ? actResult.value : null;
@@ -555,10 +571,6 @@ export default function PortfolioPage() {
 
       if (actRes?.ok && actRes.status) {
         setActivation(actRes.status);
-      }
-
-      if (mediaRes?.ok && Array.isArray(mediaRes.items)) {
-        setItems(mediaRes.items);
       }
 
       if (projRes?.ok && Array.isArray(projRes.projects)) {
@@ -574,6 +586,12 @@ export default function PortfolioPage() {
   useEffect(() => {
     loadPortfolioData();
   }, [loadPortfolioData]);
+
+  useEffect(() => {
+    if (activeTab === 'ALL_MEDIA' && !mediaLoaded) {
+      loadMediaLibrary();
+    }
+  }, [activeTab, mediaLoaded, loadMediaLibrary]);
 
   // Open modal and initialize trade-appropriate defaults
   function handleOpenCreateModal() {
@@ -1055,7 +1073,7 @@ export default function PortfolioPage() {
             }`}
           >
             <Icon name="image" size={15} />
-            <span>All Media Library ({items.length})</span>
+            <span>All Media Library{mediaLoaded ? ` (${items.length})` : ''}</span>
           </button>
         </div>
         <span className="text-xs text-muted font-medium hidden sm:inline">
@@ -1096,8 +1114,19 @@ export default function PortfolioPage() {
                       </span>
                     </div>
                     <div className="absolute top-3 right-3 flex items-center gap-1">
-                      <StatusChip status={p.status || 'PUBLISHED'} />
-                    </div>
+  <button
+    type="button"
+    onClick={(e) => {
+      e.stopPropagation();
+      handleDeleteProject(p.projectName);
+    }}
+    className="w-6 h-6 rounded-md bg-black/40 hover:bg-red-600 text-white grid place-items-center backdrop-blur-sm transition"
+    title="Delete Project"
+  >
+    <Icon name="trash" size={12} />
+  </button>
+  <StatusChip status={p.status || 'PUBLISHED'} />
+</div>
 
                     {/* Multi-media counter pill */}
                     <div className="absolute bottom-10 left-3 flex items-center gap-2">
@@ -1178,6 +1207,11 @@ export default function PortfolioPage() {
       {/* TAB 2: ALL MEDIA FILES VIEW */}
       {activeTab === 'ALL_MEDIA' && (
         <div className="space-y-4">
+          {mediaLoading && (
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 text-xs font-bold text-muted shadow-xs">
+              Loading media library...
+            </div>
+          )}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
               {[
@@ -1289,7 +1323,7 @@ export default function PortfolioPage() {
             })}
           </div>
 
-          {filteredItems.length === 0 && !loading && (
+          {filteredItems.length === 0 && !loading && !mediaLoading && (
             <div className="text-center py-14 bg-white rounded-3xl border border-gray-100 p-8 space-y-4 shadow-xs">
               <div className="w-16 h-16 rounded-3xl bg-primary-soft text-primary grid place-items-center mx-auto shadow-2xs">
                 <Icon name="image" size={28} />

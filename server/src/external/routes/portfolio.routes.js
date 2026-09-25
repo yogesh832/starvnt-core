@@ -1,4 +1,6 @@
 import express from 'express';
+import multer from 'multer';
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 import { v2 as cloudinary } from 'cloudinary';
 import { requireExternalAuth, requireAccountType } from '../middleware/requireExternalAuth.js';
 import {
@@ -43,7 +45,7 @@ function compactMediaUrl(url, mediaType = 'IMAGE') {
 }
 
 // Auto-configure Cloudinary with provided credentials or env variables
-const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'ei8znuga';
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
 const apiSecret = process.env.CLOUDINARY_API_SECRET;
 const apiKey = process.env.CLOUDINARY_API_KEY;
 const isCloudinaryConfigured = Boolean(process.env.CLOUDINARY_URL || (cloudName && apiKey && apiSecret));
@@ -63,93 +65,63 @@ if (process.env.CLOUDINARY_URL) {
  * Upload helper that uploads to Cloudinary if fully keyed,
  * or returns high-performance CDN / data payload.
  */
-async function uploadMediaFile(vendorId, { file, filename, mediaType }) {
-  const isVideo =
-    mediaType === 'VIDEO' ||
-    (filename && /\.(mp4|mov|webm|avi|mkv)$/i.test(filename)) ||
-    (typeof file === 'string' && file.startsWith('data:video/'));
 
-  // Attempt Cloudinary upload if API key is provided
-  if (isCloudinaryConfigured) {
-    try {
-      const uploadResult = await cloudinary.uploader.upload(file, {
-        folder: `starvnt_vendors/${vendorId}`,
-        resource_type: isVideo ? 'video' : 'auto',
-        public_id: filename
-          ? `${Date.now()}_${filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_')}`
-          : undefined,
-      });
-
-      return {
-        url: uploadResult.secure_url,
-        thumbnailUrl:
-          uploadResult.resource_type === 'video'
-            ? uploadResult.secure_url.replace(/\.[^/.]+$/, '.jpg')
-            : uploadResult.secure_url,
-        provider: 'cloudinary',
-        publicId: uploadResult.public_id,
-        format: uploadResult.format,
-        bytes: uploadResult.bytes,
-        width: uploadResult.width,
-        height: uploadResult.height,
-        resourceType: uploadResult.resource_type === 'video' ? 'VIDEO' : 'IMAGE',
-        filename: filename || 'media_asset',
-      };
-    } catch (cErr) {
-      console.warn('[Media Upload] Cloud storage failed, falling back:', cErr.message);
-    }
-  }
-
-  // Fast direct CDN fallback
-  return {
-    url: file,
-    thumbnailUrl: isVideo ? `${file}-poster.jpg` : file,
-    provider: 'starvnt-inline-media',
-    format: filename ? filename.split('.').pop() : isVideo ? 'mp4' : 'jpg',
-    resourceType: isVideo ? 'VIDEO' : 'IMAGE',
-    filename: filename || 'media_asset',
-  };
-}
-
-/**
- * Direct Media Upload via Cloudinary CDN or high-performance local store.
- * Supports single file OR batch multiple files upload.
- */
-router.post('/vendor/portfolio/upload', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
+router.post('/vendor/portfolio/upload', requireExternalAuth, requireAccountType('VENDOR'), upload.single('file'), async (req, res, next) => {
   try {
     const vendorId = req.externalUser.vendorOrganization;
-    if (!vendorId) {
-      return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+    if (!vendorId) return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+
+    if (!isCloudinaryConfigured) {
+      return res.status(503).json({ error: 'CLOUDINARY_NOT_CONFIGURED', message: 'Cloudinary media storage is not configured.' });
     }
 
-    const { file, filename, mediaType, files } = req.body || {};
+    const fileBuffer = req.file ? req.file.buffer : null;
+    const originalName = req.file ? req.file.originalname : (req.body.filename || 'media_asset');
+    const b64Data = req.body.file;
+    const mediaType = req.body.mediaType || 'IMAGE';
 
-    // Batch multiple files upload
-    if (Array.isArray(files) && files.length > 0) {
-      const results = [];
-      for (const item of files) {
-        if (item && item.file) {
-          const uploaded = await uploadMediaFile(vendorId, item);
-          results.push(uploaded);
-        }
+    if (!fileBuffer && !b64Data) {
+       return res.status(400).json({ error: 'NO_FILE_PROVIDED' });
+    }
+
+    const isVideo = mediaType === 'VIDEO' || /\.(mp4|mov|webm|avi|mkv)$/i.test(originalName) || (b64Data && b64Data.startsWith('data:video/'));
+    const resourceType = isVideo ? 'video' : 'auto';
+    const publicId = `${Date.now()}_${originalName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+    try {
+      let uploadResult;
+      if (fileBuffer) {
+         uploadResult = await new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+               { folder: `starvnt_vendors/${vendorId}`, resource_type: resourceType, public_id: publicId },
+               (error, result) => { if (error) reject(error); else resolve(result); }
+            );
+            stream.end(fileBuffer);
+         });
+      } else {
+         uploadResult = await cloudinary.uploader.upload(b64Data, {
+            folder: `starvnt_vendors/${vendorId}`,
+            resource_type: resourceType,
+            public_id: publicId
+         });
       }
+
+      const url = uploadResult.secure_url;
+      const thumb = uploadResult.resource_type === 'video' ? url.replace(/\.[^/.]+$/, '.jpg') : url;
+
       return res.status(201).json({
         ok: true,
-        count: results.length,
-        files: results,
+        url,
+        thumbnailUrl: thumb,
+        provider: 'cloudinary',
+        publicId: uploadResult.public_id,
+        resourceType: uploadResult.resource_type === 'video' ? 'VIDEO' : 'IMAGE',
+        filename: originalName,
       });
+    } catch (err) {
+      console.warn('[Media Upload] Cloud storage failed:', err.message || err);
+      return res.status(502).json({ error: 'MEDIA_UPLOAD_FAILED', message: err.message || 'Unknown error' });
     }
-
-    // Single file upload
-    if (!file) {
-      return res.status(400).json({ error: 'FILE_DATA_REQUIRED' });
-    }
-
-    const singleRes = await uploadMediaFile(vendorId, { file, filename, mediaType });
-    return res.status(201).json({
-      ok: true,
-      ...singleRes,
-    });
   } catch (err) {
     next(err);
   }

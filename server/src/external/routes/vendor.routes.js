@@ -111,11 +111,10 @@ router.put('/profile/picture', async (req, res, next) => {
         });
         profilePicUrl = uploadResult.secure_url;
       } catch (cErr) {
-        console.warn('[Cloudinary] Profile pic upload failed, using data URL:', cErr.message);
-      }
-    }
-
-    req.vendor.profilePicUrl = profilePicUrl;
+        console.warn('[Cloudinary] Profile pic upload failed, ', cErr.message);
+return res.status(502).json({ error: 'MEDIA_UPLOAD_FAILED' });
+} } else if (image) { return res.status(503).json({ error: 'CLOUDINARY_NOT_CONFIGURED' }); }
+req.vendor.profilePicUrl = profilePicUrl;
     await req.vendor.save();
     res.json({ ok: true, profilePicUrl });
   } catch (err) {
