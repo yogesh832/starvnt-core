@@ -13,6 +13,7 @@ export function ServicesPage() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [deletingServiceId, setDeletingServiceId] = useState(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Photography');
   const [basePrice, setBasePrice] = useState(48000);
@@ -163,6 +164,29 @@ export function ServicesPage() {
       await loadServices();
     } catch (err) {
       alert(`Could not create service: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteService(service) {
+    const serviceId = service?._id;
+    if (!serviceId || deletingServiceId) return;
+
+    const label = service?.name ? `"${service.name}"` : 'this service';
+    const confirmed = window.confirm(
+      `Delete ${label}? This will also remove its gear/capability and coverage setup.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingServiceId(serviceId);
+      await externalApi.call(`/vendor/services/${serviceId}`, {
+        method: 'DELETE',
+      });
+      await loadServices();
+    } catch (err) {
+      alert(`Could not delete service: ${err.message}`);
+    } finally {
+      setDeletingServiceId(null);
     }
   }
 
@@ -488,6 +512,16 @@ export function ServicesPage() {
                   >
                     <Icon name="mapPin" size={12} />
                     <span>{s.coverage?.length ? 'Edit Transit' : 'Transit (Step 4)'}</span>
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteService(s)}
+                    disabled={deletingServiceId === s._id}
+                    className="font-bold text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                  >
+                    <Icon name="trash" size={12} />
+                    <span>{deletingServiceId === s._id ? 'Deleting...' : 'Delete'}</span>
                   </button>
                 </div>
               </div>

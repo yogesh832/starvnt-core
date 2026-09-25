@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test --test-concurrency=1",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
     "seed": "node scripts/seed-super-admin.js",
-    "seed:vendor": "node scripts/seed-vendor.js"
+    "seed:vendor": "node scripts/seed-vendor.js",
+    "seed:customer-demo": "node scripts/seed-customer-demo.js"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
@@ -23,7 +24,9 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
-    "openai": "^7.21.0"
+    "nodemailer": "^10.0.10",
+    "openai": "^7.21.0",
+    "resend": "^6.28.1"
   },
   "devDependencies": {
     "mongodb-memory-server": "^10.1.3",

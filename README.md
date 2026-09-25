@@ -55,6 +55,62 @@ npm test
 Sign in at `http://localhost:5173/admin/login` with `SUPER_ADMIN_EMAIL` /
 `SUPER_ADMIN_PASSWORD`, then create regular admins from **Users & Access**.
 
+## Customer App + Aura+
+
+Code: `server/src/customer/` (routes → controllers → services → repositories → MongoDB)
+and `web/src/pages/customer/`. Customer data lives in `customer_*` collections of the
+external database; Vendor OS and Admin collections are only read, never written.
+
+Journey: TELL → UNDERSTAND → PLAN → DISCOVER → COMPARE → DECIDE → RESERVE → PAY →
+BOOK → CONNECT (Event Circle) → EXPERIENCE (event day) → COMPLETE → REMEMBER.
+
+**Rules that hold everywhere**
+- The customer decides. Aura+ understands and recommends; it can never select, quote,
+  reserve, pay, verify, confirm or complete anything (see `aura/coreClient.js`).
+- A reservation (48 h hold) is not a booking. The browser callback only moves a payment
+  to *processing*; only a signed Razorpay webhook or ops verification makes it
+  *verified*. A booking is confirmed only if the payment is verified **and** the hold is
+  live **and** the date isn't taken — otherwise it waits *under review*.
+- No fake data: options come from commercially active Vendor OS vendors plus clearly
+  labelled demo listings (development only). No rating without reviews, availability is
+  "not confirmed" unless a vendor blockout/booking says otherwise.
+- Another customer's event/quote/booking returns 404. Nothing is ever deleted.
+
+**Setup** (Hinglish: `.env` edit karne ke baad server restart karein)
+
+| `server/.env` | Needed for |
+|---|---|
+| `GEMINI_API_KEY` (+ optional `GEMINI_MODEL`, default `gemini-3.5-flash-lite`) | Aura+ |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` (test mode) | "Pay" (otherwise 503) |
+| `RAZORPAY_WEBHOOK_SECRET` | verifying payments via webhook |
+| `INTERNAL_API_KEY` | ops / admin endpoints (`x-internal-key`) |
+
+```bash
+npm run seed:customer-demo   # 12 demo listings (dev only; safe to re-run; refuses in production)
+npm run dev && npm run dev:web
+```
+
+Razorpay webhook (test mode): Dashboard → Webhooks → `https://<tunnel>/api/webhooks/razorpay`,
+events `payment.authorized`, `payment.captured`, `payment.failed`, `order.paid` (use ngrok
+locally). Without it, verify manually:
+
+```bash
+K=<INTERNAL_API_KEY>
+# verify a payment (bank transfer etc.)
+curl -X POST localhost:4000/api/internal/ops/payments/<paymentId>/verify -H "x-internal-key: $K" -H "Content-Type: application/json" -d '{"operator":"ravi"}'
+# event day: checked_in → started → completed (forward-only)
+curl -X POST localhost:4000/api/internal/ops/bookings/<bookingId>/execution -H "x-internal-key: $K" -H "Content-Type: application/json" -d '{"status":"checked_in","operator":"ravi"}'
+# vendor / team message in the Event Circle
+curl -X POST localhost:4000/api/internal/ops/events/<eventId>/messages -H "x-internal-key: $K" -H "Content-Type: application/json" -d '{"senderType":"team","body":"Hi!","operator":"ravi"}'
+# complete an event (refused while any booked service is incomplete)
+curl -X POST localhost:4000/api/internal/ops/events/<eventId>/complete -H "x-internal-key: $K" -H "Content-Type: application/json" -d '{"operator":"ravi"}'
+# simulate a vendor cancellation (plan item reopens)
+curl -X POST localhost:4000/api/internal/admin/simulate-vendor-cancellation -H "x-internal-key: $K" -H "Content-Type: application/json" -d '{"bookingId":"<bookingId>","operator":"ravi"}'
+```
+
+Tests (`npm test`, 49 tests) use an in-memory MongoDB, a scripted LLM and a faked
+Razorpay orders API — they never touch Atlas, Gemini or Razorpay.
+
 ## Layout
 
 ```
@@ -72,7 +128,7 @@ web/
 
 ## Roadmap hooks (env already in `.env`)
 
-- MSG91 OTP widget — phone verification on external auth
+- MSG91 direct OTP — phone verification on external auth with `MSG91_AUTHKEY` and an approved `MSG91_OTP_TEMPLATE_ID`
 - Google OAuth — "Continue with Google" buttons
 
 > Security note: the Google client secret was shared in chat — rotate it in

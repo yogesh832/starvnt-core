@@ -11,6 +11,7 @@ import transactionRoutes from './external/routes/transaction.routes.js';
 import portfolioRoutes from './external/routes/portfolio.routes.js';
 import aiRoutes from './external/routes/ai.routes.js';
 import { requireExternalAuth, requireAccountType } from './external/middleware/requireExternalAuth.js';
+import { customerRouter, auraRouter, internalRouter, webhookRouter } from './customer/routes/index.js';
 
 import adminAuthRoutes from './admin/routes/auth.routes.js';
 import adminUsersRoutes from './admin/routes/users.routes.js';
@@ -29,6 +30,8 @@ export function createApp() {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: config.clientOrigins, credentials: true }));
+  // Payment webhooks need the raw body for signature checks: before express.json().
+  app.use('/api/webhooks', webhookRouter);
   app.use(express.json({ limit: '25mb' }));
   app.use(express.urlencoded({ limit: '25mb', extended: true }));
   app.use(cookieParser());
@@ -47,6 +50,11 @@ export function createApp() {
   app.get('/api/vendor/me', requireExternalAuth, requireAccountType('VENDOR'), (req, res) => {
     res.json({ ok: true, user: req.externalUser.toSafeJSON() });
   });
+  // Customer App + Aura+ (events, plan, chat)
+  app.use('/api/customer', customerRouter);
+  app.use('/api/aura', auraRouter);
+  app.use('/api/internal', internalRouter);
+
   app.use('/api/vendor', vendorRoutes);
   app.use('/api/commercial', commercialRoutes);
   app.use('/api', transactionRoutes);

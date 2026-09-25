@@ -74,20 +74,7 @@ export default function AdminLogin() {
         >
           {/* Top: Logo */}
           <div className="relative">
-            <div className="flex items-center gap-2 text-white">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-white">
-                <path
-                  d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <div>
-                <div className="font-extrabold tracking-tight text-lg leading-tight">STARVNT</div>
-                <div className="text-[9px] text-white/80 leading-tight">Events. Simplified.</div>
-              </div>
-            </div>
+            <LogoWord light sub="Core Platform" />
           </div>
 
           {/* Center: Headings & Quote */}
