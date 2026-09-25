@@ -18,6 +18,9 @@ import adminPermissionsRoutes from './admin/routes/permissions.routes.js';
 import adminAuditRoutes from './admin/routes/audit.routes.js';
 import adminAutomationRoutes from './admin/routes/automation.routes.js';
 import adminOperationsRoutes from './admin/routes/operations.routes.js';
+import adminDisputesRoutes from './admin/routes/disputes.routes.js';
+import adminPolicyRoutes from './admin/routes/policy.routes.js';
+import adminExternalUsersRoutes from './admin/routes/external-users.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
 
 export function createApp() {
@@ -57,6 +60,9 @@ export function createApp() {
   app.use('/api/admin/audit', adminAuditRoutes);
   app.use('/api/admin/automation', adminAutomationRoutes);
   app.use('/api/admin/operations', adminOperationsRoutes);
+  app.use('/api/admin/disputes', adminDisputesRoutes);
+  app.use('/api/admin/policy', adminPolicyRoutes);
+  app.use('/api/admin/external-users', adminExternalUsersRoutes);
 
   // Admin probe — requires admin session AND analytics.read (SUPER_ADMIN bypass).
   app.get(

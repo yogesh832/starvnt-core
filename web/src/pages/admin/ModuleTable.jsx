@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { adminApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { StatusChip } from '../../components/ui.jsx';
 import EventWorkspace from './EventWorkspace.jsx';
@@ -9,72 +10,36 @@ import EventWorkspace from './EventWorkspace.jsx';
  * Set layout: search + add button, status tabs + filters, data table with
  * status chips, pagination. 
  * 
- *  data until business modules land.
+ * Uses dummy structure by default, but fetches real API data when available.
  */
 const MODULE_DATA = {
   customers: {
     title: 'Customers', add: '+ Add Customer',
     tabs: ['All', 'Active', 'Inactive'], filters: ['Event Type', 'Date Range'],
     columns: ['Name', 'Phone', 'Email', 'Events', 'Status'],
-    rows: [
-      ['Anil Verma', '+91 98765 43210', 'anil@example.com', '2', 'Active'],
-      ['Priya Sharma', '+91 91234 56789', 'priya@example.com', '1', 'Active'],
-      ['Rohan Mehta', '+91 98107 76455', 'rohan@example.com', '3', 'Active'],
-      ['Sneha Kapoor', '+91 98107 33445', 'sneha@example.com', '0', 'Inactive'],
-      ['Karan Malhotra', '+91 90210 34567', 'karan@example.com', '1', 'Active'],
-      ['Aditi Singh', '+91 90876 54321', 'aditi@example.com', '4', 'Active'],
-      ['Vikram Joshi', '+91 98761 23456', 'vikram@example.com', '1', 'Active'],
-      ['Neha Bansal', '+91 91234 99076', 'neha@example.com', '2', 'Active'],
-    ],
-    total: 234, pages: 30,
+    rows: [],
+    total: 0, pages: 1,
   },
   vendors: {
     title: 'Vendors', add: '+ Add Vendor',
     tabs: ['All', 'Verified', 'Pending', 'Rejected'], filters: ['Category', 'Location'],
-    columns: ['Name', 'Category', 'Location', 'Status'],
-    rows: [
-      ['Studio Pixel', 'Photography', 'Kolkata', 'Verified'],
-      ['Makeup by Riya', 'Makeup', 'Delhi', 'Verified'],
-      ['Royal Caterers', 'Catering', 'Kolkata', 'Pending'],
-      ['Elegance Events', 'Decoration', 'Delhi', 'Verified'],
-      ['DJ NightPro', 'DJ / Production', 'Kolkata', 'Verified'],
-      ['RideEasy Transport', 'Transport', 'Kolkata', 'Verified'],
-      ['The Grand Venue', 'Venue', 'Kolkata', 'Pending'],
-      ['Style Hub', 'Bridal Wear', 'Delhi', 'Verified'],
-    ],
-    total: 1482, pages: 186,
+    columns: ['Name', 'Email', 'Phone', 'Status'],
+    rows: [],
+    total: 0, pages: 1,
   },
   events: {
     title: 'Events', add: '+ Create Event',
     tabs: ['All', 'Planning', 'Confirmed', 'In Progress', 'Completed'], filters: ['Event Type'],
     columns: ['Event Name', 'Customer', 'Date', 'Location', 'Status'],
-    rows: [
-      ['Riya & Arjun Wedding', 'Priya Sharma', '26 Nov 2025', 'Kolkata', 'Planning'],
-      ['Mehta Corporate Event', 'Mehta Group', '18 Jan 2026', 'Delhi', 'Confirmed'],
-      ["Ananya's Birthday", 'Ananya Gupta', '5 Feb 2026', 'Kolkata', 'In Progress'],
-      ['Sharma Anniversary', 'Vivek Sharma', '20 Feb 2026', 'Delhi', 'Planning'],
-      ['TechConf 2026', 'Amit Jain', '12 Mar 2026', 'Bengaluru', 'Planning'],
-      ['Kulkarni Wedding', 'Nikhil Kulkarni', '3 Apr 2026', 'Mumbai', 'Confirmed'],
-      ['Verma Reception', 'Rohit Verma', '10 Apr 2026', 'Delhi', 'Planning'],
-      ['Iyer Family Function', 'Suresh Iyer', '18 Apr 2026', 'Chennai', 'Planning'],
-    ],
-    total: 892, pages: 112,
+    rows: [],
+    total: 0, pages: 1,
   },
   bookings: {
     title: 'Bookings', add: '+ New Booking',
     tabs: ['All', 'Pending', 'Confirmed', 'In Progress', 'Completed'], filters: [],
-    columns: ['Event', 'Service', 'Vendor', 'Amount', 'Status'],
-    rows: [
-      ['Riya & Arjun Wedding', 'Photography', 'Studio Pixel', '₹85,000', 'Confirmed'],
-      ['Riya & Arjun Wedding', 'Catering', 'Royal Caterers', '₹2,40,000', 'Pending'],
-      ['Mehta Corporate Event', 'Venue', 'The Grand Venue', '₹3,50,000', 'Confirmed'],
-      ["Ananya's Birthday", 'Decoration', 'Elegance Events', '₹75,000', 'In Progress'],
-      ['Sharma Anniversary', 'Makeup', 'Makeup by Riya', '₹45,000', 'Confirmed'],
-      ['TechConf 2026', 'AV Production', 'DJ NightPro', '₹1,20,000', 'Pending'],
-      ['Kulkarni Wedding', 'Transport', 'RideEasy', '₹60,000', 'Confirmed'],
-      ['Verma Reception', 'Photography', 'Lens Story', '₹70,000', 'Confirmed'],
-    ],
-    total: 1024, pages: 128,
+    columns: ['Reference', 'Service', 'Vendor', 'Amount', 'Execution', 'Settlement'],
+    rows: [],
+    total: 0, pages: 1,
   },
   payments: {
     title: 'Payments & Settlements', add: null,
@@ -85,28 +50,15 @@ const MODULE_DATA = {
       { label: 'Released to Vendors', value: '₹28,30,000', foot: '+18% this month', iconBg: 'bg-emerald-50 text-emerald-600', icon: 'trend' },
     ],
     columns: ['Event', 'Customer', 'Amount', 'Status', 'Date'],
-    rows: [
-      ['Riya & Arjun Wedding', 'Priya Sharma', '₹1,00,000', 'Verified', '12 Sep 2025'],
-      ['Mehta Corporate Event', 'Mehta Group', '₹2,50,000', 'Verified', '10 Sep 2025'],
-      ["Ananya's Birthday", 'Ananya Gupta', '₹50,000', 'Pending', '9 Sep 2025'],
-      ['Sharma Anniversary', 'Vivek Sharma', '₹75,000', 'Verified', '8 Sep 2025'],
-      ['TechConf 2026', 'Amit Jain', '₹1,20,000', 'Verified', '7 Sep 2025'],
-    ],
-    total: 342, pages: 69,
+    rows: [],
+    total: 0, pages: 1,
   },
   operations: {
     title: 'Automation & Operations', add: '+ Create Rule',
     tabs: ['Workflows', 'Queue', 'Logs', 'Retry', 'Alerts'], filters: [],
     columns: ['Event', 'Trigger', 'Status', 'Last Run'],
-    rows: [
-      ['Booking Confirmation', 'Booking created', 'Active', '2 min ago'],
-      ['Payment Verification', 'Payment success', 'Active', '5 min ago'],
-      ['Vendor Notification', 'New opportunity', 'Active', '10 min ago'],
-      ['Completion Review', 'Completion submitted', 'Active', '15 min ago'],
-      ['Settlement Process', 'Completion verified', 'Active', '22 min ago'],
-      ['Customer Reminder', 'Event date - 7 days', 'Active', '1 hour ago'],
-    ],
-    total: 24, pages: 3,
+    rows: [],
+    total: 0, pages: 1,
   },
   reports: {
     title: 'Reports & Analytics', add: '⇩ Export',
@@ -116,12 +68,8 @@ const MODULE_DATA = {
       ['₹1.24Cr', 'Revenue', '+22%'], ['4.8/5', 'Avg Rating', '+0.3'],
     ],
     columns: ['Report', 'Period', 'Generated', 'Status'],
-    rows: [
-      ['Revenue Summary', 'Aug 2025', '1 Sep 2025', 'Completed'],
-      ['Vendor Performance', 'Aug 2025', '1 Sep 2025', 'Completed'],
-      ['Refund Analysis', 'Aug 2025', '1 Sep 2025', 'Completed'],
-    ],
-    total: 12, pages: 2,
+    rows: [],
+    total: 0, pages: 1,
   },
   settings: {
     title: 'Settings', add: null, tabs: [], filters: [],
@@ -141,9 +89,79 @@ export default function ModuleTable({ kind }) {
   const [tab, setTab] = useState(m.tabs[0] || '');
   const [selectedEventWorkspace, setSelectedEventWorkspace] = useState(null);
 
+  const [apiData, setApiData] = useState({ rows: [], total: 0, pages: 1 });
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const limit = 10;
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+
+    let endpoint = '';
+    if (kind === 'vendors') endpoint = `/external-users/vendors?limit=${limit}&skip=${(page - 1) * limit}`;
+    else if (kind === 'customers') endpoint = `/external-users/customers?limit=${limit}&skip=${(page - 1) * limit}`;
+    else if (kind === 'bookings') endpoint = `/operations/bookings`;
+
+    if (endpoint) {
+      adminApi.call(endpoint)
+        .then(res => {
+          if (!isMounted || !res.ok) return;
+          let mappedRows = [];
+          let totalItems = res.total || res.count || 0;
+          
+          if (kind === 'vendors' && res.vendors) {
+            mappedRows = res.vendors.map(v => [
+              v.fullName || '—', 
+              v.email || '—', 
+              v.phone || '—', 
+              v.status || 'Active'
+            ]);
+          } else if (kind === 'customers' && res.customers) {
+            mappedRows = res.customers.map(c => [
+              c.fullName || '—',
+              c.phone || '—',
+              c.email || '—',
+              '0',
+              c.status || 'Active'
+            ]);
+          } else if (kind === 'bookings' && res.bookings) {
+            mappedRows = res.bookings.map(b => [
+              b.bookingReference || '—',
+              b.category || '—',
+              b.vendorName || '—',
+              `₹${b.totalAmount || 0}`,
+              b.executionStatus || '—',
+              b.settlementStatus || '—'
+            ]);
+          }
+
+          setApiData({
+            rows: mappedRows,
+            total: totalItems,
+            pages: Math.max(1, Math.ceil(totalItems / limit))
+          });
+        })
+        .catch(console.error)
+        .finally(() => {
+          if (isMounted) setLoading(false);
+        });
+    } else {
+      // Fallback for unimplemented API endpoints
+      setApiData({ rows: m.rows, total: m.total, pages: m.pages });
+      setLoading(false);
+    }
+
+    return () => { isMounted = false; };
+  }, [kind, page, tab]);
+
   if (kind === 'events' && selectedEventWorkspace) {
     return <EventWorkspace onBack={() => setSelectedEventWorkspace(null)} />;
   }
+
+  const currentRows = apiData.rows;
+  const currentTotal = apiData.total;
+  const currentPages = apiData.pages;
 
   return (
     <div className="space-y-4 max-w-6xl">
@@ -215,7 +233,12 @@ export default function ModuleTable({ kind }) {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
+      <div className="bg-white rounded-2xl shadow-sm overflow-x-auto relative min-h-[200px]">
+        {loading && (
+          <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] grid place-items-center z-10">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
         <table className="w-full text-[13px] min-w-[560px]">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100">
@@ -226,7 +249,14 @@ export default function ModuleTable({ kind }) {
             </tr>
           </thead>
           <tbody>
-            {m.rows.map((row, i) => (
+            {currentRows.length === 0 && !loading && (
+              <tr>
+                <td colSpan={m.columns.length + 1} className="px-5 py-8 text-center text-muted">
+                  No records found.
+                </td>
+              </tr>
+            )}
+            {currentRows.map((row, i) => (
               <tr
                 key={i}
                 onClick={() => {
@@ -238,7 +268,7 @@ export default function ModuleTable({ kind }) {
               >
                 {row.map((cell, j) => (
                   <td key={j} className="px-5 py-3">
-                    {typeof cell === 'string' && ['Active','Verified','Confirmed','Completed','Planning','Pending','Scheduled','In Progress','Inactive','Rejected','Cancelled'].includes(cell) ? (
+                    {typeof cell === 'string' && ['Active','Verified','Confirmed','Completed','Planning','Pending','Scheduled','In Progress','Inactive','Rejected','Cancelled','NOT_STARTED','SERVICE_SCHEDULED','SERVICE_STARTED','COMPLETION_SUBMITTED','COMPLETION_VERIFIED','NOT_ELIGIBLE','SETTLEMENT_ELIGIBLE','SETTLEMENT_HOLD','SETTLED'].includes(cell) ? (
                       <StatusChip status={cell} />
                     ) : (
                       <span className={j === 0 ? (kind === 'events' ? 'font-bold text-primary hover:underline' : 'font-semibold') : 'text-ink/70'}>
@@ -258,22 +288,38 @@ export default function ModuleTable({ kind }) {
         </table>
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-5 py-3 text-xs text-muted">
-          <span>Showing 1–{m.rows.length} of {m.total}</span>
-          <div className="flex items-center gap-1">
-            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender" aria-label="Previous page">
-              <Icon name="chevronLeft" size={13} />
-            </button>
-            <button className="w-7 h-7 grid place-items-center rounded-lg bg-primary text-white font-bold">1</button>
-            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">2</button>
-            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">3</button>
-            <span className="px-1">…</span>
-            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">{m.pages}</button>
-            <button className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender" aria-label="Next page">
-              <Icon name="chevronRight" size={13} />
-            </button>
+        {currentTotal > 0 && (
+          <div className="flex items-center justify-between px-5 py-3 text-xs text-muted">
+            <span>Showing {((page - 1) * limit) + 1}–{Math.min(page * limit, currentTotal)} of {currentTotal}</span>
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender disabled:opacity-50" 
+                aria-label="Previous page">
+                <Icon name="chevronLeft" size={13} />
+              </button>
+              <button className="w-7 h-7 grid place-items-center rounded-lg bg-primary text-white font-bold">{page}</button>
+              {page < currentPages && (
+                 <button onClick={() => setPage(p => p + 1)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">{page + 1}</button>
+              )}
+              {page + 1 < currentPages && (
+                 <button onClick={() => setPage(p => p + 2)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">{page + 2}</button>
+              )}
+              {page + 2 < currentPages && <span className="px-1">…</span>}
+              {page + 2 < currentPages && (
+                 <button onClick={() => setPage(currentPages)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender">{currentPages}</button>
+              )}
+              <button 
+                onClick={() => setPage(p => Math.min(currentPages, p + 1))}
+                disabled={page === currentPages}
+                className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender disabled:opacity-50" 
+                aria-label="Next page">
+                <Icon name="chevronRight" size={13} />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

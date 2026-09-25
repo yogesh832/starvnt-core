@@ -105,7 +105,7 @@ const coreBookingSchema = new Schema(
     },
     settlementStatus: {
       type: String,
-      enum: ['NOT_ELIGIBLE', 'SETTLEMENT_ELIGIBLE', 'SETTLED'],
+      enum: ['NOT_ELIGIBLE', 'SETTLEMENT_ELIGIBLE', 'SETTLEMENT_HOLD', 'SETTLED'],
       default: 'NOT_ELIGIBLE',
       index: true,
     },
@@ -139,6 +139,30 @@ const coreBookingSchema = new Schema(
       failedAt: { type: Date, default: null },
       reason: { type: String, default: '' },
     },
+    disputes: [
+      {
+        reportedBy: { type: String, enum: ['CUSTOMER', 'VENDOR', 'SYSTEM'] },
+        reportedAt: { type: Date, default: Date.now },
+        issueType: { type: String, default: 'SERVICE_FAILURE' },
+        description: { type: String, required: true },
+        status: { 
+          type: String, 
+          enum: ['UNDER_REVIEW', 'RESOLUTION_PROPOSED', 'RESOLVED'], 
+          default: 'UNDER_REVIEW' 
+        },
+        resolution: {
+          decision: { 
+            type: String, 
+            enum: ['SERVICE_ACCEPTED', 'VENDOR_SETTLEMENT', 'PARTIAL_SETTLEMENT', 'REFUND', 'PARTIAL_REFUND', 'REPLACEMENT', 'OTHER_REMEDY'] 
+          },
+          decidedBy: { type: String },
+          decidedAt: { type: Date },
+          notes: { type: String },
+          refundAmount: { type: Number, default: 0 },
+          settlementAmount: { type: Number, default: 0 }
+        }
+      }
+    ],
   },
   { timestamps: true }
 );
