@@ -2894,8 +2894,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
             <form onSubmit={handleSaveLocation} className="p-5 overflow-y-auto space-y-4 text-xs">
               <MapLocationPicker
-                initialCoordinates={locationForm.coordinates}
-                onLocationSelect={(geo) => {
+                value={locationForm.coordinates}
+                onChange={(geo) => {
                   setLocationForm((prev) => ({
                     ...prev,
                     address: geo.address || prev.address,
@@ -2903,7 +2903,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                     city: geo.city || prev.city,
                     state: geo.state || prev.state,
                     postalCode: geo.postalCode || prev.postalCode,
-                    coordinates: geo.coordinates || prev.coordinates,
+                    coordinates: { lat: geo.lat, lng: geo.lng },
                   }));
                 }}
               />

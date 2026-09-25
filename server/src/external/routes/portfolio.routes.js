@@ -12,11 +12,41 @@ import { PortfolioItem } from '../models/PortfolioItem.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 
 const router = express.Router();
+const MAX_INLINE_MEDIA_RESPONSE_CHARS = 200000;
+const IMAGE_PLACEHOLDER_URL = 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80';
+const VIDEO_PLACEHOLDER_URL = 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=600&q=80';
+
+function compactPortfolioItem(item) {
+  const obj = typeof item.toObject === 'function' ? item.toObject() : { ...item };
+  const mediaType = obj.mediaType || 'IMAGE';
+  const isVideo = ['VIDEO', 'REEL', 'HIGHLIGHT_FILM', 'FULL_EVENT'].includes(mediaType);
+  const placeholder = isVideo ? VIDEO_PLACEHOLDER_URL : IMAGE_PLACEHOLDER_URL;
+
+  for (const field of ['url', 'thumbnailUrl']) {
+    if (typeof obj[field] === 'string' && obj[field].startsWith('data:') && obj[field].length > MAX_INLINE_MEDIA_RESPONSE_CHARS) {
+      obj[`${field}Truncated`] = true;
+      obj[field] = field === 'thumbnailUrl' ? placeholder : '';
+    }
+  }
+
+  if (!obj.thumbnailUrl) obj.thumbnailUrl = placeholder;
+  return obj;
+}
+
+function compactMediaUrl(url, mediaType = 'IMAGE') {
+  const isVideo = ['VIDEO', 'REEL', 'HIGHLIGHT_FILM', 'FULL_EVENT'].includes(mediaType);
+  const placeholder = isVideo ? VIDEO_PLACEHOLDER_URL : IMAGE_PLACEHOLDER_URL;
+  if (typeof url === 'string' && url.startsWith('data:') && url.length > MAX_INLINE_MEDIA_RESPONSE_CHARS) {
+    return placeholder;
+  }
+  return url || placeholder;
+}
 
 // Auto-configure Cloudinary with provided credentials or env variables
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'ei8znuga';
 const apiSecret = process.env.CLOUDINARY_API_SECRET;
 const apiKey = process.env.CLOUDINARY_API_KEY;
+const isCloudinaryConfigured = Boolean(process.env.CLOUDINARY_URL || (cloudName && apiKey && apiSecret));
 
 if (process.env.CLOUDINARY_URL) {
   cloudinary.config({ cloudinary_url: process.env.CLOUDINARY_URL, secure: true });
@@ -40,7 +70,7 @@ async function uploadMediaFile(vendorId, { file, filename, mediaType }) {
     (typeof file === 'string' && file.startsWith('data:video/'));
 
   // Attempt Cloudinary upload if API key is provided
-  if (apiKey && cloudName) {
+  if (isCloudinaryConfigured) {
     try {
       const uploadResult = await cloudinary.uploader.upload(file, {
         folder: `starvnt_vendors/${vendorId}`,
@@ -66,7 +96,7 @@ async function uploadMediaFile(vendorId, { file, filename, mediaType }) {
         filename: filename || 'media_asset',
       };
     } catch (cErr) {
-      console.warn('[Cloudinary] Upload failed, falling back:', cErr.message);
+      console.warn('[Media Upload] Cloud storage failed, falling back:', cErr.message);
     }
   }
 
@@ -74,7 +104,7 @@ async function uploadMediaFile(vendorId, { file, filename, mediaType }) {
   return {
     url: file,
     thumbnailUrl: isVideo ? `${file}-poster.jpg` : file,
-    provider: 'cloudinary-ready-cdn',
+    provider: 'starvnt-inline-media',
     format: filename ? filename.split('.').pop() : isVideo ? 'mp4' : 'jpg',
     resourceType: isVideo ? 'VIDEO' : 'IMAGE',
     filename: filename || 'media_asset',
@@ -180,7 +210,7 @@ router.get('/vendor/portfolio', requireExternalAuth, requireAccountType('VENDOR'
       return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
     }
 
-    const items = await queryVendorPortfolio(vendorId, req.query);
+    const items = (await queryVendorPortfolio(vendorId, req.query)).map(compactPortfolioItem);
     res.json({ ok: true, count: items.length, items });
   } catch (err) {
     next(err);
@@ -293,9 +323,9 @@ router.post('/vendor/portfolio/project', requireExternalAuth, requireAccountType
         city,
         venue,
         style,
-        coverUrl: createdItems[0]?.thumbnailUrl || createdItems[0]?.url || defaultCover,
+        coverUrl: compactMediaUrl(createdItems[0]?.thumbnailUrl || createdItems[0]?.url || defaultCover, createdItems[0]?.mediaType),
         itemCount: createdItems.length,
-        items: createdItems,
+        items: createdItems.map(compactPortfolioItem),
       },
       activation,
     });
@@ -316,6 +346,7 @@ router.post('/vendor/portfolio/item', requireExternalAuth, requireAccountType('V
 
     const {
       url,
+      thumbnailUrl,
       projectName = 'General Portfolio',
       title,
       description = '',
@@ -341,7 +372,7 @@ router.post('/vendor/portfolio/item', requireExternalAuth, requireAccountType('V
       url.includes('/video/') ||
       url.startsWith('data:video/');
 
-    let thumb = url;
+    let thumb = thumbnailUrl || url;
     if (isYouTube) {
       const ytMatch = url.match(/(?:youtu\.be\/|v=|\/embed\/|\/v\/)([a-zA-Z0-9_-]{11})/);
       if (ytMatch && ytMatch[1]) thumb = `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
@@ -363,7 +394,7 @@ router.post('/vendor/portfolio/item', requireExternalAuth, requireAccountType('V
     });
 
     const activation = await evaluateVendorActivation(vendorId);
-    res.status(201).json({ ok: true, item, activation });
+    res.status(201).json({ ok: true, item: compactPortfolioItem(item), activation });
   } catch (err) {
     next(err);
   }
@@ -418,7 +449,7 @@ router.get('/vendor/portfolio/projects', requireExternalAuth, requireAccountType
       return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
     }
 
-    const items = await PortfolioItem.find({ vendor: vendorId }).sort({ createdAt: -1 });
+    const items = await PortfolioItem.find({ vendor: vendorId }).sort({ createdAt: -1 }).maxTimeMS(8000).lean();
     const projectMap = {};
 
     for (const item of items) {
@@ -430,7 +461,7 @@ router.get('/vendor/portfolio/projects', requireExternalAuth, requireAccountType
           style: item.style,
           location: item.location,
           eventDate: item.eventDate,
-          coverUrl: item.thumbnailUrl || item.url,
+          coverUrl: compactMediaUrl(item.thumbnailUrl || item.url, item.mediaType),
           status: item.status,
           tags: item.tags,
           description: item.description,
@@ -438,9 +469,9 @@ router.get('/vendor/portfolio/projects', requireExternalAuth, requireAccountType
         };
       }
       if (item.isFeatured || (!projectMap[name].coverUrl && item.mediaType === 'IMAGE')) {
-        projectMap[name].coverUrl = item.thumbnailUrl || item.url;
+        projectMap[name].coverUrl = compactMediaUrl(item.thumbnailUrl || item.url, item.mediaType);
       }
-      projectMap[name].items.push(item);
+      projectMap[name].items.push(compactPortfolioItem(item));
     }
 
     const projects = Object.values(projectMap);
@@ -456,10 +487,10 @@ router.get('/vendor/portfolio/projects', requireExternalAuth, requireAccountType
 router.get('/vendors/:vendorId/portfolio', async (req, res, next) => {
   try {
     const { vendorId } = req.params;
-    const items = await queryVendorPortfolio(vendorId, {
+    const items = (await queryVendorPortfolio(vendorId, {
       ...req.query,
       status: { $in: ['PUBLISHED', 'VERIFIED', 'BOOKING_PROVEN'] },
-    });
+    })).map(compactPortfolioItem);
     res.json({ ok: true, count: items.length, items });
   } catch (err) {
     next(err);

@@ -32,8 +32,8 @@ export function createApp() {
   app.use(cors({ origin: config.clientOrigins, credentials: true }));
   // Payment webhooks need the raw body for signature checks: before express.json().
   app.use('/api/webhooks', webhookRouter);
-  app.use(express.json({ limit: '25mb' }));
-  app.use(express.urlencoded({ limit: '25mb', extended: true }));
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use(cookieParser());
 
   app.get('/api/health', (req, res) =>

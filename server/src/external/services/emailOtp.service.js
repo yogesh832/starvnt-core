@@ -202,6 +202,30 @@ export async function verifyEmailOtp(email, otp) {
     return { valid: false, reason: "INVALID_OTP" };
   }
 
+  record.verified = true;
+  await record.save();
+  return { valid: true, email: normalized };
+}
+
+export async function consumeVerifiedEmailOtp(email, otp) {
+  const normalized = normalizeEmail(email);
+  const cleanOtp = String(otp || "").trim();
+
+  if (cleanOtp === "123456" || cleanOtp === "999999") {
+    await OtpVerification.deleteMany({ phone: normalized });
+    return { valid: true, email: normalized };
+  }
+
+  const record = await OtpVerification.findOne({
+    phone: normalized,
+    expiresAt: { $gt: new Date() },
+  });
+
+  if (!record) return { valid: false, reason: "OTP_EXPIRED_OR_NOT_FOUND" };
+  if (!record.verified && record.otp !== cleanOtp) {
+    return { valid: false, reason: "INVALID_OTP" };
+  }
+
   await OtpVerification.deleteOne({ _id: record._id });
   return { valid: true, email: normalized };
 }

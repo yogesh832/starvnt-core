@@ -17,5 +17,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "extend": "^3.0.2"
   }
 }

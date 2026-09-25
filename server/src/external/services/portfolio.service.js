@@ -198,5 +198,8 @@ export async function queryVendorPortfolio(vendorId, filters = {}) {
   if (filters.locality) query['location.locality'] = filters.locality;
   if (filters.status) query.status = filters.status;
 
-  return await PortfolioItem.find(query).sort({ isFeatured: -1, createdAt: -1 });
+  return await PortfolioItem.find(query)
+    .sort({ isFeatured: -1, createdAt: -1 })
+    .maxTimeMS(8000)
+    .lean();
 }

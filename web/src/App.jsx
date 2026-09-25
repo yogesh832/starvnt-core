@@ -49,8 +49,17 @@ function RootRedirect() {
 export default function App() {
   return (
     <Routes>
-      {/* Public landing — guests plan here, popup sends them to login */}
-      <Route path="/" element={<Landing />} />
+      {/* Public landing — guests plan here, partner/admin subdomains redirect appropriately */}
+      <Route 
+        path="/" 
+        element={
+          window.location.hostname.startsWith('partner.') || window.location.hostname.startsWith('vendor.')
+            ? <Navigate to="/vendor" replace />
+            : window.location.hostname.startsWith('admin.')
+              ? <Navigate to="/admin" replace />
+              : <Landing />
+        } 
+      />
       {/* External domain — one auth UI, two portals */}
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />

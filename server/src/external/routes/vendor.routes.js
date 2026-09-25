@@ -25,6 +25,17 @@ const router = Router();
 // Middleware: Authenticate and resolve vendor organization context
 router.use(requireExternalAuth, requireAccountType('VENDOR'));
 
+function normalizePrimaryCategory(category) {
+  if (category === undefined || category === null) return { value: undefined };
+  if (Array.isArray(category)) return { error: 'PRIMARY_CATEGORY_SINGLE_ONLY' };
+  const value = String(category).trim();
+  if (!value) return { value: '' };
+  if (/[|;]+/.test(value) || value.split(',').filter(Boolean).length > 1) {
+    return { error: 'PRIMARY_CATEGORY_SINGLE_ONLY' };
+  }
+  return { value };
+}
+
 async function resolveVendorContext(req, res, next) {
   const vendorId = req.externalUser.vendorOrganization;
   if (!vendorId) {
@@ -50,7 +61,11 @@ router.put('/profile', async (req, res, next) => {
   try {
     const { businessName, category, location, city, phone, website, bio } = req.body || {};
     if (businessName) req.vendor.businessName = businessName.trim();
-    if (category) req.vendor.category = category.trim();
+    const categoryResult = normalizePrimaryCategory(category);
+    if (categoryResult.error) {
+      return res.status(400).json({ error: categoryResult.error });
+    }
+    if (categoryResult.value !== undefined) req.vendor.category = categoryResult.value;
     const resolvedLoc = location !== undefined ? location : city;
     if (resolvedLoc !== undefined) req.vendor.location = resolvedLoc.trim();
     if (phone !== undefined) req.vendor.phone = phone.trim();

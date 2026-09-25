@@ -62,7 +62,16 @@ export function makeApi(base, refreshPath, options = {}) {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      const err = new Error(data.error || `HTTP_${res.status}`);
+      
+      // Global Auth enforcement: If 401 after retry, session is dead.
+      if (res.status === 401) {
+        setToken(null);
+        if (typeof window !== "undefined") {
+          window.location.href = "/login?expired=1";
+        }
+      }
+
+      const err = new Error(data.message || friendlyApiMessage(data.error, res.status));
       err.status = res.status;
       err.data = data;
       throw err;
@@ -76,6 +85,19 @@ export function makeApi(base, refreshPath, options = {}) {
   }
 
   return { call, raw, refresh, setToken, getToken: () => token };
+}
+
+export function friendlyApiMessage(code, status) {
+  const messages = {
+    UNAUTHENTICATED: "Your session has expired. Please sign in again.",
+    SESSION_REVOKED: "Your session has expired. Please sign in again.",
+    ACCOUNT_DISABLED_OR_MISSING: "This account is not available. Please contact support.",
+    FORBIDDEN: "You do not have permission to perform this action.",
+    NO_VENDOR_ORGANIZATION: "Your vendor workspace is not ready yet. Please complete vendor setup.",
+    PRIMARY_CATEGORY_SINGLE_ONLY: "Choose exactly one primary category. Add secondary services separately.",
+    RATE_LIMITED: "Too many attempts. Please wait a few minutes and try again.",
+  };
+  return messages[code] || (status ? `Request failed (${status}). Please try again.` : "Request failed. Please try again.");
 }
 
 /** Backend base URL — direct calls keep auth and OTP requests consistent. */

@@ -270,9 +270,9 @@ export default function MapLocationPicker({
   }
 
   // Geolocation button: Use device GPS
-  function handleUseCurrentLocation() {
+  const handleUseCurrentLocation = useCallback((silent = false) => {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
+      if (!silent) alert('Geolocation is not supported by your browser.');
       return;
     }
     setReverseLoading(true);
@@ -288,11 +288,19 @@ export default function MapLocationPicker({
       },
       (err) => {
         setReverseLoading(false);
-        alert(`Location access denied or unavailable: ${err.message}`);
+        if (!silent) alert(`Location access denied or unavailable: ${err.message}. Please search or drop the pin manually.`);
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );
-  }
+  }, [reverseGeocode]);
+
+  // Auto-detect location on mount if no existing coordinates are passed
+  useEffect(() => {
+    if (!readOnly && (!value?.lat || !value?.lng)) {
+      handleUseCurrentLocation(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="relative rounded-2xl overflow-hidden border border-gray-200/90 shadow-sm bg-lavender/30">
@@ -360,7 +368,7 @@ export default function MapLocationPicker({
           {/* Current GPS Location Button */}
           <button
             type="button"
-            onClick={handleUseCurrentLocation}
+            onClick={() => handleUseCurrentLocation(false)}
             title="Locate my current position"
             className="h-9 px-3 rounded-xl bg-white hover:bg-lavender text-navy text-xs font-bold shadow-lg border border-gray-200/90 flex items-center gap-1.5 shrink-0 transition cursor-pointer"
           >

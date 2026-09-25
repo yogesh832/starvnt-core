@@ -50,6 +50,10 @@ export async function sendMobileOtp(phone) {
     throw new Error("MSG91_OTP_NOT_CONFIGURED");
   }
 
+  if (!config.msg91SenderId) {
+    console.warn("[MSG91 OTP] MSG91_SENDER_ID is not set. OTP may use the sender/header configured on the MSG91 template.");
+  }
+
   const digitsOnly = normalized.replace(/^\+/, "");
   const url = new URL("https://control.msg91.com/api/v5/otp");
   url.searchParams.set("template_id", config.msg91OtpTemplateId);
@@ -57,6 +61,10 @@ export async function sendMobileOtp(phone) {
   url.searchParams.set("authkey", config.msg91AuthKey);
   url.searchParams.set("otp", otp);
   url.searchParams.set("otp_expiry", "10");
+  if (config.msg91SenderId) {
+    url.searchParams.set("sender", config.msg91SenderId);
+    url.searchParams.set("senderId", config.msg91SenderId);
+  }
 
   let response;
   let data;
@@ -80,6 +88,12 @@ export async function sendMobileOtp(phone) {
     });
     throw new Error("MSG91_OTP_SEND_FAILED");
   }
+
+  console.log("[MSG91 OTP] Sent OTP via configured template:", {
+    templateId: config.msg91OtpTemplateId,
+    senderId: config.msg91SenderId || "template-default",
+    phone: normalized.slice(0, 4) + "****" + normalized.slice(-2),
+  });
 
   return {
     phone: normalized,

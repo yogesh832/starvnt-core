@@ -83,6 +83,16 @@ export function ExternalAuthProvider({ children }) {
     });
   }
 
+  async function setPassword(email, otp, password) {
+    const data = await externalApi.call("/auth/password/set", {
+      method: "POST",
+      body: { email, otp, password },
+    });
+    externalApi.setToken(data.accessToken);
+    setUser(data.user);
+    return data.user;
+  }
+
   async function loginWithOtp(phone, otp, extra = {}) {
     const data = await externalApi.call("/auth/otp/verify", {
       method: "POST",
@@ -130,6 +140,7 @@ export function ExternalAuthProvider({ children }) {
         sendOtp,
         sendEmailOtp,
         verifyEmailOtp,
+        setPassword,
         loginWithOtp,
         loginWithEmailOtp,
         loginWithWidgetOtp,

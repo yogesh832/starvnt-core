@@ -60,6 +60,7 @@ export const config = {
   // ── MSG91 OTP ──
   msg91AuthKey: process.env.MSG91_AUTHKEY || "",
   msg91OtpTemplateId: process.env.MSG91_OTP_TEMPLATE_ID || "",
+  msg91SenderId: process.env.MSG91_SENDER_ID || "STRVNT",
   msg91WidgetId: process.env.MSG91_WIDGET_ID || "",
   msg91WidgetToken: process.env.MSG91_WIDGET_TOKEN || "",
   msg91EmailTemplateId: process.env.MSG91_EMAIL_TEMPLATE_ID || "",

@@ -14,9 +14,9 @@ export function Page({ title, sub, action, children }) {
   );
 }
 
-export function Card({ title, extra, children, className = '' }) {
+export function Card({ title, extra, children, className = '', ...props }) {
   return (
-    <div className={`bg-white rounded-2xl p-4 sm:p-5 shadow-sm ${className}`}>
+    <div className={`bg-white rounded-2xl p-4 sm:p-5 shadow-sm ${className}`} {...props}>
       {(title || extra) && (
         <div className="flex items-center justify-between mb-3 gap-2">
           {title && <h2 className="font-bold text-[15px]">{title}</h2>}

@@ -25,8 +25,11 @@ export default function VendorPortal() {
   const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [isSidebarMini, setIsSidebarMini] = useState(false);
   const notifRef = useRef(null);
+  const profileRef = useRef(null);
   const [businessName, setBusinessName] = useState(user?.fullName ? `${user.fullName}'s Brand` : 'My Brand');
   const [category, setCategory] = useState('');
   const [profilePicUrl, setProfilePicUrl] = useState('');
@@ -92,11 +95,14 @@ export default function VendorPortal() {
     return () => clearInterval(interval);
   }, []);
 
-  // Close notifications dropdown on click outside
+  // Close header dropdowns on click outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (notifRef.current && !notifRef.current.contains(event.target)) {
         setNotifOpen(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setProfileOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -131,8 +137,16 @@ export default function VendorPortal() {
   }
 
   async function handleLogout() {
-    await logout();
-    navigate('/login', { replace: true });
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setProfileOpen(false);
+    setNotifOpen(false);
+    setNavOpen(false);
+    try {
+      await logout();
+    } finally {
+      navigate('/login', { replace: true });
+    }
   }
 
   const navItems = [
@@ -218,12 +232,14 @@ export default function VendorPortal() {
           </div>
           <button
             onClick={handleLogout}
+            disabled={loggingOut}
             title="Sign out"
-            className={`w-8 h-8 grid place-items-center rounded-lg text-muted hover:text-red-500 hover:bg-red-50 transition shrink-0 ${isSidebarMini ? 'lg:w-full lg:mt-1' : ''}`}
+            className={`h-9 grid place-items-center rounded-xl text-muted hover:text-red-500 hover:bg-red-50 transition shrink-0 disabled:opacity-60 ${isSidebarMini ? 'w-9 lg:w-full lg:mt-1' : 'px-3 gap-2 grid-flow-col'}`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-            </svg>
+            <Icon name="logout" size={16} />
+            <span className={`text-xs font-bold ${isSidebarMini ? 'lg:hidden' : 'block'}`}>
+              {loggingOut ? 'Signing out' : 'Logout'}
+            </span>
           </button>
         </div>
       </aside>
@@ -341,24 +357,85 @@ export default function VendorPortal() {
               </div>
             )}
 
-            {/* Profile Avatar */}
-            <div
-              onClick={() => navigate('/vendor/profile')}
-              className="flex items-center gap-2 hover:bg-gray-50 p-1.5 rounded-full sm:rounded-xl transition select-none cursor-pointer"
-              role="button"
-              tabIndex={0}
-            >
-              {profilePicUrl || user?.avatarUrl ? (
-                <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover shadow-xs" />
-              ) : (
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-xs sm:text-sm font-bold shadow-xs">
-                  {(businessName || user?.fullName || 'VN').slice(0, 2).toUpperCase()}
+            {/* Profile Menu */}
+            <div className="relative" ref={profileRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileOpen((open) => !open);
+                  setNotifOpen(false);
+                }}
+                className="flex items-center gap-2 hover:bg-gray-50 p-1.5 rounded-full sm:rounded-xl transition select-none cursor-pointer"
+                aria-label="Open profile menu"
+                aria-expanded={profileOpen}
+              >
+                {profilePicUrl || user?.avatarUrl ? (
+                  <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover shadow-xs" />
+                ) : (
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-xs sm:text-sm font-bold shadow-xs">
+                    {(businessName || user?.fullName || 'VN').slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="hidden sm:block text-left">
+                  <div className="text-[13px] font-bold leading-tight truncate max-w-[150px]">{businessName || user?.fullName || 'Vendor'}</div>
+                  <div className="text-[10px] text-muted truncate max-w-[150px]">Vendor • {category || 'Profile Incomplete'}</div>
+                </div>
+                <Icon name="chevronDown" size={14} className={`hidden sm:block text-muted transition ${profileOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {profileOpen && (
+                <div className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-80 max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 z-50 animate-[pop_.18s_ease-out]">
+                  <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                    {profilePicUrl || user?.avatarUrl ? (
+                      <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className="w-12 h-12 rounded-2xl object-cover border border-gray-100" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white grid place-items-center text-sm font-extrabold">
+                        {(businessName || user?.fullName || 'VN').slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-sm font-extrabold text-navy truncate">{businessName || user?.fullName || 'Vendor'}</div>
+                      <div className="text-[11px] text-muted truncate">{user?.email}</div>
+                      <div className="text-[10px] font-bold text-primary mt-1">{category || 'Complete your profile'}</div>
+                    </div>
+                  </div>
+
+                  <div className="py-2 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        navigate('/vendor/profile');
+                      }}
+                      className="w-full flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold text-ink hover:bg-lavender transition"
+                    >
+                      <Icon name="profile" size={17} />
+                      Profile & Hub
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        navigate('/vendor/settings');
+                      }}
+                      className="w-full flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold text-ink hover:bg-lavender transition"
+                    >
+                      <Icon name="settings" size={17} />
+                      Account Settings
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-extrabold text-red-600 hover:bg-red-100 transition disabled:opacity-60"
+                  >
+                    <Icon name="logout" size={17} />
+                    {loggingOut ? 'Signing out...' : 'Logout'}
+                  </button>
                 </div>
               )}
-              <div className="hidden sm:block">
-                <div className="text-[13px] font-bold leading-tight truncate max-w-[150px]">{businessName || user?.fullName || 'Vendor'}</div>
-                <div className="text-[10px] text-muted truncate max-w-[150px]">Vendor • {category || 'Profile Incomplete'}</div>
-              </div>
             </div>
           </div>
         </header>
@@ -385,9 +462,7 @@ export default function VendorPortal() {
           </Routes>
         </div>
 
-        <footer className="px-6 py-3 hidden sm:flex items-center justify-end text-[10px] text-muted/70">
-          <span className="flex gap-4">Privacy · Terms · Help</span>
-        </footer>
+
 
         {/* Mobile Bottom Navigation Bar (Phone Screens) */}
         <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-gray-200/80 px-2 py-1.5 flex items-center justify-around shadow-lg">

@@ -28,6 +28,7 @@ export default function ExternalLogin() {
     loginWithGoogle,
     sendEmailOtp,
     verifyEmailOtp,
+    setPassword,
     sendOtp,
     loginWithOtp,
     loginWithWidgetOtp,
@@ -64,6 +65,7 @@ export default function ExternalLogin() {
   const [otpSent, setOtpSent] = useState(false);
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailOtpVerified, setEmailOtpVerified] = useState(false);
+  const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const [timer, setTimer] = useState(0);
 
   const [showPw, setShowPw] = useState(false);
@@ -153,7 +155,7 @@ export default function ExternalLogin() {
     setBusy(true);
     try {
       if (!emailOtpSent) {
-        await sendEmailOtp(form.email, {
+        const otpRes = await sendEmailOtp(form.email, {
           mode,
           authMode: mode,
           accountType,
@@ -176,6 +178,7 @@ export default function ExternalLogin() {
               ? form.city?.trim() || undefined
               : undefined,
         });
+        setPasswordSetupRequired(Boolean(otpRes?.requiresPasswordSetup));
         setEmailOtpSent(true);
         return;
       }
@@ -186,7 +189,9 @@ export default function ExternalLogin() {
       }
 
       const u =
-        mode === "login"
+        mode === "login" && passwordSetupRequired
+          ? await setPassword(form.email, form.otp, form.password)
+          : mode === "login"
           ? await login(form.email, form.password)
           : await register({
               fullName: form.fullName,
@@ -212,7 +217,11 @@ export default function ExternalLogin() {
         EMAIL_ACCOUNT_NOT_FOUND:
           "No account found with this email. Please create an account first.",
         EMAIL_LOGIN_NOT_AVAILABLE:
-          "This email may be linked with Mobile OTP or Google. Please try Mobile or Google login.",
+          "This email is linked to another sign-in method. Verify your email to set a password.",
+        EMAIL_PASSWORD_NOT_SET:
+          "This email is linked with Google. Verify your email here to create a password.",
+        EMAIL_OTP_PASSWORD_REQUIRED:
+          "Verify your email and enter a password to continue.",
         EMAIL_OTP_NOT_CONFIGURED:
           "Email OTP is not configured yet. Please contact support.",
         RESEND_EMAIL_SEND_FAILED:
@@ -854,6 +863,7 @@ export default function ExternalLogin() {
                           onClick={() => {
                             setEmailOtpSent(false);
                             setEmailOtpVerified(false);
+                            setPasswordSetupRequired(false);
                             setForm({ ...form, otp: "" });
                             setError("");
                           }}
@@ -894,7 +904,9 @@ export default function ExternalLogin() {
                     >
                       <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-800">
                         {mode === "login"
-                          ? "Email verified. Verify your password to access your account."
+                          ? passwordSetupRequired
+                            ? "Email verified. Set a password to link email sign-in with this account."
+                            : "Email verified. Verify your password to access your account."
                           : "Email verified. Set your password to create your account."}
                       </div>
                       <div>
@@ -907,7 +919,9 @@ export default function ExternalLogin() {
                             className={inputCls}
                             placeholder={
                               mode === "login"
-                                ? "Enter your password"
+                                ? passwordSetupRequired
+                                  ? "Create a password"
+                                  : "Enter your password"
                                 : "8+ characters, letter and number"
                             }
                             value={form.password}
@@ -930,7 +944,9 @@ export default function ExternalLogin() {
                       >
                         {busy
                           ? "Continuing..."
-                          : mode === "login"
+                          : mode === "login" && passwordSetupRequired
+                            ? "Set Password & Sign In"
+                            : mode === "login"
                             ? "Continue Sign In"
                             : "Create Account"}
                       </button>
@@ -1226,6 +1242,7 @@ export default function ExternalLogin() {
                       setOtpSent(false);
                       setEmailOtpSent(false);
                       setEmailOtpVerified(false);
+                      setPasswordSetupRequired(false);
                     }}
                     className="text-primary hover:underline font-bold cursor-pointer"
                   >

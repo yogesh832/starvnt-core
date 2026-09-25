@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   normalizeEmail,
+  consumeVerifiedEmailOtp,
   sendEmailOtp,
   verifyEmailOtp,
 } from "../services/emailOtp.service.js";
@@ -55,6 +56,16 @@ function clearRefreshCookie(res) {
   res.clearCookie(config.refreshCookieName, options);
 }
 
+function normalizePrimaryCategory(category) {
+  if (category === undefined || category === null || category === "") return { value: "" };
+  if (Array.isArray(category)) return { error: "PRIMARY_CATEGORY_SINGLE_ONLY" };
+  const value = String(category).trim();
+  if (/[|;]+/.test(value) || value.split(",").filter(Boolean).length > 1) {
+    return { error: "PRIMARY_CATEGORY_SINGLE_ONLY" };
+  }
+  return { value };
+}
+
 async function createSession(user, req) {
   const refreshToken = generateRefreshToken();
   const expiresAt = new Date(
@@ -85,7 +96,13 @@ async function ensureVendorOrganization(
       const defaultName = user.fullName || "Vendor";
       const resolvedBusinessName =
         businessName?.trim() || brandName?.trim() || `${defaultName}'s Studio`;
-      const resolvedCategory = category?.trim() || "Cinematic Production";
+      const normalizedCategory = normalizePrimaryCategory(category);
+      if (normalizedCategory.error) {
+        const err = new Error(normalizedCategory.error);
+        err.status = 400;
+        throw err;
+      }
+      const resolvedCategory = normalizedCategory.value || "Cinematic Production";
       const resolvedLocation = city?.trim() || location?.trim() || "";
       const hasExplicitBrand = Boolean(
         businessName?.trim() || brandName?.trim(),
@@ -142,6 +159,10 @@ router.post("/register", authLimiter, async (req, res, next) => {
     if (accountType === "VENDOR" && !resolvedBusinessName) {
       return res.status(400).json({ error: "BUSINESS_NAME_REQUIRED" });
     }
+    const normalizedCategory = normalizePrimaryCategory(category);
+    if (normalizedCategory.error) {
+      return res.status(400).json({ error: normalizedCategory.error });
+    }
 
     const exists = await ExternalUser.findOne({
       email: String(email).toLowerCase(),
@@ -160,7 +181,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
 
     if (accountType === "VENDOR") {
       const resolvedLocation = city || location || "";
-      const resolvedCategory = category || "Cinematic Production";
+      const resolvedCategory = normalizedCategory.value || "Cinematic Production";
       const hasExplicitBrand = Boolean(
         resolvedBusinessName && resolvedBusinessName.trim(),
       );
@@ -210,13 +231,23 @@ router.post("/login", authLimiter, async (req, res, next) => {
     } = req.body || {};
     if (!email || !password)
       return res.status(400).json({ error: "MISSING_FIELDS" });
+    const normalizedCategory = normalizePrimaryCategory(category);
+    if (normalizedCategory.error) {
+      return res.status(400).json({ error: normalizedCategory.error });
+    }
 
     const user = await ExternalUser.findOne({
       email: String(email).toLowerCase(),
-    }).select("+passwordHash authProvider");
+    }).select("+passwordHash");
     // Uniform failure — no account enumeration.
     if (!user) {
       return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+    }
+    if (!user.passwordHash) {
+      return res.status(409).json({
+        error: "EMAIL_PASSWORD_NOT_SET",
+        authProvider: user.authProvider,
+      });
     }
     if (typeof user.passwordHash === "string" && user.passwordHash) {
       if (!(await verifyPassword(password, user.passwordHash))) {
@@ -233,7 +264,7 @@ router.post("/login", authLimiter, async (req, res, next) => {
       await ensureVendorOrganization(user, {
         businessName,
         brandName,
-        category,
+        category: normalizedCategory.value,
         city,
         location,
       });
@@ -265,6 +296,10 @@ router.post("/google", authLimiter, async (req, res, next) => {
     if (!credential) {
       return res.status(400).json({ error: "MISSING_GOOGLE_CREDENTIAL" });
     }
+    const normalizedCategory = normalizePrimaryCategory(category);
+    if (normalizedCategory.error) {
+      return res.status(400).json({ error: normalizedCategory.error });
+    }
 
     const googleUser = await verifyGoogleIdToken(credential);
     let user = await ExternalUser.findOne({
@@ -279,7 +314,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
         await ensureVendorOrganization(user, {
           businessName,
           brandName,
-          category,
+          category: normalizedCategory.value,
           city,
           location,
         });
@@ -306,13 +341,13 @@ router.post("/google", authLimiter, async (req, res, next) => {
         );
         const hasExplicitCity = Boolean(city?.trim() || location?.trim());
         const isProfileCompleted = Boolean(
-          hasExplicitBrand && category?.trim() && hasExplicitCity,
+          hasExplicitBrand && normalizedCategory.value && hasExplicitCity,
         );
 
         const resolvedBusinessName = hasExplicitBrand
           ? (businessName || brandName).trim()
           : `${googleUser.fullName}'s Studio`;
-        const resolvedCategory = category?.trim() || "Cinematic Production";
+        const resolvedCategory = normalizedCategory.value || "Cinematic Production";
         const resolvedLocation = hasExplicitCity
           ? (city || location).trim()
           : "";
@@ -389,17 +424,11 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
 
     const existingUser = await ExternalUser.findOne({
       email: normalizedEmail,
-    }).select("+passwordHash authProvider");
+    }).select("+passwordHash");
 
     if (intent === "login") {
       if (!existingUser) {
         return res.status(404).json({ error: "EMAIL_ACCOUNT_NOT_FOUND" });
-      }
-      if (!existingUser.passwordHash) {
-        return res.status(409).json({
-          error: "EMAIL_LOGIN_NOT_AVAILABLE",
-          authProvider: existingUser.authProvider,
-        });
       }
     }
 
@@ -412,11 +441,19 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
       });
     }
 
-    const result = await sendEmailOtp(normalizedEmail, intent);
+    const requiresPasswordSetup = Boolean(
+      intent === "login" && existingUser && !existingUser.passwordHash,
+    );
+    const result = await sendEmailOtp(
+      normalizedEmail,
+      requiresPasswordSetup ? "forgot" : intent,
+    );
     return res.json({
       ok: true,
       email: result.email,
       expiresInSeconds: result.expiresInSeconds,
+      requiresPasswordSetup,
+      authProvider: existingUser?.authProvider,
       message: "OTP sent successfully",
     });
   } catch (err) {
@@ -441,6 +478,45 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
     ) {
       return res.status(502).json({ error: "EMAIL_OTP_SEND_FAILED" });
     }
+    next(err);
+  }
+});
+
+// ── Set Password / Link Email Password Login ────────────────────────────────
+router.post("/password/set", authLimiter, async (req, res, next) => {
+  try {
+    const { email, otp, password } = req.body || {};
+    if (!email || !otp || !password) {
+      return res.status(400).json({ error: "EMAIL_OTP_PASSWORD_REQUIRED" });
+    }
+
+    const issues = passwordIssues(password);
+    if (issues.length) {
+      return res.status(400).json({ error: "WEAK_PASSWORD", issues });
+    }
+
+    const verification = await consumeVerifiedEmailOtp(email, otp);
+    if (!verification.valid) {
+      return res.status(400).json({ error: verification.reason || "INVALID_OTP" });
+    }
+
+    const user = await ExternalUser.findOne({ email: normalizeEmail(verification.email) }).select("+passwordHash");
+    if (!user) {
+      return res.status(404).json({ error: "EMAIL_ACCOUNT_NOT_FOUND" });
+    }
+    if (user.status !== "ACTIVE") {
+      return res.status(401).json({ error: "ACCOUNT_DISABLED" });
+    }
+
+    user.passwordHash = await hashPassword(password);
+    user.authProvider = user.googleId ? "GOOGLE" : user.phone ? "PHONE" : "EMAIL";
+    user.lastLoginAt = new Date();
+    await user.save();
+
+    const { session, refreshToken } = await createSession(user, req);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+    return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
+  } catch (err) {
     next(err);
   }
 });
@@ -515,6 +591,10 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
     if (!phone || !otp) {
       return res.status(400).json({ error: "PHONE_AND_OTP_REQUIRED" });
     }
+    const normalizedCategory = normalizePrimaryCategory(category);
+    if (normalizedCategory.error) {
+      return res.status(400).json({ error: normalizedCategory.error });
+    }
 
     const verification = await verifyMobileOtp(phone, otp);
     if (!verification.valid) {
@@ -531,7 +611,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
         await ensureVendorOrganization(user, {
           businessName,
           brandName,
-          category,
+          category: normalizedCategory.value,
           city,
           location,
         });
@@ -564,13 +644,13 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
         );
         const hasExplicitCity = Boolean(city?.trim());
         const isProfileCompleted = Boolean(
-          hasExplicitBrand && category?.trim() && hasExplicitCity,
+          hasExplicitBrand && normalizedCategory.value && hasExplicitCity,
         );
 
         const resolvedBusinessName = hasExplicitBrand
           ? (businessName || brandName).trim()
           : `${defaultName} Studios`;
-        const resolvedCategory = category?.trim() || "Cinematic Production";
+        const resolvedCategory = normalizedCategory.value || "Cinematic Production";
         const resolvedLocation = hasExplicitCity ? city.trim() : "";
 
         const org = await VendorOrganization.create({
@@ -617,6 +697,10 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
     if (!accessToken) {
       return res.status(400).json({ error: "MISSING_WIDGET_ACCESS_TOKEN" });
     }
+    const normalizedCategory = normalizePrimaryCategory(category);
+    if (normalizedCategory.error) {
+      return res.status(400).json({ error: normalizedCategory.error });
+    }
 
     let normalizedPhone = "";
 
@@ -648,7 +732,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
         await ensureVendorOrganization(user, {
           businessName,
           brandName,
-          category,
+          category: normalizedCategory.value,
           city,
           location,
         });
@@ -681,13 +765,13 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
         );
         const hasExplicitCity = Boolean(city?.trim());
         const isProfileCompleted = Boolean(
-          hasExplicitBrand && category?.trim() && hasExplicitCity,
+          hasExplicitBrand && normalizedCategory.value && hasExplicitCity,
         );
 
         const resolvedBusinessName = hasExplicitBrand
           ? (businessName || brandName).trim()
           : `${defaultName} Studios`;
-        const resolvedCategory = category?.trim() || "Cinematic Production";
+        const resolvedCategory = normalizedCategory.value || "Cinematic Production";
         const resolvedLocation = hasExplicitCity ? city.trim() : "";
 
         const org = await VendorOrganization.create({

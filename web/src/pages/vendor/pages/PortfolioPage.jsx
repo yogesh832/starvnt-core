@@ -79,7 +79,7 @@ const CATEGORY_CONFIGS = {
           url: 'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Grand Wedding Buffet Spread',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-c2',
@@ -87,21 +87,21 @@ const CATEGORY_CONFIGS = {
           thumbnailUrl: 'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=400&q=80',
           mediaType: 'VIDEO',
           title: 'Live Dum Handi Video Reel (45s)',
-          provider: 'Cloudinary Video CDN',
+          provider: 'STARVNT Video Media',
         },
         {
           id: 'demo-c3',
           url: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Royal Banquet Table Setting',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-c4',
           url: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Artisanal Dessert & Mocktail Lounge',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
       ],
     }),
@@ -140,7 +140,7 @@ const CATEGORY_CONFIGS = {
           url: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Royal Mandap Setup',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-d2',
@@ -148,21 +148,21 @@ const CATEGORY_CONFIGS = {
           thumbnailUrl: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=400&q=80',
           mediaType: 'VIDEO',
           title: 'Mandap Walkthrough Video (60s)',
-          provider: 'Cloudinary Video CDN',
+          provider: 'STARVNT Video Media',
         },
         {
           id: 'demo-d3',
           url: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Illuminated Tents & Lawn Decor',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-d4',
           url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Floral Stage & Arch Details',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
       ],
     }),
@@ -201,7 +201,7 @@ const CATEGORY_CONFIGS = {
           url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'DJ Stage & Laser Trussing',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-dj2',
@@ -209,14 +209,14 @@ const CATEGORY_CONFIGS = {
           thumbnailUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=400&q=80',
           mediaType: 'VIDEO',
           title: 'Live Sangeet DJ Drop (High Energy Video)',
-          provider: 'Cloudinary Video CDN',
+          provider: 'STARVNT Video Media',
         },
         {
           id: 'demo-dj3',
           url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Concert Stage Lighting',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
       ],
     }),
@@ -255,7 +255,7 @@ const CATEGORY_CONFIGS = {
           url: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Royal Bridal Portrait',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-m2',
@@ -263,14 +263,14 @@ const CATEGORY_CONFIGS = {
           thumbnailUrl: 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=400&q=80',
           mediaType: 'VIDEO',
           title: 'Bridal Makeover Video Reel (60s)',
-          provider: 'Cloudinary Video CDN',
+          provider: 'STARVNT Video Media',
         },
         {
           id: 'demo-m3',
           url: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'HD Airbrush Glass Glow',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
       ],
     }),
@@ -309,7 +309,7 @@ const CATEGORY_CONFIGS = {
           url: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Illuminated Night Lawn & Tents',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-v2',
@@ -317,14 +317,14 @@ const CATEGORY_CONFIGS = {
           thumbnailUrl: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=400&q=80',
           mediaType: 'VIDEO',
           title: 'Drone Aerial Venue Walkthrough (60s)',
-          provider: 'Cloudinary Video CDN',
+          provider: 'STARVNT Video Media',
         },
         {
           id: 'demo-v3',
           url: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Grand Pillarless Ballroom Banquet',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
       ],
     }),
@@ -363,7 +363,7 @@ const CATEGORY_CONFIGS = {
           url: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Candid Bridal Portrait',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-p2',
@@ -371,21 +371,21 @@ const CATEGORY_CONFIGS = {
           thumbnailUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80',
           mediaType: 'VIDEO',
           title: 'Photographer Behind The Scenes & Reel',
-          provider: 'Cloudinary Video CDN',
+          provider: 'STARVNT Video Media',
         },
         {
           id: 'demo-p3',
           url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Mandap Pheras Emotional Moment',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-p4',
           url: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Golden Hour Sunset Lawn Portrait',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
       ],
     }),
@@ -424,7 +424,7 @@ const CATEGORY_CONFIGS = {
           url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Royal Mandap Key Frame',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-cp2',
@@ -432,21 +432,21 @@ const CATEGORY_CONFIGS = {
           thumbnailUrl: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80',
           mediaType: 'VIDEO',
           title: '4K Cinematic Wedding Film Teaser',
-          provider: 'Cloudinary Video CDN',
+          provider: 'STARVNT Video Media',
         },
         {
           id: 'demo-cp3',
           url: 'https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Cinematic Pheras Detail',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
         {
           id: 'demo-cp4',
           url: 'https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=800&q=80',
           mediaType: 'IMAGE',
           title: 'Drone Aerial Night Lawn',
-          provider: 'Cloudinary CDN Ready',
+          provider: 'STARVNT Media Ready',
         },
       ],
     }),
@@ -490,6 +490,7 @@ export default function PortfolioPage() {
   // Cloudinary Multi-file Drag & Drop & Upload State
   const fileInputRef = useRef(null);
   const standaloneFileInputRef = useRef(null);
+  const projectFileInputRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadingToCloudinary, setUploadingToCloudinary] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
@@ -499,6 +500,10 @@ export default function PortfolioPage() {
   const [standaloneUrl, setStandaloneUrl] = useState('');
   const [standaloneTitle, setStandaloneTitle] = useState('');
   const [standaloneMediaType, setStandaloneMediaType] = useState('AUTO');
+  const [showProjectUrlInput, setShowProjectUrlInput] = useState(false);
+  const [projectUrl, setProjectUrl] = useState('');
+  const [projectUrlTitle, setProjectUrlTitle] = useState('');
+  const [projectUrlType, setProjectUrlType] = useState('AUTO');
 
   // Interactive Media Modals (Video Player & Lightbox & Project Showcase)
   const [activeVideoModal, setActiveVideoModal] = useState(null); // { url, title }
@@ -513,40 +518,54 @@ export default function PortfolioPage() {
     CATEGORY_CONFIGS['Photography'] ||
     CATEGORY_CONFIGS['Cinematic Production'];
 
+  function openProjectShowcase(project) {
+    setProjectDetailFilter('ALL');
+    setSelectedProjectShowcase(project);
+  }
+
+  async function refreshProjectShowcase(projectName) {
+    const projRes = await externalApi.call('/vendor/portfolio/projects');
+    if (projRes.ok && Array.isArray(projRes.projects)) {
+      setProjects(projRes.projects);
+      const updated = projRes.projects.find((p) => p.projectName === projectName);
+      if (updated) setSelectedProjectShowcase(updated);
+    }
+  }
+
   // Load portfolio data cleanly without injecting fake sample projects for new vendors
   const loadPortfolioData = useCallback(async () => {
     setLoading(true);
     try {
-      const [mediaRes, projRes, profileRes, actRes] = await Promise.all([
+      const [mediaResult, projResult, profileResult, actResult] = await Promise.allSettled([
         externalApi.call('/vendor/portfolio'),
         externalApi.call('/vendor/portfolio/projects'),
         externalApi.call('/vendor/profile'),
         externalApi.call('/vendor/activation-status'),
       ]);
 
-      if (profileRes.ok && profileRes.vendor) {
+      const mediaRes = mediaResult.status === 'fulfilled' ? mediaResult.value : null;
+      const projRes = projResult.status === 'fulfilled' ? projResult.value : null;
+      const profileRes = profileResult.status === 'fulfilled' ? profileResult.value : null;
+      const actRes = actResult.status === 'fulfilled' ? actResult.value : null;
+
+      if (profileRes?.ok && profileRes.vendor) {
         setVendorProfile(profileRes.vendor);
         if (profileRes.vendor.city) setCity(profileRes.vendor.city);
       }
 
-      if (actRes.ok && actRes.status) {
+      if (actRes?.ok && actRes.status) {
         setActivation(actRes.status);
       }
 
-      if (mediaRes.ok && Array.isArray(mediaRes.items)) {
+      if (mediaRes?.ok && Array.isArray(mediaRes.items)) {
         setItems(mediaRes.items);
-      } else {
-        setItems([]);
       }
 
-      if (projRes.ok && Array.isArray(projRes.projects)) {
+      if (projRes?.ok && Array.isArray(projRes.projects)) {
         setProjects(projRes.projects);
-      } else {
-        setProjects([]);
       }
     } catch (err) {
-      setItems([]);
-      setProjects([]);
+      console.warn('[PortfolioPage] Failed to load portfolio data:', err.message);
     } finally {
       setLoading(false);
     }
@@ -571,7 +590,7 @@ export default function PortfolioPage() {
         thumbnailUrl: currCategoryConfig.defaultCover,
         mediaType: 'IMAGE',
         title: 'Project Cover',
-        provider: 'Cloudinary CDN Ready',
+        provider: 'STARVNT Media Ready',
       },
     ]);
     setShowProjectModal(true);
@@ -597,6 +616,7 @@ export default function PortfolioPage() {
     setUploadProgress({ current: 0, total: filesList.length });
 
     const newItems = [];
+    const failedFiles = [];
 
     for (let i = 0; i < filesList.length; i++) {
       const file = filesList[i];
@@ -627,11 +647,12 @@ export default function PortfolioPage() {
           thumbnailUrl: thumb,
           mediaType: resType,
           title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
-          provider: uploadRes.provider === 'cloudinary' ? 'Cloudinary CDN' : 'Fast Media CDN',
+          provider: uploadRes.provider === 'cloudinary' ? 'STARVNT Media CDN' : 'STARVNT Secure Media',
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
         });
       } catch (err) {
         console.warn('Upload error for file:', file.name, err);
+        failedFiles.push(file.name);
       }
     }
 
@@ -641,6 +662,11 @@ export default function PortfolioPage() {
     }
     setUploadingToCloudinary(false);
     setUploadProgress(null);
+    if (failedFiles.length > 0) {
+      setFeedback(`Could not upload ${failedFiles.length} file(s): ${failedFiles.slice(0, 3).join(', ')}${failedFiles.length > 3 ? '...' : ''}`);
+    } else {
+      setFeedback(`Uploaded ${newItems.length} media file(s). Preview them before publishing.`);
+    }
   }
 
   // Add media via URL inside Project creation modal
@@ -708,6 +734,102 @@ export default function PortfolioPage() {
     }
   }
 
+  async function addMediaToProject(uploaded, project) {
+    const isVid = uploaded.resourceType === 'VIDEO' || uploaded.mediaType === 'VIDEO' || isVideoUrl(uploaded.url, uploaded.resourceType);
+    return externalApi.call('/vendor/portfolio/item', {
+      method: 'POST',
+      body: {
+        url: uploaded.url,
+        thumbnailUrl: uploaded.thumbnailUrl,
+        projectName: project.projectName,
+        title: uploaded.title || uploaded.filename || `${project.projectName} Media`,
+        mediaType: isVid ? 'VIDEO' : 'IMAGE',
+        eventType: project.eventType || currCategoryConfig.defaultEventType,
+        style: project.style || currCategoryConfig.defaultStyle,
+        city: project.location?.city || vendorProfile?.city || 'Mumbai',
+        venue: project.location?.venue || 'Venue',
+        tags: project.tags || [],
+      },
+    });
+  }
+
+  async function handleUploadMoreToProject(filesList) {
+    if (!selectedProjectShowcase || !filesList || filesList.length === 0) return;
+    setUploadingToCloudinary(true);
+    setUploadProgress({ current: 0, total: filesList.length });
+    setFeedback(null);
+
+    const failedFiles = [];
+    let addedCount = 0;
+
+    for (let i = 0; i < filesList.length; i++) {
+      const file = filesList[i];
+      setUploadProgress({ current: i + 1, total: filesList.length });
+      try {
+        const base64Data = await readFileAsDataURL(file);
+        const isVideo = file.type.startsWith('video') || /\.(mp4|mov|webm|mkv|avi)$/i.test(file.name);
+        const uploadRes = await externalApi.call('/vendor/portfolio/upload', {
+          method: 'POST',
+          body: {
+            file: base64Data,
+            filename: file.name,
+            mediaType: isVideo ? 'VIDEO' : 'IMAGE',
+          },
+        });
+
+        const url = uploadRes.ok && uploadRes.url ? uploadRes.url : base64Data;
+        await addMediaToProject(
+          {
+            ...uploadRes,
+            url,
+            mediaType: isVideo ? 'VIDEO' : 'IMAGE',
+            title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+          },
+          selectedProjectShowcase
+        );
+        addedCount += 1;
+      } catch (err) {
+        console.warn('Project upload error for file:', file.name, err);
+        failedFiles.push(file.name);
+      }
+    }
+
+    setUploadingToCloudinary(false);
+    setUploadProgress(null);
+    await refreshProjectShowcase(selectedProjectShowcase.projectName);
+    setFeedback(
+      failedFiles.length > 0
+        ? `Added ${addedCount} file(s). Failed: ${failedFiles.slice(0, 3).join(', ')}${failedFiles.length > 3 ? '...' : ''}`
+        : `Added ${addedCount} file(s) to "${selectedProjectShowcase.projectName}".`
+    );
+  }
+
+  async function handleAddProjectUrlMedia() {
+    if (!selectedProjectShowcase || !projectUrl.trim()) return;
+    const url = projectUrl.trim();
+    const isVid = projectUrlType === 'VIDEO' || (projectUrlType === 'AUTO' && isVideoUrl(url));
+
+    try {
+      await addMediaToProject(
+        {
+          url,
+          thumbnailUrl: getMediaThumbnail(url, isVid ? 'VIDEO' : 'IMAGE'),
+          mediaType: isVid ? 'VIDEO' : 'IMAGE',
+          title: projectUrlTitle.trim() || (isVid ? 'Project Video' : 'Project Photo'),
+        },
+        selectedProjectShowcase
+      );
+      setProjectUrl('');
+      setProjectUrlTitle('');
+      setProjectUrlType('AUTO');
+      setShowProjectUrlInput(false);
+      await refreshProjectShowcase(selectedProjectShowcase.projectName);
+      setFeedback(`Added ${isVid ? 'video' : 'photo'} to "${selectedProjectShowcase.projectName}".`);
+    } catch (err) {
+      setFeedback('Failed to add media to this project.');
+    }
+  }
+
   // Handle Project Creation via API with multiple photos & videos
   async function handleCreateProject(e) {
     e.preventDefault();
@@ -752,6 +874,12 @@ export default function PortfolioPage() {
 
       if (res.ok) {
         const pct = res.activation?.completionPercentage;
+        if (res.project) {
+          setProjects((prev) => [res.project, ...prev.filter((p) => p.projectName !== res.project.projectName)]);
+          if (Array.isArray(res.project.items)) {
+            setItems((prev) => [...res.project.items, ...prev]);
+          }
+        }
         setFeedback(
           `Project "${projectName}" successfully published with ${formattedItems.length} media files! Profile completion increased${
             pct ? ` to ${pct}%` : ''
@@ -819,7 +947,7 @@ export default function PortfolioPage() {
   return (
     <Page
       title="Portfolio & Projects"
-      sub="Organize multi-photo and video showcases, drag & drop files via Cloudinary CDN, and link YouTube/Vimeo video proofs."
+      sub="Organize multi-photo and video showcases, drag & drop files via STARVNT Media, and link YouTube/Vimeo video proofs."
       action={
         <div className="flex items-center gap-2 flex-wrap">
           <button
@@ -947,12 +1075,15 @@ export default function PortfolioPage() {
                 <Card
                   key={p._id || p.projectName || idx}
                   className="!p-0 overflow-hidden flex flex-col group hover:shadow-lg transition border border-gray-100 cursor-pointer"
-                  onClick={() => setSelectedProjectShowcase(p)}
+                  onClick={() => openProjectShowcase(p)}
                 >
                   <div className="relative aspect-16/9 bg-gray-100 overflow-hidden">
                     <img
                       src={getMediaThumbnail(p.coverUrl, 'IMAGE')}
                       alt={p.projectName}
+                      onError={(e) => {
+                        e.currentTarget.src = getMediaThumbnail('', 'IMAGE');
+                      }}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-navy/85 via-navy/20 to-transparent opacity-90" />
@@ -1166,7 +1297,7 @@ export default function PortfolioPage() {
               <div className="space-y-1">
                 <div className="font-extrabold text-base text-navy">No Media Uploaded Yet</div>
                 <p className="text-xs text-muted max-w-md mx-auto leading-relaxed">
-                  Your media library is empty. Upload multiple photos or videos via Cloudinary, or paste YouTube/Vimeo links.
+                  Your media library is empty. Upload multiple photos or videos via STARVNT Media, or paste YouTube/Vimeo links.
                 </p>
               </div>
               <div className="pt-2 flex justify-center gap-2">
@@ -1312,7 +1443,7 @@ export default function PortfolioPage() {
                       <span>+ Add via URL (YouTube/MP4)</span>
                     </button>
                     <span className="text-[10px] text-primary font-bold bg-primary-soft px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Cloudinary Enabled
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> STARVNT Media Enabled
                     </span>
                   </div>
                 </div>
@@ -1323,7 +1454,7 @@ export default function PortfolioPage() {
                     <div className="text-[11px] font-bold text-navy flex items-center justify-between">
                       <span>Add Photo or Video Link</span>
                       <span className="text-muted font-normal text-[10px]">
-                        YouTube, Vimeo, Cloudinary, MP4, WebM, or image link
+                        YouTube, Vimeo, MP4, WebM, or image link
                       </span>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
@@ -1398,7 +1529,7 @@ export default function PortfolioPage() {
                     <div className="py-3 space-y-2">
                       <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
                       <div className="font-bold text-navy text-xs">
-                        Uploading to Cloudinary CDN ({uploadProgress?.current || 1} of{' '}
+                        Uploading to STARVNT Media ({uploadProgress?.current || 1} of{' '}
                         {uploadProgress?.total || 1})...
                       </div>
                       <div className="text-[10px] text-muted">Optimizing photos & videos</div>
@@ -1413,7 +1544,7 @@ export default function PortfolioPage() {
                         or tap to Browse (Select multiple files from computer or mobile)
                       </div>
                       <div className="text-[10px] text-muted">
-                        Cloudinary CDN · JPG, PNG, WEBP, MP4, MOV, WebM (Multiple files supported)
+                        STARVNT Media · JPG, PNG, WEBP, MP4, MOV, WebM (multiple files supported)
                       </div>
                     </div>
                   )}
@@ -1526,7 +1657,7 @@ export default function PortfolioPage() {
                           thumbnailUrl: preset.type === 'VIDEO' ? 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400&q=80' : preset.url,
                           mediaType: preset.type,
                           title: preset.label,
-                          provider: 'Cloudinary CDN Ready',
+                          provider: 'STARVNT Media Ready',
                         };
                         setMediaItems((prev) => [...prev, newItem]);
                         if (!coverUrl) setCoverUrl(preset.url);
@@ -1598,7 +1729,7 @@ export default function PortfolioPage() {
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-navy outline-none"
                 />
                 <p className="text-[10px] text-muted mt-1">
-                  Supports YouTube, Vimeo, Cloudinary, MP4 video links, and web photos.
+                  Supports YouTube, Vimeo, MP4 video links, and web photos.
                 </p>
               </div>
               <div>
@@ -1681,8 +1812,19 @@ export default function PortfolioPage() {
             </div>
 
             {/* Sub-filter within project */}
-            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-              <div className="flex items-center gap-2 text-xs">
+            <input
+              ref={projectFileInputRef}
+              type="file"
+              multiple
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) handleUploadMoreToProject(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2 gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-xs flex-wrap">
                 <button
                   onClick={() => setProjectDetailFilter('ALL')}
                   className={`px-3 py-1.5 rounded-xl font-bold transition ${
@@ -1723,13 +1865,65 @@ export default function PortfolioPage() {
                 </button>
               </div>
 
-              <button
-                onClick={() => handleDeleteProject(selectedProjectShowcase.projectName)}
-                className="text-xs text-red-600 font-bold hover:underline"
-              >
-                Delete Project
-              </button>
+              <div className="flex items-center gap-2 text-xs flex-wrap">
+                <button
+                  onClick={() => projectFileInputRef.current?.click()}
+                  disabled={uploadingToCloudinary}
+                  className="px-3 py-1.5 rounded-xl bg-primary text-white font-bold hover:bg-primary-dark disabled:opacity-60 inline-flex items-center gap-1.5"
+                >
+                  <Icon name="upload" size={12} />
+                  {uploadingToCloudinary ? `Uploading ${uploadProgress?.current || 1}/${uploadProgress?.total || 1}` : 'Upload More'}
+                </button>
+                <button
+                  onClick={() => setShowProjectUrlInput((v) => !v)}
+                  className="px-3 py-1.5 rounded-xl bg-lavender text-navy font-bold hover:bg-primary-soft inline-flex items-center gap-1.5"
+                >
+                  <Icon name="link" size={12} />
+                  Add URL
+                </button>
+                <button
+                  onClick={() => handleDeleteProject(selectedProjectShowcase.projectName)}
+                  className="px-3 py-1.5 rounded-xl bg-red-50 text-red-700 font-bold hover:bg-red-100"
+                >
+                  Delete Project
+                </button>
+              </div>
             </div>
+
+            {showProjectUrlInput && (
+              <div className="rounded-2xl border border-gray-100 bg-lavender/40 p-3 space-y-2 text-xs">
+                <div className="grid sm:grid-cols-[1fr_180px_120px_auto] gap-2">
+                  <input
+                    value={projectUrl}
+                    onChange={(e) => setProjectUrl(e.target.value)}
+                    placeholder="Paste YouTube, Vimeo, MP4, WebM, or image URL"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 font-medium text-navy outline-none focus:border-primary"
+                  />
+                  <input
+                    value={projectUrlTitle}
+                    onChange={(e) => setProjectUrlTitle(e.target.value)}
+                    placeholder="Title"
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 font-medium text-navy outline-none focus:border-primary"
+                  />
+                  <select
+                    value={projectUrlType}
+                    onChange={(e) => setProjectUrlType(e.target.value)}
+                    className="rounded-xl border border-gray-200 bg-white px-3 py-2 font-bold text-navy outline-none focus:border-primary"
+                  >
+                    <option value="AUTO">Auto</option>
+                    <option value="IMAGE">Photo</option>
+                    <option value="VIDEO">Video</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddProjectUrlMedia}
+                    className="rounded-xl bg-primary text-white px-4 py-2 font-bold hover:bg-primary-dark"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Media items gallery grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -1755,6 +1949,9 @@ export default function PortfolioPage() {
                         <img
                           src={getMediaThumbnail(item.url, item.mediaType, item.thumbnailUrl)}
                           alt={item.title}
+                          onError={(e) => {
+                            e.currentTarget.src = getMediaThumbnail('', item.mediaType);
+                          }}
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                         />
                         {isVid && (
@@ -1774,8 +1971,33 @@ export default function PortfolioPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="p-2 bg-white text-[11px] font-bold text-navy truncate">
-                        {item.title}
+                      <div className="p-2 bg-white space-y-2">
+                        <div className="text-[11px] font-bold text-navy truncate">
+                          {item.title}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isVid) setActiveVideoModal({ url: item.url, title: item.title });
+                              else setActivePhotoModal({ url: item.url, title: item.title });
+                            }}
+                            className="flex-1 rounded-lg bg-lavender text-navy px-2 py-1 text-[10px] font-extrabold hover:bg-primary-soft"
+                          >
+                            Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteItem(item._id);
+                            }}
+                            className="rounded-lg bg-red-50 text-red-700 px-2 py-1 text-[10px] font-extrabold hover:bg-red-100"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1785,10 +2007,10 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      {/* INTERACTIVE VIDEO PLAYER MODAL (YouTube, Vimeo, MP4, Cloudinary) */}
+      {/* INTERACTIVE VIDEO PLAYER MODAL (YouTube, Vimeo, MP4) */}
       {activeVideoModal && (
         <div
-          className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-[fade_.15s_ease-out]"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-[fade_.15s_ease-out]"
           onClick={() => setActiveVideoModal(null)}
         >
           <div
@@ -1851,7 +2073,7 @@ export default function PortfolioPage() {
       {/* FULLSCREEN PHOTO LIGHTBOX */}
       {activePhotoModal && (
         <div
-          className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-md animate-[fade_.15s_ease-out]"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-md animate-[fade_.15s_ease-out]"
           onClick={() => setActivePhotoModal(null)}
         >
           <div
