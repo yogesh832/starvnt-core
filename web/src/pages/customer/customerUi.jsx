@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
+import { PageLoadingSkeleton } from '../../components/LoadingSkeleton.jsx';
 import { EVENT_STATUS_LABEL, budgetText, formatDate } from './format.js';
 
 const STATUS_TONE = {
@@ -113,6 +114,10 @@ export function Empty({ title, children, action }) {
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
+}
+
+export function CustomerPageSkeleton({ cards = 3 }) {
+  return <PageLoadingSkeleton cards={cards} />;
 }
 
 const CATEGORY_ICON = {

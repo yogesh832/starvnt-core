@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Page, Card} from './shared.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import { CardListSkeleton, SkeletonBlock, SkeletonLine } from '../../../components/LoadingSkeleton.jsx';
 
 function parseLocalDate(dateStr) {
   if (!dateStr) return null;
@@ -24,9 +25,11 @@ export default function CalendarPage() {
   const [newBlockoutDate, setNewBlockoutDate] = useState('');
   const [newBlockoutReason, setNewBlockoutReason] = useState('');
   const [showBlockModal, setShowBlockModal] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const loadCalendarData = useCallback(async () => {
     try {
+      setLoading(true);
       const [bkRes, blRes] = await Promise.all([
         externalApi.call('/vendor/bookings'),
         externalApi.call('/vendor/availability/blockouts'),
@@ -40,6 +43,8 @@ export default function CalendarPage() {
       }
     } catch (err) {
       console.warn('[CalendarPage] Failed to fetch live calendar data:', err.message);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -142,6 +147,29 @@ export default function CalendarPage() {
         </button>
       }
     >
+      {loading ? (
+        <div className="grid lg:grid-cols-[1fr_340px] gap-5">
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <SkeletonLine className="w-40 h-5" />
+              <div className="flex gap-2">
+                <SkeletonBlock className="w-8 h-8" />
+                <SkeletonBlock className="w-14 h-8" />
+                <SkeletonBlock className="w-8 h-8" />
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: 35 }).map((_, idx) => (
+                <SkeletonBlock key={idx} className="h-[50px] rounded-2xl" />
+              ))}
+            </div>
+          </Card>
+          <div className="space-y-4">
+            <CardListSkeleton count={2} compact />
+            <CardListSkeleton count={1} compact />
+          </div>
+        </div>
+      ) : (
       <div className="grid lg:grid-cols-[1fr_340px] gap-5">
         <Card>
           <div className="flex items-center justify-between mb-4">
@@ -302,8 +330,10 @@ export default function CalendarPage() {
           </Card>
         </div>
       </div>
+      )}
 
       {/* Blocked Dates Registry Card (All Blockouts from DB) */}
+      {!loading && (
       <Card className="mt-5" title={`Blocked Dates Registry (${blockouts.length} active in DB)`}>
         {blockouts.length === 0 ? (
           <p className="text-xs text-muted">No blocked dates currently registered. All calendar slots are open for client bookings.</p>
@@ -332,6 +362,7 @@ export default function CalendarPage() {
           </div>
         )}
       </Card>
+      )}
 
       {/* Modal for Blocking Date */}
       {showBlockModal && (

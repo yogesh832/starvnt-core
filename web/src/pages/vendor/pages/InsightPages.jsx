@@ -3,6 +3,7 @@ import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import { CardListSkeleton, MetricSkeleton, SkeletonLine, TableSkeleton } from '../../../components/LoadingSkeleton.jsx';
 
 /* ── Payments ─────────────────────────────────────────────────────────────── */
 export function PaymentsPage() {
@@ -65,21 +66,28 @@ export function PaymentsPage() {
 
   return (
     <Page title="Payments" sub="Read-only payment truth from Core — escrow, releases and settlement state.">
-      <div className="grid sm:grid-cols-3 gap-3.5">
-        {stats.map((s) => (
-          <Card key={s.label} className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${s.iconBg}`}>
-              <Icon name={s.icon} size={18} />
-            </div>
-            <div>
-              <div className="text-lg font-extrabold text-navy">{s.value}</div>
-              <div className="text-[11px] text-muted">{s.label}</div>
-              <div className="text-[10px] text-muted/80">{s.foot}</div>
-            </div>
-          </Card>
-        ))}
-      </div>
+      {loading && bookings.length === 0 ? (
+        <MetricSkeleton count={3} />
+      ) : (
+        <div className="grid sm:grid-cols-3 gap-3.5">
+          {stats.map((s) => (
+            <Card key={s.label} className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${s.iconBg}`}>
+                <Icon name={s.icon} size={18} />
+              </div>
+              <div>
+                <div className="text-lg font-extrabold text-navy">{s.value}</div>
+                <div className="text-[11px] text-muted">{s.label}</div>
+                <div className="text-[10px] text-muted/80">{s.foot}</div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
+      {loading && bookings.length === 0 ? (
+        <TableSkeleton columns={7} rows={5} minWidth={620} />
+      ) : (
       <Card className="!p-0 overflow-x-auto" title="Payment history & Core Escrow">
         <table className="w-full text-[13px] min-w-[620px]">
           <thead>
@@ -111,6 +119,7 @@ export function PaymentsPage() {
           </tbody>
         </table>
       </Card>
+      )}
 
     </Page>
   );
@@ -179,27 +188,33 @@ export function ReviewsPage() {
   return (
     <Page title="Reviews" sub={subTitle}>
       {/* Metric Cards */}
-      <div className="grid sm:grid-cols-3 gap-3.5 mb-1">
-        <Card className="text-center">
-          <div className="text-2xl font-extrabold text-navy">
-            {stats.totalReviews > 0 ? stats.averageRating : '0.0'}
-          </div>
-          <div className="text-xs text-muted mt-1">Average rating</div>
-        </Card>
-        <Card className="text-center">
-          <div className="text-2xl font-extrabold text-navy">{stats.totalReviews}</div>
-          <div className="text-xs text-muted mt-1">Verified reviews</div>
-        </Card>
-        <Card className="text-center">
-          <div className="text-2xl font-extrabold text-navy">
-            {stats.totalReviews > 0 ? stats.recommendPercentage : '0%'}
-          </div>
-          <div className="text-xs text-muted mt-1">Would recommend</div>
-        </Card>
-      </div>
+      {loading && reviews.length === 0 ? (
+        <MetricSkeleton count={3} />
+      ) : (
+        <div className="grid sm:grid-cols-3 gap-3.5 mb-1">
+          <Card className="text-center">
+            <div className="text-2xl font-extrabold text-navy">
+              {stats.totalReviews > 0 ? stats.averageRating : '0.0'}
+            </div>
+            <div className="text-xs text-muted mt-1">Average rating</div>
+          </Card>
+          <Card className="text-center">
+            <div className="text-2xl font-extrabold text-navy">{stats.totalReviews}</div>
+            <div className="text-xs text-muted mt-1">Verified reviews</div>
+          </Card>
+          <Card className="text-center">
+            <div className="text-2xl font-extrabold text-navy">
+              {stats.totalReviews > 0 ? stats.recommendPercentage : '0%'}
+            </div>
+            <div className="text-xs text-muted mt-1">Would recommend</div>
+          </Card>
+        </div>
+      )}
 
       {/* Reviews List or Clean Blank State */}
       <div className="space-y-4">
+        {loading && reviews.length === 0 && <CardListSkeleton count={3} />}
+
         {reviews.map((r) => {
           const stars = Math.round(r.rating || 5);
           const initials = (r.customerName || 'Client')
@@ -332,10 +347,12 @@ export function AnalyticsPage() {
     quotesCount: 0,
     bookingsCount: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadCounts() {
       try {
+        setLoading(true);
         const res = await externalApi.call('/vendor/badge-counts');
         if (res.ok) {
           setCounts({
@@ -346,6 +363,8 @@ export function AnalyticsPage() {
         }
       } catch (err) {
         console.warn('[AnalyticsPage] Failed to load counts:', err.message);
+      } finally {
+        setLoading(false);
       }
     }
     loadCounts();
@@ -367,6 +386,13 @@ export function AnalyticsPage() {
     <Page title="Analytics" sub="Conversion funnels, turnaround times and verified platform performance.">
       <div className="grid lg:grid-cols-2 gap-5">
         <Card title="Operational Funnel Overview">
+          {loading ? (
+            <div className="p-4 space-y-4">
+              <SkeletonLine className="w-full h-8" />
+              <SkeletonLine className="w-5/6 h-8" />
+              <SkeletonLine className="w-4/6 h-8" />
+            </div>
+          ) : (
           <div className="p-4 space-y-4">
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-semibold">
@@ -398,9 +424,20 @@ export function AnalyticsPage() {
               </div>
             </div>
           </div>
+          )}
         </Card>
 
         <Card title="Conversion Metrics">
+          {loading ? (
+            <div className="p-4 space-y-4">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <div key={idx} className="flex items-center justify-between">
+                  <SkeletonLine className="w-40" />
+                  <SkeletonLine className="w-24" />
+                </div>
+              ))}
+            </div>
+          ) : (
           <ul className="divide-y divide-gray-50 text-sm">
             {rows.map(([label, val, change]) => (
               <li key={label} className="py-2.5 flex items-center justify-between">
@@ -414,6 +451,7 @@ export function AnalyticsPage() {
               </li>
             ))}
           </ul>
+          )}
         </Card>
       </div>
     </Page>

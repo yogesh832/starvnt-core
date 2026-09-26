@@ -6,6 +6,7 @@ import {
   ArtTile,
   AvailabilityPill,
   BackLink,
+  CustomerPageSkeleton,
   DemoBadge,
   Empty,
   PriceText,
@@ -26,7 +27,7 @@ const byPrice = (dir) => (a, b) => {
 /** Open plan items, each leading to its options. */
 function CategoryList({ eventId }) {
   const { data, error, loading } = useLoad(() => customerApi.services(eventId), [eventId]);
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerPageSkeleton cards={3} />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const { event, categories } = data;
   return (
@@ -109,7 +110,7 @@ function CategoryOptions({ eventId, category }) {
     return list; // 'recommended' keeps the server order: bookable first, then price
   }, [data, sort]);
 
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerPageSkeleton cards={6} />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const { event, label, options, bestValueId, selectedOptionId } = data;
   const chosen = options.find((o) => o.id === selectedOptionId);

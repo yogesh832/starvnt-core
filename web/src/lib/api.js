@@ -3,6 +3,51 @@
  * context); refresh happens via HttpOnly cookie scoped to each domain's
  * auth path. On 401 we attempt exactly one refresh then retry once.
  */
+
+const BACKGROUND_PATH_PATTERNS = [
+  '/vendor/badge-counts',
+  '/vendor/notifications',
+  '/vendor/notifications/read-all',
+];
+
+let activeForegroundRequests = 0;
+
+function isBackgroundRequest(path) {
+  return BACKGROUND_PATH_PATTERNS.some((pattern) => String(path || '').includes(pattern));
+}
+
+function emitApiActivity() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("starvnt:api-activity", {
+      detail: { active: Math.max(0, activeForegroundRequests) },
+    }),
+  );
+}
+
+function startApiActivity(path) {
+  if (isBackgroundRequest(path)) return () => {};
+  activeForegroundRequests += 1;
+  emitApiActivity();
+  return () => {
+    activeForegroundRequests = Math.max(0, activeForegroundRequests - 1);
+    emitApiActivity();
+  };
+}
+
+function createRequestTimeout(method, body) {
+  const controller = new AbortController();
+  const hasBody = body !== undefined && body !== null;
+  const isUploadLike =
+    body instanceof FormData ||
+    body instanceof Blob ||
+    (typeof body === "object" && body?.file) ||
+    (typeof body === "object" && Array.isArray(body?.files));
+  const timeoutMs = isUploadLike ? 120000 : method === "GET" && !hasBody ? 35000 : 60000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { controller, timeoutId };
+}
+
 export function makeApi(base, refreshPath, options = {}) {
   const storageKey = options.storageKey || "";
   let token = null;
@@ -44,16 +89,34 @@ export function makeApi(base, refreshPath, options = {}) {
   async function raw(path, { method = "GET", body, headers = {} } = {}, retry = true) {
     const hasBody = body !== undefined && body !== null;
     const isJsonBody = hasBody && !(body instanceof FormData) && !(body instanceof Blob) && typeof body !== "string";
-    const res = await fetch(`${base}${path}`, {
-      method,
-      credentials: "include",
-      headers: {
-        ...(isJsonBody ? { "Content-Type": "application/json" } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...headers,
-      },
-      body: hasBody ? (isJsonBody ? JSON.stringify(body) : body) : undefined,
-    });
+    const endActivity = startApiActivity(path);
+    const { controller, timeoutId } = createRequestTimeout(method, body);
+
+    let res;
+    try {
+      res = await fetch(`${base}${path}`, {
+        method,
+        credentials: "include",
+        signal: controller.signal,
+        headers: {
+          ...(isJsonBody ? { "Content-Type": "application/json" } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...headers,
+        },
+        body: hasBody ? (isJsonBody ? JSON.stringify(body) : body) : undefined,
+      });
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        const timeoutErr = new Error("This request is taking too long. Please try again.");
+        timeoutErr.status = 408;
+        timeoutErr.data = { error: "REQUEST_TIMEOUT" };
+        throw timeoutErr;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+      endActivity();
+    }
 
     if (res.status === 401 && retry) {
       const refreshed = await refresh();

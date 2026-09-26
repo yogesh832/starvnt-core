@@ -3,6 +3,7 @@ import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import { MetricSkeleton, TableSkeleton } from '../../../components/LoadingSkeleton.jsx';
 
 const PIPELINE = [
   { stage: 'Draft', hint: 'Finish pricing & terms' },
@@ -83,16 +84,23 @@ export default function Quotes() {
       }
     >
       {/* Pipeline strip — 2-col on mobile, 5-col on sm+ */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {PIPELINE.map((p) => (
-          <div key={p.stage} className="bg-white rounded-xl px-3 py-3 shadow-xs border border-gray-100">
-            <div className="text-lg font-extrabold text-navy">{(stages[p.stage] || []).length}</div>
-            <div className="text-xs font-semibold text-navy mt-0.5">{p.stage}</div>
-            <div className="text-[10px] text-muted">{p.hint}</div>
-          </div>
-        ))}
-      </div>
+      {loading && quotes.length === 0 ? (
+        <MetricSkeleton count={5} />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          {PIPELINE.map((p) => (
+            <div key={p.stage} className="bg-white rounded-xl px-3 py-3 shadow-xs border border-gray-100">
+              <div className="text-lg font-extrabold text-navy">{(stages[p.stage] || []).length}</div>
+              <div className="text-xs font-semibold text-navy mt-0.5">{p.stage}</div>
+              <div className="text-[10px] text-muted">{p.hint}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
+      {loading && quotes.length === 0 ? (
+        <TableSkeleton columns={9} rows={5} minWidth={680} />
+      ) : (
       <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-xs bg-white">
         <table className="w-full text-[13px] min-w-[680px]">
           <thead>
@@ -150,6 +158,7 @@ export default function Quotes() {
           </tbody>
         </table>
       </div>
+      )}
 
     </Page>
 

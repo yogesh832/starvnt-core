@@ -4,6 +4,34 @@ import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 
+function EnquiriesSkeleton() {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 4 }).map((_, idx) => (
+        <Card key={idx} className="!p-0 overflow-hidden">
+          <div className="p-4 sm:p-5">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="h-4 w-56 max-w-full rounded-full bg-gray-200 animate-pulse" />
+                <div className="h-3 w-80 max-w-full rounded-full bg-gray-100 animate-pulse" />
+              </div>
+              <div className="w-12 h-10 rounded-xl bg-primary-soft animate-pulse" />
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+              {Array.from({ length: 6 }).map((__, innerIdx) => (
+                <div key={innerIdx} className="rounded-xl bg-lavender p-3 space-y-2">
+                  <div className="h-2.5 w-20 rounded-full bg-gray-200 animate-pulse" />
+                  <div className="h-3 w-full rounded-full bg-gray-100 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function Enquiries() {
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +141,9 @@ export default function Enquiries() {
         </div>
       )}
 
+      {loading && opportunities.length === 0 ? (
+        <EnquiriesSkeleton />
+      ) : (
       <div className="space-y-4">
         {opportunities.map((o) => (
           <Card key={o.id} className="!p-0 overflow-hidden">
@@ -190,6 +221,7 @@ export default function Enquiries() {
           </Card>
         )}
       </div>
+      )}
 
       {/* Quote Submission Modal */}
       {quoteModalOpp && (

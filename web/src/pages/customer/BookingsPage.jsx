@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, DemoBadge, Empty, useLoad } from './customerUi.jsx';
+import { BackLink, CustomerPageSkeleton, DemoBadge, Empty, useLoad } from './customerUi.jsx';
 import { formatDate, formatINR } from './format.js';
 import { openCheckout } from './razorpay.js';
 
@@ -102,7 +102,7 @@ export default function BookingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting]);
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <CustomerPageSkeleton cards={4} />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">

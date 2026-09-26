@@ -220,3 +220,15 @@ html.dark .border-rose-200 { border-color: rgba(244, 63, 94, 0.3) !important; }
 html.dark .border-red-200 { border-color: rgba(239, 68, 68, 0.3) !important; }
 html.dark .border-sky-200 { border-color: rgba(14, 165, 233, 0.3) !important; }
 html.dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.3) !important; }
+
+@keyframes loadingBar {
+  0% {
+    transform: translateX(-120%);
+  }
+  50% {
+    transform: translateX(120%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}

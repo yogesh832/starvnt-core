@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Page, Card} from './shared.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import { CardListSkeleton } from '../../../components/LoadingSkeleton.jsx';
 
 function formatMessageTime(dateStr) {
   if (!dateStr) return '';
@@ -116,10 +117,7 @@ export default function Messages() {
       sub="Direct, authenticated client communications and booking coordination."
     >
       {loading && threads.length === 0 ? (
-        <Card className="p-12 text-center">
-          <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-xs text-muted">Loading conversations...</p>
-        </Card>
+        <CardListSkeleton count={4} />
       ) : threads.length === 0 ? (
         <Card className="text-center py-16 px-6 max-w-2xl mx-auto">
           <div className="w-16 h-16 rounded-3xl bg-primary-soft text-primary grid place-items-center mx-auto mb-4 shadow-xs">

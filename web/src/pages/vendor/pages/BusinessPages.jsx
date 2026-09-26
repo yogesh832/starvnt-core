@@ -6,6 +6,7 @@ import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 import MapLocationPicker from '../../../components/MapLocationPicker.jsx';
 import { useTheme } from '../../../lib/ThemeContext.jsx';
+import { CardListSkeleton, MetricSkeleton, SkeletonLine } from '../../../components/LoadingSkeleton.jsx';
 
 /* ── Services ─────────────────────────────────────────────────────────────── */
 export function ServicesPage() {
@@ -345,6 +346,9 @@ export function ServicesPage() {
         </div>
       )}
 
+      {loading && services.length === 0 ? (
+        <CardListSkeleton count={4} />
+      ) : (
       <div className="grid sm:grid-cols-2 gap-4">
         {services.map((s) => {
           const hasCap = s.capabilities && s.capabilities.length > 0;
@@ -534,6 +538,7 @@ export function ServicesPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Add Service Modal */}
       {showAddModal && (
@@ -2288,6 +2293,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const picInputRef = useRef(null);
 
   const [activation, setActivation] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [saved, setSaved] = useState(false);
 
   // Operating Locations state
@@ -2332,6 +2338,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
   const loadProfile = useCallback(async () => {
     try {
+      setLoadingProfile(true);
       const [profRes, actRes] = await Promise.all([
         externalApi.call('/vendor/profile'),
         externalApi.call('/vendor/activation-status'),
@@ -2357,6 +2364,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
       }
     } catch (err) {
       console.warn('[ProfilePage] Error loading profile:', err.message);
+    } finally {
+      setLoadingProfile(false);
     }
   }, [business, user, loadGoogleInfo]);
 
@@ -2600,8 +2609,25 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   return (
     <Page
       title="Vendor Profile & Business Hub"
-      sub={`${profile.businessName || 'Your Brand'} — ${profile.category || 'Setup Pending'} · Central administration for brand profile, operational locations, KYC documents, and account settings.`}
+      sub={
+        loadingProfile
+          ? 'Loading vendor profile and readiness details.'
+          : `${profile.businessName || 'Your Brand'} — ${profile.category || 'Setup Pending'} · Central administration for brand profile, operational locations, KYC documents, and account settings.`
+      }
     >
+    {loadingProfile ? (
+      <div className="space-y-5">
+        <MetricSkeleton count={3} />
+        <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
+          <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-xs space-y-2">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <SkeletonLine key={idx} className="h-10 w-full" />
+            ))}
+          </div>
+          <CardListSkeleton count={4} />
+        </div>
+      </div>
+    ) : (
     <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
       {/* Profile Sub-Sidebar Navigation */}
         <div className="bg-white rounded-2xl p-2 border border-gray-100 shadow-xs lg:sticky lg:top-20 shrink-0">
@@ -3134,6 +3160,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           )}
         </div>
       </div>
+    )}
 
       {/* Add / Edit Location Map Modal */}
       {showMapModal && (

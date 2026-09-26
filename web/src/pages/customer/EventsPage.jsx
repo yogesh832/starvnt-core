@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { Empty, EventCard, useLoad } from './customerUi.jsx';
+import { CustomerPageSkeleton, Empty, EventCard, useLoad } from './customerUi.jsx';
 
 export default function EventsPage() {
   const { data, error, loading } = useLoad(() => customerApi.events(), []);
@@ -21,7 +21,7 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {loading && <div className="text-xs text-muted">Loading…</div>}
+      {loading && <CustomerPageSkeleton cards={4} />}
       {error && <div className="text-xs text-red-500">{errorText(error, "Couldn't load your events.")}</div>}
       {!loading && !error && events.length === 0 && (
         <Empty title="No events yet">Start a conversation with Aura+ and your first event will appear here.</Empty>

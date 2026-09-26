@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, DemoBadge, Empty, categoryIcon, useLoad } from './customerUi.jsx';
+import { BackLink, CustomerPageSkeleton, DemoBadge, Empty, categoryIcon, useLoad } from './customerUi.jsx';
 
 const time = (t) => (t ? new Date(t).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null);
 
@@ -20,7 +20,7 @@ export default function EventDayPage() {
   const { id } = useParams();
   const { data, error, loading } = useLoad(() => customerApi.eventDay(id), [id]);
 
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerPageSkeleton cards={3} />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const { event, live, services, allCompleted } = data;
 

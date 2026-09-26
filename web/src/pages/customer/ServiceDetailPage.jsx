@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
-import { ArtTile, AvailabilityPill, BackLink, DemoBadge, PriceText, RatingText, useLoad } from './customerUi.jsx';
+import { ArtTile, AvailabilityPill, BackLink, CustomerPageSkeleton, DemoBadge, PriceText, RatingText, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
 import SelectOptionButton from './SelectOptionButton.jsx';
 
@@ -21,7 +21,7 @@ export default function ServiceDetailPage() {
   const { id, serviceId } = useParams();
   const { data, error, loading, setData } = useLoad(() => customerApi.serviceDetail(id, serviceId), [id, serviceId]);
 
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerPageSkeleton cards={3} />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">

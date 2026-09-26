@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, useLoad } from './customerUi.jsx';
+import { BackLink, CustomerPageSkeleton, useLoad } from './customerUi.jsx';
+import { CardListSkeleton } from '../../components/LoadingSkeleton.jsx';
 
 /** Event Circle: one thread per context (whole event, each booking, a service). */
 export default function CirclePage() {
@@ -36,7 +37,7 @@ export default function CirclePage() {
     }
   }
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <CustomerPageSkeleton cards={3} />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const { event, contexts } = data;
   const activeKey = bookingId ? `booking:${bookingId}` : requirementId ? `requirement:${requirementId}` : 'event';
@@ -67,7 +68,7 @@ export default function CirclePage() {
       <div className="text-[11px] text-muted">{active.path.join(' → ')}</div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3 min-h-[240px]">
-        {thread.loading && !thread.data && <div className="text-xs text-muted">Loading…</div>}
+        {thread.loading && !thread.data && <CardListSkeleton count={2} compact />}
         {thread.error && <div className="text-xs text-red-500">{errorText(thread.error)}</div>}
         {thread.data?.messages.length === 0 && <div className="text-xs text-muted">No messages yet. Ask anything about this — the STARVNT team and your vendor reply here.</div>}
         {thread.data?.messages.map((m) => (

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { AskBox, Empty, EventCard, useLoad } from './customerUi.jsx';
+import { AskBox, CustomerPageSkeleton, Empty, EventCard, useLoad } from './customerUi.jsx';
 import { attentionLink } from './format.js';
 
 const START_CHIPS = ["My daughter's wedding", 'Plan my birthday', 'Corporate event for 300 people', 'Arrange a Puja', 'Plan an anniversary'];
@@ -30,7 +30,7 @@ export default function HomePage({ firstName }) {
         </Link>
       </section>
 
-      {loading && <div className="text-xs text-muted">Loading…</div>}
+      {loading && <CustomerPageSkeleton cards={3} />}
       {error && <div className="text-xs text-red-500">{errorText(error, "Couldn't load your events.")}</div>}
 
       {!loading && !error && (

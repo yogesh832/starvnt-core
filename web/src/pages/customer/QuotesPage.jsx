@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, DemoBadge, Empty, useLoad } from './customerUi.jsx';
+import { BackLink, CustomerPageSkeleton, DemoBadge, Empty, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
 
 const QUOTE_STATUS = {
@@ -89,7 +89,7 @@ export default function QuotesPage() {
     }
   }
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <CustomerPageSkeleton cards={4} />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">

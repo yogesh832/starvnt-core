@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, ProgressBar, useLoad } from './customerUi.jsx';
+import { BackLink, CustomerPageSkeleton, ProgressBar, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
 
 function lineFor(i) {
@@ -13,7 +13,7 @@ function lineFor(i) {
 export default function BudgetPage() {
   const { id } = useParams();
   const { data, error, loading } = useLoad(() => customerApi.dashboard(id), [id]);
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerPageSkeleton cards={3} />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const { event, summary } = data;
   const b = summary.budget;

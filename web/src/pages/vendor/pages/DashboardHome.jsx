@@ -4,6 +4,7 @@ import Icon from '../../../components/Icon.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import { externalApi } from '../../../lib/api.js';
 import { useExternalAuth } from '../../../auth/ExternalAuthContext.jsx';
+import { CardListSkeleton, MetricSkeleton, SkeletonBlock, SkeletonLine, TableSkeleton } from '../../../components/LoadingSkeleton.jsx';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = [
@@ -517,6 +518,87 @@ function NotificationsCard({
   );
 }
 
+function VendorDashboardSkeleton({ business }) {
+  return (
+    <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
+      <div className="space-y-6 min-w-0 w-full">
+        <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-xs border border-gray-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <SkeletonBlock className="w-12 h-12 rounded-2xl shrink-0" />
+              <div className="space-y-2 min-w-0 flex-1">
+                <SkeletonLine className="w-56 h-5" />
+                <SkeletonLine className="w-72 max-w-full" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <SkeletonLine className="w-24 h-9" />
+              <SkeletonLine className="w-24 h-9" />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl p-5 sm:p-6 border border-primary/15 bg-white shadow-xs space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-3 flex-1">
+              <SkeletonLine className="w-64 h-4" />
+              <SkeletonLine className="w-96 max-w-full h-5" />
+              <SkeletonLine className="w-full max-w-2xl" />
+              <SkeletonLine className="w-5/6 max-w-xl" />
+            </div>
+            <div className="flex gap-2">
+              <SkeletonLine className="w-36 h-10" />
+              <SkeletonLine className="w-24 h-10" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <SkeletonLine className="w-48" />
+              <SkeletonLine className="w-20" />
+            </div>
+            <SkeletonLine className="w-full h-2.5" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3.5">
+            {Array.from({ length: 5 }).map((_, idx) => (
+              <div key={idx} className="p-4 rounded-2xl border border-gray-100 bg-white space-y-3">
+                <div className="flex justify-between gap-3">
+                  <SkeletonLine className="w-16" />
+                  <SkeletonLine className="w-14" />
+                </div>
+                <SkeletonLine className="w-32 h-4" />
+                <SkeletonLine className="w-full" />
+                <SkeletonLine className="w-24" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <MetricSkeleton count={4} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <CardListSkeleton count={3} />
+          <CardListSkeleton count={3} />
+        </div>
+        <TableSkeleton columns={6} rows={4} minWidth={500} />
+      </div>
+
+      <aside className="min-w-0 w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-5 xl:space-y-5 xl:gap-0">
+        <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-4">
+          <div className="flex justify-between">
+            <SkeletonLine className="w-28 h-4" />
+            <SkeletonLine className="w-16" />
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <SkeletonBlock key={idx} className="h-24 rounded-2xl" />
+            ))}
+          </div>
+        </div>
+        <CardListSkeleton count={4} compact />
+      </aside>
+    </div>
+  );
+}
+
 export default function DashboardHome({ business = 'Your Brand' }) {
   const { user } = useExternalAuth();
   const [selectedEnquiry, setSelectedEnquiry] = useState(null);
@@ -694,6 +776,10 @@ export default function DashboardHome({ business = 'Your Brand' }) {
   useEffect(() => {
     loadLiveDashboard();
   }, [loadLiveDashboard]);
+
+  if (loading && !activation && !vendorProfile) {
+    return <VendorDashboardSkeleton business={business} />;
+  }
 
   async function handleSendQuote(q, enquiry) {
     try {

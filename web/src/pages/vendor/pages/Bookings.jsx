@@ -3,6 +3,7 @@ import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import { CardListSkeleton } from '../../../components/LoadingSkeleton.jsx';
 
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
@@ -114,6 +115,8 @@ export default function Bookings() {
       )}
 
       <div className="space-y-4">
+        {loading && bookings.length === 0 && <CardListSkeleton count={4} />}
+
         {bookings.map((b) => (
           <Card key={b.id} className="!p-0 overflow-hidden">
             <button onClick={() => setOpen(open === b.id ? null : b.id)} className="w-full flex items-center gap-3 p-4 sm:p-5 text-left">

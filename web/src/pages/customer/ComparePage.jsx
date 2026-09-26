@@ -1,6 +1,6 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { AvailabilityPill, BackLink, DemoBadge, PriceText, RatingText, useLoad } from './customerUi.jsx';
+import { AvailabilityPill, BackLink, CustomerPageSkeleton, DemoBadge, PriceText, RatingText, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
 import SelectOptionButton from './SelectOptionButton.jsx';
 
@@ -12,7 +12,7 @@ export default function ComparePage() {
   const ids = (params.get('ids') || '').split(',').filter(Boolean);
   const { data, error, loading, setData } = useLoad(() => customerApi.compare(id, ids), [id, params.get('ids')]);
 
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerPageSkeleton cards={3} />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">

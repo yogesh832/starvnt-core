@@ -5,6 +5,7 @@ import { customerApi, errorText } from './customerApi.js';
 import {
   AskBox,
   BackLink,
+  CustomerPageSkeleton,
   Empty,
   EventMeta,
   EventStatusPill,
@@ -131,7 +132,7 @@ export default function EventPage() {
   const [tab, setTab] = useState('plan');
   const [editing, setEditing] = useState(false);
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <CustomerPageSkeleton cards={4} />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">

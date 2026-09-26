@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { Empty, Tabs, useLoad } from './customerUi.jsx';
+import { CustomerPageSkeleton, Empty, Tabs, useLoad } from './customerUi.jsx';
 
 const when = (t) => new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 const TONE = {
@@ -22,7 +22,7 @@ export default function UpdatesPage({ onRead }) {
     if (data?.unread) customerApi.readAll().then(() => onRead?.()).catch(() => {});
   }, [data, onRead]);
 
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerPageSkeleton cards={4} />;
   if (error) return <div className="text-sm text-red-500">{errorText(error)}</div>;
   const { notifications, vendorMessages, auraConversations } = data;
   const important = notifications.filter((n) => n.important);

@@ -3,6 +3,7 @@ import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import { SkeletonBlock, SkeletonLine } from '../../../components/LoadingSkeleton.jsx';
 
 // Video detection helpers
 function getYouTubeId(url) {
@@ -37,6 +38,49 @@ function getMediaThumbnail(url, mediaType, fallbackThumb) {
     return 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=600&q=80';
   }
   return url;
+}
+
+function PortfolioSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-2 flex-1 min-w-[220px]">
+          <SkeletonLine className="w-56 h-4" />
+          <SkeletonLine className="w-80 max-w-full" />
+        </div>
+        <div className="flex items-center gap-2">
+          <SkeletonLine className="w-24 h-7" />
+          <SkeletonLine className="w-28 h-7" />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-b border-gray-200 mb-6 pb-2">
+        <div className="flex items-center gap-4">
+          <SkeletonLine className="w-44 h-5" />
+          <SkeletonLine className="w-40 h-5" />
+        </div>
+        <SkeletonLine className="w-72 h-3 hidden sm:block" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <div key={idx} className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-xs">
+            <SkeletonBlock className="aspect-16/9 rounded-none" />
+            <div className="p-4 space-y-3">
+              <div className="flex gap-1.5">
+                <SkeletonLine className="w-20 h-5" />
+                <SkeletonLine className="w-24 h-5" />
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <SkeletonLine className="w-24" />
+                <SkeletonLine className="w-32" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function readFileAsDataURL(file) {
@@ -961,6 +1005,17 @@ export default function PortfolioPage() {
     if (filter === 'PUBLISHED') return i.status === 'PUBLISHED';
     return true;
   });
+
+  if (loading) {
+    return (
+      <Page
+        title="Portfolio & Projects"
+        sub="Organize multi-photo and video showcases, drag & drop files via STARVNT Media, and link YouTube/Vimeo video proofs."
+      >
+        <PortfolioSkeleton />
+      </Page>
+    );
+  }
 
   return (
     <Page

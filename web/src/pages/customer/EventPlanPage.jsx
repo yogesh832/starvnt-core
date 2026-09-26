@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, Empty, EventMeta, ProgressBar, Tabs, categoryIcon, useLoad } from './customerUi.jsx';
+import { BackLink, CustomerPageSkeleton, Empty, EventMeta, ProgressBar, Tabs, categoryIcon, useLoad } from './customerUi.jsx';
 import { formatINR, planStatus } from './format.js';
 
 const TONE = { amber: 'text-amber-600', emerald: 'text-emerald-600', primary: 'text-primary', muted: 'text-muted' };
@@ -101,7 +101,7 @@ export default function EventPlanPage() {
     }
   }
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <CustomerPageSkeleton cards={4} />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">

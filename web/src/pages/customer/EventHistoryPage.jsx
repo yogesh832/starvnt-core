@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, Empty, Tabs, useLoad } from './customerUi.jsx';
+import { BackLink, CustomerPageSkeleton, Empty, Tabs, useLoad } from './customerUi.jsx';
 
 const when = (t) => new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -27,7 +27,7 @@ export default function EventHistoryPage() {
   const { data, error, loading } = useLoad(() => customerApi.history(id), [id]);
   const [filter, setFilter] = useState('all');
 
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerPageSkeleton cards={4} />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const history = data.history;
   const shown = filter === 'all' ? history : history.filter((h) => h.group === filter);
