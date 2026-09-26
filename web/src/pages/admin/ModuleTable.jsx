@@ -3,6 +3,7 @@ import { adminApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { StatusChip } from '../../components/ui.jsx';
 import EventWorkspace from './EventWorkspace.jsx';
+import CouponModal from './CouponModal.jsx';
 
 /**
  * Generic Core module table screen (Customers / Vendors / Events / Bookings /
@@ -71,6 +72,14 @@ const MODULE_DATA = {
     rows: [],
     total: 0, pages: 1,
   },
+
+  coupons: {
+    title: 'Coupons', add: '+ Add Coupon',
+    tabs: ['All', 'Active', 'Expired'], filters: ['Discount Type'],
+    columns: ['Code', 'Type', 'Value', 'Min Order', 'Valid Until', 'Usage', 'Status'],
+    rows: [],
+    total: 0, pages: 1,
+  },
   settings: {
     title: 'Settings', add: null, tabs: [], filters: [],
     columns: ['Setting', 'Value', 'Updated'],
@@ -88,6 +97,7 @@ export default function ModuleTable({ kind }) {
   const m = MODULE_DATA[kind];
   const [tab, setTab] = useState(m.tabs[0] || '');
   const [selectedEventWorkspace, setSelectedEventWorkspace] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const [apiData, setApiData] = useState({ rows: [], total: 0, pages: 1 });
   const [loading, setLoading] = useState(false);
@@ -102,6 +112,7 @@ export default function ModuleTable({ kind }) {
     if (kind === 'vendors') endpoint = `/external-users/vendors?limit=${limit}&skip=${(page - 1) * limit}`;
     else if (kind === 'customers') endpoint = `/external-users/customers?limit=${limit}&skip=${(page - 1) * limit}`;
     else if (kind === 'bookings') endpoint = `/operations/bookings`;
+    else if (kind === 'coupons') endpoint = `/coupons?limit=${limit}&skip=${(page - 1) * limit}`;
 
     if (endpoint) {
       adminApi.call(endpoint)
@@ -109,38 +120,46 @@ export default function ModuleTable({ kind }) {
           if (!isMounted || !res.ok) return;
           let mappedRows = [];
           let totalItems = res.total || res.count || 0;
-          
-          if (kind === 'vendors' && res.vendors) {
-            mappedRows = res.vendors.map(v => [
-              v.fullName || '—', 
-              v.email || '—', 
-              v.phone || '—', 
-              v.status || 'Active'
-            ]);
-          } else if (kind === 'customers' && res.customers) {
-            mappedRows = res.customers.map(c => [
-              c.fullName || '—',
-              c.phone || '—',
-              c.email || '—',
-              '0',
-              c.status || 'Active'
-            ]);
-          } else if (kind === 'bookings' && res.bookings) {
-            mappedRows = res.bookings.map(b => [
-              b.bookingReference || '—',
-              b.category || '—',
-              b.vendorName || '—',
-              `₹${b.totalAmount || 0}`,
-              b.executionStatus || '—',
-              b.settlementStatus || '—'
+
+          if (kind === 'coupons' && res.coupons) {
+            mappedRows = res.coupons.map(c => [
+              c.code,
+              c.discountType,
+              c.discountValue,
+              '₹' + (c.minOrderAmount || 0),
+              c.validUntil ? new Date(c.validUntil).toLocaleDateString() : 'Never',
+              `${c.usageCount || 0} / ${c.usageLimit || '∞'}`,
+              c.isActive ? 'Active' : 'Inactive',
             ]);
           }
-
-          setApiData({
-            rows: mappedRows,
-            total: totalItems,
-            pages: Math.max(1, Math.ceil(totalItems / limit))
-          });
+          if (kind === 'bookings' && res.bookings) {
+            mappedRows = res.bookings.map(b => [
+              b.bookingId || '—',
+              b.serviceType || '—',
+              b.vendor?.name || '—',
+              '₹' + (b.totalAmount || 0),
+              b.status || 'PENDING',
+              'UNSETTLED'
+            ]);
+          }
+          if (kind === 'vendors' && res.vendors) {
+            mappedRows = res.vendors.map(v => [
+              v.fullName || '—',
+              v.email || '—',
+              v.phone || '—',
+              v.status || 'PENDING'
+            ]);
+          }
+          if (kind === 'customers' && res.customers) {
+            mappedRows = res.customers.map(cu => [
+              cu.fullName || '—',
+              cu.phone || '—',
+              cu.email || '—',
+              '0',
+              'ACTIVE'
+            ]);
+          }
+          setApiData({ rows: mappedRows, total: totalItems, pages: Math.ceil(totalItems / limit) || 1 });
         })
         .catch(console.error)
         .finally(() => {
@@ -173,10 +192,10 @@ export default function ModuleTable({ kind }) {
           <input className="bg-transparent flex-1 outline-none placeholder:text-muted/70" placeholder={`Search ${m.title.toLowerCase()}...`} />
         </div>
         {m.add && (
-          <button className="rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2.5 transition whitespace-nowrap">
-            {m.add}
-          </button>
-        )}
+            <button onClick={() => { if (kind === 'coupons') setShowAddModal(true); }} className="rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2.5 transition whitespace-nowrap">
+              {m.add}
+            </button>
+          )}
       </div>
 
       {/* Payments-style stat row */}
@@ -321,6 +340,8 @@ export default function ModuleTable({ kind }) {
           </div>
         )}
       </div>
+
+      {showAddModal && kind === 'coupons' && <CouponModal onClose={() => setShowAddModal(false)} onSaved={() => { setShowAddModal(false); window.location.reload(); }} />}
     </div>
   );
 }

@@ -7,6 +7,10 @@ import { externalApi } from '../../../lib/api.js';
 import MapLocationPicker from '../../../components/MapLocationPicker.jsx';
 import { useTheme } from '../../../lib/ThemeContext.jsx';
 
+function SkeletonLine({ className = '' }) {
+  return <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />;
+}
+
 /* ── Services ─────────────────────────────────────────────────────────────── */
 export function ServicesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -346,6 +350,23 @@ export function ServicesPage() {
       )}
 
       <div className="grid sm:grid-cols-2 gap-4">
+        {loading && services.length === 0 && Array.from({ length: 4 }).map((_, idx) => (
+          <Card key={`service-loading-${idx}`} className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2 flex-1">
+                <SkeletonLine className="h-4 w-40 max-w-full" />
+                <SkeletonLine className="h-3 w-52 max-w-full" />
+              </div>
+              <SkeletonLine className="h-6 w-16 rounded-lg" />
+            </div>
+            <SkeletonLine className="h-20 w-full rounded-xl" />
+            <SkeletonLine className="h-20 w-full rounded-xl" />
+            <div className="flex justify-between pt-2 border-t border-gray-100">
+              <SkeletonLine className="h-3 w-20" />
+              <SkeletonLine className="h-3 w-36" />
+            </div>
+          </Card>
+        ))}
         {services.map((s) => {
           const hasCap = s.capabilities && s.capabilities.length > 0;
           const primaryCap = hasCap ? s.capabilities[0] : null;
@@ -491,34 +512,34 @@ export function ServicesPage() {
                 })()}
               </div>
 
-              <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-gray-100 text-xs">
-                <div className="flex gap-2 text-muted font-medium">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-2.5 border-t border-gray-100 text-xs">
+                <div className="flex gap-2 text-muted font-medium min-w-0">
                   <span>{s.leadTimeDays || 7}d lead time</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
                   <button
                     type="button"
                     onClick={() => handleOpenGearModal(s)}
-                    className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                    className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="settings" size={12} />
                     <span>{hasCap ? 'Edit Gear' : 'Gear (Step 3)'}</span>
                   </button>
-                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-300 hidden sm:inline">|</span>
                   <button
                     type="button"
                     onClick={() => handleOpenCoverageModal(s)}
-                    className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                    className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="mapPin" size={12} />
                     <span>{s.coverage?.length ? 'Edit Transit' : 'Transit (Step 4)'}</span>
                   </button>
-                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-300 hidden sm:inline">|</span>
                   <button
                     type="button"
                     onClick={() => handleDeleteService(s)}
                     disabled={deletingServiceId === s._id}
-                    className="font-bold text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                    className="font-bold text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="trash" size={12} />
                     <span>{deletingServiceId === s._id ? 'Deleting...' : 'Delete'}</span>
@@ -970,6 +991,7 @@ export function ServicesPage() {
 export function AvailabilityPage() {
   const [blockouts, setBlockouts] = useState([]);
   const [resources, setResources] = useState([]);
+  const [loadingAvailability, setLoadingAvailability] = useState(true);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [showAddResourceModal, setShowAddResourceModal] = useState(false);
 
@@ -1014,6 +1036,7 @@ export function AvailabilityPage() {
 
   const loadAvailability = useCallback(async () => {
     try {
+      setLoadingAvailability(true);
       const [blRes, resRes, hrsRes, tpRes] = await Promise.all([
         externalApi.call('/vendor/availability/blockouts'),
         externalApi.call('/vendor/resources'),
@@ -1035,6 +1058,8 @@ export function AvailabilityPage() {
       }
     } catch (err) {
       console.warn('[AvailabilityPage] Error loading availability:', err.message);
+    } finally {
+      setLoadingAvailability(false);
     }
   }, []);
 
@@ -1197,6 +1222,12 @@ export function AvailabilityPage() {
 
   return (
     <Page title="Availability & Operations" sub="Availability = date + time + location + team + equipment.">
+      {loadingAvailability && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 text-xs font-bold text-muted shadow-xs flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          Loading saved availability, block dates, resources, and travel policy...
+        </div>
+      )}
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Weekly Working Hours - 100% User Maintained in DB */}
         <Card
@@ -1900,8 +1931,10 @@ export function DocumentsManager({ isTab = false }) {
           </button>
         </Card>
       ) : (
-        <Card className="text-center py-8 text-xs text-muted">
-          Loading verification records…
+        <Card className="space-y-3">
+          <SkeletonLine className="h-5 w-48" />
+          <SkeletonLine className="h-16 w-full rounded-2xl" />
+          <SkeletonLine className="h-16 w-full rounded-2xl" />
         </Card>
       )}
 
@@ -2279,6 +2312,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const picInputRef = useRef(null);
 
   const [activation, setActivation] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [saved, setSaved] = useState(false);
 
   // Operating Locations state
@@ -2302,6 +2336,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
   const loadProfile = useCallback(async () => {
     try {
+      setLoadingProfile(true);
       const [profRes, actRes] = await Promise.all([
         externalApi.call('/vendor/profile'),
         externalApi.call('/vendor/activation-status'),
@@ -2323,6 +2358,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
       }
     } catch (err) {
       console.warn('[ProfilePage] Error loading profile:', err.message);
+    } finally {
+      setLoadingProfile(false);
     }
   }, [business, user]);
 
@@ -2510,7 +2547,11 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   return (
     <Page
       title="Vendor Profile & Business Hub"
-      sub={`${profile.businessName || 'Your Brand'} — ${profile.category || 'Setup Pending'} · Central administration for brand profile, operational locations, KYC documents, and account settings.`}
+      sub={
+        loadingProfile && !activation
+          ? 'Loading your vendor details, readiness, locations, and account settings.'
+          : `${profile.businessName || 'Your Brand'} — ${profile.category || 'Setup Pending'} · Central administration for brand profile, operational locations, KYC documents, and account settings.`
+      }
     >
     <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
       {/* Profile Sub-Sidebar Navigation */}
@@ -2518,7 +2559,9 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           {/* Header row: label + readiness badge on mobile */}
           <div className="flex items-center justify-between px-2 py-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">Profile Sections</span>
-            {activation && (
+            {loadingProfile && !activation ? (
+              <SkeletonLine className="lg:hidden h-5 w-16" />
+            ) : activation && (
               <span className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.is100Percent ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                 {activation.completionPercentage ?? 0}% {activation.is100Percent ? '✓ Active' : 'Setup'}
               </span>
@@ -2556,20 +2599,32 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           {/* Desktop-only readiness bar */}
           <div className="pt-3 mt-2 border-t border-gray-100 px-2 pb-1 hidden lg:block">
             <div className="text-[11px] font-semibold text-muted">Profile Readiness</div>
-            <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
-              <span>{activation?.completionPercentage ?? 0}% Complete</span>
-              <span className={activation?.is100Percent ? 'text-emerald-600' : 'text-amber-600'}>
-                {activation?.is100Percent ? '✓ Active' : '● Setup Required'}
-              </span>
-            </div>
-            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  activation?.is100Percent ? 'bg-emerald-500' : 'bg-primary'
-                }`}
-                style={{ width: `${activation?.completionPercentage ?? 0}%` }}
-              />
-            </div>
+            {loadingProfile && !activation ? (
+              <div className="space-y-2 mt-2">
+                <div className="flex items-center justify-between">
+                  <SkeletonLine className="h-3 w-24" />
+                  <SkeletonLine className="h-3 w-16" />
+                </div>
+                <SkeletonLine className="h-1.5 w-full" />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
+                  <span>{activation?.completionPercentage ?? 0}% Complete</span>
+                  <span className={activation?.is100Percent ? 'text-emerald-600' : 'text-amber-600'}>
+                    {activation?.is100Percent ? '✓ Active' : '● Setup Required'}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      activation?.is100Percent ? 'bg-emerald-500' : 'bg-primary'
+                    }`}
+                    style={{ width: `${activation?.completionPercentage ?? 0}%` }}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
 

@@ -1062,7 +1062,7 @@ export default function PortfolioPage() {
             }`}
           >
             <Icon name="folder" size={15} />
-            <span>Projects & Showcases ({projects.length})</span>
+            <span>Projects & Showcases {loading ? '' : `(${projects.length})`}</span>
           </button>
           <button
             onClick={() => setActiveTab('ALL_MEDIA')}
@@ -1084,6 +1084,20 @@ export default function PortfolioPage() {
       {/* TAB 1: STRUCTURED PROJECTS VIEW */}
       {activeTab === 'PROJECTS' && (
         <div className="space-y-4">
+          {loading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <Card key={idx} className="!p-0 overflow-hidden border border-gray-100">
+                  <div className="aspect-16/9 bg-gray-200 animate-pulse" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 w-3/4 rounded-full bg-gray-200 animate-pulse" />
+                    <div className="h-3 w-full rounded-full bg-gray-100 animate-pulse" />
+                    <div className="h-3 w-1/2 rounded-full bg-gray-100 animate-pulse" />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {projects.map((p, idx) => {
               const photoCount = (p.items || []).filter((i) => !isVideoUrl(i.url, i.mediaType)).length;

@@ -11,6 +11,90 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+function SkeletonLine({ className = '' }) {
+  return <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />;
+}
+
+function VendorDashboardSkeleton({ business = 'Your Brand' }) {
+  return (
+    <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
+      <div className="space-y-6 min-w-0 w-full">
+        <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-xs border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
+            <div className="w-12 h-12 rounded-2xl bg-gray-200 animate-pulse shrink-0" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <SkeletonLine className="h-6 w-56 max-w-full" />
+              <SkeletonLine className="h-3 w-72 max-w-full" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <SkeletonLine className="h-9 w-24 rounded-xl" />
+            <SkeletonLine className="h-9 w-24 rounded-xl" />
+          </div>
+        </div>
+
+        <div className="rounded-3xl p-5 sm:p-6 border border-primary/15 bg-white shadow-sm space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-3 flex-1">
+              <SkeletonLine className="h-4 w-44" />
+              <SkeletonLine className="h-6 w-80 max-w-full" />
+              <SkeletonLine className="h-3 w-full max-w-2xl" />
+            </div>
+            <SkeletonLine className="h-10 w-36 rounded-xl" />
+          </div>
+          <div className="pt-4 border-t border-gray-100 space-y-3">
+            <div className="flex justify-between">
+              <SkeletonLine className="h-3 w-48" />
+              <SkeletonLine className="h-3 w-20" />
+            </div>
+            <SkeletonLine className="h-2.5 w-full" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3.5 pt-2">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <div key={idx} className="p-4 rounded-2xl border border-gray-100 bg-white space-y-3">
+                  <SkeletonLine className="h-3 w-16" />
+                  <SkeletonLine className="h-4 w-28" />
+                  <SkeletonLine className="h-3 w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <div key={idx} className="bg-white rounded-3xl p-4 border border-gray-100 shadow-xs space-y-3">
+              <SkeletonLine className="h-9 w-9 rounded-2xl" />
+              <SkeletonLine className="h-6 w-20" />
+              <SkeletonLine className="h-3 w-28 max-w-full" />
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-xs space-y-4">
+          <SkeletonLine className="h-5 w-44" />
+          <div className="grid sm:grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <SkeletonLine key={idx} className="h-20 w-full rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-xs space-y-4">
+          <SkeletonLine className="h-5 w-32" />
+          <SkeletonLine className="h-64 w-full rounded-2xl" />
+        </div>
+        <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-xs space-y-3">
+          <SkeletonLine className="h-5 w-40" />
+          <SkeletonLine className="h-12 w-full rounded-2xl" />
+          <SkeletonLine className="h-12 w-full rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Live Interactive Mini Calendar
  * Strictly driven by the current real date and authentic vendor bookings.
@@ -1011,6 +1095,10 @@ export default function DashboardHome({ business = 'Your Brand' }) {
     day: 'numeric',
     year: 'numeric',
   });
+
+  if (loading && !activation) {
+    return <VendorDashboardSkeleton business={business} />;
+  }
 
   return (
     <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">

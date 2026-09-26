@@ -24,6 +24,7 @@ const MODULES = [
   { path: 'operations', label: 'Operations', icon: 'operations', anyOf: ['execution.read', 'automation.read'] },
   { path: 'reports', label: 'Reports', icon: 'reports', anyOf: ['analytics.read', 'reports.read'] },
   { path: 'automation', label: 'Automation', icon: 'automation', anyOf: ['automation.read'] },
+  { path: 'coupons', label: 'Coupons', icon: 'payments', anyOf: ['payments.read', 'settings.read'] },
   { path: 'users', label: 'Users & Access', icon: 'access', superOnly: true },
   { path: 'audit', label: 'Audit Logs', icon: 'audit', anyOf: ['audit.read'] },
   { path: 'settings', label: 'Settings', icon: 'settings', anyOf: ['settings.read'] },
@@ -138,6 +139,7 @@ export default function AdminShell() {
             <Route path="operations" element={<ModuleTable kind="operations" />} />
             <Route path="reports" element={<ModuleTable kind="reports" />} />
             <Route path="automation" element={<ModuleTable kind="automation" />} />
+            <Route path="coupons" element={<ModuleTable kind="coupons" />} />
             <Route path="users" element={<UsersAccess />} />
             <Route path="audit" element={<AuditLogs />} />
             <Route path="settings" element={<ModuleTable kind="settings" />} />

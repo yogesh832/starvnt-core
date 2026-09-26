@@ -22,6 +22,7 @@ import adminOperationsRoutes from './admin/routes/operations.routes.js';
 import adminDisputesRoutes from './admin/routes/disputes.routes.js';
 import adminPolicyRoutes from './admin/routes/policy.routes.js';
 import adminExternalUsersRoutes from './admin/routes/external-users.routes.js';
+import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
 
 export function createApp() {
@@ -71,6 +72,7 @@ export function createApp() {
   app.use('/api/admin/disputes', adminDisputesRoutes);
   app.use('/api/admin/policy', adminPolicyRoutes);
   app.use('/api/admin/external-users', adminExternalUsersRoutes);
+  app.use('/api/admin/coupons', requireAdminAuth, adminCouponsRoutes);
 
   // Admin probe — requires admin session AND analytics.read (SUPER_ADMIN bypass).
   app.get(
