@@ -10,6 +10,7 @@ import commercialRoutes from './external/routes/commercial.routes.js';
 import transactionRoutes from './external/routes/transaction.routes.js';
 import portfolioRoutes from './external/routes/portfolio.routes.js';
 import aiRoutes from './external/routes/ai.routes.js';
+import vendorsGoogleRoutes from './external/routes/vendors.google.routes.js';
 import { requireExternalAuth, requireAccountType } from './external/middleware/requireExternalAuth.js';
 import { customerRouter, auraRouter, internalRouter, webhookRouter } from './customer/routes/index.js';
 
@@ -56,6 +57,7 @@ export function createApp() {
   app.use('/api/internal', internalRouter);
 
   app.use('/api/vendor', vendorRoutes);
+  app.use('/api/vendors', vendorsGoogleRoutes);
   app.use('/api/commercial', commercialRoutes);
   app.use('/api', transactionRoutes);
   app.use('/api', portfolioRoutes);

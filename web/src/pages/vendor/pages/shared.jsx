@@ -1,7 +1,7 @@
 /** Shared page scaffolding for Vendor OS sections. */
 export function Page({ title, sub, action, children }) {
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-5xl w-full overflow-x-hidden">
+    <div className="p-4 pb-36 sm:p-6 sm:pb-36 lg:pb-6 space-y-5 max-w-5xl w-full overflow-x-hidden">
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold truncate">{title}</h1>

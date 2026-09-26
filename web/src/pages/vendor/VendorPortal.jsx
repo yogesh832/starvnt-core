@@ -245,7 +245,7 @@ export default function VendorPortal() {
       </aside>
 
       {/* Main Container */}
-      <div className="flex-1 min-w-0 h-full flex flex-col overflow-y-auto overflow-x-hidden pb-16 lg:pb-0 w-full">
+      <div className="flex-1 min-w-0 h-full flex flex-col overflow-y-auto overflow-x-hidden pb-40 lg:pb-0 w-full">
         {/* Top bar with Dynamic Notification Bell & Mobile Search */}
         <header className="bg-white/95 backdrop-blur-md sticky top-0 z-20 border-b border-gray-100 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-4 shadow-xs shrink-0 w-full">
           <button
@@ -441,7 +441,7 @@ export default function VendorPortal() {
         </header>
 
         {/* Workspace Routes */}
-        <div className="flex-1 min-h-0 w-full min-w-0">
+        <div className="flex-1 min-h-0 w-full min-w-0 pb-32 lg:pb-0">
           <Routes>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardHome business={businessName} />} />
@@ -465,11 +465,14 @@ export default function VendorPortal() {
 
 
         {/* Mobile Bottom Navigation Bar (Phone Screens) */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-gray-200/80 px-2 py-1.5 flex items-center justify-around shadow-lg">
+        <div
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-gray-200/80 px-2 pt-1.5 flex items-center justify-around shadow-lg"
+          style={{ paddingBottom: 'calc(0.375rem + env(safe-area-inset-bottom))' }}
+        >
           <NavLink
             to="dashboard"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+              `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
                 isActive ? 'text-primary' : 'text-muted hover:text-navy'
               }`
             }
@@ -481,7 +484,7 @@ export default function VendorPortal() {
           <NavLink
             to="enquiries"
             className={({ isActive }) =>
-              `relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+              `relative flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
                 isActive ? 'text-primary' : 'text-muted hover:text-navy'
               }`
             }
@@ -498,7 +501,7 @@ export default function VendorPortal() {
           <NavLink
             to="bookings"
             className={({ isActive }) =>
-              `relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+              `relative flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
                 isActive ? 'text-primary' : 'text-muted hover:text-navy'
               }`
             }
@@ -515,7 +518,7 @@ export default function VendorPortal() {
           <NavLink
             to="calendar"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition ${
+              `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
                 isActive ? 'text-primary' : 'text-muted hover:text-navy'
               }`
             }
@@ -526,7 +529,7 @@ export default function VendorPortal() {
 
           <button
             onClick={() => setNavOpen(true)}
-            className="flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl text-[10px] font-bold text-muted hover:text-navy transition"
+            className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold text-muted hover:text-navy transition"
           >
             <Icon name="menu" size={19} />
             <span>More</span>

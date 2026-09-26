@@ -180,11 +180,11 @@ export default function CustomerPortal() {
         </header>
 
         {tab === 'aura' ? (
-          <main className="flex-1 min-h-0 flex flex-col pb-16 md:pb-0">
+          <main className="flex-1 min-h-0 flex flex-col pb-36 md:pb-0">
             <AuraChat firstName={firstName} />
           </main>
         ) : (
-          <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-24 md:pb-6">
+          <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-36 md:pb-6">
             <Routes>
               <Route index element={<HomePage firstName={firstName} />} />
               <Route path="events" element={<EventsPage />} />
@@ -208,7 +208,7 @@ export default function CustomerPortal() {
         )}
 
         {/* Mobile bottom tab bar with a raised centre Aura+ button */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 grid grid-cols-5 z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 grid grid-cols-5 z-20" style={{ paddingBottom: 'calc(0.375rem + env(safe-area-inset-bottom))' }}>
           {NAV.map((n) =>
             n.key === 'aura' ? (
               <button key={n.key} onClick={() => navigate(n.to)} className="flex flex-col items-center -mt-5 text-[10px] font-semibold text-primary">

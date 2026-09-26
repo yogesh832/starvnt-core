@@ -2275,6 +2275,15 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   });
 
   const [profilePicUrl, setProfilePicUrl] = useState('');
+  const [googleInfo, setGoogleInfo] = useState(null);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGoogleLocationId, setSelectedGoogleLocationId] = useState('');
+  const [manualGoogleUrl, setManualGoogleUrl] = useState('');
+  const [googleFeedback, setGoogleFeedback] = useState('');
+  const [googleEditMode, setGoogleEditMode] = useState(false);
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [vendorId, setVendorId] = useState(null);
   const [uploadingPic, setUploadingPic] = useState(false);
   const picInputRef = useRef(null);
 
@@ -2300,6 +2309,27 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const [savingLocation, setSavingLocation] = useState(false);
   const [locationFeedback, setLocationFeedback] = useState('');
 
+  const loadGoogleInfo = useCallback(async (id, locationId = '', query = '') => {
+    if (!id) return;
+    try {
+      setLoadingGoogle(true);
+      const params = new URLSearchParams();
+      if (locationId) params.set('locationId', locationId);
+      if (query) params.set('q', query);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      const res = await externalApi.call(`/vendors/${id}/google${suffix}`);
+      if (res.ok) {
+        setGoogleInfo(res);
+        setManualGoogleUrl(res.manualUrl || res.googleMapsUrl || '');
+        if (res.searchQuery) setSearchQuery((prev) => prev || res.searchQuery);
+      }
+    } catch (err) {
+      console.warn('[ProfilePage] Error loading google info:', err.message);
+    } finally {
+      setLoadingGoogle(false);
+    }
+  }, []);
+
   const loadProfile = useCallback(async () => {
     try {
       const [profRes, actRes] = await Promise.all([
@@ -2307,6 +2337,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
         externalApi.call('/vendor/activation-status'),
       ]);
       if (profRes.ok && profRes.vendor) {
+        setVendorId(profRes.vendor._id);
         setProfile({
           businessName: profRes.vendor.businessName || business || '',
           category: profRes.vendor.category || '',
@@ -2318,13 +2349,67 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           setProfilePicUrl(profRes.vendor.profilePicUrl);
         }
       }
+      if (profRes.ok && profRes.vendor) {
+        loadGoogleInfo(profRes.vendor._id);
+      }
       if (actRes.ok && actRes.status) {
         setActivation(actRes.status);
       }
     } catch (err) {
       console.warn('[ProfilePage] Error loading profile:', err.message);
     }
-  }, [business, user]);
+  }, [business, user, loadGoogleInfo]);
+
+  const handleSearchGoogle = async (e) => {
+    e.preventDefault();
+    if (!vendorId) return;
+    await loadGoogleInfo(vendorId, selectedGoogleLocationId, searchQuery);
+  };
+
+  const handleLinkGoogle = async (placeId) => {
+    if (!vendorId) return;
+    try {
+      setLinkingGoogle(true);
+      const res = await externalApi.call(`/vendors/${vendorId}/google`, {
+        method: 'POST',
+        body: { placeId }
+      });
+      if (res.ok) {
+        setGoogleFeedback('Google Business listing linked.');
+        setGoogleEditMode(false);
+        setGoogleInfo(res);
+        setManualGoogleUrl(res.manualUrl || res.googleMapsUrl || '');
+        setTimeout(() => setGoogleFeedback(''), 4000);
+      }
+    } catch (err) {
+      alert('Could not link profile: ' + err.message);
+    } finally {
+      setLinkingGoogle(false);
+    }
+  };
+
+  const handleSaveGoogleUrl = async (e) => {
+    e.preventDefault();
+    if (!vendorId || !manualGoogleUrl.trim()) return;
+    try {
+      setLinkingGoogle(true);
+      const res = await externalApi.call(`/vendors/${vendorId}/google`, {
+        method: 'POST',
+        body: { googleMapsUrl: manualGoogleUrl.trim() },
+      });
+      if (res.ok) {
+        setGoogleFeedback('Google Business/Maps URL saved.');
+        setGoogleEditMode(false);
+        setGoogleInfo(res);
+        setManualGoogleUrl(res.manualUrl || res.googleMapsUrl || manualGoogleUrl.trim());
+        setTimeout(() => setGoogleFeedback(''), 4000);
+      }
+    } catch (err) {
+      alert(`Could not save Google Business URL: ${err.message}`);
+    } finally {
+      setLinkingGoogle(false);
+    }
+  };
 
   const loadLocations = useCallback(async () => {
     try {
@@ -2332,6 +2417,11 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
       const res = await externalApi.call('/vendor/locations');
       if (res.ok && res.locations) {
         setLocations(res.locations);
+        setSelectedGoogleLocationId((current) => {
+          if (current) return current;
+          const primary = res.locations.find((loc) => loc.isPrimary) || res.locations[0];
+          return primary?._id || '';
+        });
       }
     } catch (err) {
       console.warn('[ProfilePage] Error loading locations:', err.message);
@@ -2856,6 +2946,179 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                 ) : (
                   <div className="text-center py-6 text-xs text-muted">Loading locations…</div>
                 )}
+              </Card>
+
+              <Card title="Google Business Rating & Reviews">
+                <div className="space-y-4">
+                  {(!googleInfo?.linked || googleEditMode) && (
+                    <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                          Match Google listing from operating location
+                        </label>
+                        <select
+                          value={selectedGoogleLocationId}
+                          onChange={(e) => {
+                            setSelectedGoogleLocationId(e.target.value);
+                            setGoogleInfo(null);
+                            setSearchQuery('');
+                            setGoogleEditMode(true);
+                          }}
+                          className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
+                          <option value="">Use primary / profile city</option>
+                          {locations.map((loc) => (
+                            <option key={loc._id} value={loc._id}>
+                              {loc.label} - {loc.city}{loc.isPrimary ? ' (Primary)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <form onSubmit={handleSearchGoogle} className="flex flex-col sm:flex-row gap-2 flex-[1.4]">
+                        <input
+                          type="text"
+                          placeholder="Search Google Business name, or leave blank to use selected hub"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                        <button
+                          type="submit"
+                          disabled={loadingGoogle}
+                          className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 shadow-xs hover:bg-primary-dark transition disabled:opacity-60"
+                        >
+                          {loadingGoogle ? 'Checking...' : 'Find Rating'}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+
+                  {googleFeedback && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+                      {googleFeedback}
+                    </div>
+                  )}
+
+                  {googleInfo?.linked && (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-white text-amber-500 grid place-items-center text-xl font-extrabold shadow-xs">
+                          ★
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-extrabold text-navy truncate">{googleInfo.businessName || profile.businessName}</div>
+                          <div className="text-xs text-muted mt-0.5 break-words">{googleInfo.address || 'Google Business listing linked'}</div>
+                          <div className="text-xs font-bold text-amber-600 mt-1">
+                            {googleInfo.rating || 0} rating · {googleInfo.reviewCount || 0} Google reviews
+                          </div>
+                        </div>
+                        {googleInfo.googleMapsUrl && (
+                          <a
+                            href={googleInfo.googleMapsUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs font-bold text-primary hover:underline shrink-0"
+                          >
+                            Open Google Maps
+                          </a>
+                        )}
+                        {!googleEditMode && (
+                          <button
+                            type="button"
+                            onClick={() => setGoogleEditMode(true)}
+                            className="text-xs font-bold text-primary hover:underline shrink-0"
+                          >
+                            Change listing
+                          </button>
+                        )}
+                      </div>
+
+                      {Array.isArray(googleInfo.reviews) && googleInfo.reviews.length > 0 && (
+                        <div className="grid sm:grid-cols-2 gap-3 mt-4">
+                          {googleInfo.reviews.map((review, idx) => (
+                            <div key={idx} className="rounded-2xl bg-white border border-emerald-100 p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-navy truncate">
+                                  {review.authorAttribution?.displayName || 'Google reviewer'}
+                                </span>
+                                <span className="text-[11px] font-bold text-amber-500">{review.rating || 5}★</span>
+                              </div>
+                              <p className="text-xs text-muted mt-2 leading-relaxed break-words">
+                                {review.text?.text || 'No review text provided.'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(!googleInfo?.linked || googleEditMode) && Array.isArray(googleInfo?.matches) && googleInfo.matches.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-2xl p-3">
+                        Select the correct Google listing. Ratings and review count will sync from this listing.
+                      </div>
+                      {googleInfo.matches.map((match) => (
+                        <div key={match.placeId} className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-extrabold text-sm text-navy truncate">{match.businessName}</div>
+                            <div className="text-xs text-muted mt-1 break-words">{match.address}</div>
+                            <div className="text-xs font-bold text-amber-600 mt-1">
+                              {match.rating || 0} rating · {match.reviewCount || 0} reviews
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleLinkGoogle(match.placeId)}
+                            disabled={linkingGoogle}
+                            className="rounded-xl bg-primary-soft text-primary px-4 py-2 text-xs font-extrabold hover:bg-primary/20 transition disabled:opacity-60"
+                          >
+                            Link Listing
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {(!googleInfo?.linked || googleEditMode) && googleInfo?.needsApiKey && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 leading-relaxed">
+                      Google Places API is not configured on the server. Add <span className="font-mono font-bold">GOOGLE_PLACES_API_KEY</span> to enable automatic rating search, or save the business URL below.
+                    </div>
+                  )}
+
+                  {(!googleInfo?.linked || googleEditMode) && googleInfo?.notFound && (
+                    <div className="rounded-2xl border border-gray-200 bg-lavender/40 p-3 text-xs text-muted">
+                      No Google listing was found for that location/search. Save the vendor's Google Business or Google Maps URL manually.
+                    </div>
+                  )}
+
+                  {(!googleInfo?.linked || googleEditMode) && (
+                    <form onSubmit={handleSaveGoogleUrl} className="rounded-2xl border border-gray-100 bg-lavender/30 p-3 space-y-2">
+                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                        Manual Google Business / Maps URL
+                      </label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="url"
+                          placeholder="https://maps.app.goo.gl/... or Google business profile URL"
+                          value={manualGoogleUrl}
+                          onChange={(e) => setManualGoogleUrl(e.target.value)}
+                          className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                        <button
+                          type="submit"
+                          disabled={linkingGoogle || !manualGoogleUrl.trim()}
+                          className="rounded-xl bg-white text-primary border border-primary/20 px-4 py-2.5 text-xs font-extrabold hover:bg-primary-soft transition disabled:opacity-60"
+                        >
+                          Save URL
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-muted">
+                        Use this when Google search cannot confidently find the listing. The saved URL can still be shown on the vendor profile.
+                      </p>
+                    </form>
+                  )}
+                </div>
               </Card>
             </div>
           )}

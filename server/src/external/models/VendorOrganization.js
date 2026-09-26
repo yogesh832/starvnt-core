@@ -51,6 +51,12 @@ const vendorOrganizationSchema = new Schema(
     website: { type: String, trim: true, default: '' },
     bio: { type: String, trim: true, default: '' },
     profilePicUrl: { type: String, trim: true, default: '' },
+    googlePlaceId: { type: String, trim: true, default: null },
+    googleBusinessUrl: { type: String, trim: true, default: '' },
+    googleRating: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
     verification: {
       isVerified: { type: Boolean, default: false },
       verifiedAt: { type: Date, default: null },
