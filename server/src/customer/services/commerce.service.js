@@ -211,11 +211,22 @@ export async function checkoutComplete(customerId, eventId, paymentId, body = {}
   return { payment: serializePayment(moved || payment) };
 }
 
+import { publishOutboxEvent } from '../../automation/services/outbox.service.js';
+
 // ── Verification & booking confirmation (webhook / ops only) ────────────────
 async function markFailed(payment, reason, actor) {
   const moved = await commerceRepo.movePayment(payment._id, ['pending', 'processing', 'paid'], { status: 'failed', failureReason: reason });
   if (!moved) return null;
   await eventsRepo.appendHistory({ eventId: payment.event, ...actor, action: 'payment_failed', details: { amount: payment.amount } });
+  
+  await publishOutboxEvent({
+    eventType: 'PAYMENT_FAILED',
+    aggregateType: 'Payment',
+    aggregateId: payment._id.toString(),
+    payload: { paymentId: payment._id.toString(), reason, eventId: payment.event.toString() },
+    idempotencyKey: `payment_failed_${payment._id}`
+  });
+  
   await circleRepo.notify({
     customerId: payment.customer,
     eventId: payment.event,
@@ -320,6 +331,20 @@ export async function verifyPayment(paymentId, { actorType, actorId }) {
   });
   if (moved) {
     await eventsRepo.appendHistory({ eventId: payment.event, actorType, actorId, action: 'payment_verified', details: { amount: payment.amount } });
+    
+    await publishOutboxEvent({
+      eventType: 'PAYMENT_CONFIRMED',
+      aggregateType: 'Payment',
+      aggregateId: payment._id.toString(),
+      payload: {
+        paymentId: payment._id.toString(),
+        eventId: payment.event.toString(),
+        reservationId: payment.reservation.toString(),
+        amount: payment.amount,
+        currency: payment.currency
+      },
+      idempotencyKey: `payment_confirmed_${payment._id}`
+    });
   }
   const booking = await confirmBookingFor(moved || payment);
   return { payment: moved || (await commerceRepo.getPayment(paymentId)), booking };

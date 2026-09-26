@@ -103,6 +103,19 @@ export default function ModuleTable({ kind }) {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const limit = 10;
+  const [openAction, setOpenAction] = useState(null);
+
+  async function handleDelete(id) {
+    if (!window.confirm("Are you sure you want to delete this record?")) return;
+    try {
+      setLoading(true);
+      await adminApi.call('/' + kind + '/' + id, { method: 'DELETE' });
+      window.location.reload();
+    } catch(e) {
+      alert(e.message || "Failed to delete");
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -159,7 +172,7 @@ export default function ModuleTable({ kind }) {
               'ACTIVE'
             ]);
           }
-          setApiData({ rows: mappedRows, total: totalItems, pages: Math.ceil(totalItems / limit) || 1 });
+          setApiData({ rows: mappedRows, raw: res.coupons || res.users || [], total: totalItems, pages: Math.ceil(totalItems / limit) || 1 });
         })
         .catch(console.error)
         .finally(() => {

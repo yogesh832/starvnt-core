@@ -155,3 +155,67 @@ export async function dispatchEvent(outboxEvent) {
 
   return await handler(outboxEvent.payload);
 }
+
+import { VendorActivity } from '../../external/models/VendorActivity.js';
+import { BusinessAuditLog } from '../../admin/models/BusinessAuditLog.js';
+
+registerEventHandler('FOLLOW_UP_OVERDUE', async (payload) => {
+  const { followUpId, vendorId, customerId, title } = payload;
+  const idempotencyKey = `followup-overdue-${followUpId}`;
+
+  const { duplicate, result } = await withIdempotency(
+    idempotencyKey,
+    'ACTIVITY_CREATION',
+    async () => {
+      // 1. Simulate Aura+ Recommendation Handoff
+      // In a real flow, Aura+ analyzes context and recommends an action.
+      // Here, Core validates and acts on the structured recommendation.
+      const recommendation = {
+        priority: 'HIGH',
+        action: 'CREATE_REMINDER',
+        reason: 'Customer engagement requires immediate follow-up.'
+      };
+
+      // 2. Core executes the business change
+      const activity = await VendorActivity.create({
+        vendor: vendorId,
+        type: 'REMINDER',
+        title: `Overdue: ${title}`,
+        description: recommendation.reason,
+        priority: recommendation.priority,
+        status: 'OPEN',
+        relatedEntity: {
+          entityType: 'FollowUp',
+          entityId: followUpId
+        }
+      });
+
+      // 3. Record the Business Audit Log (Traceability)
+      await BusinessAuditLog.create({
+        actorId: 'system',
+        actorType: 'AUTOMATION',
+        organizationId: vendorId,
+        action: 'FOLLOW_UP_OVERDUE_PROCESSED',
+        resourceType: 'FollowUp',
+        resourceId: followUpId,
+        beforeState: { status: 'PENDING' },
+        afterState: { status: 'OVERDUE', activityId: activity._id },
+        source: 'AUTOMATION',
+        traceContext: {
+          eventId: idempotencyKey
+        }
+      });
+
+      return {
+        activityId: activity._id.toString(),
+        status: 'CREATED_AND_AUDITED'
+      };
+    }
+  );
+
+  return {
+    handled: true,
+    duplicate,
+    activity: result
+  };
+});
