@@ -52,7 +52,13 @@ export function applyGuards(extracted, message, { askedTopic = null } = {}) {
 
   // Event facts (current event)
   const eventType = cleanString(x.eventType);
-  if (eventType) out.eventType = normalizeEventType(eventType);
+  if (eventType) {
+    out.eventType = normalizeEventType(eventType);
+    // "Housewarming" stays in the customer's own words when it isn't a known type.
+    if (out.eventType === 'other' && !/^(other|event|party)$/i.test(eventType) && valueStatedIn(eventType, message)) {
+      out.customType = eventType.replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 60);
+    }
+  }
   if (typeof x.date === 'string' && isValidISODate(x.date)) out.date = x.date;
   const g = cleanPositiveInt(x.guestCount, 100000);
   if (g) out.guestCount = g;
@@ -62,6 +68,55 @@ export function applyGuards(extracted, message, { askedTopic = null } = {}) {
   if (city) {
     if (valueStatedIn(city, message)) out.city = city;
     else dropped.push('city');
+  }
+  // A stated range ("10 to 15 lakh"): both ends positive, low < high.
+  const bmin = cleanPositiveInt(x.budgetMin, 1e10);
+  const bmax = cleanPositiveInt(x.budgetMax, 1e10);
+  if (bmin && bmax && bmin < bmax && /\d/.test(message)) {
+    out.budgetMin = bmin;
+    out.budgetMax = bmax;
+    delete out.budget;
+  }
+
+  // Event location: every word must be in the message (no invented venues or addresses).
+  for (const [key, max] of [['venueName', 120], ['area', 80], ['state', 60], ['country', 60], ['address', 300], ['landmark', 120]]) {
+    const v = cleanString(x[key], max);
+    if (!v) continue;
+    if (valueStatedIn(v, message)) out[key] = v;
+    else dropped.push(key);
+  }
+  const pin = cleanString(x.pincode, 12);
+  if (pin) {
+    if (/^[A-Za-z0-9 -]{3,12}$/.test(pin) && message.includes(pin)) out.pincode = pin;
+    else dropped.push('pincode');
+  }
+
+  // Where individual services happen ("makeup will be at my hotel").
+  if (Array.isArray(x.serviceLocations)) {
+    const askedLocationCategory = askedTopic?.startsWith('location.') ? askedTopic.slice('location.'.length) : null;
+    const list = [];
+    for (const s of x.serviceLocations) {
+      const category = normalizeCategory(s?.category);
+      if (!category || !(mentioned.has(category) || category === askedCategory || category === askedLocationCategory)) {
+        dropped.push('serviceLocation');
+        continue;
+      }
+      const place = cleanString(s.place, 200);
+      const pickup = cleanString(s.pickup, 200);
+      let drop = cleanString(s.drop, 200);
+      const venueWords = /\b(venue|event location|same place|wahi|wahin)\b/i;
+      const dropIsEventLocation = Boolean(drop && venueWords.test(drop) && venueWords.test(message));
+      if (dropIsEventLocation) drop = null;
+      const atEventVenue = s.atEventVenue === true && venueWords.test(message);
+      const stated = (v) => !v || valueStatedIn(v, message);
+      if (!stated(place) || !stated(pickup) || !stated(drop)) {
+        dropped.push('serviceLocation');
+        continue;
+      }
+      if (atEventVenue && !place && !pickup) list.push({ category, mode: 'event' });
+      else if (place || pickup || drop || dropIsEventLocation) list.push({ category, mode: 'custom', place, pickup, drop, dropIsEventLocation });
+    }
+    if (list.length) out.serviceLocations = list;
   }
 
   // A different event mentioned for the first time
@@ -91,10 +146,11 @@ export function applyGuards(extracted, message, { askedTopic = null } = {}) {
   // Service statements
   const providedCategory = normalizeCategory(x.providedCategory);
   const providedValue = cleanString(x.providedValue, 200);
-  if (providedCategory && providedValue) {
-    if (categoryInPlay(providedCategory) && valueStatedIn(providedValue, message)) {
+  if (providedCategory) {
+    // "Catering is already arranged" (no name) is a valid statement; a name must be literal.
+    if (categoryInPlay(providedCategory) && (!providedValue || valueStatedIn(providedValue, message))) {
       out.providedCategory = providedCategory;
-      out.providedValue = providedValue;
+      out.providedValue = providedValue || null;
     } else dropped.push('provided');
   }
   const help = normalizeCategory(x.needsHelpCategory);

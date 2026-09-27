@@ -144,5 +144,5 @@ test('Aura+ has no way to select, quote, book or pay', async () => {
   const names = Object.keys(core).sort();
   // Writes Aura+ may make: event facts, plan statements, preferences, its own notes. Everything else is read-only.
   const writes = names.filter((n) => !/^(get|list|read|optionStats|compactOptions)/.test(n));
-  assert.deepEqual(writes, ['applyServiceStatement', 'createDraftEvent', 'mergePreferences', 'patchEventFacts', 'setNote']);
+  assert.deepEqual(writes, ['applyServiceLocation', 'applyServiceStatement', 'createDraftEvent', 'mergePreferences', 'patchEventFacts', 'setNote']);
 });

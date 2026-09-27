@@ -3,6 +3,35 @@ import { Link, useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { EVENT_STATUS_LABEL, budgetText, formatDate } from './format.js';
 
+// Categorical palette for charts (purple family + distinct accents).
+export const CHART_COLORS = ['#5a4bd1', '#22c55e', '#f59e0b', '#ec4899', '#06b6d4', '#9b6dff', '#ef4444', '#84cc16'];
+
+/** Donut chart from [{ label, value }]; zero/empty values are skipped. */
+export function Donut({ data, size = 140, center }) {
+  const rows = data.filter((d) => d.value > 0);
+  const total = rows.reduce((s, d) => s + d.value, 0);
+  const r = 42;
+  const c = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="#eceaf7" strokeWidth="12" />
+        {total > 0 &&
+          rows.map((d, i) => {
+            const len = (d.value / total) * c;
+            const el = (
+              <circle key={d.label} cx="50" cy="50" r={r} fill="none" stroke={d.color || CHART_COLORS[i % CHART_COLORS.length]} strokeWidth="12" strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-offset} />
+            );
+            offset += len;
+            return el;
+          })}
+      </svg>
+      {center && <div className="absolute inset-0 grid place-items-center text-center px-3">{center}</div>}
+    </div>
+  );
+}
+
 const STATUS_TONE = {
   draft: 'bg-amber-50 text-amber-600',
   planning: 'bg-primary-soft text-primary',
@@ -32,7 +61,7 @@ export function ProgressBar({ percent }) {
 export function EventMeta({ event }) {
   const parts = [
     event.eventDate && ['calendar', formatDate(event.eventDate)],
-    event.city && ['vendors', event.city],
+    (event.locationLabel || event.city) && ['vendors', event.locationLabel || event.city],
     event.guestCount && ['customers', `${event.guestCount} guests`],
     budgetText(event) && ['wallet', budgetText(event)],
   ].filter(Boolean);

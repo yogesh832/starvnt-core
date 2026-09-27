@@ -302,7 +302,7 @@ test('manual form validates everything before writing', async () => {
   const { user, token } = await makeUser();
   const before = await models.CustomerEvent.countDocuments({ customer: user._id });
   const base = { eventType: 'birthday', eventDate: uniqueDate(), city: 'Pune', guestCount: 40, budgetRange: 'o_50k_1l' };
-  await request(app).post('/api/customer/events').set(auth(token)).send({ ...base, services: [{ category: 'cake', status: 'customer_provided' }] }).expect(400);
+  await request(app).post('/api/customer/events').set(auth(token)).send({ ...base, services: [{ category: 'cake', status: 'customer_provided', details: { flavour: 'x' } }] }).expect(400);
   await request(app).post('/api/customer/events').set(auth(token)).send({ ...base, services: [{ category: 'spaceship', status: 'pending' }] }).expect(400);
   await request(app).post('/api/customer/events').set(auth(token)).send({ ...base, city: '' }).expect(400);
   assert.equal(await models.CustomerEvent.countDocuments({ customer: user._id }), before, 'no half-created events');

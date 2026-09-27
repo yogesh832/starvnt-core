@@ -1,7 +1,7 @@
 import * as core from './coreClient.js';
 import { todayISO } from '../services/dates.js';
 import { categoryLabel, tierOf, EVENT_TYPE_LABELS, budgetRangeLabel } from '../services/planCatalog.js';
-import { buildContextStates, nextQuestion, progressOf } from '../services/understanding.js';
+import { buildContextStates, nextQuestion, progressOf, eventTypeLabelOf, locationLabel, serviceLocationText } from '../services/understanding.js';
 import { computeEventSummary } from '../services/summary.js';
 
 /**
@@ -69,10 +69,13 @@ export async function buildContext({ customer, event }) {
       event: event
         ? {
             title: event.title,
-            eventType: event.eventType ? EVENT_TYPE_LABELS[event.eventType] : null,
+            eventType: eventTypeLabelOf(event),
             status: event.status,
             date: event.eventDate,
             city: event.city,
+            location: locationLabel(event),
+            venueName: event.location?.venueName || null,
+            area: event.location?.locality || null,
             guestCount: event.guestCount,
             budget: event.budget,
             budgetRange: event.budget == null ? budgetRangeLabel(event.budgetMin, event.budgetMax) : null,
@@ -90,6 +93,7 @@ export async function buildContext({ customer, event }) {
               ? `${r.selectedOption?.vendorName}${r.selectedOption?.isDemo ? ' (demo listing)' : ''} – ₹${r.selectedOption?.price}`
               : undefined,
             preferences: Object.keys(r.preferences || {}).length ? r.preferences : undefined,
+            serviceLocation: serviceLocationText(r.serviceLocation, locationLabel(event)) || undefined,
           }))
         : [],
       // committedCost = booked amounts; estimatedCost = lowest listed options for what's still open.

@@ -38,7 +38,32 @@ function Cover({ event, onEdit, editable }) {
         </div>
       </div>
       <div className="mt-2 [&_*]:text-white/90"><EventMeta event={event} /></div>
+      <LocationDetails event={event} />
     </section>
+  );
+}
+
+/** The parts of the event location beyond the one-line label — only those given. */
+function LocationDetails({ event }) {
+  const l = event.location || {};
+  const lines = [
+    l.address && ['Address', [l.address, l.pincode].filter(Boolean).join(' – ')],
+    !l.address && l.pincode && ['Pincode', l.pincode],
+    (l.state || l.country) && ['Region', [l.state, l.country].filter(Boolean).join(', ')],
+    l.landmark && ['Landmark', l.landmark],
+    l.notes && ['Location notes', l.notes],
+    event.specialRequirements && ['Special requirements', event.specialRequirements],
+  ].filter(Boolean);
+  if (!lines.length) return null;
+  return (
+    <dl className="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+      {lines.map(([k, v]) => (
+        <div key={k} className="min-w-0">
+          <dt className="text-white/70 inline">{k}: </dt>
+          <dd className="inline text-white/95">{v}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

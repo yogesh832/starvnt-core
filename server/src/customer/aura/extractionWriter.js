@@ -6,7 +6,9 @@ import { HttpError } from '../utils/http.js';
  * Event facts → patch event; preferences / provided / needs → requirements.
  * Anything Core refuses (locked, closed, invalid) is reported as skipped.
  */
-export async function writeExtraction({ customerId, event, extracted, yearStated }) {
+const LOCATION_KEYS = { venueName: 'venueName', area: 'locality', state: 'state', country: 'country', pincode: 'pincode', address: 'address', landmark: 'landmark' };
+
+export async function writeExtraction({ customerId, event, extracted, yearStated, isQuestion = false }) {
   const written = [];
   const skipped = [];
   const eventId = event._id;
@@ -16,6 +18,7 @@ export async function writeExtraction({ customerId, event, extracted, yearStated
   if (extracted.guestCount) candidate.guestCount = extracted.guestCount;
   if (extracted.budget) candidate.budget = extracted.budget;
   if (extracted.city) candidate.city = extracted.city;
+  if (extracted.customType && event.eventType === 'other' && !event.customType) candidate.customType = extracted.customType;
 
   // Same value → nothing to write. After confirmation Aura+ only fills blanks:
   // a date mentioned in a question ("free on 5 Dec?") must never silently move
@@ -29,6 +32,28 @@ export async function writeExtraction({ customerId, event, extracted, yearStated
     }
     facts[k] = v;
   }
+  if (extracted.budgetMin && extracted.budgetMax && !facts.budget) {
+    const same = event.budgetMin === extracted.budgetMin && event.budgetMax === extracted.budgetMax;
+    const hasBudget = event.budget != null || event.budgetMin != null || event.budgetMax != null;
+    if (!same && (event.status === 'draft' || !hasBudget)) {
+      facts.budgetMin = extracted.budgetMin;
+      facts.budgetMax = extracted.budgetMax;
+    } else if (!same) skipped.push({ field: 'budget', reason: 'confirmed_fact' });
+  }
+
+  // Event location. A clear statement ("No, the venue is actually ABC Banquet")
+  // corrects it; a question ("Is ABC Banquet free?") never does.
+  const location = {};
+  for (const [from, to] of Object.entries(LOCATION_KEYS)) {
+    const v = extracted[from];
+    if (!v || event.location?.[to] === v) continue;
+    if (isQuestion && event.location?.[to]) {
+      skipped.push({ field: `location.${to}`, reason: 'question' });
+      continue;
+    }
+    location[to] = v;
+  }
+  if (Object.keys(location).length) facts.location = location;
 
   if (Object.keys(facts).length) {
     let factsWritten = [];
@@ -52,7 +77,7 @@ export async function writeExtraction({ customerId, event, extracted, yearStated
         if (!factsWritten.includes(k)) skipped.push({ field: k, reason: bad[k] ? 'invalid' : err.code });
       }
     }
-    written.push(...factsWritten);
+    written.push(...factsWritten.flatMap((k) => (k === 'location' ? Object.keys(facts.location).map((l) => `location.${l}`) : [k])));
     if (factsWritten.includes('eventDate')) {
       await core.setNote(
         eventId,
@@ -84,6 +109,14 @@ export async function writeExtraction({ customerId, event, extracted, yearStated
     const r = await core.applyServiceStatement(customerId, eventId, category, st);
     if (r.applied) written.push(`requirement.${category}`);
     else if (r.reason !== 'unchanged') skipped.push({ field: `requirement.${category}`, reason: r.reason });
+  }
+
+  // Service-specific locations (event location ≠ service location).
+  for (const sl of extracted.serviceLocations || []) {
+    const { category, ...loc } = sl;
+    const r = await core.applyServiceLocation(customerId, eventId, category, loc);
+    if (r.applied) written.push(`location.${category}`);
+    else skipped.push({ field: `location.${category}`, reason: r.reason || 'unchanged' });
   }
 
   if (extracted.tentativeCategory) {

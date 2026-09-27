@@ -77,6 +77,75 @@ export function parseBudget(text) {
   return null;
 }
 
+/** A stated budget range: "budget is 10 to 15 lakh", "10-15 lakh budget". */
+export function parseBudgetRange(text) {
+  const RANGE = `(?:rs\\.?|inr|₹)?\\s*(\\d[\\d,]*(?:\\.\\d+)?)\\s*(${UNIT_RE})?\\s*(?:-|–|—|to|se)\\s*(?:rs\\.?|inr|₹)?\\s*(\\d[\\d,]*(?:\\.\\d+)?)\\s*(${UNIT_RE})?\\b`;
+  const m =
+    new RegExp(`budget[^\\d₹]{0,25}?${RANGE}`, 'i').exec(text) ||
+    new RegExp(`${RANGE}\\s*(?:ka\\s+|ki\\s+|of\\s+)?budget`, 'i').exec(text);
+  if (!m) return null;
+  const unit = m[4] || m[2];
+  const lo = toAmount(m[1], m[2] || unit);
+  const hi = toAmount(m[3], unit);
+  return lo && hi && lo < hi ? { min: lo, max: hi } : null;
+}
+
+// Capitalised name words (case-sensitive on purpose; stops at punctuation).
+const CAP_WORDS = "([A-Z][\\w'&-]*(?:\\s+(?:[A-Z][\\w'&-]*|of|the|and|&)){0,4})";
+
+/** "venue is Kisan Palace", "It is at Kisan Palace". Not when another service is the subject. */
+export function parseVenue(text) {
+  const explicit = new RegExp(`\\b[Vv]enue\\s+(?:is|will be|hai|:)\\s+(?:actually\\s+)?(?:at\\s+)?${CAP_WORDS}`).exec(text);
+  if (explicit) return explicit[1].trim();
+  const sentence = text.split(/[.!?\n]/)[0] || '';
+  const others = categoriesMentioned(sentence).filter((c) => c !== 'venue');
+  if (others.length) return null;
+  const at = new RegExp(`\\b(?:at|venue)\\s+${CAP_WORDS}`).exec(sentence);
+  if (!at) return null;
+  const words = at[1].split(/\s+/);
+  if (MONTH_WORDS.has(words[0].toLowerCase())) return null;
+  return at[1].replace(/[,.]+$/, '').trim();
+}
+
+/** "Makeup will be at my hotel", "guests picked up from Salt Lake and taken to the venue". */
+export function parseServiceLocations(text) {
+  const found = [];
+  for (const sentence of text.split(/[.!?\n]+/)) {
+    const cats = categoriesMentioned(sentence).filter((c) => c !== 'venue');
+    const pickup = /\bpick(?:ed)?[\s-]?up\s+from\s+([^,.;]+?)(?=\s+(?:and|to|then|&)\b|[,.;]|$)/i.exec(sentence);
+    const drop = /\b(?:taken|dropped|drop(?:ped)? off|go(?:ing)?)\s+to\s+([^,.;]+?)(?=[,.;]|$)/i.exec(sentence);
+    if (pickup || (drop && /\b(guests|cab|transport|shuttle|car)\b/i.test(sentence))) {
+      const d = drop?.[1]?.trim() || null;
+      const dropIsEventLocation = Boolean(d && /\b(venue|event location)\b/i.test(d));
+      found.push({ category: 'transport', mode: 'custom', pickup: pickup?.[1]?.trim() || null, drop: dropIsEventLocation ? null : d, dropIsEventLocation });
+      continue;
+    }
+    if (!cats.length) continue;
+    // The service is the subject BEFORE the verb ("Makeup will be at my hotel": makeup, not accommodation).
+    const m = /^(.*?)\b(?:will be|is|hoga|hogi|happens?)\s+(?:at|in)\s+([^,.;]+)$/i.exec(sentence.trim());
+    if (!m) continue;
+    const subject = categoriesMentioned(m[1]).filter((c) => c !== 'venue');
+    if (subject.length !== 1) continue;
+    const place = m[2].trim();
+    if (/^(the\s+)?(venue|event location)$/i.test(place)) found.push({ category: subject[0], mode: 'event' });
+    else found.push({ category: subject[0], mode: 'custom', place });
+  }
+  return found;
+}
+
+/**
+ * A short reply to the question Aura just asked ("Kolkata.", "New Town",
+ * "Kisan Palace") is an answer to that question. Nothing else is inferred.
+ */
+export function parseShortAnswer(text, askedTopic) {
+  if (!['event.city', 'event.area', 'requirement.venue'].includes(askedTopic)) return null;
+  const t = text.trim().replace(/[.!]+$/, '');
+  if (!t || t.includes('?') || /\d/.test(t) || t.split(/\s+/).length > 5) return null;
+  if (/^(yes|no|haan|nahi|ok|okay|skip|not sure|help)/i.test(t)) return null;
+  const cleaned = t.replace(/^(it(?:'s| is)?|in|at|the venue is|venue is|area is)\s+/i, '').replace(/^(in|at)\s+/i, '').trim();
+  return cleaned || null;
+}
+
 const CITY_STOPWORDS = new Set(['the', 'my', 'our', 'a', 'an', 'english', 'hindi', 'bengali', 'bangla', 'hinglish', 'morning', 'evening', 'afternoon', 'night', 'budget', 'india']);
 
 /**
@@ -117,7 +186,7 @@ export function parseStatedNeeds(text) {
 const blank = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0);
 
 /** Returns a copy of `extracted` with blanks filled from the message, plus `dateYearStated`. */
-export function backfillFacts(message, extracted = {}, { today = todayISO() } = {}) {
+export function backfillFacts(message, extracted = {}, { today = todayISO(), askedTopic = null } = {}) {
   const out = { ...extracted };
   const parsedDate = parseDate(message, today);
   if (blank(out.date) && blank(out.newEventDate) && parsedDate) out.date = parsedDate.date;
@@ -125,13 +194,29 @@ export function backfillFacts(message, extracted = {}, { today = todayISO() } = 
     const g = parseGuests(message);
     if (g) out.guestCount = g;
   }
-  if (blank(out.budget) && blank(out.newEventBudget)) {
-    const b = parseBudget(message);
-    if (b) out.budget = b;
+  if (blank(out.budget) && blank(out.budgetMin) && blank(out.newEventBudget)) {
+    const range = parseBudgetRange(message);
+    if (range) {
+      out.budgetMin = range.min;
+      out.budgetMax = range.max;
+    } else {
+      const b = parseBudget(message);
+      if (b) out.budget = b;
+    }
   }
+  const short = parseShortAnswer(message, askedTopic);
   if (blank(out.city) && blank(out.newEventCity)) {
-    const c = parseCity(message);
+    const c = askedTopic === 'event.city' && short ? short : parseCity(message);
     if (c) out.city = c;
+  }
+  if (blank(out.area) && askedTopic === 'event.area' && short) out.area = short;
+  if (blank(out.venueName)) {
+    const v = askedTopic === 'requirement.venue' && short ? short : parseVenue(message);
+    if (v && v !== out.city) out.venueName = v;
+  }
+  if (blank(out.serviceLocations)) {
+    const locs = parseServiceLocations(message);
+    if (locs.length) out.serviceLocations = locs;
   }
   if (blank(out.neededCategories)) {
     const needs = parseStatedNeeds(message);

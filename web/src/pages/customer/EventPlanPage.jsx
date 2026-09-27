@@ -4,15 +4,30 @@ import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, Empty, EventMeta, ProgressBar, Tabs, categoryIcon, useLoad } from './customerUi.jsx';
 import { formatINR, planStatus } from './format.js';
+import { EMPTY_SERVICE_LOCATION, ServiceEditor, detailsPayload, serviceLocationPayload, serviceLocationText, usePlanOptions } from './eventForms.jsx';
 
 const TONE = { amber: 'text-amber-600', emerald: 'text-emerald-600', primary: 'text-primary', muted: 'text-muted' };
 const LOCKED = ['confirmed', 'booked', 'completed'];
 
-function PlanCard({ eventId, req, busy, onSet }) {
+function PlanCard({ eventId, req, busy, onSet, fields, isRoute, eventLocationLabel }) {
   const [arranging, setArranging] = useState(false);
   const [name, setName] = useState(req.providedValue || '');
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(null);
   const s = planStatus(req);
   const locked = LOCKED.includes(req.status);
+  const locText = serviceLocationText(req.serviceLocation, eventLocationLabel);
+  const detailCount = Object.values(req.preferences || {}).filter((v) => v != null && v !== '' && !(Array.isArray(v) && !v.length)).length;
+
+  function startEdit() {
+    const sl = req.serviceLocation || EMPTY_SERVICE_LOCATION;
+    setDraft({
+      details: { ...(req.preferences || {}) },
+      serviceLocation: { ...EMPTY_SERVICE_LOCATION, ...Object.fromEntries(Object.entries(sl).map(([k, v]) => [k, v ?? (k === 'dropIsEventLocation' ? false : '')])) },
+      specialRequirements: req.specialRequirements || '',
+    });
+    setEditing(true);
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-3.5">
@@ -28,10 +43,38 @@ function PlanCard({ eventId, req, busy, onSet }) {
                 : 'No options listed yet'}
             </div>
           )}
+          {(locText || detailCount > 0 || req.specialRequirements) && (
+            <div className="text-[10px] text-ink/70 truncate">
+              {[locText && `📍 ${locText}`, detailCount > 0 && `${detailCount} detail${detailCount > 1 ? 's' : ''}`, req.specialRequirements && 'Notes added'].filter(Boolean).join(' · ')}
+            </div>
+          )}
         </div>
       </div>
 
-      {!locked && (
+      {!locked && editing && draft && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <ServiceEditor category={req.category} fields={fields} isRoute={isRoute} value={draft} eventLocationLabel={eventLocationLabel} onChange={setDraft} />
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" onClick={() => setEditing(false)} className="text-xs font-bold text-muted px-2">Cancel</button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                onSet(req.category, {
+                  details: detailsPayload(draft.details),
+                  serviceLocation: serviceLocationPayload(draft.serviceLocation),
+                  specialRequirements: draft.specialRequirements.trim() || null,
+                }).then((ok) => ok && setEditing(false))
+              }
+              className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2 disabled:opacity-50"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!locked && !editing && (
         arranging ? (
           <form
             className="mt-3 flex gap-2"
@@ -65,6 +108,9 @@ function PlanCard({ eventId, req, busy, onSet }) {
             <button disabled={busy} onClick={() => setArranging(true)} className="text-[11px] font-bold rounded-lg border border-gray-200 text-navy px-2.5 py-1.5 disabled:opacity-50">
               {req.status === 'customer_provided' ? 'Change name' : 'I have this arranged'}
             </button>
+            <button disabled={busy} onClick={startEdit} className="text-[11px] font-bold rounded-lg border border-gray-200 text-navy px-2.5 py-1.5 disabled:opacity-50">
+              Details & location
+            </button>
             {req.status !== 'missing' && (
               <button disabled={busy} onClick={() => onSet(req.category, { status: 'missing' })} className="text-[11px] font-bold text-muted hover:text-navy px-2 py-1.5 disabled:opacity-50">
                 Reset
@@ -80,7 +126,8 @@ function PlanCard({ eventId, req, busy, onSet }) {
 export default function EventPlanPage() {
   const { id } = useParams();
   const { data, error, loading, setData } = useLoad(() => customerApi.requirements(id), [id]);
-  const options = useLoad(() => customerApi.planOptions(), []);
+  // Service fields depend on the event type (Event Type + Service → relevant requirements).
+  const planOpts = usePlanOptions(data?.event?.eventType);
   const [tab, setTab] = useState('all');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -115,7 +162,7 @@ export default function EventPlanPage() {
   const closed = ['completed', 'cancelled'].includes(event.status);
   const shown = tab === 'all' ? requirements : requirements.filter((r) => r.tier === tab);
   const inPlan = new Set(requirements.map((r) => r.category));
-  const addable = (options.data?.categories || []).filter((c) => !inPlan.has(c.value));
+  const addable = (planOpts?.categories || []).filter((c) => !inPlan.has(c.value));
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 pb-6">
@@ -160,7 +207,16 @@ export default function EventPlanPage() {
           {shown.map((r) => (closed ? (
             <div key={r.id} className="bg-white rounded-2xl border border-gray-100 p-3.5 text-sm font-bold text-navy">{r.label} <span className={`block text-[11px] font-normal ${TONE[planStatus(r).tone]}`}>{planStatus(r).text}</span></div>
           ) : (
-            <PlanCard key={r.id} eventId={id} req={r} busy={busy} onSet={onSet} />
+            <PlanCard
+              key={r.id}
+              eventId={id}
+              req={r}
+              busy={busy}
+              onSet={onSet}
+              fields={planOpts?.serviceFields?.[r.category] || []}
+              isRoute={(planOpts?.routeCategories || []).includes(r.category)}
+              eventLocationLabel={event.locationLabel}
+            />
           )))}
         </div>
       )}

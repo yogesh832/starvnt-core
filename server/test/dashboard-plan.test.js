@@ -103,7 +103,10 @@ test('requirements: customer rules, locks, closed events, add service', async ()
 
   r = await request(app).patch(url('photography')).set(auth(token)).send({ status: 'pending' }).expect(200);
   assert.equal(r.body.requirement.status, 'pending');
-  await request(app).patch(url('decor')).set(auth(token)).send({ status: 'customer_provided' }).expect(400);
+  // "Already arranged" needs no name (prompt §17); an unknown detail is still rejected.
+  r = await request(app).patch(url('decor')).set(auth(token)).send({ status: 'customer_provided' }).expect(200);
+  assert.equal(r.body.requirement.providedValue, null);
+  await request(app).patch(url('decor')).set(auth(token)).send({ details: { spaceship: 'yes' } }).expect(400);
   r = await request(app).patch(url('decor')).set(auth(token)).send({ status: 'customer_provided', providedValue: 'Bloom Decor' }).expect(200);
   assert.equal(r.body.requirement.providedValue, 'Bloom Decor');
   r = await request(app).patch(url('decor')).set(auth(token)).send({ status: 'missing' }).expect(200);

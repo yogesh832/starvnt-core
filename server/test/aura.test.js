@@ -19,6 +19,7 @@ test('golden path: draft → card → chips → skip → budget range → confir
     { text: 'Lovely! I saved this on the card. Which city is it in?', extracted: { eventType: 'wedding', guestCount: 500 } },
     { text: 'Got it. Do you already have a venue?', extracted: { city: 'Kolkata' } },
     { text: 'Noted the venue.', extracted: { providedCategory: 'venue', providedValue: 'Kisan Palace' } },
+    { text: 'Noted.', extracted: {} }, // "New Town." — the parser reads it as the answer to the area question
     { text: 'No problem.', extracted: {} },
     { text: 'Budget range saved.', extracted: { budget: 1500000 } },
   ]);
@@ -35,7 +36,7 @@ test('golden path: draft → card → chips → skip → budget range → confir
   assert.equal(r.body.nextQuestion.topic, 'event.city');
   // Exactly one question, computed after this turn's writes, plus the year note.
   assert.match(r.body.reply, /assumed the year \d{4}/);
-  assert.ok(r.body.reply.endsWith('Which city is the event in?'));
+  assert.ok(r.body.reply.endsWith('Which city will it be in?'));
   // Draft stage keeps the prompt small: no vendor list.
   assert.match(llm.calls[0].systemPrompt, /"vendors":\[\]/);
 
@@ -46,8 +47,14 @@ test('golden path: draft → card → chips → skip → budget range → confir
   assert.equal(r.body.nextQuestion.topic, 'requirement.venue');
 
   r = await chat(token, { sessionId: s, message: 'My venue is Kisan Palace' }).expect(200);
-  assert.deepEqual(r.body.understanding.services.provided, [{ category: 'venue', label: 'Venue', value: 'Kisan Palace' }]);
-  assert.equal(r.body.nextQuestion.topic, 'event.budget', 'date and guests are known, so budget is next');
+  assert.deepEqual(r.body.understanding.services.provided, [{ category: 'venue', label: 'Venue', value: 'Kisan Palace', location: null }]);
+  // Manual and Aura+ share one representation: the venue is also the event location.
+  assert.equal(r.body.understanding.facts.location.venueName, 'Kisan Palace');
+  assert.equal(r.body.nextQuestion.topic, 'event.area');
+
+  r = await chat(token, { sessionId: s, message: 'New Town.' }).expect(200);
+  assert.equal(r.body.understanding.facts.location.value, 'Kisan Palace, New Town, Kolkata');
+  assert.equal(r.body.nextQuestion.topic, 'event.budget', 'date, city, guests, venue and area are known');
 
   r = await chat(token, { sessionId: s, message: 'Skip for now', skipTopic: 'event.budget' }).expect(200);
   assert.notEqual(r.body.nextQuestion?.topic, 'event.budget', 'skipped topics are never re-asked');
@@ -62,7 +69,7 @@ test('golden path: draft → card → chips → skip → budget range → confir
   assert.equal(c.body.requirements.find((x) => x.category === 'photography').status, 'pending');
 
   const hist = await request(app).get(`/api/aura/sessions/${s}`).set(auth(token)).expect(200);
-  assert.equal(hist.body.messages.length, 10);
+  assert.equal(hist.body.messages.length, 12);
   assert.equal(hist.body.activeEvent.id, eventId);
 });
 
@@ -85,7 +92,10 @@ test('hallucination guards drop values the customer never said', async () => {
   ]);
   await chat(token, { sessionId: s, message: "It's my son's birthday" }).expect(200);
   const r = await chat(token, { sessionId: s, message: 'The venue is Kisan Palace. Maybe a DJ. We need photography.' }).expect(200);
-  assert.deepEqual(r.body.understanding.services.provided, [], 'value words must all appear in the message');
+  // The model's "Kisan Palace Gardens" is dropped; only the literal "Kisan Palace" is kept.
+  assert.deepEqual(r.body.understanding.services.provided.map((p) => p.value), ['Kisan Palace']);
+  assert.equal(r.body.understanding.facts.location.venueName, 'Kisan Palace');
+  assert.ok(r.body.dropped.includes('provided'));
   assert.deepEqual(r.body.understanding.services.needed.map((x) => x.category), ['photography']);
   assert.equal(r.body.understanding.facts.city.value, null);
   const eventId = r.body.activeEvent.id;

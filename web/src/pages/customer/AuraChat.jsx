@@ -81,11 +81,12 @@ function useVoice(onText) {
   return { supported: Boolean(Speech), listening, lang, setLang, toggle };
 }
 
-export default function AuraChat({ firstName }) {
+export default function AuraChat({ firstName, eventId: embeddedEventId = null, embedded = false, onEventChanged }) {
   const { user } = useExternalAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const scopedEventId = params.get('event');
+  // Embedded (home workspace) chats are scoped by prop and never read or write the URL.
+  const scopedEventId = embedded ? embeddedEventId : params.get('event');
   const key = sessionKey(user?.id, scopedEventId);
 
   const [sessionId, setSessionId] = useState(null);
@@ -116,11 +117,12 @@ export default function AuraChat({ firstName }) {
   useEffect(() => {
     let cancelled = false;
     let sid = readSession(key);
-    if (params.get('new') === '1' || !sid) {
+    const fresh = !embedded && params.get('new') === '1';
+    if (fresh || !sid) {
       sid = newSessionId();
       writeSession(key, sid);
     }
-    if (params.get('new') === '1') {
+    if (fresh) {
       const next = new URLSearchParams(params);
       next.delete('new');
       setParams(next, { replace: true });
@@ -159,6 +161,9 @@ export default function AuraChat({ firstName }) {
         const res = await customerApi.auraChat({ sessionId, message: msg, eventId: scopedEventId || undefined, ...extra });
         setMessages((prev) => [...prev, { role: 'model', content: res.reply }]);
         applyState(res);
+        // A chat that just created an event keeps its history when opened from that event later.
+        if (res.createdEventId) writeSession(sessionKey(user?.id, res.createdEventId), sessionId);
+        onEventChanged?.(res);
       } catch (err) {
         setMessages((prev) => prev.slice(0, -1));
         setInput(msg);
@@ -167,12 +172,12 @@ export default function AuraChat({ firstName }) {
         setSending(false);
       }
     },
-    [sessionId, sending, scopedEventId, applyState]
+    [sessionId, sending, scopedEventId, applyState, onEventChanged, user?.id]
   );
 
   // ?ask= auto-sends once, then leaves the URL clean.
   useEffect(() => {
-    const ask = params.get('ask');
+    const ask = embedded ? null : params.get('ask');
     if (!ask || loading || !sessionId || askedRef.current) return;
     askedRef.current = true;
     const next = new URLSearchParams(params);
@@ -188,6 +193,7 @@ export default function AuraChat({ firstName }) {
       setTimeout(() => inputRef.current?.focus(), 0);
     } else if (opt.skipTopic) send(opt.label, { skipTopic: opt.skipTopic });
     else if (opt.budgetRange) send(opt.label, { budgetRange: opt.budgetRange });
+    else if (opt.serviceLocation) send(opt.label, { serviceLocation: opt.serviceLocation });
     else send(opt.message || opt.label);
   }
 
@@ -195,7 +201,11 @@ export default function AuraChat({ firstName }) {
     const sid = newSessionId();
     writeSession(sessionKey(user?.id, null), sid);
     askedRef.current = false;
-    if (scopedEventId) navigate('/customer/aura');
+    if (embedded) {
+      writeSession(key, sid);
+      setSessionId(sid);
+      setMessages([]);
+    } else if (scopedEventId) navigate('/customer/aura');
     else {
       setSessionId(sid);
       setMessages([]);
@@ -245,7 +255,7 @@ export default function AuraChat({ firstName }) {
 
         {understanding && activeEvent && (
           <div className="pl-10">
-            <UnderstandingCard understanding={understanding} event={activeEvent} onChanged={onCardChanged} />
+            <UnderstandingCard understanding={understanding} event={activeEvent} onChanged={onCardChanged} onAsk={(t) => send(t)} />
           </div>
         )}
 

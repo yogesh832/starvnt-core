@@ -6,7 +6,7 @@ import { BackLink, Empty, Tabs, useLoad } from './customerUi.jsx';
 const when = (t) => new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 
 /** Milestones reached so far, derived only from recorded history. */
-function milestones(history) {
+export function milestones(history) {
   const has = (re) => history.find((h) => re.test(h.text));
   const booked = history.filter((h) => / booked with /.test(h.text));
   const verified = history.filter((h) => /^Payment of .* verified$/.test(h.text));
