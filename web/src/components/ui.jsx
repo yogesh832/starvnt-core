@@ -8,7 +8,7 @@ export function LogoMark({ size = 22, className = '' }) {
   return (
     <img
       src={BRAND_ASSETS.mark}
-      alt="StarVnt"
+      alt=""
       width={size}
       height={size}
       className={`rounded-lg object-cover shadow-[0_0_20px_rgba(14,165,233,0.34)] ring-1 ring-cyan-300/35 ${className}`}

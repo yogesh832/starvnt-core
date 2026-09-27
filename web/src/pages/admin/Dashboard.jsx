@@ -2,31 +2,22 @@ import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import Icon from '../../components/Icon.jsx';
 
 const STATS = [
-  { label: 'Total Customers', value: '234', delta: '+12% this month', icon: 'customers', iconBg: 'bg-primary-soft text-primary' },
-  { label: 'Total Vendors', value: '1,482', delta: '+8% this month', icon: 'vendors', iconBg: 'bg-sky-50 text-sky-600' },
-  { label: 'Active Events', value: '892', delta: '+15% this month', icon: 'events', iconBg: 'bg-orange-50 text-orange-500' },
-  { label: 'GMV (Total Bookings)', value: '₹1,24,50,000', delta: '+22% this month', icon: 'wallet', iconBg: 'bg-emerald-50 text-emerald-600' },
+  { label: 'Total Customers', value: '0', delta: '0% this month', icon: 'customers', iconBg: 'bg-primary-soft text-primary' },
+  { label: 'Total Vendors', value: '0', delta: '0% this month', icon: 'vendors', iconBg: 'bg-sky-50 text-sky-600' },
+  { label: 'Active Events', value: '0', delta: '0% this month', icon: 'events', iconBg: 'bg-orange-50 text-orange-500' },
+  { label: 'GMV (Total Bookings)', value: '₹0', delta: '0% this month', icon: 'wallet', iconBg: 'bg-emerald-50 text-emerald-600' },
 ];
 
-const ACTIVITIES = [
-  { text: 'New booking confirmed — Riya & Arjun Wedding · Photography', ago: '2 min ago', icon: 'check', cls: 'bg-emerald-50 text-emerald-600' },
-  { text: 'Vendor payment released — Studio Pixel · ₹15,000', ago: '12 min ago', icon: 'payments', cls: 'bg-primary-soft text-primary' },
-  { text: 'New customer registered — Anil Verma', ago: '20 min ago', icon: 'customers', cls: 'bg-sky-50 text-sky-600' },
-];
+const ACTIVITIES = [];
 
-const ATTENTION = [
-  '3 vendor documents pending',
-  '2 payments in review',
-  '1 event at risk',
-  '5 new enquiries',
-];
+const ATTENTION = [];
 
 const DONUT = [
-  { label: 'Planning', pct: 45, color: '#5a4bd1' },
-  { label: 'Confirmed', pct: 32, color: '#22c55e' },
-  { label: 'In Progress', pct: 12, color: '#f59e0b' },
-  { label: 'Completed', pct: 8, color: '#0ea5e9' },
-  { label: 'Cancelled', pct: 3, color: '#ef4444' },
+  { label: 'Planning', pct: 0, color: '#5a4bd1' },
+  { label: 'Confirmed', pct: 0, color: '#22c55e' },
+  { label: 'In Progress', pct: 0, color: '#f59e0b' },
+  { label: 'Completed', pct: 0, color: '#0ea5e9' },
+  { label: 'Cancelled', pct: 0, color: '#ef4444' },
 ];
 
 function BookingsTrend() {
@@ -111,6 +102,7 @@ function EventsDonut() {
 
 export default function Dashboard() {
   const { admin } = useAdminAuth();
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   return (
     <div className="space-y-5 max-w-6xl">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -118,7 +110,7 @@ export default function Dashboard() {
           <h1 className="text-xl sm:text-2xl font-bold text-navy">Good morning, {admin.fullName.split(' ')[0]}</h1>
           <p className="text-sm text-muted mt-0.5">Here's what's happening across STARVNT today.</p>
         </div>
-        <span className="text-xs text-muted bg-white rounded-xl px-3 py-2 shadow-sm">16 Sep 2025</span>
+        <span className="text-xs text-muted bg-white rounded-xl px-3 py-2 shadow-sm">{today}</span>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -140,30 +132,38 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <h2 className="font-bold text-[15px] mb-3">Recent Activities</h2>
-          <ul className="space-y-3">
-            {ACTIVITIES.map((a, i) => (
-              <li key={i} className="flex items-center gap-3">
-                <span className={`w-8 h-8 rounded-full grid place-items-center shrink-0 ${a.cls}`}>
-                  <Icon name={a.icon} size={15} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium truncate">{a.text}</div>
-                  <div className="text-[11px] text-muted">{a.ago}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {ACTIVITIES.length > 0 ? (
+            <ul className="space-y-3">
+              {ACTIVITIES.map((a, i) => (
+                <li key={i} className="flex items-center gap-3">
+                  <span className={`w-8 h-8 rounded-full grid place-items-center shrink-0 ${a.cls}`}>
+                    <Icon name={a.icon} size={15} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-medium truncate">{a.text}</div>
+                    <div className="text-[11px] text-muted">{a.ago}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted">No recent activities.</p>
+          )}
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <h2 className="font-bold text-[15px] mb-3">Needs Attention</h2>
-          <ul className="space-y-2.5">
-            {ATTENTION.map((t) => (
-              <li key={t} className="flex items-center gap-2.5 text-[13px]">
-                <span className="w-5 h-5 rounded-full bg-red-50 text-red-500 grid place-items-center text-[10px] font-bold">!</span>
-                {t}
-              </li>
-            ))}
-          </ul>
+          {ATTENTION.length > 0 ? (
+            <ul className="space-y-2.5">
+              {ATTENTION.map((t) => (
+                <li key={t} className="flex items-center gap-2.5 text-[13px]">
+                  <span className="w-5 h-5 rounded-full bg-red-50 text-red-500 grid place-items-center text-[10px] font-bold">!</span>
+                  {t}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted">No items need attention.</p>
+          )}
         </div>
       </div>
     </div>

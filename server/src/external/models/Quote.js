@@ -64,6 +64,19 @@ const quoteSchema = new Schema(
       additionalFee: { type: Number, default: 0 },
       totalAmount: { type: Number, required: true },
     },
+    advancePayment: {
+      percentage: { type: Number, default: 30 },
+      amount: { type: Number, default: 0 },
+      status: {
+        type: String,
+        enum: ['NOT_STARTED', 'ORDER_CREATED', 'PROCESSING', 'VERIFIED', 'FAILED'],
+        default: 'NOT_STARTED',
+      },
+      provider: { type: String, default: 'razorpay' },
+      providerOrderId: { type: String, default: '' },
+      providerPaymentId: { type: String, default: '' },
+      paidAt: { type: Date, default: null },
+    },
     notes: {
       type: String,
       default: '',

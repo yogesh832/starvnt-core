@@ -38,6 +38,15 @@ export const customerApi = {
   updates: () => externalApi.call('/customer/updates'),
   readAll: () => externalApi.call('/customer/notifications/read-all', { method: 'POST' }),
   createEvent: (body) => externalApi.call('/customer/events', { method: 'POST', body }),
+  createMahimanDemoEnquiry: (body = {}) => externalApi.call('/customer/demo/mahiman-enquiry', { method: 'POST', body }),
+  vendorQuotes: () => externalApi.call('/customer/vendor-quotes'),
+  negotiateVendorQuote: (quoteId, message) =>
+    externalApi.call(`/customer/vendor-quotes/${quoteId}/negotiate`, { method: 'POST', body: { message } }),
+  payVendorQuoteAdvance: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/pay-advance`, { method: 'POST' }),
+  completeVendorQuoteCheckout: (quoteId, body) =>
+    externalApi.call(`/customer/vendor-quotes/${quoteId}/checkout-complete`, { method: 'POST', body }),
+  verifyVendorBookingCompletion: (bookingId, notes = '') =>
+    externalApi.call(`/customer/bookings/${bookingId}/verify-completion`, { method: 'POST', body: { notes } }),
   patchProfile: (body) => externalApi.call('/customer/profile', { method: 'PATCH', body }),
   auraSession: (sid, eventId) =>
     externalApi.call(`/aura/sessions/${encodeURIComponent(sid)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`),

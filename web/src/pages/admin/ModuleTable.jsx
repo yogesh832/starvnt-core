@@ -46,9 +46,9 @@ const MODULE_DATA = {
     title: 'Payments & Settlements', add: null,
     tabs: ['Customer Payments', 'Vendor Settlements', 'Refunds'], filters: [],
     stats: [
-      { label: 'Total Collected', value: '₹1,24,50,000', foot: '+22% this month', iconBg: 'bg-primary-soft text-primary', icon: 'payments' },
-      { label: 'Held in Escrow', value: '₹86,20,000', foot: '70% of collected', iconBg: 'bg-orange-50 text-orange-500', icon: 'wallet' },
-      { label: 'Released to Vendors', value: '₹28,30,000', foot: '+18% this month', iconBg: 'bg-emerald-50 text-emerald-600', icon: 'trend' },
+      { label: 'Total Collected', value: '₹0', foot: '0% this month', iconBg: 'bg-primary-soft text-primary', icon: 'payments' },
+      { label: 'Held in Escrow', value: '₹0', foot: '0% of collected', iconBg: 'bg-orange-50 text-orange-500', icon: 'wallet' },
+      { label: 'Released to Vendors', value: '₹0', foot: '0% this month', iconBg: 'bg-emerald-50 text-emerald-600', icon: 'trend' },
     ],
     columns: ['Event', 'Customer', 'Amount', 'Status', 'Date'],
     rows: [],
@@ -65,8 +65,8 @@ const MODULE_DATA = {
     title: 'Reports & Analytics', add: '⇩ Export',
     tabs: [], filters: ['Last 30 Days', 'All Event Types'],
     statRow: [
-      ['1,248', 'New Customers', '+20%'], ['342', 'Bookings', '+18%'],
-      ['₹1.24Cr', 'Revenue', '+22%'], ['4.8/5', 'Avg Rating', '+0.3'],
+      ['0', 'New Customers', '0%'], ['0', 'Bookings', '0%'],
+      ['₹0', 'Revenue', '0%'], ['0/5', 'Avg Rating', '0'],
     ],
     columns: ['Report', 'Period', 'Generated', 'Status'],
     rows: [],
@@ -147,12 +147,12 @@ export default function ModuleTable({ kind }) {
           }
           if (kind === 'bookings' && res.bookings) {
             mappedRows = res.bookings.map(b => [
-              b.bookingId || '—',
-              b.serviceType || '—',
-              b.vendor?.name || '—',
+              b.bookingReference || b.bookingId || '—',
+              b.serviceName || b.serviceType || '—',
+              b.vendorName || b.vendor?.name || '—',
               '₹' + (b.totalAmount || 0),
-              b.status || 'PENDING',
-              'UNSETTLED'
+              b.executionStatus || b.status || 'PENDING',
+              b.settlementStatus || 'UNSETTLED'
             ]);
           }
           if (kind === 'vendors' && res.vendors) {

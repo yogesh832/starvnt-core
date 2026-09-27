@@ -3,12 +3,60 @@ import { requireExternalAuth, requireAccountType } from '../middleware/requireEx
 import { Opportunity } from '../models/Opportunity.js';
 import { Quote } from '../models/Quote.js';
 import { Notification } from '../models/Notification.js';
+import { VendorOrganization } from '../models/VendorOrganization.js';
+import { VendorService } from '../models/VendorService.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../services/matching.service.js';
 import { createQuote, transitionQuote } from '../services/quoteStateMachine.service.js';
-import { startService, submitCompletionEvidence } from '../../admin/services/executionSettlement.service.js';
+import { startService, submitCompletionEvidence, validateCompletionFromCore } from '../../admin/services/executionSettlement.service.js';
+import * as razorpay from '../../customer/services/payments/razorpay.js';
 
 const router = express.Router();
+const ADVANCE_PERCENTAGE = 30;
+
+function quoteForCustomer(quote) {
+  const total = Number(quote.pricingBreakdown?.totalAmount || 0);
+  const advanceAmount = Math.ceil((total * ADVANCE_PERCENTAGE) / 100);
+  return {
+    id: String(quote._id),
+    quoteReference: quote.quoteReference,
+    serviceName: quote.serviceName,
+    eventDate: quote.eventDate,
+    serviceLocation: quote.serviceLocation,
+    status: quote.status,
+    vendorName: quote.vendor?.businessName || quote.vendorName || 'Vendor',
+    vendorCategory: quote.vendor?.category || '',
+    vendorLocation: quote.vendor?.location || '',
+    pricingBreakdown: quote.pricingBreakdown,
+    totalAmount: total,
+    advancePercentage: quote.advancePayment?.percentage || ADVANCE_PERCENTAGE,
+    advanceAmount: quote.advancePayment?.amount || advanceAmount,
+    advanceStatus: quote.advancePayment?.status || 'NOT_STARTED',
+    notes: quote.notes || '',
+    validUntil: quote.validUntil,
+    createdAt: quote.createdAt,
+  };
+}
+
+function bookingForCustomer(booking) {
+  return {
+    id: String(booking._id),
+    bookingReference: booking.bookingReference,
+    vendorName: booking.vendorName || 'Vendor',
+    customerName: booking.customerName || '',
+    serviceName: booking.serviceName,
+    category: booking.category,
+    eventDate: booking.eventDate,
+    serviceLocation: booking.serviceLocation,
+    totalAmount: booking.totalAmount,
+    paymentStatus: booking.paymentStatus,
+    executionStatus: booking.executionStatus,
+    settlementStatus: booking.settlementStatus,
+    completionEvidence: booking.completionEvidence || [],
+    validationAudit: booking.validationAudit || null,
+    createdAt: booking.createdAt,
+  };
+}
 
 // ── OPPORTUNITIES (Spec §9, §10, Golden Test F) ──────────────────────────
 
@@ -111,6 +159,77 @@ router.get('/opportunities', requireExternalAuth, requireAccountType('CUSTOMER')
   }
 });
 
+router.post('/customer/demo/mahiman-enquiry', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
+  try {
+    const vendor = await VendorOrganization.findOne({
+      businessName: { $regex: /^mahiman tent house$/i },
+      category: 'DJ & Music',
+    });
+    if (!vendor) {
+      return res.status(404).json({
+        error: 'DEMO_VENDOR_NOT_FOUND',
+        message: 'Mahiman Tent House vendor profile was not found.',
+      });
+    }
+
+    const service =
+      (await VendorService.findOne({ vendor: vendor._id, status: 'ACTIVE', category: 'DJ & Music' })) ||
+      (await VendorService.findOne({ vendor: vendor._id, status: 'ACTIVE' }));
+    if (!service) {
+      return res.status(404).json({
+        error: 'DEMO_VENDOR_SERVICE_NOT_FOUND',
+        message: 'This vendor has no active service to quote yet.',
+      });
+    }
+
+    const eventDate = req.body?.eventDate || '2026-11-26';
+    const guestCount = Number(req.body?.guestCount || 150);
+    const serviceLocation = {
+      address: req.body?.address || 'Ritabagar celebration ground',
+      locality: req.body?.locality || 'Ritabagar',
+      city: req.body?.city || 'Ritabagar',
+    };
+
+    let opportunity = await Opportunity.findOne({
+      vendor: vendor._id,
+      customer: req.externalUser._id,
+      vendorService: service._id,
+      eventDate,
+      status: { $in: ['NEW', 'VIEWED', 'RESPONDED'] },
+    }).sort({ createdAt: -1 });
+
+    if (!opportunity) {
+      opportunity = await Opportunity.create({
+        vendor: vendor._id,
+        customer: req.externalUser._id,
+        vendorService: service._id,
+        serviceName: service.name || 'DJ & Music',
+        eventDate,
+        serviceLocation,
+        guestCount,
+        requiredCapability: 'Bollywood/Punjabi DJ setup with sound, mic and evening event support',
+        estimatedTravel: `${vendor.location || 'Vendor base'} -> ${serviceLocation.locality}`,
+        travelCost: 0,
+        status: 'NEW',
+        action: 'Respond / Quote',
+      });
+
+      await Notification.create({
+        vendor: vendor._id,
+        title: 'New Customer Enquiry',
+        message: `${service.name || 'DJ & Music'} · ${eventDate} · ${serviceLocation.locality} · ${guestCount} guests`,
+        type: 'ENQUIRY',
+        link: '/vendor/enquiries',
+        metadata: { opportunityId: opportunity._id },
+      });
+    }
+
+    res.status(201).json({ ok: true, vendor, service, opportunity });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /**
  * Vendor retrieves their structured opportunities.
  */
@@ -166,6 +285,197 @@ router.get('/quotes', requireExternalAuth, async (req, res, next) => {
     res.json({ ok: true, count: quotes.length, quotes });
   } catch (err) {
     next(err);
+  }
+});
+
+router.get('/customer/vendor-quotes', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
+  try {
+    const [opportunities, quotes, bookings] = await Promise.all([
+      Opportunity.find({ customer: req.externalUser._id })
+        .populate('vendor', 'businessName category location')
+        .populate('vendorService', 'name pricing')
+        .sort({ createdAt: -1 })
+        .limit(20),
+      Quote.find({ customer: req.externalUser._id })
+        .populate('vendor', 'businessName category location')
+        .sort({ createdAt: -1 })
+        .limit(20),
+      CoreBooking.find({ customerId: req.externalUser._id })
+        .sort({ createdAt: -1 })
+        .limit(20),
+    ]);
+
+    res.json({
+      ok: true,
+      opportunities,
+      quotes: quotes.map(quoteForCustomer),
+      bookings: bookings.map(bookingForCustomer),
+      paymentsConfigured: razorpay.isConfigured(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/customer/bookings/:id/verify-completion', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res) => {
+  try {
+    const booking = await CoreBooking.findOne({ _id: req.params.id, customerId: req.externalUser._id });
+    if (!booking) return res.status(404).json({ error: 'BOOKING_NOT_FOUND' });
+    if (booking.executionStatus !== 'COMPLETION_SUBMITTED') {
+      return res.status(400).json({
+        error: 'BOOKING_NOT_READY_FOR_CUSTOMER_VERIFICATION',
+        message: 'The vendor must mark the work done before you can verify it.',
+      });
+    }
+
+    const verified = await validateCompletionFromCore(
+      booking._id,
+      { approved: true, notes: req.body?.notes || 'Customer confirmed service completion' },
+      req.externalUser.fullName || req.externalUser.email || 'CUSTOMER'
+    );
+
+    res.json({ ok: true, booking: bookingForCustomer(verified) });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'COMPLETION_VERIFICATION_FAILED', message: err.message });
+  }
+});
+
+router.post('/customer/vendor-quotes/:id/negotiate', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
+  try {
+    const message = String(req.body?.message || '').trim();
+    if (!message) return res.status(400).json({ error: 'MESSAGE_REQUIRED' });
+
+    const quote = await Quote.findOne({ _id: req.params.id, customer: req.externalUser._id });
+    if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
+    if (quote.status !== 'SUBMITTED') {
+      return res.status(400).json({ error: 'QUOTE_NOT_NEGOTIABLE', message: 'Only submitted quotes can be negotiated.' });
+    }
+
+    quote.history.push({
+      fromStatus: quote.status,
+      toStatus: quote.status,
+      changedBy: req.externalUser.fullName || req.externalUser.email,
+      reason: `Customer requested change: ${message}`,
+      timestamp: new Date(),
+    });
+    await quote.save();
+
+    await Notification.create({
+      vendor: quote.vendor,
+      title: 'Customer requested quote change',
+      message,
+      type: 'QUOTE',
+      link: '/vendor/quotes',
+      metadata: { quoteId: quote._id },
+    });
+
+    res.json({ ok: true, quote: quoteForCustomer(await quote.populate('vendor', 'businessName category location')) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/customer/vendor-quotes/:id/pay-advance', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
+  try {
+    const quote = await Quote.findOne({ _id: req.params.id, customer: req.externalUser._id })
+      .populate('vendor', 'businessName category location');
+    if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
+    if (quote.status !== 'SUBMITTED') {
+      return res.status(400).json({ error: 'QUOTE_NOT_PAYABLE', message: 'This quote is not awaiting customer payment.' });
+    }
+    if (!razorpay.isConfigured()) {
+      return res.status(503).json({ error: 'PAYMENT_NOT_CONFIGURED', message: 'Razorpay test keys are not configured on the server.' });
+    }
+
+    const total = Number(quote.pricingBreakdown?.totalAmount || 0);
+    const amount = Math.ceil((total * ADVANCE_PERCENTAGE) / 100);
+    if (!amount) return res.status(400).json({ error: 'INVALID_QUOTE_AMOUNT' });
+
+    const order = await razorpay.createOrder({
+      amount,
+      receipt: `vq_${quote._id}`,
+      notes: { quoteId: String(quote._id), customerId: String(req.externalUser._id), advancePercentage: ADVANCE_PERCENTAGE },
+    });
+    const orderId = order.id;
+    quote.advancePayment = {
+      percentage: ADVANCE_PERCENTAGE,
+      amount,
+      status: 'ORDER_CREATED',
+      provider: 'razorpay',
+      providerOrderId: orderId,
+      providerPaymentId: '',
+      paidAt: null,
+    };
+    await quote.save();
+
+    res.json({
+      ok: true,
+      quote: quoteForCustomer(quote),
+      checkout: {
+        key: razorpay.publicKeyId(),
+        orderId,
+        amount: razorpay.toPaise(amount),
+        currency: 'INR',
+        name: 'STARVNT',
+        description: `30% advance · ${quote.vendor?.businessName || 'Vendor'} · ${quote.serviceName}`,
+        prefill: {
+          name: req.externalUser.fullName || '',
+          email: req.externalUser.email || '',
+          contact: req.externalUser.phone || '',
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/customer/vendor-quotes/:id/checkout-complete', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res) => {
+  try {
+    const quote = await Quote.findOne({ _id: req.params.id, customer: req.externalUser._id })
+      .populate('vendor', 'businessName category location');
+    if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+    const orderId = quote.advancePayment?.providerOrderId;
+    if (!orderId || razorpay_order_id !== orderId) {
+      return res.status(400).json({ error: 'ORDER_MISMATCH' });
+    }
+    if (!razorpay.verifyCheckoutSignature({ orderId, paymentId: razorpay_payment_id, signature: razorpay_signature })) {
+      quote.advancePayment.status = 'FAILED';
+      await quote.save();
+      return res.status(400).json({ error: 'PAYMENT_SIGNATURE_INVALID', message: 'Payment could not be verified.' });
+    }
+
+    quote.advancePayment.status = 'VERIFIED';
+    quote.advancePayment.providerPaymentId = razorpay_payment_id || '';
+    quote.advancePayment.paidAt = new Date();
+    await quote.save();
+
+    await transitionQuote(quote._id, 'APPROVED', {
+      actor: req.externalUser.fullName || req.externalUser.email,
+      reason: `Customer paid ${ADVANCE_PERCENTAGE}% Razorpay advance`,
+    });
+
+    const booking = await CoreBooking.findOneAndUpdate(
+      { quoteId: String(quote._id) },
+      {
+        $set: {
+          vendorName: quote.vendor?.businessName || '',
+          customerName: req.externalUser.fullName || req.externalUser.email || '',
+          category: quote.vendor?.category || '',
+          paymentStatus: 'PAYMENT_VERIFIED',
+          executionStatus: 'SERVICE_SCHEDULED',
+        },
+      },
+      { new: true }
+    );
+
+    const approved = await Quote.findById(quote._id)
+      .populate('vendor', 'businessName category location');
+
+    res.json({ ok: true, quote: quoteForCustomer(approved), booking });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'PAYMENT_CONFIRMATION_FAILED', message: err.message });
   }
 });
 
@@ -234,6 +544,13 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
       status,
       actor: req.externalUser.fullName || req.externalUser.email,
     });
+
+    if (opportunityId) {
+      await Opportunity.findOneAndUpdate(
+        { _id: opportunityId, vendor: resolvedVendorId },
+        { status: 'RESPONDED', action: 'Quote Sent' }
+      );
+    }
 
     res.status(201).json({ ok: true, quote });
   } catch (err) {
