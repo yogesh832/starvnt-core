@@ -33,6 +33,40 @@ export default function VendorPortal() {
     if (text) setAuraPrompt({ id: Date.now(), text });
     setAuraOpen(true);
   }
+
+  // Profile setup status (same checklist as the dashboard's 5 onboarding steps).
+  const [setup, setSetup] = useState(null);
+  async function loadSetup() {
+    try {
+      const res = await externalApi.call('/vendor/activation-status');
+      if (res?.status?.checklist) setSetup({ percent: res.status.completionPercentage ?? 0, checklist: res.status.checklist });
+    } catch {
+      /* setup card simply stays hidden */
+    }
+  }
+
+  // Re-check when the vendor moves between pages (they may have finished a step there)
+  // and whenever a profile change is announced (Profile page, Aura+ chat).
+  useEffect(() => {
+    loadSetup();
+  }, [location.pathname]);
+  useEffect(() => {
+    const onUpdate = () => loadSetup();
+    window.addEventListener('vendorProfileUpdated', onUpdate);
+    return () => window.removeEventListener('vendorProfileUpdated', onUpdate);
+  }, []);
+
+  // New vendor (setup incomplete): open Aura+ once per sign-in so it can walk them through setup.
+  useEffect(() => {
+    if (!setup || setup.percent >= 100) return;
+    try {
+      if (sessionStorage.getItem('vendor_aura_setup_opened')) return;
+      sessionStorage.setItem('vendor_aura_setup_opened', '1');
+    } catch {
+      return;
+    }
+    setAuraOpen(true);
+  }, [setup]);
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [isSidebarMini, setIsSidebarMini] = useState(false);
@@ -490,7 +524,7 @@ export default function VendorPortal() {
         )}
       </div>
 
-      <VendorAura open={auraOpen} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} />
+      <VendorAura open={auraOpen} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} setup={setup} />
     </div>
   );
 }

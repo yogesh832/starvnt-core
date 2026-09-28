@@ -1,11 +1,13 @@
 import { VendorAuraSession, VendorAuraMessage } from '../models/VendorAura.js';
 import { getLlmAdapter } from './llmAdapter.js';
-import { buildVendorContext, PAGES } from './vendorContext.js';
+import { buildVendorContext, PAGES, setupSummary, isAutoBusinessName } from './vendorContext.js';
+import { applyProfileFromChat } from './profileWriter.js';
 import { buildVendorSystemPrompt } from './vendorSystemPrompt.js';
 
 /**
- * Vendor Aura+ chat. Read-only: it answers from the vendor's own data and
- * suggests pages; it never writes business data.
+ * Vendor Aura+ chat. It answers from the vendor's own data and suggests pages.
+ * Its only write is profile setup (brand name, category, city — see profileWriter.js);
+ * quotes, bookings, payments and availability are never touched.
  */
 
 export const MAX_MESSAGE = 2000;
@@ -86,15 +88,43 @@ export async function chat({ vendor, user, sessionId, message, page }) {
   let reply = FALLBACK_REPLY;
   let actions = [{ label: 'Open dashboard', to: '/vendor/dashboard' }];
   let fallback = true;
+  let extractedProfile = {};
   try {
     const res = await getLlmAdapter().chat({ systemPrompt: buildVendorSystemPrompt(context), history, message: text });
     if (res?.text) {
       reply = res.text.slice(0, 4000);
       actions = cleanActions(res.actions);
+      extractedProfile = res.profile || {};
       fallback = false;
     }
   } catch (err) {
     console.warn('[vendor-aura] LLM failed, using fallback:', err?.code || err?.message || err);
+  }
+
+  // Profile setup: save brand basics the vendor stated, then say exactly what was saved
+  // (the server writes this line, so the reply never claims a save that didn't happen).
+  let setup = null;
+  const { saved, activation } = await applyProfileFromChat(vendor, extractedProfile, text).catch((err) => {
+    console.warn('[vendor-aura] profile save failed:', err?.message || err);
+    return { saved: [], activation: null };
+  });
+  if (saved.length) {
+    setup = setupSummary(activation);
+    // The model often re-asks for what was just saved; the app asks the next question itself.
+    reply = `${withoutQuestions(reply) || 'Got it!'}\n\n✅ Saved to your profile — ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}.`;
+    const next = setup?.nextStep;
+    if (next) {
+      const missing = missingBrand(vendor);
+      reply += next.auraCanFill
+        ? missing.length
+          ? `\nStill needed for your brand: ${missing.join(', ')}. What's your ${missing[0]}?`
+          : '\nPlease review your brand details on the Profile page.'
+        : `\nNext step: ${next.step}. You can do it on the page below, or ask me how.`;
+      if (!next.auraCanFill) actions = [{ label: `Next: ${next.short}`, to: next.to }, ...actions].slice(0, MAX_ACTIONS);
+    } else if (setup?.complete) {
+      reply += '\n🎉 Your profile setup is complete.';
+    }
+    actions = dedupeActions(actions);
   }
 
   await VendorAuraMessage.insertMany([
@@ -103,5 +133,27 @@ export async function chat({ vendor, user, sessionId, message, page }) {
   ]);
   await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date() } });
 
-  return { reply, actions, fallback };
+  return { reply, actions, fallback, profileUpdated: saved.length > 0, setup };
+}
+
+function missingBrand(vendor) {
+  const missing = [];
+  if (isAutoBusinessName(vendor.businessName)) missing.push('business name');
+  if (!vendor.category) missing.push('category');
+  if (!vendor.location) missing.push('city');
+  return missing;
+}
+
+/** Drop question sentences ("Which city are you in?") from the model's text. */
+export function withoutQuestions(text) {
+  return String(text || '')
+    .split(/(?<=[.!?])\s+/)
+    .filter((s) => !s.trim().endsWith('?'))
+    .join(' ')
+    .trim();
+}
+
+function dedupeActions(actions) {
+  const seen = new Set();
+  return actions.filter((a) => (seen.has(a.to) ? false : seen.add(a.to)));
 }

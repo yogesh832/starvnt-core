@@ -3,11 +3,19 @@ import { GoogleGenAI, Type } from '@google/genai';
 const TIMEOUT_MS = 12000;
 const ATTEMPTS = 3;
 
-// Vendor Aura+ answers and points at pages; it never extracts or writes data.
+// Vendor Aura+ answers and points at pages. The only thing it may extract is the
+// vendor's own brand basics during profile setup (validated server-side).
+const str = { type: Type.STRING, nullable: true };
+
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     reply: { type: Type.STRING },
+    profile: {
+      type: Type.OBJECT,
+      nullable: true,
+      properties: { businessName: str, category: str, city: str },
+    },
     actions: {
       type: Type.ARRAY,
       nullable: true,
@@ -64,7 +72,11 @@ export function createGeminiAdapter() {
             },
           });
           const parsed = JSON.parse(res.text || '{}');
-          return { text: String(parsed.reply || '').trim(), actions: Array.isArray(parsed.actions) ? parsed.actions : [] };
+          return {
+            text: String(parsed.reply || '').trim(),
+            actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+            profile: parsed.profile && typeof parsed.profile === 'object' ? parsed.profile : {},
+          };
         } catch (err) {
           lastErr = err;
           console.warn(`[vendor-aura] Gemini attempt ${attempt} failed:`, err?.message || err);

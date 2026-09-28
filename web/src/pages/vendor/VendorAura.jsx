@@ -5,8 +5,69 @@ import { externalApi } from '../../lib/api.js';
 
 /**
  * Vendor Aura+: answers from the vendor's own data and links to the page
- * where they can act. It never changes anything itself.
+ * where they can act. The only thing it saves is the brand basics (name,
+ * category, city) during profile setup; everything else is done on the pages.
  */
+
+// Same 5 steps, order and checks as the dashboard onboarding (activation checklist).
+const SETUP_STEPS = [
+  { key: 'profile', title: 'Brand name, category & city', done: (c) => c.profile, to: '/vendor/profile', prompt: 'Help me set up my brand profile' },
+  { key: 'services', title: 'Add a service with a price', done: (c) => c.services, to: '/vendor/services', prompt: 'How do I add my first service?' },
+  { key: 'capabilities', title: 'Team & equipment', done: (c) => c.capabilities, to: '/vendor/services?action=gear', prompt: 'What should I add for team and equipment?' },
+  { key: 'coverage', title: 'Location & coverage area', done: (c) => c.locations && c.coverage, to: '/vendor/services?action=coverage', prompt: 'How do I set my location and coverage area?' },
+  { key: 'portfolio', title: 'Add a portfolio project', done: (c) => c.portfolio, to: '/vendor/portfolio', prompt: 'What should I put in my portfolio?' },
+];
+
+const START_SETUP = 'Help me complete my profile setup';
+
+/** Profile setup checklist: each open step can be done with Aura+ or manually. */
+function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
+  const steps = SETUP_STEPS.map((s) => ({ ...s, isDone: Boolean(s.done(setup.checklist)) }));
+  const next = steps.find((s) => !s.isDone);
+  return (
+    <div className="mx-4 mt-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-soft/60 to-white shrink-0">
+      <button onClick={onToggle} className="w-full flex items-center gap-2 px-3 pt-2.5 pb-2 text-left" aria-expanded={expanded}>
+        <span className="text-[12px] font-extrabold text-navy flex-1">Complete your profile</span>
+        <span className="text-[11px] font-bold text-primary">{setup.percent}%</span>
+        <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} className="text-muted" />
+      </button>
+      <div className="mx-3 mb-2.5 h-1.5 rounded-full bg-white overflow-hidden">
+        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.max(4, setup.percent)}%` }} />
+      </div>
+      {expanded && (
+        <ul className="px-3 pb-3 space-y-1.5">
+          {steps.map((s, i) => (
+            <li key={s.key} className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${s === next ? 'bg-white shadow-sm' : ''}`}>
+              <span
+                className={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold shrink-0 ${
+                  s.isDone ? 'bg-emerald-500 text-white' : 'bg-white border border-gray-200 text-muted'
+                }`}
+              >
+                {s.isDone ? '✓' : i + 1}
+              </span>
+              <span className={`flex-1 min-w-0 text-[12px] truncate ${s.isDone ? 'text-muted line-through' : 'font-semibold text-navy'}`}>{s.title}</span>
+              {!s.isDone && (
+                <span className="flex gap-1 shrink-0">
+                  <button
+                    onClick={() => onAura(s.prompt)}
+                    disabled={busy}
+                    className="rounded-lg bg-primary text-white text-[10px] font-bold px-2 py-1 disabled:opacity-50"
+                    title="Let Aura+ guide you"
+                  >
+                    With Aura
+                  </button>
+                  <button onClick={() => onManual(s.to)} className="rounded-lg border border-gray-200 bg-white text-navy text-[10px] font-bold px-2 py-1 hover:bg-lavender" title="Open the page and do it yourself">
+                    Manually
+                  </button>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const QUICK = ['What should I do today?', 'Show pending enquiries', "This week's bookings", "What's my payment status?", "What's missing in my profile?"];
 
@@ -136,7 +197,7 @@ function Bubble({ m, onAction }) {
   );
 }
 
-export default function VendorAura({ open, onClose, page, userId, prompt }) {
+export default function VendorAura({ open, onClose, page, userId, prompt, setup }) {
   const navigate = useNavigate();
   const [sessionId, setSessionId] = useState(() => readSession(userId));
   const [messages, setMessages] = useState([]);
@@ -145,6 +206,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt }) {
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [mode, setModeState] = useState(readMode);
+  const [setupExpanded, setSetupExpanded] = useState(true);
+  const setupIncomplete = Boolean(setup?.checklist) && setup.percent < 100;
   const listRef = useRef(null);
   const lastPromptId = useRef(null);
 
@@ -244,6 +307,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt }) {
     try {
       const res = await externalApi.call('/vendor/aura/chat', { method: 'POST', body: { sessionId, message, page } });
       setMessages((m) => [...m, { role: 'model', content: res.reply, actions: res.actions || [] }]);
+      // Aura+ saved brand details → refresh the portal header and the setup checklist.
+      if (res.profileUpdated) window.dispatchEvent(new Event('vendorProfileUpdated'));
       // Asked by voice → answer by voice too.
       if (spoken && canSpeak) {
         setSpeaking(true);
@@ -280,8 +345,24 @@ export default function VendorAura({ open, onClose, page, userId, prompt }) {
     if (window.matchMedia?.('(max-width: 1023px)').matches) onClose();
   }
 
+  function setupWithAura(text) {
+    setMode('aura');
+    setSetupExpanded(false);
+    send(text);
+  }
+
   if (!open) return null;
-  const chips = [...(PAGE_PROMPTS[page] || []), ...QUICK].slice(0, 5);
+  const chips = [...(setupIncomplete ? [START_SETUP] : []), ...(PAGE_PROMPTS[page] || []), ...QUICK].slice(0, 5);
+  const setupCard = setupIncomplete && (
+    <SetupCard
+      setup={setup}
+      expanded={setupExpanded}
+      onToggle={() => setSetupExpanded((v) => !v)}
+      onAura={setupWithAura}
+      onManual={goTo}
+      busy={sending}
+    />
+  );
 
   return (
     <>
@@ -331,6 +412,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt }) {
           </div>
         </div>
 
+        {setupCard}
+
         {mode === 'manual' ? (
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-2">
             <p className="text-[11px] text-muted px-1 pb-1">Go straight to what you want to do:</p>
@@ -361,14 +444,28 @@ export default function VendorAura({ open, onClose, page, userId, prompt }) {
           </div>
         ) : (
         <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
-          {messages.length === 0 && !sending && (
+          {messages.length === 0 && !sending && (setupIncomplete ? (
+            <div className="text-center pt-4">
+              <div className="text-sm font-extrabold text-navy">Welcome! Let's set up your business.</div>
+              <p className="text-xs text-muted mt-1 max-w-[290px] mx-auto">
+                Customers can find and book you once all 5 steps above are done. I can fill your brand details right here in chat and guide
+                you through the rest — or tap “Manually” on any step to do it yourself.
+              </p>
+              <button
+                onClick={() => setupWithAura(START_SETUP)}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-4 py-2 shadow-md shadow-primary/25"
+              >
+                <Icon name="bolt" size={13} /> Start setup with Aura
+              </button>
+            </div>
+          ) : (
             <div className="text-center pt-6">
               <div className="text-sm font-extrabold text-navy">Hi! I'm Aura+.</div>
               <p className="text-xs text-muted mt-1 max-w-[280px] mx-auto">
                 Ask me anything about your enquiries, quotes, bookings, payments, reviews or profile — in English, Hindi or Hinglish.
               </p>
             </div>
-          )}
+          ))}
           {messages.map((m, i) => (
             <Bubble key={i} m={m} onAction={goTo} />
           ))}
@@ -452,7 +549,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt }) {
             </button>
           </form>
           <p className="text-[10px] text-muted/80 px-1 flex items-center justify-between gap-2">
-            <span>Aura+ only explains and suggests — quotes, bookings and payments stay in your hands.</span>
+            <span>Aura+ can save your brand details; quotes, bookings and payments stay in your hands.</span>
             <button onClick={() => setMode('manual')} className="shrink-0 font-bold text-primary hover:underline">
               Prefer to do it yourself? Ask manually →
             </button>
