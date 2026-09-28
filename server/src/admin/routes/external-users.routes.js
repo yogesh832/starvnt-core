@@ -8,6 +8,21 @@ const VendorOrganization = externalConn.model('VendorOrganization');
 
 const router = Router();
 
+// One email can be both a customer and a vendor (`roles`); legacy users only have accountType.
+function roleQuery(role, search) {
+  const clauses = [{ $or: [{ roles: role }, { accountType: role }] }];
+  if (search) {
+    clauses.push({
+      $or: [
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } },
+        { fullName: { $regex: search, $options: 'i' } },
+      ],
+    });
+  }
+  return { $and: clauses };
+}
+
 // Require admin authentication for viewing external users
 router.use(requireAdminAuth);
 
@@ -19,14 +34,7 @@ router.get('/customers', requirePermission('users.read'), async (req, res, next)
     const limit = parseInt(req.query.limit) || 50;
     const skip = parseInt(req.query.skip) || 0;
     
-    const query = { accountType: 'CUSTOMER' };
-    if (req.query.search) {
-      query.$or = [
-        { email: { $regex: req.query.search, $options: 'i' } },
-        { phone: { $regex: req.query.search, $options: 'i' } },
-        { fullName: { $regex: req.query.search, $options: 'i' } }
-      ];
-    }
+    const query = roleQuery('CUSTOMER', req.query.search);
 
     const customers = await ExternalUser.find(query)
       .select('-passwordHash') // Security: never return hashes to frontend
@@ -50,14 +58,7 @@ router.get('/vendors', requirePermission('users.read'), async (req, res, next) =
     const limit = parseInt(req.query.limit) || 50;
     const skip = parseInt(req.query.skip) || 0;
     
-    const query = { accountType: 'VENDOR' };
-    if (req.query.search) {
-      query.$or = [
-        { email: { $regex: req.query.search, $options: 'i' } },
-        { phone: { $regex: req.query.search, $options: 'i' } },
-        { fullName: { $regex: req.query.search, $options: 'i' } }
-      ];
-    }
+    const query = roleQuery('VENDOR', req.query.search);
 
     const vendors = await ExternalUser.find(query)
       .select('-passwordHash')

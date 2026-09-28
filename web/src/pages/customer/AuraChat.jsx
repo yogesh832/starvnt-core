@@ -56,34 +56,88 @@ function Bubble({ from, children }) {
   );
 }
 
+
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Voice input (Web Speech API). Fills the box only; never sends by itself. */
-function useVoice(onText) {
+
+const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+/** Read Aura's reply aloud in the reply's script (Hindi / Bengali / English). */
+function speakText(text, onDone) {
+  if (!canSpeak || !text) return onDone?.();
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = /[ऀ-ॿ]/.test(text) ? 'hi-IN' : /[ঀ-৿]/.test(text) ? 'bn-IN' : 'en-IN';
+  const voices = window.speechSynthesis.getVoices();
+  const voice = voices.find((v) => v.lang === u.lang) || voices.find((v) => v.lang?.startsWith(u.lang.slice(0, 2)));
+  if (voice) u.voice = voice;
+  u.onend = () => onDone?.();
+  u.onerror = () => onDone?.();
+  window.speechSynthesis.speak(u);
+}
+
+/**
+ * Voice conversation (Web Speech API): the spoken words fill the box live and
+ * are sent when the customer stops talking; the reply is then read aloud.
+ * Only the transcribed text leaves the browser, like a typed message.
+ */
+function useVoice({ onInterim, onFinal, onError }) {
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [lang, setLang] = useState('en-IN');
   const recRef = useRef(null);
   const Speech = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
+  function stop() {
+    recRef.current?.abort();
+    recRef.current = null;
+    setListening(false);
+    if (canSpeak) window.speechSynthesis.cancel();
+    setSpeaking(false);
+  }
+
+  // Stop listening/speaking when the chat unmounts.
+  useEffect(() => () => stop(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
   function toggle() {
+    if (listening || speaking) return stop();
     if (!Speech) return;
-    if (listening) {
-      recRef.current?.stop();
-      return;
-    }
     const rec = new Speech();
     rec.lang = lang;
-    rec.interimResults = false;
-    rec.onresult = (e) => onText(Array.from(e.results).map((r) => r[0].transcript).join(' '));
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    let finalText = '';
+    rec.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i += 1) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      onInterim((finalText + interim).trim());
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') onError('Microphone permission denied. Allow the mic in your browser to talk to Aura+.');
+      else if (e.error !== 'aborted' && e.error !== 'no-speech') onError('Could not hear you. Please try again.');
+    };
+    rec.onend = () => {
+      setListening(false);
+      recRef.current = null;
+      if (finalText.trim()) onFinal(finalText.trim());
+    };
     recRef.current = rec;
     setListening(true);
     rec.start();
   }
-  return { supported: Boolean(Speech), listening, lang, setLang, toggle };
+
+  function speak(text) {
+    if (!canSpeak) return;
+    setSpeaking(true);
+    speakText(text, () => setSpeaking(false));
+  }
+
+  return { supported: Boolean(Speech), listening, speaking, lang, setLang, toggle, speak };
 }
 
 export default function AuraChat({ firstName, eventId: embeddedEventId = null, embedded = false, onEventChanged }) {
@@ -111,9 +165,12 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const inputRef = useRef(null);
   const askedRef = useRef(false);
 
-  const voice = useVoice((t) => {
-    setInput((prev) => (prev ? `${prev} ${t}` : t));
-    inputRef.current?.focus();
+  // Asked by voice → sent automatically and answered by voice too (see send()).
+  const sendRef = useRef(null);
+  const voice = useVoice({
+    onInterim: (t) => setInput(t),
+    onFinal: (t) => sendRef.current?.(t, {}, { spoken: true }),
+    onError: (msg) => setError(msg),
   });
 
   const applyState = useCallback((s) => {
@@ -159,7 +216,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   }, [messages, understanding, sending]);
 
   const send = useCallback(
-    async (text, extra = {}) => {
+    async (text, extra = {}, { spoken = false } = {}) => {
       const msg = (text ?? '').trim();
       if (!msg || !sessionId || sending) return;
       setInput('');
@@ -169,6 +226,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
       try {
         const res = await customerApi.auraChat({ sessionId, message: msg, eventId: scopedEventId || undefined, ...extra });
         setMessages((prev) => [...prev, { role: 'model', content: res.reply }]);
+        if (spoken) voice.speak(res.reply);
         applyState(res);
         // A chat that just created an event keeps its history when opened from that event later.
         if (res.createdEventId) writeSession(sessionKey(user?.id, res.createdEventId), sessionId);
@@ -181,8 +239,10 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         setSending(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [sessionId, sending, scopedEventId, applyState, onEventChanged, user?.id]
   );
+  sendRef.current = send;
 
   // ?ask= auto-sends once, then leaves the URL clean.
   useEffect(() => {
@@ -453,7 +513,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={sending || loading}
-            placeholder="Type a message or describe your event…"
+            placeholder={voice.listening ? 'Listening… speak now' : 'Type a message or describe your event…'}
             className="flex-1 outline-none text-xs sm:text-sm placeholder:text-muted/60 bg-transparent"
           />
           {voice.supported && (
@@ -469,11 +529,15 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
               <button
                 type="button"
                 onClick={voice.toggle}
-                className={`p-1 transition ${voice.listening ? 'text-red-500 animate-pulse' : 'text-muted hover:text-primary'}`}
-                title="Voice input"
-                aria-label="Voice input"
+                disabled={(sending || loading) && !voice.speaking}
+                className={`relative w-8 h-8 rounded-full grid place-items-center shrink-0 transition disabled:opacity-50 ${
+                  voice.listening ? 'bg-red-500 text-white' : voice.speaking ? 'bg-primary-soft text-primary' : 'text-muted hover:text-primary hover:bg-lavender'
+                }`}
+                title={voice.listening ? 'Stop listening' : voice.speaking ? 'Stop speaking' : 'Talk to Aura+ (voice)'}
+                aria-label={voice.listening ? 'Stop listening' : voice.speaking ? 'Stop speaking' : 'Talk to Aura+'}
               >
-                <Icon name="mic" size={16} />
+                {voice.listening && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
+                {voice.speaking ? <span className="w-2.5 h-2.5 rounded-[3px] bg-primary" /> : <Icon name="mic" size={16} className="relative" />}
               </button>
             </>
           )}

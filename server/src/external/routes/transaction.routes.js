@@ -5,6 +5,7 @@ import { Quote } from '../models/Quote.js';
 import { Notification } from '../models/Notification.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
+import { activeAccountType } from '../models/ExternalUser.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../services/matching.service.js';
 import { createQuote, transitionQuote } from '../services/quoteStateMachine.service.js';
@@ -364,7 +365,7 @@ router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VEN
 router.get('/quotes', requireExternalAuth, async (req, res, next) => {
   try {
     const filter = {};
-    if (req.externalUser.accountType === 'VENDOR') {
+    if (activeAccountType(req.externalUser) === 'VENDOR') {
       const vendorId = req.externalUser.vendorOrganization;
       if (!vendorId) {
         return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
@@ -658,7 +659,7 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
     } = req.body || {};
 
     const resolvedVendorId =
-      req.externalUser.accountType === 'VENDOR'
+      activeAccountType(req.externalUser) === 'VENDOR'
         ? req.externalUser.vendorOrganization
         : inputVendorId;
 

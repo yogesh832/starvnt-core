@@ -15,6 +15,8 @@ const externalSessionSchema = new Schema(
     userAgent: { type: String, default: '' },
     expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
     revokedAt: { type: Date, default: null },
+    // Surface this session signed in as (the tab chosen at login). Older sessions: null → user's accountType.
+    accountType: { type: String, enum: ['CUSTOMER', 'VENDOR', null], default: null },
   },
   { timestamps: true }
 );

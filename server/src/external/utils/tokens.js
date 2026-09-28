@@ -8,11 +8,11 @@ import { config } from '../../config.js';
  * different secret AND a different audience, so a token from one domain can
  * never be replayed against the other.
  */
-export function signExternalAccessToken(user, sessionId) {
+export function signExternalAccessToken(user, sessionId, accountType = user.accountType) {
   return jwt.sign(
     {
       sub: String(user._id),
-      accountType: user.accountType, // CUSTOMER | VENDOR
+      accountType, // active surface for this session: CUSTOMER | VENDOR
       sid: String(sessionId),
       domain: 'EXTERNAL',
     },

@@ -190,9 +190,9 @@ export default function ExternalLogin() {
 
       const u =
         mode === "login" && passwordSetupRequired
-          ? await setPassword(form.email, form.otp, form.password)
+          ? await setPassword(form.email, form.otp, form.password, accountType)
           : mode === "login"
-          ? await login(form.email, form.password)
+          ? await login(form.email, form.password, accountType)
           : await register({
               fullName: form.fullName,
               email: form.email,
@@ -210,7 +210,7 @@ export default function ExternalLogin() {
     } catch (err) {
       const map = {
         INVALID_CREDENTIALS: "Incorrect email or password.",
-        EMAIL_IN_USE: "That email is already registered — try signing in.",
+        EMAIL_IN_USE: `That email is already registered — sign in on this tab to use it as a ${accountType === "VENDOR" ? "vendor" : "customer"}.`,
         WEAK_PASSWORD: "Password needs 8+ chars with a letter and a number.",
         BUSINESS_NAME_REQUIRED: "Please add your brand / business name.",
         RATE_LIMITED: "Too many attempts — wait a few minutes and retry.",
