@@ -45,11 +45,26 @@ const externalUserSchema = new Schema(
       default: 'ACTIVE',
       index: true,
     },
+    // Every surface this identity may use. One email can be both a customer and
+    // a vendor; the tab chosen at sign-in picks the active one (stored on the
+    // session). `accountType` stays the original/primary type. Older documents
+    // have no `roles` — see userRoles().
+    roles: { type: [{ type: String, enum: ['CUSTOMER', 'VENDOR'] }], default: undefined, index: true },
     vendorOrganization: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', default: null },
     lastLoginAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
+
+/** Roles this identity holds (legacy users: just their accountType). */
+export function userRoles(user) {
+  return user?.roles?.length ? [...user.roles] : user?.accountType ? [user.accountType] : [];
+}
+
+/** The surface this request/session is acting as (set per session, never persisted). */
+export function activeAccountType(user) {
+  return user?.$locals?.activeAccountType || user?.accountType;
+}
 
 externalUserSchema.methods.toSafeJSON = function toSafeJSON() {
   return {
@@ -59,7 +74,8 @@ externalUserSchema.methods.toSafeJSON = function toSafeJSON() {
     phone: this.phone,
     avatarUrl: this.avatarUrl,
     authProvider: this.authProvider,
-    accountType: this.accountType,
+    accountType: activeAccountType(this),
+    roles: userRoles(this),
     status: this.status,
     vendorOrganization: this.vendorOrganization,
     createdAt: this.createdAt,
