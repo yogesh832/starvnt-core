@@ -7,6 +7,13 @@ import * as circleRepo from '../repositories/circle.repo.js';
 import { serializeBooking, serializePayment } from './commerce.service.js';
 import { badRequest, notFound, conflict } from '../utils/http.js';
 import { CLOSED_EVENT_STATUSES, LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
+import { PortfolioItem } from '../../external/models/PortfolioItem.js';
+import { VendorCapability } from '../../external/models/VendorCapability.js';
+import { VendorReview } from '../../external/models/VendorReview.js';
+import { VendorResource } from '../../external/models/VendorResource.js';
+import { OperatingLocation } from '../../external/models/OperatingLocation.js';
+import { TravelPolicy } from '../../external/models/TravelPolicy.js';
+import { VendorOrganization } from '../../external/models/VendorOrganization.js';
 import {
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
@@ -684,7 +691,92 @@ export async function serviceDetail(customerId, eventId, optionId) {
   const event = await getOwnedEventOr404(customerId, eventId);
   const option = await catalog.getOption(event, optionId);
   const req = await reqRepo.findRequirement(event._id, option.category);
-  return { event: serializeEvent(event), option, selected: req?.selectedOptionId === option.id };
+
+  let vendorProfile = null;
+  let portfolio = [];
+  let capabilities = [];
+  let reviews = [];
+  let resources = [];
+  let locations = [];
+  let travelPolicy = null;
+  let googleRating = null;
+
+  if (option.vendorId) {
+    const [
+      fetchedPortfolio,
+      fetchedCapabilities,
+      fetchedReviews,
+      fetchedResources,
+      fetchedLocations,
+      fetchedTravelPolicy,
+      vendorOrg
+    ] = await Promise.all([
+      PortfolioItem.find({ vendor: option.vendorId, visibility: 'PUBLIC', status: { $in: ['PUBLISHED', 'VERIFIED', 'BOOKING_PROVEN'] } }).sort({ isFeatured: -1, createdAt: -1 }).limit(20).lean(),
+      VendorCapability.find({ vendor: option.vendorId }).lean(),
+      VendorReview.find({ vendor: option.vendorId, status: 'PUBLISHED' }).sort({ createdAt: -1 }).limit(10).lean(),
+      VendorResource.find({ vendor: option.vendorId, status: 'AVAILABLE' }).lean(),
+      OperatingLocation.find({ vendor: option.vendorId }).lean(),
+      TravelPolicy.findOne({ vendor: option.vendorId }).lean(),
+      VendorOrganization.findById(option.vendorId).lean()
+    ]);
+
+    portfolio = fetchedPortfolio;
+    capabilities = fetchedCapabilities;
+    reviews = fetchedReviews;
+    resources = fetchedResources;
+    locations = fetchedLocations;
+    travelPolicy = fetchedTravelPolicy;
+
+    if (vendorOrg) {
+      vendorProfile = {
+        businessName: vendorOrg.businessName,
+        bio: vendorOrg.bio,
+        phone: vendorOrg.phone,
+        website: vendorOrg.website,
+        profilePicUrl: vendorOrg.profilePicUrl,
+        location: vendorOrg.location,
+        category: vendorOrg.category,
+        isVerified: vendorOrg.verification?.isVerified || false,
+        workingHours: vendorOrg.workingHours,
+        rating: vendorOrg.rating,
+      };
+
+      if (vendorOrg.googlePlaceId) {
+        try {
+          const key = process.env.GOOGLE_PLACES_API_KEY || 'AIzaSyDd44OidU39QkGFJ06aklMbYDZZKR3SFik';
+          const url = `https://places.googleapis.com/v1/places/${vendorOrg.googlePlaceId}?fields=id,displayName,rating,userRatingCount,reviews,googleMapsUri,formattedAddress&key=${key}`;
+          const res = await fetch(url);
+          const gData = await res.json();
+          if (gData && !gData.error) {
+            googleRating = {
+              rating: gData.rating,
+              reviewCount: gData.userRatingCount,
+              googleMapsUrl: gData.googleMapsUri,
+              reviews: gData.reviews || [],
+              address: gData.formattedAddress,
+              businessName: gData.displayName?.text,
+            };
+          }
+        } catch (err) {
+          console.warn('[serviceDetail] Google Places fetch failed:', err.message);
+        }
+      }
+    }
+  }
+
+  return {
+    event: serializeEvent(event),
+    option,
+    selected: req?.selectedOptionId === option.id,
+    vendorProfile,
+    portfolio,
+    capabilities,
+    reviews,
+    resources,
+    locations,
+    travelPolicy,
+    googleRating,
+  };
 }
 
 export async function compareServices(customerId, eventId, ids) {

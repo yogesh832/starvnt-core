@@ -220,7 +220,7 @@ export function BackLink({ to, children }) {
 }
 
 const AVAIL = {
-  unconfirmed: ['Availability not confirmed yet', 'bg-gray-100 text-muted'],
+  unconfirmed: ['Calendar clear - send enquiry', 'bg-emerald-50 text-emerald-600'],
   blocked: ['Not available on your date', 'bg-red-50 text-red-500'],
   booked: ['Already booked on your date', 'bg-red-50 text-red-500'],
   available: ['Available on your date', 'bg-emerald-50 text-emerald-600'],

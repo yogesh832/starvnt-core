@@ -18,7 +18,6 @@ import {
   useLoad,
 } from './customerUi.jsx';
 import { attentionLink, budgetText, formatDate, formatINR, planStatus } from './format.js';
-import { openCheckout } from './razorpay.js';
 import { useCurrentEvent } from './currentEvent.jsx';
 import { milestones } from './EventHistoryPage.jsx';
 import AuraChat from './AuraChat.jsx';
@@ -26,6 +25,145 @@ import SelectOptionButton from './SelectOptionButton.jsx';
 
 const TONE = { amber: 'text-amber-600', emerald: 'text-emerald-600', primary: 'text-primary', muted: 'text-muted' };
 const card = 'bg-white rounded-3xl shadow-sm border border-gray-100/70';
+
+function SkeletonLine({ className = '' }) {
+  return <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />;
+}
+
+function CustomerDashboardSkeleton() {
+  return (
+    <div className="max-w-[1400px] mx-auto space-y-5 w-full">
+      {/* Row 1: hero + event summary */}
+      <div className="grid lg:grid-cols-12 gap-5">
+        <section className="lg:col-span-7 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 sm:p-7 flex flex-col justify-center gap-3 min-h-[220px]">
+          <SkeletonLine className="h-4 w-32" />
+          <SkeletonLine className="h-8 w-64 max-w-full" />
+          <SkeletonLine className="h-4 w-48 max-w-full" />
+          <div className="mt-4">
+            <SkeletonLine className="h-12 w-full max-w-lg rounded-2xl" />
+          </div>
+        </section>
+        <div className="lg:col-span-5 bg-white rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5 space-y-4">
+          <div className="flex justify-between items-start">
+            <div className="space-y-2 flex-1">
+              <SkeletonLine className="h-6 w-48 max-w-full" />
+              <SkeletonLine className="h-3 w-32" />
+            </div>
+            <SkeletonLine className="h-7 w-16 rounded-lg shrink-0" />
+          </div>
+          <div className="space-y-2 mt-4">
+            <div className="flex gap-2">
+              <SkeletonLine className="h-3 flex-1" />
+              <SkeletonLine className="h-3 flex-1" />
+              <SkeletonLine className="h-3 flex-1" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonLine key={i} className="h-12 rounded-2xl w-full" />
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <SkeletonLine key={i} className="h-16 rounded-2xl w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2 */}
+      <div className="grid lg:grid-cols-12 gap-5 items-start">
+        <div className="lg:col-span-5 space-y-3">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 h-[560px] p-5 flex flex-col gap-4">
+            <div className="flex-1 space-y-4">
+              <SkeletonLine className="h-16 w-3/4 rounded-2xl" />
+              <SkeletonLine className="h-16 w-2/3 rounded-2xl self-end ml-auto" />
+              <SkeletonLine className="h-16 w-3/4 rounded-2xl" />
+            </div>
+            <SkeletonLine className="h-12 w-full rounded-2xl" />
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+               <div key={i} className="bg-white rounded-3xl shadow-sm border border-gray-100 p-2 flex flex-col items-center gap-2">
+                  <SkeletonLine className="w-8 h-8 rounded-xl" />
+                  <SkeletonLine className="h-2 w-10" />
+               </div>
+            ))}
+          </div>
+        </div>
+        
+        <div className="lg:col-span-4 bg-white rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
+           <div className="flex justify-between items-center mb-4">
+              <SkeletonLine className="h-4 w-32" />
+              <SkeletonLine className="h-3 w-10" />
+           </div>
+           <div className="flex gap-2 mb-4">
+              <SkeletonLine className="h-6 w-16" />
+              <SkeletonLine className="h-6 w-20" />
+           </div>
+           <div className="grid gap-3">
+              <SkeletonLine className="h-48 rounded-2xl w-full" />
+              <SkeletonLine className="h-48 rounded-2xl w-full" />
+           </div>
+        </div>
+
+        <div className="lg:col-span-3 space-y-5">
+           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
+              <div className="flex justify-between items-center mb-4">
+                <SkeletonLine className="h-4 w-28" />
+              </div>
+              <div className="space-y-2">
+                 <SkeletonLine className="h-12 rounded-xl w-full" />
+                 <SkeletonLine className="h-12 rounded-xl w-full" />
+              </div>
+           </div>
+           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
+              <div className="flex justify-between items-center mb-4">
+                 <SkeletonLine className="h-4 w-24" />
+                 <SkeletonLine className="h-3 w-10" />
+              </div>
+              <div className="space-y-4">
+                 <SkeletonLine className="h-6 w-3/4" />
+                 <SkeletonLine className="h-6 w-2/3" />
+                 <SkeletonLine className="h-6 w-full" />
+              </div>
+           </div>
+        </div>
+      </div>
+      
+      {/* Row 3 */}
+      <div className="grid lg:grid-cols-12 gap-5 items-start">
+        <div className="lg:col-span-8 bg-white rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
+          <div className="flex justify-between items-center mb-4">
+            <SkeletonLine className="h-4 w-32" />
+            <SkeletonLine className="h-3 w-12" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+             {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-2xl border border-gray-100 p-2.5">
+                   <SkeletonLine className="h-16 w-full rounded-xl" />
+                   <SkeletonLine className="h-3 w-20 mt-3" />
+                   <SkeletonLine className="h-2 w-16 mt-2" />
+                </div>
+             ))}
+          </div>
+        </div>
+        <div className="lg:col-span-4 bg-white rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-5">
+          <SkeletonLine className="h-4 w-32 mb-4" />
+          <div className="flex items-center gap-4">
+            <SkeletonLine className="h-32 w-32 rounded-full shrink-0" />
+            <div className="space-y-3 flex-1">
+              <SkeletonLine className="h-3 w-full" />
+              <SkeletonLine className="h-3 w-5/6" />
+              <SkeletonLine className="h-3 w-4/6" />
+            </div>
+          </div>
+          <SkeletonLine className="h-8 w-full rounded-2xl mt-4" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Section({ title, action, children, className = '' }) {
   return (
@@ -160,7 +298,26 @@ function Recommended({ event, items }) {
           </button>
         ))}
       </div>
-      {loading && <div className="text-xs text-muted mt-3">Loading…</div>}
+      {loading && (
+         <div className="grid sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 mt-3">
+           {Array.from({ length: 2 }).map((_, i) => (
+             <div key={i} className="rounded-2xl border border-gray-100 p-2.5 flex flex-col">
+               <SkeletonLine className="h-20 w-full rounded-xl" />
+               <SkeletonLine className="h-4 w-3/4 mt-3" />
+               <SkeletonLine className="h-3 w-1/2 mt-2" />
+               <SkeletonLine className="h-6 w-1/3 mt-2" />
+               <div className="mt-3 space-y-2">
+                 <SkeletonLine className="h-3 w-full" />
+                 <SkeletonLine className="h-3 w-5/6" />
+               </div>
+               <div className="mt-3 flex gap-2">
+                 <SkeletonLine className="h-8 flex-1 rounded-xl" />
+                 <SkeletonLine className="h-8 flex-1 rounded-xl" />
+               </div>
+             </div>
+           ))}
+         </div>
+      )}
       {error && <div className="text-xs text-red-500 mt-3">{errorText(error)}</div>}
       {!loading && !error && options.length === 0 && <p className="text-xs text-muted mt-3">No vendor options available yet for this service.</p>}
       <div className="grid sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 mt-3">
@@ -253,7 +410,7 @@ function Workspace({ firstName, event }) {
   const hist = useLoad(() => customerApi.history(event.id), [event.id, tick]);
   const ms = useMemo(() => milestones(hist.data?.history || []), [hist.data]);
 
-  if (dash.loading && !dash.data) return <div className="text-xs text-muted">Loading…</div>;
+  if (dash.loading && !dash.data) return <CustomerDashboardSkeleton />;
   if (dash.error) return <div className="text-sm text-red-500">{errorText(dash.error)}</div>;
   const { summary, steps, attention, payments = [] } = dash.data;
   const ev = dash.data.event;
@@ -376,227 +533,12 @@ function Workspace({ firstName, event }) {
   );
 }
 
-/* ── Vendor enquiry → quote → 30% advance → completion test flow ───────── */
-function VendorQuotesFlow() {
-  const vendorFlow = useLoad(() => customerApi.vendorQuotes(), []);
-  const [creatingEnquiry, setCreatingEnquiry] = useState(false);
-  const [payingQuoteId, setPayingQuoteId] = useState(null);
-  const [verifyingBookingId, setVerifyingBookingId] = useState(null);
-  const [negotiatingQuoteId, setNegotiatingQuoteId] = useState(null);
-  const [negotiationText, setNegotiationText] = useState('Can you please share a better final price or include extra sound support?');
-  const [flowMessage, setFlowMessage] = useState('');
-
-  async function createDemoEnquiry() {
-    setCreatingEnquiry(true);
-    setFlowMessage('');
-    try {
-      await customerApi.createMahimanDemoEnquiry();
-      setFlowMessage('Enquiry sent to mahiman tent house. The vendor can now see it in Enquiries.');
-      vendorFlow.reload();
-    } catch (err) {
-      setFlowMessage(errorText(err, err.message || 'Could not create enquiry.'));
-    } finally {
-      setCreatingEnquiry(false);
-    }
-  }
-
-  async function requestChange(quoteId) {
-    setFlowMessage('');
-    try {
-      await customerApi.negotiateVendorQuote(quoteId, negotiationText);
-      setNegotiatingQuoteId(null);
-      setFlowMessage('Your change request was sent to the vendor.');
-      vendorFlow.reload();
-    } catch (err) {
-      setFlowMessage(errorText(err, err.message || 'Could not send request.'));
-    }
-  }
-
-  async function payAdvance(quoteId) {
-    setPayingQuoteId(quoteId);
-    setFlowMessage('');
-    try {
-      const { checkout } = await customerApi.payVendorQuoteAdvance(quoteId);
-      const response = await openCheckout(checkout);
-      await customerApi.completeVendorQuoteCheckout(quoteId, response);
-      setFlowMessage('30% advance paid and verified. Booking is now sent to the vendor dashboard.');
-      vendorFlow.reload();
-    } catch (err) {
-      setFlowMessage(err?.dismissed ? 'Payment window closed. You can try again.' : errorText(err, err.message || 'Payment failed.'));
-    } finally {
-      setPayingQuoteId(null);
-    }
-  }
-
-  async function verifyWorkDone(bookingId) {
-    setVerifyingBookingId(bookingId);
-    setFlowMessage('');
-    try {
-      await customerApi.verifyVendorBookingCompletion(bookingId, 'Customer confirmed the vendor work is complete.');
-      setFlowMessage('Work verified. The booking is now marked complete.');
-      vendorFlow.reload();
-    } catch (err) {
-      setFlowMessage(errorText(err, err.message || 'Could not verify work yet.'));
-    } finally {
-      setVerifyingBookingId(null);
-    }
-  }
-
-  return (
-    <section className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-extrabold text-navy">DJ booking test with mahiman tent house</div>
-          <p className="text-xs text-muted mt-1">
-            Use this to send a real enquiry to the vendor, receive their quote, then pay 30% advance by Razorpay.
-          </p>
-        </div>
-        <button
-          onClick={createDemoEnquiry}
-          disabled={creatingEnquiry}
-          className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 disabled:opacity-60"
-        >
-          {creatingEnquiry ? 'Sending...' : 'Send enquiry'}
-        </button>
-      </div>
-
-      {flowMessage && (
-        <div className="mt-3 rounded-xl bg-primary-soft text-primary text-xs font-bold px-3 py-2">
-          {flowMessage}
-        </div>
-      )}
-
-      {!vendorFlow.loading && vendorFlow.data?.opportunities?.length > 0 && (
-        <div className="mt-4 space-y-2">
-          <div className="text-xs font-bold text-muted uppercase tracking-wide">My vendor enquiries</div>
-          {vendorFlow.data.opportunities.slice(0, 3).map((opp) => (
-            <div key={opp._id} className="rounded-2xl border border-gray-100 bg-lavender/30 p-3 text-xs">
-              <div className="font-bold text-navy">{opp.vendor?.businessName || 'Vendor'} · {opp.serviceName}</div>
-              <div className="text-muted mt-0.5">{opp.eventDate} · {opp.serviceLocation?.locality || opp.serviceLocation?.city} · {opp.guestCount} guests</div>
-              <div className="mt-1 font-bold text-primary">Status: {opp.status === 'NEW' ? 'Sent to vendor' : opp.status}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!vendorFlow.loading && vendorFlow.data?.quotes?.length > 0 && (
-        <div className="mt-4 space-y-3">
-          <div className="text-xs font-bold text-muted uppercase tracking-wide">Quotes from vendor</div>
-          {vendorFlow.data.quotes.map((quote) => (
-            <div key={quote.id} className="rounded-2xl border border-gray-100 p-3 text-xs">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-extrabold text-navy">{quote.vendorName}</div>
-                  <div className="text-muted mt-0.5">{quote.serviceName} · {quote.eventDate}</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                    <div className="rounded-xl bg-lavender/50 p-2">
-                      <div className="text-muted">Total quote</div>
-                      <div className="font-extrabold text-navy">{formatINR(quote.totalAmount)}</div>
-                    </div>
-                    <div className="rounded-xl bg-emerald-50 p-2">
-                      <div className="text-emerald-700">Pay now</div>
-                      <div className="font-extrabold text-emerald-700">30% · {formatINR(quote.advanceAmount)}</div>
-                    </div>
-                  </div>
-                </div>
-                <span className="rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 text-[10px] font-bold self-start">
-                  {quote.status === 'SUBMITTED' ? 'Vendor quote ready' : quote.status}
-                </span>
-              </div>
-
-              {quote.status === 'SUBMITTED' && quote.advanceStatus !== 'VERIFIED' && (
-                <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                  <button
-                    onClick={() => payAdvance(quote.id)}
-                    disabled={payingQuoteId === quote.id || !vendorFlow.data.paymentsConfigured}
-                    className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 disabled:opacity-60"
-                  >
-                    {payingQuoteId === quote.id ? 'Opening payment...' : 'Pay 30% advance'}
-                  </button>
-                  <button
-                    onClick={() => setNegotiatingQuoteId(negotiatingQuoteId === quote.id ? null : quote.id)}
-                    className="rounded-xl border border-gray-200 text-navy text-xs font-bold px-4 py-2.5"
-                  >
-                    Ask for change
-                  </button>
-                </div>
-              )}
-
-              {quote.advanceStatus === 'VERIFIED' && (
-                <div className="mt-3 rounded-xl bg-emerald-50 text-emerald-700 px-3 py-2 font-bold">
-                  Advance verified. Booking sent to vendor.
-                </div>
-              )}
-
-              {negotiatingQuoteId === quote.id && (
-                <div className="mt-3 space-y-2">
-                  <textarea
-                    rows={2}
-                    value={negotiationText}
-                    onChange={(e) => setNegotiationText(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 p-3 text-xs outline-none focus:border-primary"
-                  />
-                  <button onClick={() => requestChange(quote.id)} className="rounded-xl bg-lavender text-primary text-xs font-bold px-4 py-2">
-                    Send request
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!vendorFlow.loading && vendorFlow.data?.bookings?.length > 0 && (
-        <div className="mt-4 space-y-3">
-          <div className="text-xs font-bold text-muted uppercase tracking-wide">Bookings after advance payment</div>
-          {vendorFlow.data.bookings.map((booking) => (
-            <div key={booking.id} className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3 text-xs">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-extrabold text-navy">{booking.vendorName}</div>
-                  <div className="text-muted mt-0.5">
-                    {booking.serviceName} · {booking.eventDate} · Booking #{booking.bookingReference}
-                  </div>
-                  <div className="mt-2 font-bold text-emerald-700">
-                    {booking.executionStatus === 'COMPLETION_VERIFIED'
-                      ? 'Work completed and verified'
-                      : booking.executionStatus === 'COMPLETION_SUBMITTED'
-                        ? 'Vendor marked work done. Please verify.'
-                        : booking.executionStatus === 'SERVICE_STARTED'
-                          ? 'Vendor has started work'
-                          : 'Booking confirmed'}
-                  </div>
-                </div>
-                <span className="rounded-full bg-white text-emerald-700 px-2 py-0.5 text-[10px] font-bold self-start">
-                  {booking.paymentStatus === 'PAYMENT_VERIFIED' ? 'Advance paid' : booking.paymentStatus}
-                </span>
-              </div>
-              {booking.executionStatus === 'COMPLETION_SUBMITTED' && (
-                <button
-                  onClick={() => verifyWorkDone(booking.id)}
-                  disabled={verifyingBookingId === booking.id}
-                  className="mt-3 rounded-xl bg-emerald-600 text-white text-xs font-bold px-4 py-2.5 disabled:opacity-60"
-                >
-                  {verifyingBookingId === booking.id ? 'Verifying...' : 'Yes, work is done'}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
 export default function HomePage({ firstName }) {
   const { current, loading, refresh } = useCurrentEvent();
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <CustomerDashboardSkeleton />;
   return (
     <div className="space-y-5">
       {current ? <Workspace firstName={firstName} event={current} key={current.id} /> : <Welcome firstName={firstName} onEventChanged={() => refresh()} />}
-      <div className="max-w-[1400px] mx-auto">
-        <VendorQuotesFlow />
-      </div>
     </div>
   );
 }

@@ -1,8 +1,12 @@
 import { DemoListing } from '../models/index.js';
 
 const NOTE = 'Demo listing for development – not a real vendor';
+const delhi = (locality, lat, lng, radius = 28) => ({
+  location: { locality, city: 'Delhi', address: `${locality}, Delhi`, coordinates: { lat, lng } },
+  serviceRadiusKm: radius,
+});
 
-/** 12 demo packages (Blueprint seed). No availability, ratings or images. */
+/** Demo packages (Blueprint seed). No availability, ratings or images. */
 export const DEMO_LISTINGS = [
   { externalRef: 'pho_01', category: 'photography', vendorName: 'Basic Frames Studio', packageName: 'Standard', costBreakdown: { base: 60000 }, includes: ['1 photographer', 'Full-day coverage', '300 edited photos'] },
   { externalRef: 'pho_02', category: 'photography', vendorName: 'Cinematic Tales', packageName: 'Premium Cinematic', costBreakdown: { base: 56000, travel: 4000, additional: 4000 }, includes: ['2 photographers', 'Cinematic highlight film', 'Drone shots'] },
@@ -16,6 +20,126 @@ export const DEMO_LISTINGS = [
   { externalRef: 'cake_01', category: 'cake', vendorName: 'Sweet Layers Bakery', packageName: '2kg Designer Cake', costBreakdown: { base: 4000 }, includes: ['Custom design', 'Delivery'] },
   { externalRef: 'makeup_01', category: 'makeup', vendorName: 'Glow Bridal Studio', packageName: 'Bridal Makeup', costBreakdown: { base: 20000 }, includes: ['Bridal makeup', 'Hair styling', 'Draping'] },
   { externalRef: 'sound_01', category: 'sound', vendorName: 'Beat Box Audio', packageName: 'Full Event Sound', costBreakdown: { base: 18000 }, includes: ['PA system', '2 wireless mics', 'Technician'] },
+  {
+    externalRef: 'corp_venue_del_01',
+    category: 'venue',
+    vendorName: 'Connaught Conference Hall',
+    packageName: 'Corporate Hall for 300',
+    costBreakdown: { base: 95000 },
+    includes: ['Theatre seating for 300', 'Stage', 'Basic lighting', 'Green room'],
+    ...delhi('Connaught Place', 28.6315, 77.2167, 30),
+    strengths: ['Strong budget fit', 'Central Delhi access', 'Good for formal corporate seating'],
+    limitations: ['Basic lighting only', 'Decor/theming needs add-on vendor'],
+    negotiable: ['weekday discount', 'extra setup hour', 'projector or branding standee'],
+  },
+  {
+    externalRef: 'corp_venue_del_02',
+    category: 'venue',
+    vendorName: 'Aerocity Summit Rooms',
+    packageName: 'Business Ballroom',
+    costBreakdown: { base: 145000 },
+    includes: ['Ballroom access', 'Registration desk', 'Parking coordination', 'Power backup'],
+    ...delhi('Aerocity', 28.5505, 77.1212, 32),
+    strengths: ['Premium business feel', 'Parking coordination', 'Reliable power backup'],
+    limitations: ['Higher base price', 'Further from West Delhi than Hari Nagar options'],
+    negotiable: ['parking bundle', 'registration desk staffing', 'AV bundle discount'],
+  },
+  {
+    externalRef: 'corp_cat_del_01',
+    category: 'catering',
+    vendorName: 'Delhi Boardroom Caterers',
+    packageName: 'Corporate Buffet - 300 Guests',
+    costBreakdown: { base: 135000 },
+    includes: ['Veg buffet', 'Tea and coffee counter', 'Water service', 'Service staff'],
+    ...delhi('Rajouri Garden', 28.6425, 77.1195, 22),
+    strengths: ['Very close to West Delhi', 'Budget-friendly per guest', 'Simple corporate menu'],
+    limitations: ['Veg buffet only in this package', 'Live counters cost extra'],
+    negotiable: ['tea refill duration', 'welcome drink', 'extra service staff'],
+  },
+  {
+    externalRef: 'corp_cat_del_02',
+    category: 'catering',
+    vendorName: 'North Campus Hospitality',
+    packageName: 'Premium Working Lunch',
+    costBreakdown: { base: 180000 },
+    includes: ['Veg and non-veg buffet', 'Live snack counter', 'Dessert station', 'Uniformed staff'],
+    ...delhi('Kamla Nagar', 28.6809, 77.2046, 30),
+    strengths: ['Premium menu coverage', 'Live counter included', 'Good for mixed audience'],
+    limitations: ['Higher total', 'Longer travel to West Delhi'],
+    negotiable: ['dessert count', 'snack counter choice', 'per-plate reduction'],
+  },
+  {
+    externalRef: 'corp_sound_del_01',
+    category: 'sound',
+    vendorName: 'StageLine Audio Delhi',
+    packageName: 'Conference Audio Kit',
+    costBreakdown: { base: 32000 },
+    includes: ['PA system', '4 wireless mics', 'Mixer console', 'Audio technician'],
+    ...delhi('Janakpuri', 28.6219, 77.0878, 24),
+    strengths: ['Closest audio team for Hari Nagar', 'Good mic coverage', 'Technician included'],
+    limitations: ['No projector screen in base', 'DJ lights not included'],
+    negotiable: ['extra wireless mic', 'sound check timing', 'small mixer upgrade'],
+  },
+  {
+    externalRef: 'corp_sound_del_02',
+    category: 'sound',
+    vendorName: 'Corporate AV Works',
+    packageName: 'Sound + Screen Setup',
+    costBreakdown: { base: 58000 },
+    includes: ['PA system', 'Projector screen', 'Podium mic', 'On-site technician'],
+    ...delhi('Dwarka', 28.5921, 77.0460, 28),
+    strengths: ['Screen included', 'Good for presentations', 'Podium mic included'],
+    limitations: ['Higher than basic audio', 'DJ setup not included'],
+    negotiable: ['screen size', 'extra podium mic', 'presentation laptop support'],
+  },
+  {
+    externalRef: 'corp_anchor_del_01',
+    category: 'anchor',
+    vendorName: 'Delhi Emcee Desk',
+    packageName: 'Corporate Host',
+    costBreakdown: { base: 28000 },
+    includes: ['Professional anchor', 'Script coordination', '4-hour event hosting'],
+    ...delhi('Karol Bagh', 28.6514, 77.1907, 25),
+    strengths: ['Corporate hosting style', 'Script coordination included', 'Useful for award segments'],
+    limitations: ['Only 4 hours included', 'Bilingual hosting must be confirmed'],
+    negotiable: ['extra hour', 'bilingual script', 'rehearsal call'],
+  },
+  {
+    externalRef: 'corp_photo_del_01',
+    category: 'photography',
+    vendorName: 'Boardroom Frames',
+    packageName: 'Corporate Event Coverage',
+    costBreakdown: { base: 36000 },
+    includes: ['1 photographer', 'Keynote and candid coverage', '150 edited photos'],
+    ...delhi('Moti Nagar', 28.6570, 77.1424, 24),
+    strengths: ['Close to West Delhi', 'Candid plus keynote coverage', 'Fast corporate delivery'],
+    limitations: ['Single photographer only', 'Video not included'],
+    negotiable: ['same-day highlights', 'extra edited photos', 'second shooter add-on'],
+  },
+  {
+    externalRef: 'corp_stream_del_01',
+    category: 'live_streaming',
+    vendorName: 'StreamPro Delhi',
+    packageName: 'Single Camera Live Stream',
+    costBreakdown: { base: 45000 },
+    includes: ['1 camera setup', 'Streaming operator', 'YouTube private link'],
+    ...delhi('Patel Nagar', 28.6517, 77.1689, 24),
+    strengths: ['Private stream link', 'Operator included', 'Good for hybrid attendees'],
+    limitations: ['Single camera only', 'Venue internet must be checked'],
+    negotiable: ['recording copy', 'stream test', 'backup dongle'],
+  },
+  {
+    externalRef: 'corp_transport_del_01',
+    category: 'transport',
+    vendorName: 'NCR Shuttle Fleet',
+    packageName: 'Guest Shuttle Coordination',
+    costBreakdown: { base: 42000 },
+    includes: ['2 tempo travellers', 'Pickup coordination', '8-hour city duty'],
+    ...delhi('Subhash Nagar', 28.6412, 77.1076, 20),
+    strengths: ['Very close to Hari Nagar', 'Good for group movement', 'Pickup coordination included'],
+    limitations: ['Only 2 vehicles in base', 'Extra hours charged separately'],
+    negotiable: ['extra pickup point', 'extra hour', 'vehicle branding'],
+  },
 ].map((l) => {
   const cb = { base: 0, travel: 0, additional: 0, ...l.costBreakdown };
   return { ...l, costBreakdown: cb, price: cb.base + cb.travel + cb.additional, description: NOTE, isDemo: true, isActive: true };
@@ -28,7 +152,7 @@ export async function seedDemoListings() {
   }
   const res = await DemoListing.bulkWrite(
     DEMO_LISTINGS.map((l) => ({
-      updateOne: { filter: { externalRef: l.externalRef }, update: { $setOnInsert: l }, upsert: true },
+      updateOne: { filter: { externalRef: l.externalRef }, update: { $set: l }, upsert: true },
     })),
     { ordered: false }
   );

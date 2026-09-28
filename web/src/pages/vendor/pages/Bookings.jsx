@@ -19,14 +19,17 @@ export default function Bookings() {
       setLoading(true);
       try {
         const res = await externalApi.call('/vendor/bookings');
-        if (Array.isArray(res)) {
-          const mapped = res.map((b) => ({
+        const rows = Array.isArray(res) ? res : Array.isArray(res?.bookings) ? res.bookings : [];
+        if (rows.length > 0) {
+          const mapped = rows.map((b) => ({
             id: b.bookingReference || `BK-${b._id?.slice(-4)}`,
             dbId: b._id,
             title: `${b.serviceName || 'Wedding Service'} (${b.customerName || 'Direct Booking'})`,
             date: b.eventDate ? new Date(b.eventDate).toLocaleDateString() : 'Scheduled',
-            location: b.location?.venue || b.location?.city || 'Selected Venue',
+            location: b.serviceLocation?.address || b.serviceLocation?.locality || b.serviceLocation?.city || 'Selected Venue',
             amount: `₹${(b.totalAmount || 0).toLocaleString()}`,
+            advancePaid: b.paymentSummary?.paidAmount || 0,
+            balanceAmount: b.paymentSummary?.balanceAmount ?? Math.max(0, (b.totalAmount || 0) - (b.paymentSummary?.paidAmount || 0)),
             status: b.executionStatus === 'SERVICE_STARTED' ? 'In Progress' : (b.executionStatus === 'COMPLETION_SUBMITTED' ? 'Completion Submitted' : (b.status || 'Confirmed')),
             executionStatus: b.executionStatus || 'SCHEDULED',
             payment: b.paymentStatus || 'PAYMENT_VERIFIED',
@@ -123,7 +126,10 @@ export default function Bookings() {
                   <StatusChip status={b.status} />
                   <span className="text-[10px] text-muted">{b.id}</span>
                 </div>
-                <div className="text-xs text-muted mt-1">{b.date} · {b.location} · <b className="text-ink">{b.amount}</b></div>
+                <div className="text-xs text-muted mt-1">{b.date} · {b.location} · Quote <b className="text-ink">{b.amount}</b></div>
+                <div className="text-[11px] text-emerald-700 font-bold mt-1">
+                  Advance received: ₹{b.advancePaid.toLocaleString()} · Balance: ₹{b.balanceAmount.toLocaleString()}
+                </div>
               </div>
               <Icon
                 name="chevronDown"
@@ -165,6 +171,7 @@ export default function Bookings() {
                   <div className="bg-lavender rounded-xl p-3">
                     <div className="text-muted text-[10px] uppercase font-bold">Payment Status</div>
                     <div className="font-semibold mt-0.5">{b.payment} <span className="text-muted font-normal">(Core authority)</span></div>
+                    <div className="text-[11px] text-muted mt-1">₹{b.advancePaid.toLocaleString()} advance paid by customer</div>
                   </div>
                   <div className="bg-lavender rounded-xl p-3">
                     <div className="text-muted text-[10px] uppercase font-bold">Team / Resources</div>

@@ -79,7 +79,10 @@ export async function postMessage(customerId, eventId, body = {}) {
   const event = await getOwnedEventOr404(customerId, eventId);
   const text = typeof body.body === 'string' ? body.body.trim() : '';
   if (!text || text.length > 2000) throw badRequest('INVALID_BODY', 'Message must be 1–2000 characters');
-  const ctx = await resolveContext(event, body);
+  const ctx = await resolveContext(event, {
+    bookingId: body.bookingId || body.booking,
+    requirementId: body.requirementId || body.service,
+  });
   const m = await circleRepo.addMessage({
     event: event._id,
     booking: ctx.bookingId || null,
@@ -117,7 +120,7 @@ export async function updates(customerId) {
       createdAt: n.createdAt,
     })),
     vendorMessages: messages
-      .filter((m) => m.senderType === 'vendor' || m.senderType === 'team')
+      .filter((m) => m.senderType === 'vendor' || m.senderType === 'team' || m.senderType === 'customer')
       .slice(0, 30)
       .map((m) => ({ ...serializeMessage(m), eventId: String(m.event), eventTitle: titles.get(String(m.event)) || null })),
     auraConversations: sessions.map((s) => ({

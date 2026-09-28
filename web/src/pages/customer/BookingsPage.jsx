@@ -30,7 +30,9 @@ function holdLeft(expiresAt) {
 /** "You're almost done." review sheet before paying. */
 function PaySheet({ event, reservation, onClose, onPaid }) {
   const [busy, setBusy] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
   const [error, setError] = useState('');
+  const showDevPaymentButton = import.meta.env.DEV;
 
   async function pay() {
     setBusy(true);
@@ -45,6 +47,19 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
       setError(err?.dismissed ? 'Payment window closed. You can try again while the hold is active.' : errorText(err, err?.message));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function testSuccessPayment() {
+    setTestBusy(true);
+    setError('');
+    try {
+      await customerApi.devSuccessPayment(event.id, reservation.id);
+      onPaid();
+    } catch (err) {
+      setError(errorText(err, 'Could not mark the test payment successful.'));
+    } finally {
+      setTestBusy(false);
     }
   }
 
@@ -71,15 +86,34 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
             </div>
           ))}
           <div className="flex justify-between py-3">
-            <span className="text-sm font-bold text-navy">Total</span>
-            <span className="text-lg font-extrabold text-navy">{formatINR(reservation.amount)}</span>
+            <span className="text-sm font-bold text-navy">Package total</span>
+            <span className="text-lg font-extrabold text-navy">{formatINR(reservation.packageTotal || reservation.amount)}</span>
+          </div>
+          <div className="flex justify-between py-3 bg-primary-soft/50 rounded-2xl px-3 my-2">
+            <span className="text-sm font-extrabold text-primary">Pay now ({reservation.advancePercent || 30}% advance)</span>
+            <span className="text-lg font-extrabold text-primary">{formatINR(reservation.advanceAmount || reservation.amount)}</span>
+          </div>
+          <div className="flex justify-between py-2">
+            <span className="text-xs font-semibold text-muted">Balance after advance</span>
+            <span className="text-sm font-bold text-navy">{formatINR(reservation.balanceAmount || 0)}</span>
           </div>
         </div>
-        <div className="text-[11px] text-muted">Pay with UPI, cards, net banking or wallets — you choose in the Razorpay window.</div>
+        <div className="text-[11px] text-muted">Pay only the advance now. The remaining balance is handled later as per vendor terms.</div>
         {error && <div className="text-xs text-red-500 mt-3">{error}</div>}
         <button onClick={pay} disabled={busy} className="mt-4 w-full rounded-2xl bg-primary text-white text-sm font-extrabold py-3 disabled:opacity-60">
-          {busy ? 'Opening payment…' : `Confirm & Pay ${formatINR(reservation.amount)}`}
+          {busy ? 'Opening payment…' : `Confirm & Pay Advance ${formatINR(reservation.advanceAmount || reservation.amount)}`}
         </button>
+        {/* TODO_REMOVE_BEFORE_PRODUCTION: temporary QA shortcut for payment-success testing. */}
+        {showDevPaymentButton && (
+          <button
+            type="button"
+            onClick={testSuccessPayment}
+            disabled={busy || testBusy}
+            className="mt-2 w-full rounded-2xl border border-amber-300 bg-amber-50 text-amber-800 text-xs font-extrabold py-2.5 disabled:opacity-60"
+          >
+            {testBusy ? 'Marking test payment…' : 'Test success payment'}
+          </button>
+        )}
         <div className="text-[11px] text-center text-muted mt-2">🔒 100% secure payments via Razorpay</div>
         <div className="text-[10px] text-center text-muted mt-1">Your booking is confirmed only after STARVNT verifies the payment.</div>
         <button onClick={onClose} disabled={busy} className="mt-3 w-full text-xs font-bold text-muted">Not now</button>
@@ -132,7 +166,9 @@ export default function BookingsPage() {
                 <li key={r.id} className="py-3 flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold text-navy truncate">{r.label}: {r.vendorName} {r.isDemo && <DemoBadge />}</div>
-                    <div className="text-[11px] text-muted">{formatINR(r.amount)} · {holdLeft(r.expiresAt)}</div>
+                    <div className="text-[11px] text-muted">
+                      Advance {formatINR(r.advanceAmount || r.amount)} of {formatINR(r.packageTotal || r.amount)} · Balance {formatINR(r.balanceAmount || 0)} · {holdLeft(r.expiresAt)}
+                    </div>
                     {inFlight && <div className="text-[11px] text-primary">Payment received — waiting for verification…</div>}
                     {p?.status === 'failed' && <div className="text-[11px] text-red-500">Last attempt failed. You can try again.</div>}
                   </div>
@@ -160,7 +196,10 @@ export default function BookingsPage() {
                 <div key={b.id} className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-bold text-navy truncate">{b.label}: {b.vendorName} {b.isDemo && <DemoBadge />}</div>
-                    <div className="text-[11px] text-muted">Booking #{b.reference} · {formatINR(b.amount)}</div>
+                    <div className="text-[11px] text-muted">
+                      Booking #{b.reference} · Total {formatINR(b.packageTotal || b.amount)} · Paid advance {formatINR(b.paidAmount || b.amount)}
+                      {b.balanceAmount > 0 ? ` · Balance ${formatINR(b.balanceAmount)}` : ''}
+                    </div>
                     {b.underReviewReason && <div className="text-[11px] text-amber-700 mt-0.5">{b.underReviewReason}. Our team is reviewing it.</div>}
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">

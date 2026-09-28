@@ -81,22 +81,37 @@ registerEventHandler('QUOTE_APPROVED', async (payload) => {
       const cId = mongoose.isValidObjectId(customerId)
         ? customerId
         : new mongoose.Types.ObjectId();
+      const totalAmount = Number(amount || pricing?.totalAmount || 0);
+      const advanceAmount = Math.ceil(totalAmount * 0.3);
 
-      const coreBooking = await CoreBooking.create({
-        quoteId,
-        opportunityId: opportunityId || null,
-        vendorId: vId,
-        customerId: cId,
-        serviceName: serviceName || 'Photography Service',
-        eventDate: eventDate || new Date().toISOString().split('T')[0],
-        serviceLocation: serviceLocation || {},
-        pricing: pricing || { totalAmount: amount || 0 },
-        totalAmount: amount || 0,
-        bookingStatus: 'CONFIRMED',
-        paymentStatus: 'PENDING',
-        executionStatus: 'NOT_STARTED',
-        settlementStatus: 'NOT_ELIGIBLE',
-      });
+      const coreBooking = await CoreBooking.findOneAndUpdate(
+        { quoteId },
+        {
+          $setOnInsert: {
+            quoteId,
+            opportunityId: opportunityId || null,
+            vendorId: vId,
+            customerId: cId,
+            serviceName: serviceName || 'Photography Service',
+            eventDate: eventDate || new Date().toISOString().split('T')[0],
+            serviceLocation: serviceLocation || {},
+            pricing: pricing || { totalAmount },
+            totalAmount,
+            paymentSummary: {
+              advancePercentage: 30,
+              advanceAmount,
+              paidAmount: 0,
+              balanceAmount: totalAmount,
+              provider: 'razorpay',
+            },
+            bookingStatus: 'CONFIRMED',
+            paymentStatus: 'PENDING',
+            executionStatus: 'NOT_STARTED',
+            settlementStatus: 'NOT_ELIGIBLE',
+          },
+        },
+        { new: true, upsert: true }
+      );
 
       return {
         bookingId: coreBooking.bookingReference,

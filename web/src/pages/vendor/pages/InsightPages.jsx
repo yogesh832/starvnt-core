@@ -4,6 +4,12 @@ import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 
+const paidAdvance = (booking) => Number(booking?.paymentSummary?.paidAmount || 0);
+const advanceDue = (booking) => Number(booking?.paymentSummary?.advanceAmount || Math.ceil((Number(booking?.totalAmount || 0) * 30) / 100));
+const balanceDue = (booking) => Number(
+  booking?.paymentSummary?.balanceAmount ?? Math.max(0, Number(booking?.totalAmount || 0) - paidAdvance(booking))
+);
+
 /* ── Payments ─────────────────────────────────────────────────────────────── */
 export function PaymentsPage() {
   const [bookings, setBookings] = useState([]);
@@ -28,36 +34,36 @@ export function PaymentsPage() {
   }, [loadPayments]);
 
   const escrowAmount = bookings
-    .filter((b) => b.settlementStatus !== 'SETTLEMENT_RELEASED' && b.bookingStatus === 'CONFIRMED')
-    .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    .filter((b) => b.paymentStatus === 'PAYMENT_VERIFIED' && b.bookingStatus === 'CONFIRMED')
+    .reduce((sum, b) => sum + paidAdvance(b), 0);
 
   const releasedAmount = bookings
-    .filter((b) => b.settlementStatus === 'SETTLEMENT_RELEASED')
-    .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    .filter((b) => b.settlementStatus === 'SETTLED')
+    .reduce((sum, b) => sum + (b.settlementDetails?.amount || b.totalAmount || 0), 0);
 
   const nextPayout = bookings
-    .filter((b) => b.executionStatus === 'SERVICE_STARTED' || b.executionStatus === 'COMPLETION_SUBMITTED')
-    .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    .filter((b) => b.executionStatus === 'SERVICE_STARTED' || b.executionStatus === 'COMPLETION_SUBMITTED' || b.executionStatus === 'COMPLETION_VERIFIED')
+    .reduce((sum, b) => sum + balanceDue(b), 0);
 
   const stats = [
     {
       label: 'In Escrow',
       value: `₹${escrowAmount.toLocaleString()}`,
-      foot: 'Protected Core escrow until completion',
+      foot: 'Advance paid by customers',
       iconBg: 'bg-orange-50 text-orange-500',
       icon: 'wallet',
     },
     {
       label: 'Released & Settled',
       value: `₹${releasedAmount.toLocaleString()}`,
-      foot: `${bookings.filter((b) => b.settlementStatus === 'SETTLEMENT_RELEASED').length} verified releases`,
+      foot: `${bookings.filter((b) => b.settlementStatus === 'SETTLED').length} verified releases`,
       iconBg: 'bg-emerald-50 text-emerald-600',
       icon: 'trend',
     },
     {
       label: 'Pending Settlement Validation',
       value: `₹${nextPayout.toLocaleString()}`,
-      foot: 'Core Admin execution verification',
+      foot: 'Remaining balance after advance',
       iconBg: 'bg-primary-soft text-primary',
       icon: 'payments',
     },
@@ -84,7 +90,7 @@ export function PaymentsPage() {
         <table className="w-full text-[13px] min-w-[620px]">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100">
-              {['Booking Reference', 'Customer', 'Service', 'Amount', 'Payment Truth', 'Settlement Status', 'Event Date'].map((h) => (
+              {['Booking Reference', 'Customer', 'Service', 'Quote Total', 'Advance Paid', 'Balance', 'Payment Truth', 'Settlement Status', 'Event Date'].map((h) => (
                 <th key={h} className="px-5 py-3 font-semibold">{h}</th>
               ))}
             </tr>
@@ -96,6 +102,8 @@ export function PaymentsPage() {
                 <td className="px-5 py-3 font-medium text-navy">{b.customerName || 'Customer'}</td>
                 <td className="px-5 py-3 text-muted">{b.serviceName}</td>
                 <td className="px-5 py-3 font-bold text-navy">₹{(b.totalAmount || 0).toLocaleString()}</td>
+                <td className="px-5 py-3 font-bold text-emerald-700">₹{paidAdvance(b).toLocaleString()}</td>
+                <td className="px-5 py-3 font-semibold text-muted">₹{balanceDue(b).toLocaleString()}</td>
                 <td className="px-5 py-3"><StatusChip status={b.paymentStatus || 'Verified'} /></td>
                 <td className="px-5 py-3"><StatusChip status={b.settlementStatus || 'Pending'} /></td>
                 <td className="px-5 py-3 text-muted">{b.eventDate}</td>
@@ -103,7 +111,7 @@ export function PaymentsPage() {
             ))}
             {bookings.length === 0 && !loading && (
               <tr>
-                <td colSpan="7" className="py-8 text-center text-xs text-muted">
+                <td colSpan="9" className="py-8 text-center text-xs text-muted">
                   No payment transactions recorded yet.
                 </td>
               </tr>
@@ -331,17 +339,27 @@ export function AnalyticsPage() {
     enquiriesCount: 0,
     quotesCount: 0,
     bookingsCount: 0,
+    advanceReceived: 0,
+    quoteValue: 0,
   });
 
   useEffect(() => {
     async function loadCounts() {
       try {
-        const res = await externalApi.call('/vendor/badge-counts');
+        const [res, bookingsRes] = await Promise.all([
+          externalApi.call('/vendor/badge-counts'),
+          externalApi.call('/vendor/bookings'),
+        ]);
+        const bookings = Array.isArray(bookingsRes?.bookings) ? bookingsRes.bookings : [];
+        const advanceReceived = bookings.reduce((sum, b) => sum + paidAdvance(b), 0);
+        const quoteValue = bookings.reduce((sum, b) => sum + Number(b.totalAmount || 0), 0);
         if (res.ok) {
           setCounts({
             enquiriesCount: res.enquiriesCount || 0,
             quotesCount: res.quotesCount || 0,
             bookingsCount: res.bookingsCount || 0,
+            advanceReceived,
+            quoteValue,
           });
         }
       } catch (err) {
@@ -351,7 +369,7 @@ export function AnalyticsPage() {
     loadCounts();
   }, []);
 
-  const { enquiriesCount, quotesCount, bookingsCount } = counts;
+  const { enquiriesCount, quotesCount, bookingsCount, advanceReceived, quoteValue } = counts;
   const enqToQuoteRate = enquiriesCount > 0 ? `${Math.round((quotesCount / enquiriesCount) * 100)}%` : '0%';
   const quoteToBookingRate = quotesCount > 0 ? `${Math.round((bookingsCount / quotesCount) * 100)}%` : '0%';
 
@@ -361,6 +379,8 @@ export function AnalyticsPage() {
     ['Total Quotes Generated', String(quotesCount), quotesCount > 0 ? 'In Progress' : '0 Quotes'],
     ['Quote → Booking Conversion', quoteToBookingRate, 'Core Escrow'],
     ['Confirmed Bookings', String(bookingsCount), bookingsCount > 0 ? 'Verified' : '0 Bookings'],
+    ['Advance Received', `₹${advanceReceived.toLocaleString()}`, advanceReceived > 0 ? 'Payment Verified' : '₹0'],
+    ['Confirmed Quote Value', `₹${quoteValue.toLocaleString()}`, quoteValue > 0 ? 'Booked Value' : '₹0'],
   ];
 
   return (

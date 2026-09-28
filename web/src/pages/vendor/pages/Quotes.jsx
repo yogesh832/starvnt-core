@@ -16,6 +16,9 @@ export default function Quotes() {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [editingQuote, setEditingQuote] = useState(null);
+  const [form, setForm] = useState({ basePrice: '', travelFee: '', equipmentFee: '', setupFee: '', additionalFee: '', notes: '' });
+  const [saving, setSaving] = useState(false);
 
   const loadQuotes = useCallback(async () => {
     try {
@@ -48,6 +51,51 @@ export default function Quotes() {
       await loadQuotes();
     } catch (err) {
       alert(`Could not transition quote: ${err.message}`);
+    }
+  }
+
+  function openRevision(q) {
+    setEditingQuote(q);
+    setForm({
+      basePrice: q.pricingBreakdown?.basePrice || '',
+      travelFee: q.pricingBreakdown?.travelFee || 0,
+      equipmentFee: q.pricingBreakdown?.equipmentFee || 0,
+      setupFee: q.pricingBreakdown?.setupFee || 0,
+      additionalFee: q.pricingBreakdown?.additionalFee || 0,
+      notes: q.notes || 'Updated offer based on customer discussion.',
+    });
+  }
+
+  async function saveRevision() {
+    if (!editingQuote) return;
+    setSaving(true);
+    try {
+      const totalAmount =
+        Number(form.basePrice) +
+        Number(form.travelFee) +
+        Number(form.equipmentFee) +
+        Number(form.setupFee) +
+        Number(form.additionalFee);
+      await externalApi.call(`/vendor/quotes/${editingQuote._id}/revise`, {
+        method: 'POST',
+        body: {
+          pricingBreakdown: {
+            basePrice: Number(form.basePrice),
+            travelFee: Number(form.travelFee),
+            equipmentFee: Number(form.equipmentFee),
+            setupFee: Number(form.setupFee),
+            additionalFee: Number(form.additionalFee),
+            totalAmount,
+          },
+          notes: form.notes,
+        },
+      });
+      setEditingQuote(null);
+      await loadQuotes();
+    } catch (err) {
+      alert(`Could not revise quote: ${err.message}`);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -129,7 +177,17 @@ export default function Quotes() {
                         Send
                       </button>
                     )}
-                    {stage === 'Submitted' && <span className="text-[11px] text-muted">Awaiting Customer</span>}
+                    {stage === 'Submitted' && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted">Awaiting Customer</span>
+                        <button
+                          onClick={() => openRevision(q)}
+                          className="text-[11px] font-bold text-primary bg-primary-soft rounded-lg px-3 py-1.5"
+                        >
+                          Revise offer
+                        </button>
+                      </div>
+                    )}
                     {stage === 'Approved' && (
                       <span className="text-[11px] text-emerald-600 font-semibold inline-flex items-center gap-1">
                         <Icon name="check" size={12} /> Booking created
@@ -150,6 +208,71 @@ export default function Quotes() {
           </tbody>
         </table>
       </div>
+
+      {editingQuote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-3">
+              <div>
+                <h2 className="text-base font-extrabold text-navy">Revise Customer Offer</h2>
+                <p className="text-xs text-muted">{editingQuote.serviceName} · {editingQuote.eventDate}</p>
+              </div>
+              <button onClick={() => setEditingQuote(null)} className="w-8 h-8 rounded-full bg-lavender grid place-items-center" aria-label="Close">
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              {[
+                ['Your price', 'basePrice'],
+                ['Travel', 'travelFee'],
+                ['Equipment', 'equipmentFee'],
+                ['Setup', 'setupFee'],
+                ['Other', 'additionalFee'],
+              ].map(([label, key]) => (
+                <div key={key}>
+                  <label className="block text-muted font-semibold mb-1">{label} (₹)</label>
+                  <input
+                    type="number"
+                    value={form[key]}
+                    onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                    className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3 py-2.5 font-bold outline-none focus:border-primary"
+                  />
+                </div>
+              ))}
+              <div className="rounded-2xl bg-primary-soft/70 border border-primary/20 p-3 flex flex-col justify-center">
+                <span className="text-[10px] text-muted font-bold">New total</span>
+                <span className="text-lg font-extrabold text-primary">
+                  ₹{(
+                    Number(form.basePrice) +
+                    Number(form.travelFee) +
+                    Number(form.equipmentFee) +
+                    Number(form.setupFee) +
+                    Number(form.additionalFee)
+                  ).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-muted font-semibold mb-1 text-xs">Message to customer</label>
+              <textarea
+                rows={4}
+                value={form.notes}
+                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                className="w-full bg-lavender/60 border border-gray-200 rounded-xl p-3 text-xs outline-none focus:border-primary resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setEditingQuote(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted">Cancel</button>
+              <button onClick={saveRevision} disabled={saving} className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold disabled:opacity-60">
+                {saving ? 'Saving...' : 'Send revised offer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </Page>
 

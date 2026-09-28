@@ -252,7 +252,9 @@ export default function EventPage() {
                     <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center shrink-0"><Icon name={categoryIcon(b.category)} size={13} /></span>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-navy truncate">{b.vendorName}{b.isDemo ? ' (demo)' : ''}</div>
-                      <div className="text-[10px] text-muted">{b.label} · {formatINR(b.amount)}</div>
+                      <div className="text-[10px] text-muted">
+                        {b.label} · Total {formatINR(b.packageTotal || b.amount)} · Advance paid {formatINR(b.paidAmount || b.amount)}
+                      </div>
                     </div>
                     <span className={`text-[10px] font-bold ${b.status === 'confirmed' ? 'text-emerald-600' : b.status === 'pending' ? 'text-amber-600' : 'text-muted'}`}>
                       {b.status === 'confirmed' ? '✓ Confirmed' : b.status === 'pending' ? 'Under review' : 'Cancelled'}

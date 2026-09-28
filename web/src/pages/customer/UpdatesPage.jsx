@@ -26,6 +26,18 @@ export default function UpdatesPage({ onRead }) {
   if (error) return <div className="text-sm text-red-500">{errorText(error)}</div>;
   const { notifications, vendorMessages, auraConversations } = data;
   const important = notifications.filter((n) => n.important);
+  const messageItems = vendorMessages.map((m) => ({
+    id: `message:${m.id}`,
+    type: 'message',
+    title: m.senderType === 'customer' ? 'You sent an enquiry' : `${m.senderName} replied`,
+    body: m.body,
+    eventId: m.eventId,
+    eventTitle: m.eventTitle,
+    createdAt: m.createdAt,
+    read: true,
+    to: `/customer/events/${m.eventId}/circle${m.bookingId ? `?booking=${m.bookingId}` : m.requirementId ? `?service=${m.requirementId}` : ''}`,
+  }));
+  const allItems = [...notifications, ...messageItems].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   const list = (items) =>
     items.length === 0 ? (
@@ -33,7 +45,7 @@ export default function UpdatesPage({ onRead }) {
     ) : (
       <div className="space-y-2">
         {items.map((n) => (
-          <Link key={n.id} to={n.eventId ? `/customer/events/${n.eventId}` : '/customer'} className={`block bg-white rounded-2xl shadow-sm p-4 ${n.read ? '' : 'ring-1 ring-primary/30'}`}>
+          <Link key={n.id} to={n.to || (n.eventId ? `/customer/events/${n.eventId}` : '/customer')} className={`block bg-white rounded-2xl shadow-sm p-4 ${n.read ? '' : 'ring-1 ring-primary/30'}`}>
             <div className="flex items-center justify-between gap-2">
               <span className={`text-[9px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 ${TONE[n.type] || 'bg-gray-100 text-muted'}`}>{n.type.replace('_', ' ')}</span>
               <span className="text-[10px] text-muted">{when(n.createdAt)}</span>
@@ -56,17 +68,17 @@ export default function UpdatesPage({ onRead }) {
         value={tab}
         onChange={setTab}
         tabs={[
-          { key: 'all', label: 'All', count: notifications.length },
-          { key: 'vendors', label: 'Vendors', count: vendorMessages.length },
+          { key: 'all', label: 'All', count: allItems.length },
+          { key: 'messages', label: 'Messages', count: vendorMessages.length },
           { key: 'aura', label: 'Aura+', count: auraConversations.length },
           { key: 'important', label: 'Important', count: important.length },
         ]}
       />
-      {tab === 'all' && list(notifications)}
+      {tab === 'all' && list(allItems)}
       {tab === 'important' && list(important)}
-      {tab === 'vendors' &&
+      {tab === 'messages' &&
         (vendorMessages.length === 0 ? (
-          <Empty title="No vendor messages yet" />
+          <Empty title="No messages yet" />
         ) : (
           <div className="space-y-2">
             {vendorMessages.map((m) => (

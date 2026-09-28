@@ -26,6 +26,8 @@ export const customerApi = {
   acceptQuote: (quoteId) => externalApi.call(`/customer/quotes/${quoteId}/accept`, { method: 'POST' }),
   bookings: (id) => externalApi.call(`/customer/events/${id}/bookings`),
   pay: (id, reservationId) => externalApi.call(`/customer/events/${id}/reservations/${reservationId}/pay`, { method: 'POST' }),
+  devSuccessPayment: (id, reservationId) =>
+    externalApi.call(`/customer/events/${id}/reservations/${reservationId}/dev-success-payment`, { method: 'POST' }),
   checkoutComplete: (id, paymentId, body) =>
     externalApi.call(`/customer/events/${id}/payments/${paymentId}/checkout-complete`, { method: 'POST', body }),
   eventDay: (id) => externalApi.call(`/customer/events/${id}/event-day`),
@@ -40,11 +42,12 @@ export const customerApi = {
   createEvent: (body) => externalApi.call('/customer/events', { method: 'POST', body }),
   createMahimanDemoEnquiry: (body = {}) => externalApi.call('/customer/demo/mahiman-enquiry', { method: 'POST', body }),
   vendorQuotes: () => externalApi.call('/customer/vendor-quotes'),
-  negotiateVendorQuote: (quoteId, message) =>
-    externalApi.call(`/customer/vendor-quotes/${quoteId}/negotiate`, { method: 'POST', body: { message } }),
+  negotiateVendorQuote: (quoteId, message, counterBudget) =>
+    externalApi.call(`/customer/vendor-quotes/${quoteId}/negotiate`, { method: 'POST', body: { message, counterBudget } }),
   payVendorQuoteAdvance: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/pay-advance`, { method: 'POST' }),
   completeVendorQuoteCheckout: (quoteId, body) =>
     externalApi.call(`/customer/vendor-quotes/${quoteId}/checkout-complete`, { method: 'POST', body }),
+  reconcileVendorQuotePayment: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/reconcile-payment`, { method: 'POST' }),
   verifyVendorBookingCompletion: (bookingId, notes = '') =>
     externalApi.call(`/customer/bookings/${bookingId}/verify-completion`, { method: 'POST', body: { notes } }),
   patchProfile: (body) => externalApi.call('/customer/profile', { method: 'PATCH', body }),

@@ -38,9 +38,14 @@ export default function CirclePage() {
 
   if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
-  const { event, contexts } = data;
+  const event = data?.event || { title: 'Event' };
+  const contexts = Array.isArray(data?.contexts) && data.contexts.length
+    ? data.contexts
+    : [{ key: 'event', label: 'Whole event', path: [event.title || 'Event'], messageCount: 0 }];
   const activeKey = bookingId ? `booking:${bookingId}` : requirementId ? `requirement:${requirementId}` : 'event';
   const active = contexts.find((c) => c.key === activeKey) || contexts[0];
+  const activePath = Array.isArray(active?.path) && active.path.length ? active.path : [event.title || 'Event'];
+  const messages = Array.isArray(thread.data?.messages) ? thread.data.messages : [];
 
   const choose = (c) => {
     const next = new URLSearchParams();
@@ -64,13 +69,13 @@ export default function CirclePage() {
           </button>
         ))}
       </div>
-      <div className="text-[11px] text-muted">{active.path.join(' → ')}</div>
+      <div className="text-[11px] text-muted">{activePath.join(' → ')}</div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3 min-h-[240px]">
         {thread.loading && !thread.data && <div className="text-xs text-muted">Loading…</div>}
         {thread.error && <div className="text-xs text-red-500">{errorText(thread.error)}</div>}
-        {thread.data?.messages.length === 0 && <div className="text-xs text-muted">No messages yet. Ask anything about this — the STARVNT team and your vendor reply here.</div>}
-        {thread.data?.messages.map((m) => (
+        {!thread.loading && !thread.error && messages.length === 0 && <div className="text-xs text-muted">No messages yet. Ask anything about this — the STARVNT team and your vendor reply here.</div>}
+        {messages.map((m) => (
           <div key={m.id} className={`flex ${m.senderType === 'customer' ? 'justify-end' : ''}`}>
             <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-xs ${m.senderType === 'customer' ? 'bg-primary text-white' : 'bg-lavender text-navy'}`}>
               {m.senderType !== 'customer' && <div className="text-[10px] font-bold mb-0.5">{m.senderName}</div>}

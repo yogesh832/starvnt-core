@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
+import MapLocationPicker from '../../components/MapLocationPicker.jsx';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import UnderstandingCard from './UnderstandingCard.jsx';
@@ -55,6 +56,10 @@ function Bubble({ from, children }) {
   );
 }
 
+function todayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /** Voice input (Web Speech API). Fills the box only; never sends by itself. */
 function useVoice(onText) {
   const [listening, setListening] = useState(false);
@@ -95,6 +100,10 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const [understanding, setUnderstanding] = useState(null);
   const [nextQ, setNextQ] = useState(null);
   const [input, setInput] = useState('');
+  const [customChoice, setCustomChoice] = useState('');
+  const [pickedDate, setPickedDate] = useState('');
+  const [pickedLocation, setPickedLocation] = useState(null);
+  const [savingStructured, setSavingStructured] = useState(false);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -188,6 +197,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   }, [params, loading, sessionId, send, setParams]);
 
   function onChip(opt) {
+    setCustomChoice('');
     if (opt.prefill) {
       setInput(opt.prefill);
       setTimeout(() => inputRef.current?.focus(), 0);
@@ -195,6 +205,55 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
     else if (opt.budgetRange) send(opt.label, { budgetRange: opt.budgetRange });
     else if (opt.serviceLocation) send(opt.label, { serviceLocation: opt.serviceLocation });
     else send(opt.message || opt.label);
+  }
+
+  function sendCustomChoice() {
+    const text = customChoice.trim();
+    if (!text) return;
+    setCustomChoice('');
+    send(text);
+  }
+
+  function sendPickedDate() {
+    if (!pickedDate) return;
+    send(pickedDate);
+    setPickedDate('');
+  }
+
+  async function savePickedLocation() {
+    if (!activeEvent?.id || !pickedLocation) return;
+    const loc = pickedLocation;
+    const city = loc.city || activeEvent.city || '';
+    const locality = loc.locality || loc.address?.split(',')?.[0] || '';
+    const payload = {
+      ...(city ? { city } : {}),
+      location: {
+        ...(city ? { city } : {}),
+        ...(locality ? { locality } : {}),
+        ...(loc.state ? { state: loc.state } : {}),
+        ...(loc.postalCode ? { pincode: loc.postalCode } : {}),
+        ...(loc.address ? { address: loc.address } : {}),
+        coordinates: { lat: loc.lat, lng: loc.lng },
+      },
+    };
+    setSavingStructured(true);
+    setError('');
+    try {
+      await customerApi.patchEvent(activeEvent.id, payload);
+      const refreshed = await customerApi.auraSession(sessionId, activeEvent.id);
+      applyState(refreshed);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: `Pinned location: ${loc.address || `${loc.lat}, ${loc.lng}`}` },
+        { role: 'model', content: 'Saved the exact map location. I will use this for matching nearby options.' },
+      ]);
+      setPickedLocation(null);
+      onEventChanged?.(refreshed);
+    } catch (err) {
+      setError(errorText(err, "Couldn't save this location. Please try again."));
+    } finally {
+      setSavingStructured(false);
+    }
   }
 
   function newChat() {
@@ -226,6 +285,11 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
     if (activeEvent && activeEvent.status !== 'draft') return EVENT_PROMPTS.map((p) => ({ label: p, message: p }));
     return [];
   })();
+  const latestAuraMessage = [...messages].reverse().find((m) => m.role === 'model')?.content || '';
+  const showChipQuestion = nextQ?.question && !latestAuraMessage.includes(nextQ.question);
+  const showDatePicker = nextQ?.topic === 'event.date';
+  const showLocationPicker = ['event.city', 'event.area'].includes(nextQ?.topic);
+  const showAnswerPanel = chips.length > 0 || showDatePicker || showLocationPicker;
 
   return (
     <div className="flex flex-col h-full">
@@ -248,12 +312,20 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto">
         <Bubble from="model">Hi{firstName ? ` ${firstName}` : ''}! 👋 What are you planning? Tell me in your own words. I'll figure out the rest.</Bubble>
 
-        {loading && <div className="text-[11px] text-muted pl-10">Loading your conversation…</div>}
+        {loading && (
+          <div className="space-y-4">
+            <div className="flex justify-end pr-2"><div className="bg-primary/20 rounded-3xl rounded-br-xs h-10 w-48 sm:w-64 animate-pulse" /></div>
+            <div className="flex gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse shrink-0 mt-0.5" />
+              <div className="bg-white border border-gray-100 rounded-3xl rounded-tl-xs h-16 w-64 sm:w-80 animate-pulse shadow-xs" />
+            </div>
+          </div>
+        )}
         {messages.map((m, i) => (
           <Bubble key={i} from={m.role}>{m.content}</Bubble>
         ))}
 
-        {understanding && activeEvent && (
+        {understanding?.showUnderstandingCard && activeEvent && (
           <div className="pl-10">
             <UnderstandingCard understanding={understanding} event={activeEvent} onChanged={onCardChanged} onAsk={(t) => send(t)} />
           </div>
@@ -266,23 +338,103 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         )}
         {error && <div className="pl-10 text-[11px] text-red-500">{error}</div>}
 
-        {chips.length > 0 && (
+        {showAnswerPanel && (
           <div className="pl-10 space-y-2">
-            {/* In a draft, the question is already in Aura's reply. */}
-            {nextQ?.question && activeEvent && activeEvent.status !== 'draft' && (
+            {showChipQuestion && (
               <div className="text-[10px] font-bold text-muted uppercase tracking-wide">{nextQ.question}</div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
-              {chips.map((c) => (
+            {chips.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
+                {chips.map((c) => (
+                  <button
+                    key={c.label}
+                    onClick={() => onChip(c)}
+                    className="text-left text-xs font-semibold bg-white border border-primary/25 text-primary hover:bg-primary hover:text-white rounded-2xl px-4 py-2.5 transition shadow-xs"
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {showDatePicker && (
+              <div className="max-w-xl bg-white border border-gray-100 rounded-2xl p-3 shadow-xs space-y-2">
+                <label className="text-[10px] font-bold text-muted uppercase tracking-wide">
+                  Select date
+                  <input
+                    type="date"
+                    min={todayDate()}
+                    value={pickedDate}
+                    onChange={(e) => setPickedDate(e.target.value)}
+                    disabled={sending || loading}
+                    className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-primary"
+                  />
+                </label>
                 <button
-                  key={c.label}
-                  onClick={() => onChip(c)}
-                  className="text-left text-xs font-semibold bg-white border border-primary/25 text-primary hover:bg-primary hover:text-white rounded-2xl px-4 py-2.5 transition shadow-xs"
+                  type="button"
+                  onClick={sendPickedDate}
+                  disabled={sending || loading || !pickedDate}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary-dark transition disabled:opacity-50"
                 >
-                  {c.label}
+                  <Icon name="calendar" size={13} />
+                  Use this date
                 </button>
-              ))}
-            </div>
+              </div>
+            )}
+            {showLocationPicker && (
+              <div className="max-w-xl bg-white border border-gray-100 rounded-2xl p-3 shadow-xs space-y-2">
+                <div>
+                  <div className="text-[10px] font-bold text-muted uppercase tracking-wide">Pin exact event area</div>
+                  <p className="text-[11px] text-muted mt-0.5">Search the area or drop the pin so Aura can match nearby vendors more accurately.</p>
+                </div>
+                <MapLocationPicker
+                  height="260px"
+                  value={activeEvent?.location?.coordinates || pickedLocation || undefined}
+                  onChange={setPickedLocation}
+                  guidance="Drag or click pointer to pin the exact event area"
+                />
+                {pickedLocation && (
+                  <div className="rounded-xl bg-lavender/50 px-3 py-2 text-[11px] text-navy">
+                    <div className="font-bold">Selected location</div>
+                    <div className="text-muted">{pickedLocation.address || `${pickedLocation.lat}, ${pickedLocation.lng}`}</div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={savePickedLocation}
+                  disabled={sending || loading || savingStructured || !pickedLocation}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary-dark transition disabled:opacity-50"
+                >
+                  <Icon name="mapPin" size={13} />
+                  {savingStructured ? 'Saving...' : 'Save pinned location'}
+                </button>
+              </div>
+            )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                sendCustomChoice();
+              }}
+              className="max-w-xl bg-white border border-gray-100 rounded-2xl p-2.5 shadow-xs"
+            >
+              <textarea
+                value={customChoice}
+                onChange={(e) => setCustomChoice(e.target.value)}
+                disabled={sending || loading}
+                rows={2}
+                placeholder="Something else? Type your own answer here..."
+                className="w-full resize-y min-h-16 max-h-48 outline-none bg-transparent text-xs sm:text-sm text-navy placeholder:text-muted/60 px-2 py-1"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={sending || loading || !customChoice.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary-dark transition disabled:opacity-50"
+                >
+                  <Icon name="send" size={13} />
+                  Send answer
+                </button>
+              </div>
+            </form>
           </div>
         )}
         <div ref={bottomRef} />

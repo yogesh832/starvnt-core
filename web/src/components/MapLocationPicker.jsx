@@ -35,6 +35,7 @@ export default function MapLocationPicker({
   onChange,
   height = '340px',
   readOnly = false,
+  guidance = 'Drag or click pointer to pin exact studio entrance',
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -412,7 +413,7 @@ export default function MapLocationPicker({
           <span>
             {reverseLoading
               ? 'Detecting address…'
-              : 'Drag or click pointer to pin exact studio entrance'}
+              : guidance}
           </span>
           <span className="text-[10px] text-muted font-mono pl-1 border-l border-gray-200">
             {Number(value?.lat || initialLat).toFixed(4)}, {Number(value?.lng || initialLng).toFixed(4)}

@@ -734,6 +734,8 @@ export default function DashboardHome({ business = 'Your Brand' }) {
           eventDate: b.eventDate,
           date: b.eventDate,
           totalAmount: b.totalAmount || 0,
+          advancePaid: Number(b.paymentSummary?.paidAmount || 0),
+          balanceAmount: Number(b.paymentSummary?.balanceAmount ?? Math.max(0, Number(b.totalAmount || 0) - Number(b.paymentSummary?.paidAmount || 0))),
           status: b.bookingStatus === 'CONFIRMED'
             ? (b.executionStatus === 'SERVICE_STARTED' ? 'In Progress' : 'Confirmed')
             : b.bookingStatus || 'Confirmed',
@@ -1033,7 +1035,8 @@ export default function DashboardHome({ business = 'Your Brand' }) {
   ].filter(Boolean).length;
 
   // Real KPI calculations
-  const totalRevenue = bookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
+  const advanceReceived = bookings.reduce((sum, b) => sum + (Number(b.advancePaid) || 0), 0);
+  const confirmedBookingValue = bookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
   const activeBookingsCount = bookings.filter((b) => b.status !== 'CANCELLED').length;
   const activeEnquiriesCount = enquiries.filter((e) => e.status === 'New' || e.status === 'NEW').length;
   const avgRatingDisplay = reviewStats?.averageRating && reviewStats.averageRating !== '0.0'
@@ -1042,10 +1045,10 @@ export default function DashboardHome({ business = 'Your Brand' }) {
 
   const dynamicStats = [
     {
-      label: 'Total Revenue',
-      value: `₹${totalRevenue.toLocaleString()}`,
-      foot: totalRevenue > 0 ? 'Verified via Core Bookings' : '₹0 settled payouts yet',
-      footClass: totalRevenue > 0 ? 'text-emerald-600' : 'text-muted',
+      label: 'Advance Received',
+      value: `₹${advanceReceived.toLocaleString()}`,
+      foot: confirmedBookingValue > 0 ? `₹${confirmedBookingValue.toLocaleString()} confirmed booking value` : '₹0 received yet',
+      footClass: advanceReceived > 0 ? 'text-emerald-600' : 'text-muted',
       icon: 'wallet',
       iconBg: 'bg-emerald-50 text-emerald-600',
     },

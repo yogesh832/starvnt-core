@@ -6,18 +6,19 @@ import { setup, teardown, makeUser, uniqueDate, scriptLlm, sid } from './helpers
 let app;
 let models;
 let seedDemoListings;
+let demoCount;
 let ids = {};
 const DATE = uniqueDate();
 
 before(async () => {
   ({ app, models } = await setup());
-  ({ seedDemoListings } = await import('../src/customer/seeds/demoListings.js'));
+  ({ seedDemoListings, DEMO_LISTINGS: { length: demoCount } } = await import('../src/customer/seeds/demoListings.js'));
   const { VendorOrganization } = await import('../src/external/models/VendorOrganization.js');
   const { VendorService } = await import('../src/external/models/VendorService.js');
   const { VendorBlockout } = await import('../src/external/models/VendorBlockout.js');
 
   const first = await seedDemoListings();
-  assert.equal(first.inserted, 12);
+  assert.equal(first.inserted, demoCount);
 
   const owner = await makeUser('VENDOR');
   const live = await VendorOrganization.create({
@@ -62,8 +63,8 @@ test('open categories with option counts', async () => {
   const ev = await plannedWedding(user, token);
   const r = await request(app).get(`/api/customer/events/${ev._id}/services`).set(auth(token)).expect(200);
   const photo = r.body.categories.find((c) => c.category === 'photography');
-  // live + busy + hourly (real) + 2 demo; the unverified vendor never counts.
-  assert.equal(photo.optionCount, 5);
+  // live + busy + hourly (real) + demo photography rows; the unverified vendor never counts.
+  assert.equal(photo.optionCount, 6);
   assert.equal(photo.lowestPrice, 30000);
 });
 
@@ -82,7 +83,7 @@ test('options: honest availability, demo labels, no invented ratings, best value
   const demo = byId.get('demo_pho_02');
   assert.equal(demo.isDemo, true);
   assert.equal(demo.price, 64000);
-  assert.equal(r.body.bestValueId, ids.live, 'lowest bookable total; the blocked cheaper vendor is excluded');
+  assert.equal(r.body.bestValueId, 'demo_corp_photo_del_01', 'lowest bookable total; the blocked cheaper vendor is excluded');
   assert.equal(r.body.options.at(-1).id, ids.busy, 'unbookable options sort last');
 
   // A draft without a date can still browse options.

@@ -22,17 +22,28 @@ import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
  */
 
 const HOLD_HOURS = 48;
+const ADVANCE_PERCENT = 30;
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
+const advanceOf = (total) => Math.ceil((Number(total || 0) * ADVANCE_PERCENT) / 100);
+const packageTotalOf = (reservation) => reservation.packageTotal ?? reservation.amount;
+const advanceAmountOf = (reservation) => reservation.packageTotal == null ? advanceOf(reservation.amount) : reservation.amount;
+const balanceAmountOf = (reservation, paid = advanceAmountOf(reservation)) => Math.max(0, packageTotalOf(reservation) - paid);
 
 // ── Serializers (customer-safe) ─────────────────────────────────────────────
 export function serializeReservation(r) {
+  const packageTotal = packageTotalOf(r);
+  const advanceAmount = advanceAmountOf(r);
   return {
     id: String(r._id),
     category: r.category,
     label: categoryLabel(r.category),
     vendorName: r.vendorName,
     packageName: r.packageName,
-    amount: r.amount,
+    amount: advanceAmount,
+    advanceAmount,
+    packageTotal,
+    advancePercent: r.advancePercent ?? ADVANCE_PERCENT,
+    balanceAmount: r.balanceAmount ?? balanceAmountOf(r, advanceAmount),
     isDemo: r.isDemo,
     status: r.status,
     expiresAt: r.expiresAt,
@@ -54,6 +65,8 @@ export function serializePayment(p) {
 }
 
 export function serializeBooking(b) {
+  const packageTotal = b.amount;
+  const paidAmount = b.paidAmount ?? b.amount;
   return {
     id: String(b._id),
     reference: String(b._id).slice(-6).toUpperCase(),
@@ -62,6 +75,9 @@ export function serializeBooking(b) {
     vendorName: b.vendorName,
     packageName: b.packageName,
     amount: b.amount,
+    packageTotal,
+    paidAmount,
+    balanceAmount: b.balanceAmount ?? Math.max(0, packageTotal - paidAmount),
     isDemo: b.isDemo,
     status: b.status,
     underReviewReason: b.status === 'pending' ? b.reviewReason : null,
@@ -106,21 +122,27 @@ export async function acceptQuote(customerId, quoteId) {
   await commerceRepo.cancelPendingForRequirements(quote.items.map((i) => i.requirement));
   const expiresAt = new Date(Date.now() + HOLD_HOURS * 3600000);
   const reservations = await commerceRepo.createReservations(
-    quote.items.map((i) => ({
-      event: event._id,
-      customer: customerId,
-      quote: quote._id,
-      quoteItem: i._id,
-      requirement: i.requirement,
-      category: i.category,
-      optionId: i.optionId,
-      vendorName: i.vendorName,
-      packageName: i.packageName,
-      amount: i.price,
-      isDemo: i.isDemo,
-      status: 'pending_payment',
-      expiresAt,
-    }))
+    quote.items.map((i) => {
+      const advance = advanceOf(i.price);
+      return {
+        event: event._id,
+        customer: customerId,
+        quote: quote._id,
+        quoteItem: i._id,
+        requirement: i.requirement,
+        category: i.category,
+        optionId: i.optionId,
+        vendorName: i.vendorName,
+        packageName: i.packageName,
+        packageTotal: i.price,
+        advancePercent: ADVANCE_PERCENT,
+        amount: advance,
+        balanceAmount: Math.max(0, i.price - advance),
+        isDemo: i.isDemo,
+        status: 'pending_payment',
+        expiresAt,
+      };
+    })
   );
   await eventsRepo.appendHistory({
     eventId: event._id,
@@ -163,14 +185,22 @@ export async function payReservation(customer, eventId, reservationId) {
   }
 
   let payment = await commerceRepo.findOpenPaymentForReservation(reservation._id);
+  const payableAmount = advanceAmountOf(reservation);
+  if (payment && payment.amount !== payableAmount && payment.status === 'pending') payment = null;
   if (payment && ['paid', 'verified'].includes(payment.status)) throw conflict('ALREADY_PAID', 'This reservation is already paid');
   if (!payment || !payment.providerOrderId) {
     let order;
     try {
       order = await razorpay.createOrder({
-        amount: reservation.amount,
+        amount: payableAmount,
         receipt: `res_${reservation._id}`,
-        notes: { eventId: String(event._id), reservationId: String(reservation._id) },
+        notes: {
+          eventId: String(event._id),
+          reservationId: String(reservation._id),
+          paymentType: 'advance',
+          packageTotal: String(packageTotalOf(reservation)),
+          advancePercent: String(reservation.advancePercent ?? ADVANCE_PERCENT),
+        },
       });
     } catch (err) {
       console.error('[payments] order failed:', err.message);
@@ -180,7 +210,7 @@ export async function payReservation(customer, eventId, reservationId) {
       event: event._id,
       customer: customerId,
       reservation: reservation._id,
-      amount: reservation.amount,
+      amount: payableAmount,
       currency: 'INR',
       status: 'pending',
       providerOrderId: order.id,
@@ -209,6 +239,16 @@ export async function checkoutComplete(customerId, eventId, paymentId, body = {}
   const ref = typeof body.razorpay_payment_id === 'string' ? body.razorpay_payment_id.slice(0, 64) : null;
   const moved = await commerceRepo.movePayment(payment._id, ['pending'], { status: 'processing', ...(ref ? { providerRef: ref } : {}) });
   return { payment: serializePayment(moved || payment) };
+}
+
+// TODO_REMOVE_BEFORE_PRODUCTION: local customer test helper for bypassing Razorpay during QA.
+export async function devVerifyReservationPayment(customer, eventId, reservationId) {
+  if (process.env.NODE_ENV === 'production') {
+    throw notFound('Not found');
+  }
+  const { payment } = await payReservation(customer, eventId, reservationId);
+  const result = await verifyPayment(payment.id, { actorType: 'ops', actorId: 'dev-test-success-button' });
+  return { payment: serializePayment(result.payment), booking: result.booking ? serializeBooking(result.booking) : null };
 }
 
 import { publishOutboxEvent } from '../../automation/services/outbox.service.js';
@@ -292,7 +332,9 @@ export async function confirmBookingFor(payment) {
     packageName: reservation.packageName,
     reservation: reservation._id,
     payment: payment._id,
-    amount: reservation.amount,
+    amount: packageTotalOf(reservation),
+    paidAmount: payment.amount,
+    balanceAmount: reservation.balanceAmount ?? balanceAmountOf(reservation, payment.amount),
     isDemo: reservation.isDemo,
     status: reason ? 'pending' : 'confirmed',
     reviewReason: reason,
@@ -303,7 +345,18 @@ export async function confirmBookingFor(payment) {
   const label = categoryLabel(reservation.category);
   if (!reason) {
     await reqRepo.upsertRequirement(event._id, reservation.category, { status: 'booked', source: 'system' }, { onlyIfStatusIn: ['missing', 'pending', 'customer_provided'] });
-    await eventsRepo.appendHistory({ eventId: event._id, actorType: 'system', action: 'booking_confirmed', details: { category: reservation.category, vendorName: reservation.vendorName, amount: reservation.amount } });
+    await eventsRepo.appendHistory({
+      eventId: event._id,
+      actorType: 'system',
+      action: 'booking_confirmed',
+      details: {
+        category: reservation.category,
+        vendorName: reservation.vendorName,
+        amount: packageTotalOf(reservation),
+        paidAmount: payment.amount,
+        balanceAmount: reservation.balanceAmount ?? balanceAmountOf(reservation, payment.amount),
+      },
+    });
     await circleRepo.notify({ customerId: event.customer, eventId: event._id, type: 'booking', title: `${label} booked`, body: `${reservation.vendorName} is confirmed for ${event.title}.` });
     await maybeMarkEventBooked(event._id);
   } else {

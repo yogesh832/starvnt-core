@@ -47,7 +47,9 @@ export default function VendorsPage() {
                 <span className="w-10 h-10 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0"><Icon name={categoryIcon(b.category)} size={16} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-bold text-navy truncate">{b.vendorName} {b.isDemo && <DemoBadge />}</div>
-                  <div className="text-[11px] text-muted">{b.label} · {b.packageName} · {formatINR(b.amount)}</div>
+                  <div className="text-[11px] text-muted">
+                    {b.label} · {b.packageName} · Total {formatINR(b.packageTotal || b.amount)} · Advance {formatINR(b.paidAmount || b.amount)}
+                  </div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className={`text-[11px] font-bold ${cls}`}>{label}</div>

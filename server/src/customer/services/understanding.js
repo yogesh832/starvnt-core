@@ -19,9 +19,21 @@ const CONFIRM_REQUIRED = [
   ['eventDate', 'Date'],
   ['city', 'Location'],
 ];
+const STARTER_REQUIRED = [
+  ...CONFIRM_REQUIRED,
+  ['guestCount', 'Guest count'],
+  ['budget', 'Budget'],
+];
 
 export function missingForConfirm(event) {
   return CONFIRM_REQUIRED.filter(([k]) => !event?.[k]).map(([k, label]) => ({ field: k, label }));
+}
+
+export function missingForStarterUnderstanding(event) {
+  return STARTER_REQUIRED.filter(([k]) => {
+    if (k === 'budget') return event?.budget == null && event?.budgetMin == null && event?.budgetMax == null;
+    return !event?.[k];
+  }).map(([field, label]) => ({ field, label }));
 }
 
 export function contextMap(contextRows) {
@@ -161,6 +173,14 @@ export function buildUnderstanding(event, requirements, contextRows) {
   const reqs = requirements || [];
   const byCat = new Map(reqs.map((r) => [r.category, r]));
   const missing = missingForConfirm(event);
+  const starterMissing = missingForStarterUnderstanding(event);
+  const skipped = skippedTopics(contextRows);
+  const unresolvedEssentials = event.eventType
+    ? templateFor(event.eventType).essential.filter((c) => {
+        const status = byCat.get(c)?.status || 'missing';
+        return status === 'missing' && !skipped.has(`requirement.${c}`);
+      })
+    : [];
   const loc = serializeLocation(event);
   const label = locationLabel(event);
 
@@ -209,6 +229,9 @@ export function buildUnderstanding(event, requirements, contextRows) {
     },
     services: { needed, provided, suggested },
     missingForConfirm: missing,
+    missingForStarterUnderstanding: starterMissing,
+    missingEssentialServices: unresolvedEssentials.map((category) => ({ category, label: categoryLabel(category) })),
+    showUnderstandingCard: starterMissing.length === 0,
     missingInfo,
     inferred,
     canConfirm: event.status === 'draft' && missing.length === 0,
@@ -294,6 +317,11 @@ const LOCATION_PREFILL = {
   accommodation: 'Guests will stay at ',
   ceremony: 'The ceremony will be at ',
 };
+const SERVICE_QUESTION = {
+  sound: 'Do you need sound, DJ, mics, or audio setup?',
+  catering: 'Do you already have catering arranged?',
+  venue: 'Do you already have a venue?',
+};
 
 /**
  * Smart clarification: exactly ONE next question, with chips.
@@ -337,7 +365,7 @@ export function nextQuestion(event, requirements, contextRows) {
     };
   }
   if (open('venue') && !event.location?.venueName && !skipped.has('requirement.venue')) {
-    return { topic: 'requirement.venue', question: 'Do you already have a venue?', options: SERVICE_CHIPS('venue', PREFILL.venue) };
+    return { topic: 'requirement.venue', question: SERVICE_QUESTION.venue, options: SERVICE_CHIPS('venue', PREFILL.venue) };
   }
   if (event.location?.venueName && !event.location?.locality && !skipped.has('event.area')) {
     return {
@@ -362,7 +390,7 @@ export function nextQuestion(event, requirements, contextRows) {
     if (open(c) && !skipped.has(`requirement.${c}`)) {
       return {
         topic: `requirement.${c}`,
-        question: `Do you already have ${categoryLabel(c).toLowerCase()} arranged?`,
+        question: SERVICE_QUESTION[c] || `Do you already have ${categoryLabel(c).toLowerCase()} arranged?`,
         options: SERVICE_CHIPS(c, PREFILL[c] || `My ${categoryLabel(c).toLowerCase()} is `),
       };
     }

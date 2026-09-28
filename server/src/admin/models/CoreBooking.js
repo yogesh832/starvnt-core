@@ -79,6 +79,16 @@ const coreBookingSchema = new Schema(
       type: Number,
       required: true,
     },
+    paymentSummary: {
+      advancePercentage: { type: Number, default: 30 },
+      advanceAmount: { type: Number, default: 0 },
+      paidAmount: { type: Number, default: 0 },
+      balanceAmount: { type: Number, default: 0 },
+      provider: { type: String, default: 'razorpay' },
+      providerOrderId: { type: String, default: '' },
+      providerPaymentId: { type: String, default: '' },
+      paidAt: { type: Date, default: null },
+    },
     bookingStatus: {
       type: String,
       enum: ['CONFIRMED', 'CANCELLED', 'FAILED'],

@@ -14,6 +14,21 @@ import * as razorpay from '../../customer/services/payments/razorpay.js';
 const router = express.Router();
 const ADVANCE_PERCENTAGE = 30;
 
+function numberField(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+}
+
+function normalizePricingBreakdown(input = {}) {
+  const basePrice = numberField(input.basePrice);
+  const travelFee = numberField(input.travelFee);
+  const equipmentFee = numberField(input.equipmentFee);
+  const setupFee = numberField(input.setupFee);
+  const additionalFee = numberField(input.additionalFee);
+  const totalAmount = numberField(input.totalAmount) || basePrice + travelFee + equipmentFee + setupFee + additionalFee;
+  return { basePrice, travelFee, equipmentFee, setupFee, additionalFee, totalAmount };
+}
+
 function quoteForCustomer(quote) {
   const total = Number(quote.pricingBreakdown?.totalAmount || 0);
   const advanceAmount = Math.ceil((total * ADVANCE_PERCENTAGE) / 100);
@@ -33,6 +48,15 @@ function quoteForCustomer(quote) {
     advanceAmount: quote.advancePayment?.amount || advanceAmount,
     advanceStatus: quote.advancePayment?.status || 'NOT_STARTED',
     notes: quote.notes || '',
+    history: Array.isArray(quote.history)
+      ? quote.history.slice(-8).map((h) => ({
+          fromStatus: h.fromStatus,
+          toStatus: h.toStatus,
+          changedBy: h.changedBy,
+          reason: h.reason,
+          timestamp: h.timestamp,
+        }))
+      : [],
     validUntil: quote.validUntil,
     createdAt: quote.createdAt,
   };
@@ -56,6 +80,83 @@ function bookingForCustomer(booking) {
     validationAudit: booking.validationAudit || null,
     createdAt: booking.createdAt,
   };
+}
+
+async function completePaidVendorQuote({ quote, actorName, paymentId }) {
+  const vendorName = quote.vendor?.businessName || '';
+  const vendorCategory = quote.vendor?.category || '';
+  quote.advancePayment.status = 'VERIFIED';
+  quote.advancePayment.providerPaymentId = paymentId || quote.advancePayment.providerPaymentId || '';
+  quote.advancePayment.paidAt = quote.advancePayment.paidAt || new Date();
+  await quote.save();
+
+  if (quote.status === 'SUBMITTED') {
+    await transitionQuote(quote._id, 'APPROVED', {
+      actor: actorName,
+      reason: `Customer paid ${ADVANCE_PERCENTAGE}% Razorpay advance`,
+    });
+  } else if (quote.status !== 'APPROVED') {
+    const err = new Error('This quote cannot be approved from its current state.');
+    err.statusCode = 409;
+    err.code = 'QUOTE_NOT_APPROVABLE';
+    throw err;
+  }
+
+  const vendorId = quote.vendor?._id || quote.vendor;
+  const customerId = quote.customer?._id || quote.customer;
+  const totalAmount = Number(quote.pricingBreakdown?.totalAmount || 0);
+  const paidAmount = Number(quote.advancePayment?.amount || Math.ceil((totalAmount * ADVANCE_PERCENTAGE) / 100));
+  const booking = await CoreBooking.findOneAndUpdate(
+    { quoteId: String(quote._id) },
+    {
+      $setOnInsert: {
+        quoteId: String(quote._id),
+        opportunityId: quote.opportunity ? String(quote.opportunity) : null,
+        vendorId,
+        customerId,
+        serviceName: quote.serviceName || 'Event Service',
+        eventDate: quote.eventDate || new Date().toISOString().split('T')[0],
+        serviceLocation: quote.serviceLocation || {},
+        pricing: quote.pricingBreakdown || { totalAmount },
+        totalAmount,
+        paymentSummary: {
+          advancePercentage: ADVANCE_PERCENTAGE,
+          advanceAmount: paidAmount,
+          paidAmount,
+          balanceAmount: Math.max(0, totalAmount - paidAmount),
+          provider: quote.advancePayment?.provider || 'razorpay',
+          providerOrderId: quote.advancePayment?.providerOrderId || '',
+          providerPaymentId: paymentId || quote.advancePayment?.providerPaymentId || '',
+          paidAt: quote.advancePayment?.paidAt || new Date(),
+        },
+        bookingStatus: 'CONFIRMED',
+        settlementStatus: 'NOT_ELIGIBLE',
+      },
+      $set: {
+        vendorName,
+        customerName: actorName,
+        category: vendorCategory,
+        paymentSummary: {
+          advancePercentage: ADVANCE_PERCENTAGE,
+          advanceAmount: paidAmount,
+          paidAmount,
+          balanceAmount: Math.max(0, totalAmount - paidAmount),
+          provider: quote.advancePayment?.provider || 'razorpay',
+          providerOrderId: quote.advancePayment?.providerOrderId || '',
+          providerPaymentId: paymentId || quote.advancePayment?.providerPaymentId || '',
+          paidAt: quote.advancePayment?.paidAt || new Date(),
+        },
+        paymentStatus: 'PAYMENT_VERIFIED',
+        executionStatus: 'SERVICE_SCHEDULED',
+      },
+    },
+    { new: true, upsert: true }
+  );
+
+  const approved = await Quote.findById(quote._id)
+    .populate('vendor', 'businessName category location');
+
+  return { quote: approved, booking };
 }
 
 // ── OPPORTUNITIES (Spec §9, §10, Golden Test F) ──────────────────────────
@@ -343,7 +444,9 @@ router.post('/customer/bookings/:id/verify-completion', requireExternalAuth, req
 router.post('/customer/vendor-quotes/:id/negotiate', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
   try {
     const message = String(req.body?.message || '').trim();
-    if (!message) return res.status(400).json({ error: 'MESSAGE_REQUIRED' });
+    const counterBudget = req.body?.counterBudget ? Number(req.body.counterBudget) : null;
+    
+    if (!message && !counterBudget) return res.status(400).json({ error: 'MESSAGE_REQUIRED' });
 
     const quote = await Quote.findOne({ _id: req.params.id, customer: req.externalUser._id });
     if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
@@ -351,19 +454,27 @@ router.post('/customer/vendor-quotes/:id/negotiate', requireExternalAuth, requir
       return res.status(400).json({ error: 'QUOTE_NOT_NEGOTIABLE', message: 'Only submitted quotes can be negotiated.' });
     }
 
+    const reasonParts = [];
+    if (counterBudget) reasonParts.push(`Proposed Budget: ₹${counterBudget}`);
+    if (message) reasonParts.push(`Message: ${message}`);
+    const fullReason = `Customer requested change - ${reasonParts.join(' | ')}`;
+
     quote.history.push({
       fromStatus: quote.status,
       toStatus: quote.status,
       changedBy: req.externalUser.fullName || req.externalUser.email,
-      reason: `Customer requested change: ${message}`,
+      reason: fullReason,
       timestamp: new Date(),
     });
+    
+    // Vendor quote logic: If they negotiate, maybe it goes to DRAFT or stays SUBMITTED for vendor to re-review.
+    // The previous code kept it as quote.status (SUBMITTED).
     await quote.save();
 
     await Notification.create({
       vendor: quote.vendor,
       title: 'Customer requested quote change',
-      message,
+      message: fullReason,
       type: 'QUOTE',
       link: '/vendor/quotes',
       metadata: { quoteId: quote._id },
@@ -430,6 +541,41 @@ router.post('/customer/vendor-quotes/:id/pay-advance', requireExternalAuth, requ
   }
 });
 
+router.post('/customer/vendor-quotes/:id/reconcile-payment', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res) => {
+  try {
+    const quote = await Quote.findOne({ _id: req.params.id, customer: req.externalUser._id })
+      .populate('vendor', 'businessName category location');
+    if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
+    const orderId = quote.advancePayment?.providerOrderId;
+    if (!orderId) return res.status(400).json({ error: 'PAYMENT_ORDER_NOT_FOUND' });
+
+    const amount = Number(quote.advancePayment?.amount || Math.ceil((Number(quote.pricingBreakdown?.totalAmount || 0) * ADVANCE_PERCENTAGE) / 100));
+    const expectedPaise = razorpay.toPaise(amount);
+    const payments = await razorpay.listOrderPayments(orderId);
+    const captured = payments.find((payment) =>
+      payment.order_id === orderId &&
+      Number(payment.amount) === expectedPaise &&
+      (payment.status === 'captured' || payment.captured === true)
+    );
+    if (!captured) {
+      return res.status(402).json({
+        error: 'PAYMENT_NOT_CAPTURED',
+        message: 'Razorpay has not confirmed a captured payment for this order yet.',
+      });
+    }
+
+    const result = await completePaidVendorQuote({
+      quote,
+      actorName: req.externalUser.fullName || req.externalUser.email,
+      paymentId: captured.id,
+    });
+
+    res.json({ ok: true, quote: quoteForCustomer(result.quote), booking: result.booking });
+  } catch (err) {
+    res.status(err.statusCode || err.status || 400).json({ error: err.code || 'PAYMENT_RECONCILIATION_FAILED', message: err.message });
+  }
+});
+
 router.post('/customer/vendor-quotes/:id/checkout-complete', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res) => {
   try {
     const quote = await Quote.findOne({ _id: req.params.id, customer: req.externalUser._id })
@@ -441,39 +587,28 @@ router.post('/customer/vendor-quotes/:id/checkout-complete', requireExternalAuth
       return res.status(400).json({ error: 'ORDER_MISMATCH' });
     }
     if (!razorpay.verifyCheckoutSignature({ orderId, paymentId: razorpay_payment_id, signature: razorpay_signature })) {
-      quote.advancePayment.status = 'FAILED';
-      await quote.save();
-      return res.status(400).json({ error: 'PAYMENT_SIGNATURE_INVALID', message: 'Payment could not be verified.' });
+      const amount = Number(quote.advancePayment?.amount || Math.ceil((Number(quote.pricingBreakdown?.totalAmount || 0) * ADVANCE_PERCENTAGE) / 100));
+      const expectedPaise = razorpay.toPaise(amount);
+      const payments = await razorpay.listOrderPayments(orderId).catch(() => []);
+      const captured = payments.find((payment) =>
+        payment.id === razorpay_payment_id &&
+        Number(payment.amount) === expectedPaise &&
+        (payment.status === 'captured' || payment.captured === true)
+      );
+      if (!captured) {
+        quote.advancePayment.status = 'FAILED';
+        await quote.save();
+        return res.status(400).json({ error: 'PAYMENT_SIGNATURE_INVALID', message: 'Payment could not be verified.' });
+      }
     }
 
-    quote.advancePayment.status = 'VERIFIED';
-    quote.advancePayment.providerPaymentId = razorpay_payment_id || '';
-    quote.advancePayment.paidAt = new Date();
-    await quote.save();
-
-    await transitionQuote(quote._id, 'APPROVED', {
-      actor: req.externalUser.fullName || req.externalUser.email,
-      reason: `Customer paid ${ADVANCE_PERCENTAGE}% Razorpay advance`,
+    const result = await completePaidVendorQuote({
+      quote,
+      actorName: req.externalUser.fullName || req.externalUser.email,
+      paymentId: razorpay_payment_id,
     });
 
-    const booking = await CoreBooking.findOneAndUpdate(
-      { quoteId: String(quote._id) },
-      {
-        $set: {
-          vendorName: quote.vendor?.businessName || '',
-          customerName: req.externalUser.fullName || req.externalUser.email || '',
-          category: quote.vendor?.category || '',
-          paymentStatus: 'PAYMENT_VERIFIED',
-          executionStatus: 'SERVICE_SCHEDULED',
-        },
-      },
-      { new: true }
-    );
-
-    const approved = await Quote.findById(quote._id)
-      .populate('vendor', 'businessName category location');
-
-    res.json({ ok: true, quote: quoteForCustomer(approved), booking });
+    res.json({ ok: true, quote: quoteForCustomer(result.quote), booking: result.booking });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'PAYMENT_CONFIRMATION_FAILED', message: err.message });
   }
@@ -531,6 +666,14 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'VENDOR_ID_REQUIRED' });
     }
 
+    const normalizedPricing = normalizePricingBreakdown(pricingBreakdown);
+    if (!normalizedPricing.basePrice || !normalizedPricing.totalAmount) {
+      return res.status(400).json({
+        error: 'INVALID_QUOTE_AMOUNT',
+        message: 'Enter a valid quote amount before sending the offer.',
+      });
+    }
+
     const quote = await createQuote({
       opportunityId,
       vendorId: resolvedVendorId,
@@ -539,8 +682,8 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
       serviceName: serviceName || 'Event Service',
       eventDate,
       serviceLocation,
-      pricingBreakdown,
-      notes,
+      pricingBreakdown: normalizedPricing,
+      notes: String(notes || '').trim(),
       status,
       actor: req.externalUser.fullName || req.externalUser.email,
     });
@@ -555,6 +698,61 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
     res.status(201).json({ ok: true, quote });
   } catch (err) {
     next(err);
+  }
+});
+
+router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType('VENDOR'), async (req, res) => {
+  try {
+    const vendorId = req.externalUser.vendorOrganization;
+    if (!vendorId) return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+
+    const quote = await Quote.findOne({ _id: req.params.id, vendor: vendorId });
+    if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
+    if (!['DRAFT', 'SUBMITTED'].includes(quote.status)) {
+      return res.status(400).json({
+        error: 'QUOTE_NOT_EDITABLE',
+        message: 'Only draft or submitted quotes can be revised.',
+      });
+    }
+
+    const pricing = normalizePricingBreakdown(req.body?.pricingBreakdown || {});
+    if (!pricing.basePrice || !pricing.totalAmount) {
+      return res.status(400).json({
+        error: 'INVALID_QUOTE_AMOUNT',
+        message: 'Enter a valid revised quote amount.',
+      });
+    }
+
+    const message = String(req.body?.notes || req.body?.message || '').trim();
+    const previousStatus = quote.status;
+    quote.pricingBreakdown = pricing;
+    quote.notes = message;
+    quote.status = 'SUBMITTED';
+    quote.validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    quote.advancePayment = {
+      percentage: ADVANCE_PERCENTAGE,
+      amount: 0,
+      status: 'NOT_STARTED',
+      provider: 'razorpay',
+      providerOrderId: '',
+      providerPaymentId: '',
+      paidAt: null,
+    };
+    quote.history.push({
+      fromStatus: previousStatus,
+      toStatus: 'SUBMITTED',
+      changedBy: req.externalUser.fullName || req.externalUser.email || 'Vendor',
+      reason: message ? `Vendor revised offer: ${message}` : `Vendor revised offer to ₹${pricing.totalAmount.toLocaleString('en-IN')}`,
+      timestamp: new Date(),
+    });
+    await quote.save();
+
+    res.json({
+      ok: true,
+      quote: await quote.populate('customer', 'fullName email phone'),
+    });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'QUOTE_REVISION_FAILED', message: err.message });
   }
 });
 
