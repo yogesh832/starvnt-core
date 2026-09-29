@@ -743,7 +743,7 @@ export async function serviceDetail(customerId, eventId, optionId) {
 
       if (vendorOrg.googlePlaceId) {
         try {
-          const key = process.env.GOOGLE_PLACES_API_KEY || 'AIzaSyDd44OidU39QkGFJ06aklMbYDZZKR3SFik';
+          const key = process.env.GOOGLE_PLACES_API_KEY || '';
           const url = `https://places.googleapis.com/v1/places/${vendorOrg.googlePlaceId}?fields=id,displayName,rating,userRatingCount,reviews,googleMapsUri,formattedAddress&key=${key}`;
           const res = await fetch(url);
           const gData = await res.json();
