@@ -506,6 +506,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
           e.preventDefault();
           send(input);
         }}
+        // abcd
         className="p-3 sm:p-4 max-w-3xl w-full mx-auto"
       >
         <div className="flex items-center gap-2 bg-white rounded-2xl shadow-lg shadow-primary/5 px-4 py-2.5 border border-gray-100">
@@ -557,3 +558,4 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
     </div>
   );
 }
+// abcd
