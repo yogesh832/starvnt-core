@@ -601,7 +601,52 @@ function NotificationsCard({
   );
 }
 
-export default function DashboardHome({ business = 'Your Brand' }) {
+const AURA_CHIPS = ['Aaj kya karna hai?', 'Pending enquiries dikhao', 'Is hafte ki bookings'];
+
+/** Ask Aura+ from the dashboard: opens the Aura+ panel and sends the question. */
+function AskAuraCard({ onAsk }) {
+  const [text, setText] = useState('');
+  function submit(e) {
+    e.preventDefault();
+    if (!text.trim()) return onAsk();
+    onAsk(text.trim());
+    setText('');
+  }
+  return (
+    <div className="rounded-3xl p-4 sm:p-5 bg-gradient-to-br from-primary via-[#7b5cf0] to-[#b18cff] text-white shadow-lg shadow-primary/20">
+      <div className="flex items-center gap-2">
+        <span className="w-8 h-8 rounded-xl bg-white/20 grid place-items-center">
+          <Icon name="bolt" size={15} />
+        </span>
+        <div>
+          <div className="text-sm font-extrabold">Ask Aura+</div>
+          <div className="text-[11px] text-white/80">Enquiries, quotes, bookings, payments — pooch lo, main batata hoon.</div>
+        </div>
+      </div>
+      <form onSubmit={submit} className="mt-3 flex items-center gap-2 bg-white rounded-2xl px-3 py-1.5">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={2000}
+          placeholder="e.g. Kaunse quotes pending hain?"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[13px] text-navy py-1"
+        />
+        <button type="submit" className="w-8 h-8 rounded-xl bg-primary text-white grid place-items-center shrink-0" aria-label="Ask Aura+">
+          <Icon name="send" size={14} />
+        </button>
+      </form>
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {AURA_CHIPS.map((c) => (
+          <button key={c} onClick={() => onAsk(c)} className="rounded-full bg-white/15 hover:bg-white/25 text-[11px] font-semibold px-3 py-1 transition">
+            {c}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const { user } = useExternalAuth();
   const [selectedEnquiry, setSelectedEnquiry] = useState(null);
   const [quoteEnquiry, setQuoteEnquiry] = useState(null);
@@ -1173,6 +1218,9 @@ export default function DashboardHome({ business = 'Your Brand' }) {
             </Link>
           </div>
         </div>
+
+        {/* Aura+ assistant */}
+        {onAskAura && <AskAuraCard onAsk={onAskAura} />}
 
         {/* 5-STEP MANDATORY ONBOARDING READINESS */}
         {(!is100Percent || !gotItAcknowledged) && (

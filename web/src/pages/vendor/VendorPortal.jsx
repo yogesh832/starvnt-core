@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { NavLink, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { NavLink, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import Icon from '../../components/Icon.jsx';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
@@ -19,10 +19,54 @@ import {
   ProfilePage,
   SettingsPage,
 } from './pages/BusinessPages.jsx';
+import VendorAura from './VendorAura.jsx';
 
 export default function VendorPortal() {
   const { user, logout } = useExternalAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const currentPage = location.pathname.split('/')[2] || 'dashboard';
+  const [auraOpen, setAuraOpen] = useState(false);
+  const [auraPrompt, setAuraPrompt] = useState(null);
+
+  function askAura(text) {
+    if (text) setAuraPrompt({ id: Date.now(), text });
+    setAuraOpen(true);
+  }
+
+  // Profile setup status (same checklist as the dashboard's 5 onboarding steps).
+  const [setup, setSetup] = useState(null);
+  async function loadSetup() {
+    try {
+      const res = await externalApi.call('/vendor/activation-status');
+      if (res?.status?.checklist) setSetup({ percent: res.status.completionPercentage ?? 0, checklist: res.status.checklist });
+    } catch {
+      /* setup card simply stays hidden */
+    }
+  }
+
+  // Re-check when the vendor moves between pages (they may have finished a step there)
+  // and whenever a profile change is announced (Profile page, Aura+ chat).
+  useEffect(() => {
+    loadSetup();
+  }, [location.pathname]);
+  useEffect(() => {
+    const onUpdate = () => loadSetup();
+    window.addEventListener('vendorProfileUpdated', onUpdate);
+    return () => window.removeEventListener('vendorProfileUpdated', onUpdate);
+  }, []);
+
+  // New vendor (setup incomplete): open Aura+ once per sign-in so it can walk them through setup.
+  useEffect(() => {
+    if (!setup || setup.percent >= 100) return;
+    try {
+      if (sessionStorage.getItem('vendor_aura_setup_opened')) return;
+      sessionStorage.setItem('vendor_aura_setup_opened', '1');
+    } catch {
+      return;
+    }
+    setAuraOpen(true);
+  }, [setup]);
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -264,6 +308,16 @@ export default function VendorPortal() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 ml-auto shrink-0 relative" ref={notifRef}>
+            {/* Aura+ assistant */}
+            <button
+              onClick={() => setAuraOpen((o) => !o)}
+              className="hidden lg:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-gradient-to-r from-primary to-[#9b6dff] text-white text-xs font-bold shadow-md shadow-primary/25 hover:opacity-95 transition shrink-0"
+              title="Ask Aura+"
+            >
+              <Icon name="bolt" size={15} />
+              Aura+
+            </button>
+
             <button
               className="hidden sm:grid w-9 h-9 place-items-center rounded-xl hover:bg-lavender text-ink/60 transition shrink-0"
               title="Help & Support"
@@ -444,7 +498,7 @@ export default function VendorPortal() {
         <div className="flex-1 min-h-0 w-full min-w-0">
           <Routes>
             <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardHome business={businessName} />} />
+            <Route path="dashboard" element={<DashboardHome business={businessName} onAskAura={askAura} />} />
             <Route path="enquiries" element={<Enquiries />} />
             <Route path="quotes" element={<Quotes />} />
             <Route path="bookings" element={<Bookings />} />
@@ -535,7 +589,20 @@ export default function VendorPortal() {
             <span>More</span>
           </button>
         </div>
+
+        {/* Mobile Aura+ button, above the bottom navigation */}
+        {!auraOpen && (
+          <button
+            onClick={() => setAuraOpen(true)}
+            className="lg:hidden fixed right-4 bottom-20 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/40 border-4 border-white"
+            aria-label="Ask Aura+"
+          >
+            <Icon name="bolt" size={18} />
+          </button>
+        )}
       </div>
+
+      <VendorAura open={auraOpen} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} setup={setup} />
     </div>
   );
 }

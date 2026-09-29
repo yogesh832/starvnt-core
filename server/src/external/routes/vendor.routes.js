@@ -19,6 +19,7 @@ import { VendorDocument } from '../models/VendorDocument.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { generateVendorInsights } from '../services/auraIntelligence.service.js';
 import { v2 as cloudinary } from 'cloudinary';
+import vendorAuraRoutes from './vendorAura.routes.js';
 
 const router = Router();
 
@@ -51,6 +52,9 @@ async function resolveVendorContext(req, res, next) {
 }
 
 router.use(resolveVendorContext);
+
+// ── Aura+ assistant ────────────────────────────────────────────────────────
+router.use('/aura', vendorAuraRoutes);
 
 // ── Profile & Activation ───────────────────────────────────────────────────
 router.get('/profile', async (req, res) => {
