@@ -428,6 +428,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
                     disabled={sending || loading}
                     className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-primary"
                   />
+                  {/* //this is test */}
                 </label>
                 <button
                   type="button"
