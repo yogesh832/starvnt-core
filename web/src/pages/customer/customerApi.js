@@ -24,6 +24,7 @@ export const customerApi = {
   createQuote: (id) => externalApi.call(`/customer/events/${id}/quotes`, { method: 'POST' }),
   quote: (quoteId) => externalApi.call(`/customer/quotes/${quoteId}`),
   acceptQuote: (quoteId) => externalApi.call(`/customer/quotes/${quoteId}/accept`, { method: 'POST' }),
+  generateVoice: (text) => externalApi.raw('/ai/voice', { method: 'POST', body: { text } }).then(r => r.blob()),
   bookings: (id) => externalApi.call(`/customer/events/${id}/bookings`),
   pay: (id, reservationId) => externalApi.call(`/customer/events/${id}/reservations/${reservationId}/pay`, { method: 'POST' }),
   devSuccessPayment: (id, reservationId) =>

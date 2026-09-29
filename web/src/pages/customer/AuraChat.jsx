@@ -69,7 +69,7 @@ function speakText(text, onDone) {
   if (!canSpeak || !text) return onDone?.();
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = /[ऀ-ॿ]/.test(text) ? 'hi-IN' : /[ঀ-৿]/.test(text) ? 'bn-IN' : 'en-IN';
+  u.lang = /[ऀ-ॿ]/.test(text) ? 'hi-IN' : /[ঀ-]/.test(text) ? 'bn-IN' : 'en-IN';
   const voices = window.speechSynthesis.getVoices();
   const voice = voices.find((v) => v.lang === u.lang) || voices.find((v) => v.lang?.startsWith(u.lang.slice(0, 2)));
   if (voice) u.voice = voice;
