@@ -128,30 +128,38 @@ function speakText(text, onDone) {
  * Only the transcribed text leaves the browser, like a typed message.
  */
 function useVoice({ onInterim, onFinal, onError }) {
-  const [listening, setListening] = useState(false);
+  // mode: 'dictate' = mic fills the box only (like ChatGPT's mic);
+  //       'converse' = voice chat: send when the customer stops talking, reply aloud.
+  const [listening, setListening] = useState(null); // null | 'dictate' | 'converse'
   const [speaking, setSpeaking] = useState(false);
   const [lang, setLang] = useState('en-IN');
   const recRef = useRef(null);
   const Speech = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
+  /** Stop listening (keeping what was heard) and stop any reply being spoken. */
   function stop() {
-    recRef.current?.abort();
-    recRef.current = null;
-    setListening(false);
+    recRef.current?.stop();
     if (canSpeak) window.speechSynthesis.cancel();
     setSpeaking(false);
   }
 
   // Stop listening/speaking when the chat unmounts.
-  useEffect(() => () => stop(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(
+    () => () => {
+      recRef.current?.abort();
+      if (canSpeak) window.speechSynthesis.cancel();
+    },
+    []
+  );
 
-  function toggle() {
+  function start(mode, base = '') {
     if (listening || speaking) return stop();
     if (!Speech) return;
     const rec = new Speech();
     rec.lang = lang;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
+    const prefix = base.trim() ? `${base.trim()} ` : '';
     let finalText = '';
     rec.onresult = (e) => {
       let interim = '';
@@ -159,19 +167,19 @@ function useVoice({ onInterim, onFinal, onError }) {
         if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
         else interim += e.results[i][0].transcript;
       }
-      onInterim((finalText + interim).trim());
+      onInterim(`${prefix}${(finalText + interim).trim()}`);
     };
     rec.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') onError('Microphone permission denied. Allow the mic in your browser to talk to Aura+.');
       else if (e.error !== 'aborted' && e.error !== 'no-speech') onError('Could not hear you. Please try again.');
     };
     rec.onend = () => {
-      setListening(false);
+      setListening(null);
       recRef.current = null;
-      if (finalText.trim()) onFinal(finalText.trim());
+      if (mode === 'converse' && finalText.trim()) onFinal(`${prefix}${finalText.trim()}`);
     };
     recRef.current = rec;
-    setListening(true);
+    setListening(mode);
     rec.start();
   }
 
@@ -181,7 +189,23 @@ function useVoice({ onInterim, onFinal, onError }) {
     speakText(text, () => setSpeaking(false));
   }
 
-  return { supported: Boolean(Speech), listening, speaking, lang, setLang, toggle, speak };
+  return { supported: Boolean(Speech), listening, speaking, lang, setLang, start, stop, speak };
+}
+
+/** ChatGPT-style voice-mode glyph: five bars; they bounce while Aura+ listens or talks. */
+function WaveIcon({ active = false }) {
+  const bars = [6, 12, 16, 12, 6];
+  return (
+    <span className="flex items-center gap-[2px] h-4" aria-hidden="true">
+      {bars.map((h, i) => (
+        <span
+          key={i}
+          className={`w-[2.5px] rounded-full bg-current ${active ? 'animate-pulse' : ''}`}
+          style={{ height: h, animationDelay: active ? `${i * 0.12}s` : undefined }}
+        />
+      ))}
+    </span>
+  );
 }
 
 export default function AuraChat({ firstName, eventId: embeddedEventId = null, embedded = false, onEventChanged }) {
@@ -550,49 +574,83 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         // abcd
         className="p-3 sm:p-4 max-w-3xl w-full mx-auto"
       >
-        <div className="flex items-center gap-2 bg-white rounded-2xl shadow-lg shadow-primary/5 px-4 py-2.5 border border-gray-100">
+        {/* ChatGPT-style composer: + · text · language · mic (dictate) · voice mode / send */}
+        <div className="flex items-center gap-1.5 bg-white rounded-full shadow-lg shadow-primary/5 pl-2 pr-1.5 py-1.5 border border-gray-200/80 focus-within:border-primary/40 transition">
+          <button
+            type="button"
+            onClick={newChat}
+            className="w-9 h-9 grid place-items-center rounded-full text-ink/70 hover:bg-lavender shrink-0 transition"
+            title="New chat"
+            aria-label="New chat"
+          >
+            <Icon name="plus" size={18} />
+          </button>
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={sending || loading}
-            placeholder={voice.listening ? 'Listening… speak now' : 'Type a message or describe your event…'}
-            className="flex-1 outline-none text-xs sm:text-sm placeholder:text-muted/60 bg-transparent"
+            placeholder={
+              voice.listening === 'converse' ? 'Listening… speak now' : voice.listening === 'dictate' ? 'Listening… tap the mic to stop' : 'Ask Aura+ anything'
+            }
+            className="flex-1 min-w-0 outline-none text-sm placeholder:text-muted/70 bg-transparent px-1"
           />
           {voice.supported && (
             <>
               <button
                 type="button"
                 onClick={() => voice.setLang(voice.lang === 'en-IN' ? 'hi-IN' : 'en-IN')}
-                className="text-[10px] font-bold text-muted hover:text-primary px-1"
-                title="Voice language"
+                className="hidden sm:inline-flex items-center gap-1 h-9 rounded-full px-3 text-xs font-semibold text-ink/70 hover:bg-lavender shrink-0 transition"
+                title="Voice language — English / Hindi"
               >
-                {voice.lang === 'en-IN' ? 'EN' : 'हि'}
+                <span className="w-4 h-4 rounded-full border border-current grid place-items-center text-[8px] font-bold">{voice.lang === 'en-IN' ? 'A' : 'अ'}</span>
+                {voice.lang === 'en-IN' ? 'English' : 'हिंदी'}
               </button>
               <button
                 type="button"
-                onClick={voice.toggle}
-                disabled={(sending || loading) && !voice.speaking}
-                className={`relative w-8 h-8 rounded-full grid place-items-center shrink-0 transition disabled:opacity-50 ${
-                  voice.listening ? 'bg-red-500 text-white' : voice.speaking ? 'bg-primary-soft text-primary' : 'text-muted hover:text-primary hover:bg-lavender'
+                onClick={() => (voice.listening === 'dictate' ? voice.stop() : voice.start('dictate', input))}
+                disabled={sending || loading || voice.listening === 'converse' || voice.speaking}
+                className={`relative w-9 h-9 rounded-full grid place-items-center shrink-0 transition disabled:opacity-40 ${
+                  voice.listening === 'dictate' ? 'bg-red-50 text-red-500' : 'text-ink/70 hover:bg-lavender'
                 }`}
-                title={voice.listening ? 'Stop listening' : voice.speaking ? 'Stop speaking' : 'Talk to Aura+ (voice)'}
-                aria-label={voice.listening ? 'Stop listening' : voice.speaking ? 'Stop speaking' : 'Talk to Aura+'}
+                title={voice.listening === 'dictate' ? 'Stop dictation' : 'Dictate (fills the box)'}
+                aria-label={voice.listening === 'dictate' ? 'Stop dictation' : 'Dictate'}
               >
-                {voice.listening && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
-                {voice.speaking ? <span className="w-2.5 h-2.5 rounded-[3px] bg-primary" /> : <Icon name="mic" size={16} className="relative" />}
+                {voice.listening === 'dictate' && <span className="absolute inset-1 rounded-full bg-red-400/30 animate-ping" />}
+                <Icon name="mic" size={17} className="relative" />
               </button>
             </>
           )}
-          <button
-            type="submit"
-            disabled={sending || loading || !input.trim()}
-            className="w-9 h-9 grid place-items-center rounded-full bg-primary text-white hover:bg-primary-dark transition shadow-sm cursor-pointer disabled:opacity-50"
-            title="Send"
-            aria-label="Send message"
-          >
-            <Icon name="send" size={14} className="-translate-y-px translate-x-px" />
-          </button>
+          {/* abcd */}
+          {(input.trim() && !voice.listening) || !voice.supported ? (
+            <button
+              type="submit"
+              disabled={sending || loading || !input.trim()}
+              className="w-9 h-9 grid place-items-center rounded-full bg-primary text-white hover:bg-primary-dark transition shadow-sm shrink-0 disabled:opacity-50"
+              title="Send"
+              aria-label="Send message"
+            >
+              <Icon name="send" size={14} className="-translate-y-px translate-x-px" />
+            </button>
+          ) : (
+            voice.supported && (
+              <button
+                type="button"
+                onClick={() => (voice.listening === 'converse' || voice.speaking ? voice.stop() : voice.start('converse'))}
+                disabled={(sending || loading || voice.listening === 'dictate') && !voice.speaking}
+                className={`relative w-9 h-9 grid place-items-center rounded-full text-white shadow-sm shrink-0 transition disabled:opacity-50 ${
+                  voice.listening === 'converse' ? 'bg-red-500' : 'bg-primary hover:bg-primary-dark'
+                }`}
+                title={voice.listening === 'converse' ? 'Done talking' : voice.speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={voice.listening === 'converse' ? 'Done talking' : voice.speaking ? 'Stop speaking' : 'Voice mode'}
+              >
+                {voice.listening === 'converse' && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
+                <span className="relative">
+                  {voice.speaking ? <span className="block w-3 h-3 rounded-[3px] bg-white" /> : <WaveIcon active={voice.listening === 'converse'} />}
+                </span>
+              </button>
+            )
+          )}
         </div>
         <p className="text-[10px] text-muted text-center mt-1.5">You decide — Aura+ never books or pays without you.</p>
       </form>
