@@ -162,6 +162,21 @@ function speakText(text, onDone) {
   window.speechSynthesis.speak(u);
 }
 
+/** ChatGPT-style voice-mode glyph: five bars; they pulse while Aura+ listens. */
+function WaveIcon({ active = false }) {
+  return (
+    <span className="flex items-center gap-[2px] h-4" aria-hidden="true">
+      {[6, 11, 15, 11, 6].map((h, i) => (
+        <span
+          key={i}
+          className={`w-[2.5px] rounded-full bg-current ${active ? 'animate-pulse' : ''}`}
+          style={{ height: h, animationDelay: active ? `${i * 0.12}s` : undefined }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function Bubble({ m, onAction }) {
   const mine = m.role === 'user';
   return (
@@ -231,7 +246,11 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     let cancelled = false;
     externalApi
       .call(`/vendor/aura/sessions/${encodeURIComponent(sessionId)}`)
-      .then((res) => !cancelled && setMessages(res.messages || []))
+      .then((res) => {
+        if (cancelled) return;
+        setMessages(res.messages || []);
+        setPending(res.pending || null);
+      })
       .catch(() => {
         /* a fresh session simply starts empty */
       })
@@ -245,34 +264,44 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending, open, mode]);
 
-  // ── Voice ────────────────────────────────────────────────────────────────
-  const [listening, setListening] = useState(false);
+  // A setup action (service, team & gear, location, coverage) waiting for the vendor's OK.
+  const [pending, setPending] = useState(null);
+
+  // ── Voice (ChatGPT-style) ────────────────────────────────────────────────
+  // 'dictate' = mic fills the box only; 'converse' = voice mode: send when the
+  // vendor stops talking and read the reply aloud.
+  const [listening, setListening] = useState(null); // null | 'dictate' | 'converse'
   const [speaking, setSpeaking] = useState(false);
+  const [voiceLang, setVoiceLang] = useState('en-IN');
   const recRef = useRef(null);
 
+  /** Stop listening (keeping what was heard) and stop any reply being spoken. */
   function stopVoice() {
-    recRef.current?.abort();
-    recRef.current = null;
-    setListening(false);
+    recRef.current?.stop();
     if (canSpeak) window.speechSynthesis.cancel();
     setSpeaking(false);
   }
 
   // Stop listening/speaking when the panel closes or unmounts.
   useEffect(() => {
-    if (!open) stopVoice();
-    return () => stopVoice();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const abort = () => {
+      recRef.current?.abort();
+      if (canSpeak) window.speechSynthesis.cancel();
+      setSpeaking(false);
+    };
+    if (!open) abort();
+    return abort;
   }, [open]);
 
-  function toggleVoice() {
+  function startVoice(voiceMode) {
     if (listening || speaking) return stopVoice();
     if (!Recognition) return setError('Voice input is not supported in this browser. Try Chrome or Edge.');
     setError('');
     const rec = new Recognition();
-    rec.lang = 'en-IN'; // understands English and Hinglish
+    rec.lang = voiceLang;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
+    const prefix = voiceMode === 'dictate' && input.trim() ? `${input.trim()} ` : '';
     let finalText = '';
     rec.onresult = (e) => {
       let interim = '';
@@ -280,23 +309,23 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
         else interim += e.results[i][0].transcript;
       }
-      setInput((finalText + interim).trim());
+      setInput(`${prefix}${(finalText + interim).trim()}`);
     };
     rec.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setError('Microphone permission denied. Allow the mic in your browser to talk to Aura+.');
       else if (e.error !== 'aborted' && e.error !== 'no-speech') setError('Could not hear you. Please try again.');
     };
     rec.onend = () => {
-      setListening(false);
+      setListening(null);
       recRef.current = null;
-      if (finalText.trim()) send(finalText, { spoken: true });
+      if (voiceMode === 'converse' && finalText.trim()) send(finalText, { spoken: true });
     };
     recRef.current = rec;
-    setListening(true);
+    setListening(voiceMode);
     rec.start();
   }
 
-  async function send(text, { spoken = false } = {}) {
+  async function send(text, { spoken = false, confirm } = {}) {
     const message = String(text || '').trim();
     if (!message || sending) return;
     setError('');
@@ -305,9 +334,13 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     setMessages((m) => [...m, optimistic]);
     setSending(true);
     try {
-      const res = await externalApi.call('/vendor/aura/chat', { method: 'POST', body: { sessionId, message, page } });
+      const res = await externalApi.call('/vendor/aura/chat', {
+        method: 'POST',
+        body: { sessionId, message, page, ...(typeof confirm === 'boolean' ? { confirm } : {}) },
+      });
       setMessages((m) => [...m, { role: 'model', content: res.reply, actions: res.actions || [] }]);
-      // Aura+ saved brand details → refresh the portal header and the setup checklist.
+      setPending(res.pending || null);
+      // Aura+ saved something for setup → refresh the portal header and the setup checklist.
       if (res.profileUpdated) window.dispatchEvent(new Event('vendorProfileUpdated'));
       // Asked by voice → answer by voice too.
       if (spoken && canSpeak) {
@@ -336,6 +369,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     writeSession(userId, sid);
     setSessionId(sid);
     setMessages([]);
+    setPending(null);
     setError('');
     setLoaded(true);
   }
@@ -448,8 +482,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
             <div className="text-center pt-4">
               <div className="text-sm font-extrabold text-navy">Welcome! Let's set up your business.</div>
               <p className="text-xs text-muted mt-1 max-w-[290px] mx-auto">
-                Customers can find and book you once all 5 steps above are done. I can fill your brand details right here in chat and guide
-                you through the rest — or tap “Manually” on any step to do it yourself.
+                Customers can find and book you once all 5 steps above are done. Just talk or type — I'll set up your brand, services
+                with prices, team &amp; gear, location and coverage (you confirm before I save). Or tap “Manually” on any step.
               </p>
               <button
                 onClick={() => setupWithAura(START_SETUP)}
@@ -469,6 +503,21 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
           {messages.map((m, i) => (
             <Bubble key={i} m={m} onAction={goTo} />
           ))}
+          {pending && !sending && (
+            <div className="ml-9 rounded-2xl border border-primary/30 bg-primary-soft/40 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-primary">Save this?</div>
+              <div className="text-[12px] font-semibold text-navy mt-0.5">{pending.summary}</div>
+              <div className="flex gap-2 mt-2.5">
+                <button onClick={() => send('Yes, save it', { confirm: true })} className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-1.5">
+                  ✓ Save
+                </button>
+                <button onClick={() => send('Cancel', { confirm: false })} className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-1.5 hover:bg-lavender">
+                  Cancel
+                </button>
+              </div>
+              <p className="text-[10px] text-muted mt-1.5">Or just say “yes” / “haan” — or tell me what to change.</p>
+            </div>
+          )}
           {sending && (
             <div className="flex gap-2 items-center text-[11px] text-muted">
               <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center">
@@ -503,53 +552,78 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               </button>
             ))}
           </div>
+          {/* ChatGPT-style composer: + · text · language · mic (dictate) · voice mode / send */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               send(input);
             }}
-            className="flex items-end gap-2 rounded-2xl border border-gray-200 bg-gray-50 focus-within:bg-white focus-within:border-primary/40 px-3 py-2"
+            className="flex items-center gap-1 rounded-full border border-gray-200 bg-white shadow-sm focus-within:border-primary/40 pl-1.5 pr-1.5 py-1.5 transition"
           >
-            <textarea
-              rows={1}
+            <button type="button" onClick={newChat} className="w-8 h-8 grid place-items-center rounded-full text-ink/70 hover:bg-lavender shrink-0" title="New chat" aria-label="New chat">
+              <Icon name="plus" size={17} />
+            </button>
+            <input
               value={input}
               maxLength={2000}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  send(input);
-                }
-              }}
-              placeholder={listening ? 'Listening… speak now' : 'Ask Aura+ about your business…'}
-              className="flex-1 resize-none bg-transparent outline-none text-[13px] max-h-28 py-1"
+              placeholder={listening === 'converse' ? 'Listening… speak now' : listening === 'dictate' ? 'Listening… tap the mic to stop' : 'Ask Aura+ anything'}
+              className="flex-1 min-w-0 bg-transparent outline-none text-[13px] px-1"
             />
             {Recognition && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}
+                  className="h-8 rounded-full px-2 text-[11px] font-semibold text-ink/70 hover:bg-lavender shrink-0 inline-flex items-center gap-1"
+                  title="Voice language — English / Hindi"
+                >
+                  <span className="w-3.5 h-3.5 rounded-full border border-current grid place-items-center text-[7px] font-bold">{voiceLang === 'en-IN' ? 'A' : 'अ'}</span>
+                  {voiceLang === 'en-IN' ? 'EN' : 'हि'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => (listening === 'dictate' ? stopVoice() : startVoice('dictate'))}
+                  disabled={sending || listening === 'converse' || speaking}
+                  className={`relative w-8 h-8 rounded-full grid place-items-center shrink-0 transition disabled:opacity-40 ${
+                    listening === 'dictate' ? 'bg-red-50 text-red-500' : 'text-ink/70 hover:bg-lavender'
+                  }`}
+                  title={listening === 'dictate' ? 'Stop dictation' : 'Dictate (fills the box)'}
+                  aria-label={listening === 'dictate' ? 'Stop dictation' : 'Dictate'}
+                >
+                  {listening === 'dictate' && <span className="absolute inset-1 rounded-full bg-red-400/30 animate-ping" />}
+                  <Icon name="mic" size={16} className="relative" />
+                </button>
+              </>
+            )}
+            {(input.trim() && !listening) || !Recognition ? (
+              <button
+                type="submit"
+                disabled={sending || !input.trim()}
+                className="w-8 h-8 rounded-full bg-primary text-white grid place-items-center shrink-0 disabled:opacity-50"
+                aria-label="Send"
+                title="Send"
+              >
+                <Icon name="send" size={14} />
+              </button>
+            ) : (
               <button
                 type="button"
-                onClick={toggleVoice}
-                disabled={sending && !speaking}
-                className={`relative w-8 h-8 rounded-xl grid place-items-center shrink-0 transition disabled:opacity-50 ${
-                  listening ? 'bg-red-500 text-white' : speaking ? 'bg-primary-soft text-primary' : 'bg-lavender text-primary hover:bg-primary-soft'
+                onClick={() => (listening === 'converse' || speaking ? stopVoice() : startVoice('converse'))}
+                disabled={(sending || listening === 'dictate') && !speaking}
+                className={`relative w-8 h-8 rounded-full text-white grid place-items-center shrink-0 transition disabled:opacity-50 ${
+                  listening === 'converse' ? 'bg-red-500' : 'bg-primary hover:bg-primary-dark'
                 }`}
-                aria-label={listening ? 'Stop listening' : speaking ? 'Stop speaking' : 'Talk to Aura+'}
-                title={listening ? 'Stop listening' : speaking ? 'Stop speaking' : 'Talk to Aura+ (voice)'}
+                title={listening === 'converse' ? 'Done talking' : speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={listening === 'converse' ? 'Done talking' : speaking ? 'Stop speaking' : 'Voice mode'}
               >
-                {listening && <span className="absolute inset-0 rounded-xl bg-red-500/40 animate-ping" />}
-                {speaking ? <span className="w-2.5 h-2.5 rounded-[3px] bg-primary" /> : <Icon name="mic" size={15} className="relative" />}
+                {listening === 'converse' && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
+                <span className="relative">{speaking ? <span className="block w-2.5 h-2.5 rounded-[3px] bg-white" /> : <WaveIcon active={listening === 'converse'} />}</span>
               </button>
             )}
-            <button
-              type="submit"
-              disabled={sending || !input.trim()}
-              className="w-8 h-8 rounded-xl bg-primary text-white grid place-items-center shrink-0 disabled:opacity-50"
-              aria-label="Send"
-            >
-              <Icon name="send" size={15} />
-            </button>
           </form>
           <p className="text-[10px] text-muted/80 px-1 flex items-center justify-between gap-2">
-            <span>Aura+ can save your brand details; quotes, bookings and payments stay in your hands.</span>
+            <span>Aura+ sets up your profile after you confirm; quotes, bookings and payments stay in your hands.</span>
             <button onClick={() => setMode('manual')} className="shrink-0 font-bold text-primary hover:underline">
               Prefer to do it yourself? Ask manually →
             </button>

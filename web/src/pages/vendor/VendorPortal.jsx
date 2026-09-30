@@ -107,6 +107,7 @@ export default function VendorPortal() {
     messagesCount: 0,
     unreadNotificationsCount: 0,
   });
+  // abcd
   const [dismissedBadges, setDismissedBadges] = useState({});
   const [notifications, setNotifications] = useState([]);
 
