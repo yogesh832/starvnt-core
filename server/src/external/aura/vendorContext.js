@@ -30,14 +30,15 @@ export const PAGES = [
 
 /**
  * Profile setup, in the same order and with the same checks as the dashboard's
- * 5-step onboarding (evaluateVendorActivation().checklist). Only the brand step
- * can be filled from chat; the rest need forms/uploads on their page.
+ * 5-step onboarding (evaluateVendorActivation().checklist). Aura+ can fill the
+ * first four from chat/voice (brand directly; the others after the vendor
+ * confirms — see setupActions.js). The portfolio needs an upload on its page.
  */
 export const SETUP_STEPS = [
   { key: 'profile', label: 'Brand name, category & city', short: 'Brand details', page: 'profile', to: '/vendor/profile', done: (c) => c.profile, auraCanFill: true },
-  { key: 'services', label: 'At least one active service with a price', short: 'Add a service', page: 'services', to: '/vendor/services', done: (c) => c.services },
-  { key: 'capabilities', label: 'Team & equipment (capability)', short: 'Add team & gear', page: 'services', to: '/vendor/services?action=gear', done: (c) => c.capabilities },
-  { key: 'coverage', label: 'Operating location & coverage area', short: 'Set coverage area', page: 'services', to: '/vendor/services?action=coverage', done: (c) => c.locations && c.coverage },
+  { key: 'services', label: 'At least one active service with a price', short: 'Add a service', page: 'services', to: '/vendor/services', done: (c) => c.services, auraCanFill: true },
+  { key: 'capabilities', label: 'Team & equipment (capability)', short: 'Add team & gear', page: 'services', to: '/vendor/services?action=gear', done: (c) => c.capabilities, auraCanFill: true },
+  { key: 'coverage', label: 'Operating location & coverage area', short: 'Set coverage area', page: 'services', to: '/vendor/services?action=coverage', done: (c) => c.locations && c.coverage, auraCanFill: true },
   { key: 'portfolio', label: 'At least one portfolio project', short: 'Add portfolio', page: 'portfolio', to: '/vendor/portfolio', done: (c) => c.portfolio },
 ];
 
@@ -105,7 +106,9 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       return {
         percent: s.percent,
         complete: s.complete,
-        steps: s.steps.map(({ step, done, page, auraCanFill }) => ({ step, done, page, auraCanFill })),
+        steps: s.steps.map(({ key, step, done, page, auraCanFill }) => ({ kind: key, step, done, page, auraCanFill })),
+        hasOperatingLocation: Boolean(activation.checklist.locations),
+        hasCoverageArea: Boolean(activation.checklist.coverage),
         brand: {
           businessName: isAutoBusinessName(vendor.businessName) ? null : vendor.businessName,
           category: vendor.category || null,

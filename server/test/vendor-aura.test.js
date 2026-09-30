@@ -91,3 +91,36 @@ test('after a save, re-asked questions are dropped from the model reply', async 
   assert.equal(withoutQuestions('Which city?'), '');
   assert.equal(withoutQuestions('Nice name. Photography is popular here.'), 'Nice name. Photography is popular here.');
 });
+
+// ── Setup actions (service / team & gear / location / coverage) ─────────────
+test('setup actions use only numbers the vendor said, and need a confirmation', async () => {
+  const { validateAction, describeAction, readConfirmation, amountsIn } = await import('../src/external/aura/setupActions.js');
+  const vendor = { category: 'Photography', businessName: 'Shutter Stories', location: 'Kolkata' };
+  const services = [{ _id: 's1', name: 'Wedding photography', status: 'ACTIVE' }];
+
+  assert.deepEqual(amountsIn('45,000 or 45k or 1.5 lakh or 20 hazar'), [45000, 45000, 150000, 20000]);
+
+  // Model dropped the price → read from what the vendor said; FIXED_PER_EVENT → FIXED.
+  const svc = validateAction({ kind: 'service', service: { name: 'Wedding photography', pricingType: 'FIXED_PER_EVENT' } }, { said: 'starting price 45000 per event', vendor, services: [] });
+  assert.equal(svc.action.service.basePrice, 45000);
+  assert.equal(svc.action.service.pricingType, 'FIXED');
+  assert.match(describeAction(svc.action), /₹45,000 per event/);
+  // An invented price is rejected.
+  assert.equal(validateAction({ kind: 'service', service: { name: 'X', basePrice: 99000 } }, { said: 'price 45000', vendor, services: [] }).error, 'the base price');
+
+  const cap = validateAction({ kind: 'capability', capability: { equipment: ['Sony A7IV'] } }, { said: '4 log hain team mein', vendor, services });
+  assert.equal(cap.action.capability.teamSize, 4);
+  assert.equal(validateAction({ kind: 'capability', capability: { teamSize: 4 } }, { said: '4 log', vendor, services: [] }).error, 'a service first (add one before team & gear)');
+
+  const cov = validateAction({ kind: 'coverage', coverage: {} }, { said: '30 km tak jaate hain', vendor, services });
+  assert.equal(cov.action.coverage.radiusKm, 30);
+  assert.equal(cov.action.coverage.city, 'Kolkata');
+
+  const loc = validateAction({ kind: 'location', location: { locality: 'Salt Lake', city: 'Kolkata' } }, { said: 'Studio Salt Lake me hai, Kolkata', vendor, services });
+  assert.equal(loc.action.location.address, 'Salt Lake');
+  assert.equal(loc.action.location.type, 'STUDIO');
+
+  for (const yes of ['yes', 'haan', 'haan save karo', 'yes please', 'ok', 'हाँ', 'ঠিক আছে']) assert.equal(readConfirmation(yes), true, yes);
+  for (const no of ['no', 'nahi', 'cancel', 'नहीं']) assert.equal(readConfirmation(no), false, no);
+  for (const other of ['make it 30000', 'haan but price 30000 karo', 'what is coverage?']) assert.equal(readConfirmation(other), null, other);
+});
