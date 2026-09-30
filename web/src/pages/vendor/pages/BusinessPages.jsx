@@ -11,10 +11,87 @@ function SkeletonLine({ className = '' }) {
   return <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />;
 }
 
+function activationStepList(activation) {
+  const checklist = activation?.checklist || {};
+  return [
+    { key: 'profile', label: 'Business profile', detail: 'Brand name, one primary category, and base city', done: Boolean(checklist.profile), href: '/vendor/profile?tab=profile', action: 'Complete profile' },
+    { key: 'services', label: 'Active service with price', detail: 'At least one ACTIVE service package with a base price', done: Boolean(checklist.services), href: '/vendor/services', action: 'Add service' },
+    { key: 'capabilities', label: 'Gear and capability', detail: 'Crew size, formats, styles, and equipment for the service', done: Boolean(checklist.capabilities), href: '/vendor/services?action=gear', action: 'Add gear' },
+    { key: 'coverage', label: 'Coverage and travel', detail: 'Operating hub plus service coverage radius/localities', done: Boolean(checklist.locations && checklist.coverage), href: '/vendor/services?action=coverage', action: 'Set coverage' },
+    { key: 'portfolio', label: 'Portfolio project', detail: 'At least one published photo/video showcase', done: Boolean(checklist.portfolio), href: '/vendor/portfolio', action: 'Add portfolio' },
+    { key: 'verified', label: 'KYC verification', detail: 'Documents uploaded and verified by STARVNT', done: Boolean(checklist.verified), href: '/vendor/profile?tab=documents', action: 'Upload documents' },
+  ];
+}
+
+function VendorActivationCard({ activation, compact = false }) {
+  if (!activation) return null;
+  const steps = activationStepList(activation);
+  const next = steps.find((step) => !step.done);
+  const complete = steps.every((step) => step.done);
+
+  return (
+    <div className={`rounded-2xl border ${complete ? 'border-emerald-200 bg-emerald-50/80' : 'border-amber-200 bg-amber-50/70'} p-4 sm:p-5 shadow-xs`}>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
+          <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${complete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+            <Icon name={complete ? 'check' : 'lock'} size={12} />
+            {complete ? 'Client matching active' : 'Client matching locked'}
+          </div>
+          <h2 className="mt-2 text-base font-extrabold text-navy">
+            {complete ? 'Your vendor profile is live for customers' : 'Finish these steps to appear in customer search'}
+          </h2>
+          <p className="mt-1 text-xs text-muted leading-relaxed">
+            There is no manual vendor toggle. STARVNT turns commercial matching on automatically after service, coverage, portfolio, and verification are complete.
+          </p>
+        </div>
+        <div className="shrink-0 text-left sm:text-right">
+          <div className="text-2xl font-extrabold text-navy">{activation.completionPercentage ?? 0}%</div>
+          <div className="text-[11px] font-bold text-muted">readiness</div>
+        </div>
+      </div>
+
+      <div className={`mt-4 grid ${compact ? 'grid-cols-1' : 'sm:grid-cols-2 xl:grid-cols-3'} gap-2.5`}>
+        {steps.map((step) => (
+          <a
+            key={step.key}
+            href={step.href}
+            className={`rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-sm ${step.done ? 'border-emerald-200 bg-white text-emerald-900' : 'border-amber-200 bg-white text-navy'}`}
+          >
+            <div className="flex items-start gap-2">
+              <span className={`mt-0.5 h-5 w-5 rounded-full grid place-items-center shrink-0 ${step.done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                <Icon name={step.done ? 'check' : 'chevronRight'} size={11} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-extrabold">{step.label}</span>
+                <span className="block text-[11px] text-muted leading-snug mt-0.5">{step.done ? 'Done' : step.detail}</span>
+                {!step.done && <span className="block text-[11px] font-bold text-primary mt-1">{step.action}</span>}
+              </span>
+            </div>
+          </a>
+        ))}
+      </div>
+
+      {!complete && next && (
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-white border border-amber-100 p-3">
+          <div className="text-xs">
+            <div className="font-extrabold text-navy">Next step: {next.label}</div>
+            <div className="text-muted mt-0.5">{next.detail}</div>
+          </div>
+          <a href={next.href} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark">
+            {next.action}
+            <Icon name="chevronRight" size={12} />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Services ─────────────────────────────────────────────────────────────── */
 export function ServicesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [services, setServices] = useState([]);
+  const [activation, setActivation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [deletingServiceId, setDeletingServiceId] = useState(null);
@@ -54,9 +131,15 @@ export function ServicesPage() {
   const loadServices = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await externalApi.call('/vendor/services');
+      const [res, actRes] = await Promise.all([
+        externalApi.call('/vendor/services'),
+        externalApi.call('/vendor/activation-status').catch(() => ({ ok: false })),
+      ]);
       if (res.ok && res.services) {
         setServices(res.services);
+      }
+      if (actRes.ok && actRes.status) {
+        setActivation(actRes.status);
       }
     } catch (err) {
       console.warn('[ServicesPage] Error loading services:', err.message);
@@ -335,6 +418,8 @@ export function ServicesPage() {
         </button>
       }
     >
+      <VendorActivationCard activation={activation} compact />
+
       {gearFeedback && (
         <div className="mb-4 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-2">
           <Icon name="check" size={15} />
@@ -550,8 +635,22 @@ export function ServicesPage() {
           );
         })}
         {services.length === 0 && !loading && (
-          <div className="sm:col-span-2 text-center py-10 text-xs text-muted border-2 border-dashed border-gray-200 rounded-3xl bg-lavender/20">
-            No services configured yet. Click "+ Add Service" to define your offerings and gear.
+          <div className="sm:col-span-2 text-center py-10 px-4 text-xs text-muted border-2 border-dashed border-amber-200 rounded-3xl bg-amber-50/60">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 grid place-items-center mx-auto mb-3">
+              <Icon name="services" size={22} />
+            </div>
+            <h3 className="text-sm font-extrabold text-navy">No active services yet</h3>
+            <p className="max-w-lg mx-auto mt-1 leading-relaxed">
+              This is why the vendor is not visible in customer options. Add one service, choose its price, then add gear and coverage.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-primary-dark"
+            >
+              <Icon name="plus" size={14} />
+              Add first service
+            </button>
           </div>
         )}
       </div>
@@ -594,7 +693,7 @@ export function ServicesPage() {
                   <option value="Decor">Decor & Styling</option>
                   <option value="Catering">Catering</option>
                   <option value="Makeup">Makeup & Styling</option>
-                  <option value="Music">DJ & Music</option>
+                  <option value="Entertainment">DJ & Music / Entertainment</option>
                   <option value="Venue">Venue</option>
                   <option value="Planning">Event Planning</option>
                 </select>
@@ -1835,7 +1934,7 @@ export function DocumentsManager({ isTab = false }) {
         <div>
           <h2 className="font-extrabold text-base text-navy">KYC & Business Documents</h2>
           <p className="text-xs text-muted mt-0.5">
-            Verified documents authenticate your brand and unlock high-trust placement in client search results.
+            GSTIN is checked automatically. Matching legal/trade names are verified instantly; mismatches go to admin review.
           </p>
         </div>
         <button
@@ -1879,6 +1978,32 @@ export function DocumentsManager({ isTab = false }) {
                     </div>
                     {doc.notes && (
                       <p className="text-[11px] text-muted italic mt-1">{doc.notes}</p>
+                    )}
+                    {doc.verificationSource === 'GSTIN_API' && (
+                      <div className={`mt-2 rounded-xl border p-3 text-[11px] ${
+                        doc.status === 'VERIFIED'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                          : 'border-amber-200 bg-amber-50 text-amber-950'
+                      }`}>
+                        <div className="flex items-center gap-1.5 font-extrabold">
+                          <Icon name={doc.status === 'VERIFIED' ? 'shieldCheck' : 'help'} size={13} />
+                          <span>{doc.status === 'VERIFIED' ? 'GSTIN auto-verified' : 'GSTIN needs admin review'}</span>
+                          {doc.verificationResult?.confidence && (
+                            <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] uppercase">
+                              {doc.verificationResult.confidence}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 grid sm:grid-cols-2 gap-x-3 gap-y-1">
+                          <span>Legal: <strong>{doc.verificationResult?.legalName || 'Not provided'}</strong></span>
+                          <span>Trade: <strong>{doc.verificationResult?.tradeName || 'Not provided'}</strong></span>
+                          <span>Status: <strong>{doc.verificationResult?.gstinStatus || 'Unknown'}</strong></span>
+                          <span>Type: <strong>{doc.verificationResult?.taxpayerType || 'Unknown'}</strong></span>
+                        </div>
+                        {doc.verificationResult?.error && (
+                          <div className="mt-1 text-rose-600 font-bold">Provider: {doc.verificationResult.error}</div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1945,7 +2070,7 @@ export function DocumentsManager({ isTab = false }) {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h3 className="font-extrabold text-base text-navy">Upload KYC / Business Document</h3>
-                <p className="text-xs text-muted mt-0.5">Secure partner onboarding & Core platform verification</p>
+                <p className="text-xs text-muted mt-0.5">Enter GSTIN to auto-check legal name and tax status.</p>
               </div>
               <button
                 type="button"
@@ -2012,6 +2137,11 @@ export function DocumentsManager({ isTab = false }) {
                   placeholder="e.g. 27AABCU9603R1ZM or PAN number"
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20 font-mono"
                 />
+                {docForm.type === 'GST' && (
+                  <span className="text-[10px] text-muted mt-1 block">
+                    If GST legal/trade name matches your business profile, STARVNT verifies KYC automatically. If not, it goes to admin review.
+                  </span>
+                )}
               </div>
 
               <div>
@@ -2477,10 +2607,14 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
   async function handleSaveLocation(e) {
     e.preventDefault();
-    if (!locationForm.address || !locationForm.city) {
-      alert('Please select or enter an address and city for this location.');
+    const city = (locationForm.city && locationForm.city.trim()) || (profile.location ? profile.location.split(',')[0].trim() : '');
+    if (!city) {
+      alert('Please enter a city for this location.');
       return;
     }
+
+    const locality = (locationForm.locality && locationForm.locality.trim()) || '';
+    const resolvedAddress = (locationForm.address && locationForm.address.trim()) || [locality, city].filter(Boolean).join(', ') || city;
 
     try {
       setSavingLocation(true);
@@ -2491,7 +2625,12 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
       const res = await externalApi.call(url, {
         method,
-        body: locationForm,
+        body: {
+          ...locationForm,
+          address: resolvedAddress,
+          city,
+          locality,
+        },
       });
 
       if (res.ok) {
@@ -2631,6 +2770,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
         {/* Tab Content Area */}
         <div className="min-w-0 space-y-5">
+          <VendorActivationCard activation={activation} />
+
           {/* TAB 1: Business Profile */}
           {activeTab === 'profile' && (
             <div className="space-y-5">
@@ -2994,11 +3135,10 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Full Street Address</label>
+                <label className="block text-muted font-semibold mb-1">Full Street Address <span className="text-[11px] font-normal text-muted/70">(Optional, defaults to Locality/City)</span></label>
                 <input
                   type="text"
-                  required
-                  placeholder="Street address, building, road..."
+                  placeholder="e.g. 12/A Park Street, Studio Suite 4B..."
                   value={locationForm.address}
                   onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })}
                   className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/25"

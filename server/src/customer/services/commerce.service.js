@@ -10,6 +10,9 @@ import { assertCommerceAllowed, serializeQuote } from './decision.service.js';
 import { HANDLED_STATUSES, serializeEvent } from './understanding.js';
 import { categoryLabel, templateFor } from './planCatalog.js';
 import { LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
+import { Quote } from '../../external/models/Quote.js';
+import { ExternalUser } from '../../external/models/ExternalUser.js';
+import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
 
 /**
@@ -309,15 +312,21 @@ export async function confirmBookingFor(payment) {
     const req = await reqRepo.findRequirement(event._id, reservation.category);
     if (req && LOCKED_REQUIREMENT_STATUSES.includes(req.status)) reason = `${categoryLabel(reservation.category)} is already ${req.status}`;
   }
+  let vq = null;
   if (!reason) {
-    try {
-      const o = await catalog.getOption(event, reservation.optionId);
-      if (!catalog.isBookable(o)) reason = 'The vendor is not available on your date';
-    } catch {
-      reason = 'The option is no longer offered';
+    if (reservation.quote) {
+      vq = await Quote.findById(reservation.quote).populate('vendor').catch(() => null);
+    }
+    if (!vq) {
+      try {
+        const o = await catalog.getOption(event, reservation.optionId);
+        if (!catalog.isBookable(o)) reason = 'The vendor is not available on your date';
+      } catch {
+        reason = 'The option is no longer offered';
+      }
     }
   }
-  if (!reason && event.eventDate) {
+  if (!reason && event.eventDate && !vq) {
     const claimed = await commerceRepo.claimOptionDate(reservation.optionId, event.eventDate, event._id);
     if (!claimed) reason = 'The vendor was just booked by someone else for your date';
   }
@@ -341,6 +350,66 @@ export async function confirmBookingFor(payment) {
   });
   if (!created) return booking;
   await commerceRepo.setReservationStatus(reservation._id, 'converted');
+
+  if (vq && !reason) {
+    try {
+      vq.advancePayment = {
+        ...(vq.advancePayment?.toObject?.() || vq.advancePayment || {}),
+        percentage: reservation.advancePercent || ADVANCE_PERCENT,
+        amount: payment.amount,
+        status: 'VERIFIED',
+        provider: payment.provider || 'razorpay',
+        providerOrderId: payment.providerOrderId || '',
+        providerPaymentId: payment.providerRef || '',
+        paidAt: payment.verifiedAt || new Date(),
+      };
+      await vq.save();
+
+      const customerUser = await ExternalUser.findById(event.customer);
+      const customerName = customerUser?.fullName || customerUser?.email || 'Customer';
+      const totalAmount = packageTotalOf(reservation);
+      const paidAmount = payment.amount;
+
+      await CoreBooking.findOneAndUpdate(
+        { quoteId: String(vq._id) },
+        {
+          $setOnInsert: {
+            quoteId: String(vq._id),
+            opportunityId: vq.opportunity ? String(vq.opportunity) : null,
+            vendorId: vq.vendor?._id || vq.vendor,
+            customerId: event.customer,
+            serviceName: vq.serviceName || reservation.packageName,
+            eventDate: vq.eventDate || event.eventDate || new Date().toISOString().split('T')[0],
+            serviceLocation: vq.serviceLocation || event.location || {},
+            pricing: vq.pricingBreakdown || { totalAmount },
+            totalAmount,
+            bookingStatus: 'CONFIRMED',
+            settlementStatus: 'NOT_ELIGIBLE',
+          },
+          $set: {
+            vendorName: reservation.vendorName,
+            customerName,
+            category: vq.vendor?.category || reservation.category,
+            paymentSummary: {
+              advancePercentage: reservation.advancePercent || ADVANCE_PERCENT,
+              advanceAmount: paidAmount,
+              paidAmount,
+              balanceAmount: reservation.balanceAmount ?? Math.max(0, totalAmount - paidAmount),
+              provider: payment.provider || 'razorpay',
+              providerOrderId: payment.providerOrderId || '',
+              providerPaymentId: payment.providerRef || '',
+              paidAt: payment.verifiedAt || new Date(),
+            },
+            paymentStatus: 'PAYMENT_VERIFIED',
+            executionStatus: 'SERVICE_SCHEDULED',
+          },
+        },
+        { new: true, upsert: true }
+      );
+    } catch (e) {
+      console.warn('[confirmBookingFor] CoreBooking sync error:', e.message);
+    }
+  }
 
   const label = categoryLabel(reservation.category);
   if (!reason) {

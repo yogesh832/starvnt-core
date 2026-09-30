@@ -70,20 +70,32 @@ export default function CirclePage() {
         ))}
       </div>
       <div className="text-[11px] text-muted">{activePath.join(' → ')}</div>
+      <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-3">
+        <div className="text-[10px] uppercase tracking-wide font-extrabold text-primary">Current thread</div>
+        <div className="text-sm font-extrabold text-navy mt-0.5">{active.label || activePath.at(-1) || 'Whole event'}</div>
+        <div className="text-[11px] text-muted mt-0.5">{activePath.join(' → ')}</div>
+        <div className="text-[10px] text-muted mt-1">
+          Messages here stay attached to this exact {bookingId ? 'booking' : requirementId ? 'service and vendor context' : 'event'}.
+        </div>
+      </div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3 min-h-[240px]">
         {thread.loading && !thread.data && <div className="text-xs text-muted">Loading…</div>}
         {thread.error && <div className="text-xs text-red-500">{errorText(thread.error)}</div>}
         {!thread.loading && !thread.error && messages.length === 0 && <div className="text-xs text-muted">No messages yet. Ask anything about this — the STARVNT team and your vendor reply here.</div>}
-        {messages.map((m) => (
-          <div key={m.id} className={`flex ${m.senderType === 'customer' ? 'justify-end' : ''}`}>
-            <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-xs ${m.senderType === 'customer' ? 'bg-primary text-white' : 'bg-lavender text-navy'}`}>
-              {m.senderType !== 'customer' && <div className="text-[10px] font-bold mb-0.5">{m.senderName}</div>}
+        {messages.map((m) => {
+          const mine = m.senderType === 'customer';
+          const senderLabel = mine ? 'You' : m.senderName || (m.senderType === 'vendor' ? 'Vendor' : 'STARVNT');
+          return (
+          <div key={m.id} className={`flex ${mine ? 'justify-end' : ''}`}>
+            <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-xs ${mine ? 'bg-primary text-white' : 'bg-lavender text-navy'}`}>
+              <div className={`text-[10px] font-bold mb-0.5 ${mine ? 'text-white/80' : 'text-primary'}`}>{senderLabel}</div>
               <div className="whitespace-pre-wrap">{m.body}</div>
-              <div className={`text-[9px] mt-1 ${m.senderType === 'customer' ? 'text-white/70' : 'text-muted'}`}>{new Date(m.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+              <div className={`text-[9px] mt-1 ${mine ? 'text-white/70' : 'text-muted'}`}>{new Date(m.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
             </div>
           </div>
-        ))}
+          );
+        })}
         <div ref={bottom} />
       </div>
 

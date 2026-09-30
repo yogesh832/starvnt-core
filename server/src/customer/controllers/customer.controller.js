@@ -38,6 +38,7 @@ export const selectOption = async (req, res) => {
   res.json({ requirement });
 };
 export const listQuotes = async (req, res) => res.json(await decision.listQuotes(me(req), req.params.id));
+export const requestVendorQuotes = async (req, res) => res.status(201).json(await decision.requestVendorQuotes(me(req), req.params.id));
 export const createQuote = async (req, res) => res.status(201).json({ quote: await decision.createQuote(me(req), req.params.id) });
 export const getQuote = async (req, res) => res.json({ quote: await decision.getQuote(me(req), req.params.quoteId) });
 export const createEvent = async (req, res) => res.status(201).json(await events.createManualEvent(me(req), req.body));

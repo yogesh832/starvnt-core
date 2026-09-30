@@ -210,6 +210,8 @@ export default function ExternalLogin() {
     } catch (err) {
       const map = {
         INVALID_CREDENTIALS: "Incorrect email or password.",
+        ACCOUNT_TYPE_MISMATCH:
+          err.data?.message || "This account belongs to the other login tab. Please switch Customer/Vendor and try again.",
         EMAIL_IN_USE: `That email is already registered — sign in on this tab to use it as a ${accountType === "VENDOR" ? "vendor" : "customer"}.`,
         WEAK_PASSWORD: "Password needs 8+ chars with a letter and a number.",
         BUSINESS_NAME_REQUIRED: "Please add your brand / business name.",
@@ -295,7 +297,11 @@ export default function ExternalLogin() {
       });
       redirectAfterAuth(u);
     } catch (err) {
-      setError(err.data?.error || err.message || "Google sign-in failed.");
+      setError(
+        err.data?.error === "ACCOUNT_TYPE_MISMATCH"
+          ? err.data?.message || "This account belongs to the other login tab. Please switch Customer/Vendor and try again."
+          : err.message || err.data?.error || "Google sign-in failed.",
+      );
     } finally {
       setBusy(false);
     }
@@ -371,7 +377,9 @@ export default function ExternalLogin() {
             redirectAfterAuth(u);
           } catch (err) {
             setError(
-              err.data?.error || err.message || "OTP verification failed.",
+              err.data?.error === "ACCOUNT_TYPE_MISMATCH"
+                ? err.data?.message || "This account belongs to the other login tab. Please switch Customer/Vendor and try again."
+                : err.message || err.data?.error || "OTP verification failed.",
             );
           } finally {
             setBusy(false);
@@ -435,6 +443,8 @@ export default function ExternalLogin() {
         INVALID_OTP: "Invalid OTP code. Please check and retry.",
         OTP_EXPIRED_OR_NOT_FOUND: "OTP expired. Please request a new one.",
         TOO_MANY_ATTEMPTS: "Too many failed attempts. Request a new OTP.",
+        ACCOUNT_TYPE_MISMATCH:
+          err.data?.message || "This account belongs to the other login tab. Please switch Customer/Vendor and try again.",
       };
       setError(
         map[err.data?.error] || err.message || "OTP verification failed.",

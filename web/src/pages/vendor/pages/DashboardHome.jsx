@@ -1061,7 +1061,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const completionPercentage = activation?.completionPercentage !== undefined
     ? activation.completionPercentage
     : 0;
-  const is100Percent = completionPercentage === 100 || Boolean(activation?.is100Percent);
+  const is100Percent = Boolean(activation?.is100Percent || activation?.isCommerciallyActive);
 
   const checklist = activation?.checklist || {
     profile: false,

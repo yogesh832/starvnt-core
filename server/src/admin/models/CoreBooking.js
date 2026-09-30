@@ -124,6 +124,18 @@ const coreBookingSchema = new Schema(
         submittedBy: String,
         submittedAt: { type: Date, default: Date.now },
         deliverablesUrl: { type: String, default: '' },
+        photos: [{ type: String }],
+        videos: [{ type: String }],
+        files: [
+          {
+            url: { type: String, default: '' },
+            thumbnailUrl: { type: String, default: '' },
+            publicId: { type: String, default: '' },
+            resourceType: { type: String, default: 'IMAGE' },
+            name: { type: String, default: '' },
+            size: { type: String, default: '' },
+          },
+        ],
         checklist: [
           {
             item: String,

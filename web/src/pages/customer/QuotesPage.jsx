@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, DemoBadge, Empty, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
-import { openCheckout } from './razorpay.js';
+
 
 const QUOTE_STATUS = {
   draft: ['Awaiting your decision', 'bg-amber-50 text-amber-600'],
@@ -71,7 +71,8 @@ function QuoteCard({ quote, eventId }) {
   );
 }
 
-function VendorOfferCard({ quote, onChanged }) {
+function VendorOfferCard({ quote, eventId, onChanged }) {
+  const navigate = useNavigate();
   const [message, setMessage] = useState('');
   const [counterBudget, setCounterBudget] = useState('');
   const [busy, setBusy] = useState('');
@@ -79,6 +80,7 @@ function VendorOfferCard({ quote, onChanged }) {
   const total = quote.totalAmount || quote.pricingBreakdown?.totalAmount || 0;
   const advance = quote.advanceAmount || Math.ceil(total * 0.3);
   const balance = Math.max(0, total - advance);
+  const isAccepted = quote.status === 'APPROVED' || quote.status === 'accepted';
   const canAct = quote.status === 'SUBMITTED';
 
   async function negotiate() {
@@ -97,17 +99,18 @@ function VendorOfferCard({ quote, onChanged }) {
     }
   }
 
-  async function payAdvance() {
-    setBusy('pay');
+  async function acceptOffer() {
+    setBusy('accept');
     setError('');
     try {
-      const res = await customerApi.payVendorQuoteAdvance(quote.id);
-      const response = await openCheckout(res.checkout);
-      await customerApi.completeVendorQuoteCheckout(quote.id, response);
-      onChanged();
+      const res = await customerApi.acceptVendorQuote(quote.id, eventId);
+      onChanged?.();
+      const targetEventId = eventId || res?.eventId;
+      if (targetEventId) {
+        navigate(`/customer/events/${targetEventId}/bookings`);
+      }
     } catch (err) {
-      setError(errorText(err, err?.message || 'Could not complete payment.'));
-    } finally {
+      setError(errorText(err, 'Could not accept this quote offer.'));
       setBusy('');
     }
   }
@@ -120,8 +123,8 @@ function VendorOfferCard({ quote, onChanged }) {
           <div className="text-sm font-extrabold text-navy mt-0.5">{quote.vendorName} · {quote.serviceName}</div>
           <div className="text-[11px] text-muted">{quote.eventDate} · {quote.serviceLocation?.address || quote.serviceLocation?.city || 'Location shared'}</div>
         </div>
-        <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${canAct ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-          {quote.status}
+        <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${isAccepted ? 'bg-emerald-50 text-emerald-600' : canAct ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-muted'}`}>
+          {isAccepted ? 'Accepted' : quote.status}
         </span>
       </div>
 
@@ -176,20 +179,32 @@ function VendorOfferCard({ quote, onChanged }) {
           {error && <div className="text-xs text-red-500">{error}</div>}
           <div className="flex flex-wrap gap-2">
             <button
+              onClick={acceptOffer}
+              disabled={busy}
+              className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 disabled:opacity-50"
+            >
+              {busy === 'accept' ? 'Accepting...' : 'Accept offer'}
+            </button>
+            <button
               onClick={negotiate}
               disabled={busy || (!message.trim() && !counterBudget.trim())}
               className="rounded-xl border border-primary/30 text-primary bg-primary-soft text-xs font-bold px-4 py-2.5 disabled:opacity-50"
             >
               {busy === 'negotiate' ? 'Sending...' : 'Send counter quote'}
             </button>
-            <button
-              onClick={payAdvance}
-              disabled={busy}
-              className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 disabled:opacity-50"
-            >
-              {busy === 'pay' ? 'Opening payment...' : `Pay 30% advance ${formatINR(advance)}`}
-            </button>
           </div>
+        </div>
+      )}
+
+      {isAccepted && (
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+          <span className="text-xs text-muted">Offer accepted · Pay 30% advance on Bookings</span>
+          <Link
+            to={eventId ? `/customer/events/${eventId}/bookings` : '/customer/events'}
+            className="inline-flex text-xs font-bold text-primary hover:underline"
+          >
+            Go to bookings & payments →
+          </Link>
         </div>
       )}
     </div>
@@ -230,6 +245,13 @@ export default function QuotesPage() {
   const commercialQuotes = Array.isArray(vendorOffers.data?.quotes)
     ? vendorOffers.data.quotes.filter((q) => !event.eventDate || q.eventDate === event.eventDate)
     : [];
+  const quotedOpportunityIds = new Set(commercialQuotes.map((q) => q.opportunityId).filter(Boolean));
+  const pendingVendorRequests = Array.isArray(vendorOffers.data?.opportunities)
+    ? vendorOffers.data.opportunities.filter((o) =>
+        (!event.eventDate || o.eventDate === event.eventDate) &&
+        !quotedOpportunityIds.has(String(o._id || o.id))
+      )
+    : [];
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -245,10 +267,32 @@ export default function QuotesPage() {
           <div className="text-xs text-muted">Loading vendor offers...</div>
         ) : commercialQuotes.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm p-4 text-xs text-muted">
-            No vendor offers yet. When a vendor responds to your enquiry, the offer appears here.
+            No vendor offers yet. When a vendor responds with price and message, the offer appears here.
           </div>
         ) : (
-          commercialQuotes.map((q) => <VendorOfferCard key={q.id} quote={q} onChanged={vendorOffers.reload} />)
+          commercialQuotes.map((q) => <VendorOfferCard key={q.id} quote={q} eventId={id} onChanged={vendorOffers.reload} />)
+        )}
+        {pendingVendorRequests.length > 0 && (
+          <div className="rounded-2xl border border-primary/10 bg-primary-soft/40 p-3 text-xs">
+            <div className="text-[10px] uppercase tracking-wide font-extrabold text-primary">Quote requested</div>
+            <div className="mt-2 space-y-2">
+              {pendingVendorRequests.map((o) => (
+                <div key={o._id || o.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-bold text-navy truncate">
+                      {o.vendor?.businessName || o.vendorName || 'Vendor'} · {o.serviceName}
+                    </div>
+                    <div className="text-[11px] text-muted truncate">
+                      Waiting for vendor quote · {o.eventDate} · {o.serviceLocation?.locality || o.serviceLocation?.city || 'Location shared'}
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-white text-primary text-[10px] font-extrabold px-2 py-1">
+                    {o.status || 'NEW'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 

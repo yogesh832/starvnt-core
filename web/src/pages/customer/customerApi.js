@@ -21,6 +21,7 @@ export const customerApi = {
   selectOption: (id, category, optionId) =>
     externalApi.call(`/customer/events/${id}/requirements/${encodeURIComponent(category)}/select`, { method: 'POST', body: { optionId } }),
   quotes: (id) => externalApi.call(`/customer/events/${id}/quotes`),
+  requestVendorQuotes: (id) => externalApi.call(`/customer/events/${id}/vendor-quote-requests`, { method: 'POST' }),
   createQuote: (id) => externalApi.call(`/customer/events/${id}/quotes`, { method: 'POST' }),
   quote: (quoteId) => externalApi.call(`/customer/quotes/${quoteId}`),
   acceptQuote: (quoteId) => externalApi.call(`/customer/quotes/${quoteId}/accept`, { method: 'POST' }),
@@ -43,6 +44,8 @@ export const customerApi = {
   createEvent: (body) => externalApi.call('/customer/events', { method: 'POST', body }),
   createMahimanDemoEnquiry: (body = {}) => externalApi.call('/customer/demo/mahiman-enquiry', { method: 'POST', body }),
   vendorQuotes: () => externalApi.call('/customer/vendor-quotes'),
+  acceptVendorQuote: (quoteId, eventId) =>
+    externalApi.call(`/customer/vendor-quotes/${quoteId}/accept`, { method: 'POST', body: { eventId } }),
   negotiateVendorQuote: (quoteId, message, counterBudget) =>
     externalApi.call(`/customer/vendor-quotes/${quoteId}/negotiate`, { method: 'POST', body: { message, counterBudget } }),
   payVendorQuoteAdvance: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/pay-advance`, { method: 'POST' }),

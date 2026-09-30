@@ -15,7 +15,7 @@ const operatingLocationSchema = new Schema(
       enum: ['STUDIO', 'HEAD_OFFICE', 'BRANCH', 'WAREHOUSE', 'KITCHEN', 'EQUIPMENT_HUB', 'STORAGE'],
       default: 'STUDIO',
     },
-    address: { type: String, required: true, trim: true },
+    address: { type: String, trim: true, default: '' },
     locality: { type: String, trim: true, default: '' },
     city: { type: String, required: true, trim: true }, // e.g. 'Kolkata'
     state: { type: String, trim: true, default: 'West Bengal' },
