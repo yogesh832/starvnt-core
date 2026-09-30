@@ -580,6 +580,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
               </button>
             </>
           )}
+          {/* abcd */}
           {(input.trim() && !voice.listening) || !voice.supported ? (
             <button
               type="submit"
