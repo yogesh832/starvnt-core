@@ -31,14 +31,24 @@ function holdLeft(expiresAt) {
 function PaySheet({ event, reservation, onClose, onPaid }) {
   const [busy, setBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [coupon, setCoupon] = useState(null);
+  const [couponBusy, setCouponBusy] = useState(false);
   const [error, setError] = useState('');
   const showDevPaymentButton = import.meta.env.DEV;
+  const packageTotal = reservation.packageTotal || reservation.amount;
+  const originalAdvance = reservation.advanceAmount || reservation.amount;
+  const discountAmount = coupon?.discountAmount || 0;
+  const payableAdvance = coupon?.payableAmount || Math.max(1, originalAdvance - discountAmount);
+  const balanceAfterAdvance = Math.max(0, packageTotal - payableAdvance);
+  const canPay = !busy && !couponBusy;
+  const canApplyCoupon = !busy && !couponBusy && !coupon && Boolean(couponCode.trim());
 
   async function pay() {
     setBusy(true);
     setError('');
     try {
-      const { payment, checkout } = await customerApi.pay(event.id, reservation.id);
+      const { payment, checkout } = await customerApi.pay(event.id, reservation.id, coupon?.code || '');
       const response = await openCheckout(checkout);
       // Recorded only; STARVNT confirms after verifying with Razorpay.
       await customerApi.checkoutComplete(event.id, payment.id, response).catch(() => {});
@@ -48,6 +58,34 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function applyCoupon() {
+    if (!couponCode.trim()) return;
+    setCouponBusy(true);
+    setCoupon(null);
+    setError('');
+    try {
+      const res = await customerApi.previewCoupon(event.id, reservation.id, couponCode);
+      setCoupon(res.coupon);
+      setCouponCode(res.coupon?.code || couponCode.trim().toUpperCase());
+    } catch (err) {
+      setError(errorText(err, 'This coupon could not be applied.'));
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
+  function removeCoupon() {
+    setCoupon(null);
+    setCouponCode('');
+    setError('');
+  }
+
+  function updateCouponCode(value) {
+    setCouponCode(value.toUpperCase().replace(/\s+/g, ''));
+    if (coupon) setCoupon(null);
+    setError('');
   }
 
   async function testSuccessPayment() {
@@ -85,23 +123,76 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
               <span className="font-semibold text-navy text-right">{v}</span>
             </div>
           ))}
-          <div className="flex justify-between py-3">
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-extrabold text-navy">Coupon code</div>
+              <div className="text-[11px] text-muted">Optional. Discount applies to the advance payment.</div>
+            </div>
+            {coupon && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">Applied</span>}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <input
+              value={couponCode}
+              onChange={(e) => updateCouponCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && canApplyCoupon) {
+                  e.preventDefault();
+                  applyCoupon();
+                }
+              }}
+              disabled={busy || couponBusy || Boolean(coupon)}
+              placeholder="ENTER CODE"
+              aria-label="Coupon code"
+              className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-extrabold text-navy outline-none focus:border-primary disabled:opacity-60"
+            />
+            {coupon ? (
+              <button type="button" onClick={removeCoupon} disabled={busy} className="rounded-xl bg-white px-3 py-2 text-xs font-extrabold text-muted border border-gray-200">
+                Remove
+              </button>
+            ) : (
+              <button type="button" onClick={applyCoupon} disabled={!canApplyCoupon} className="rounded-xl bg-primary-soft px-3 py-2 text-xs font-extrabold text-primary disabled:opacity-50">
+                {couponBusy ? 'Checking...' : 'Apply'}
+              </button>
+            )}
+          </div>
+          {coupon && (
+            <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
+              Coupon {coupon.code} saved {formatINR(discountAmount)}. Razorpay will charge {formatINR(payableAdvance)} now.
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+          <div className="flex justify-between gap-3 px-3 py-3">
             <span className="text-sm font-bold text-navy">Package total</span>
-            <span className="text-lg font-extrabold text-navy">{formatINR(reservation.packageTotal || reservation.amount)}</span>
+            <span className="text-lg font-extrabold text-navy">{formatINR(packageTotal)}</span>
           </div>
-          <div className="flex justify-between py-3 bg-primary-soft/50 rounded-2xl px-3 my-2">
-            <span className="text-sm font-extrabold text-primary">Pay now ({reservation.advancePercent || 30}% advance)</span>
-            <span className="text-lg font-extrabold text-primary">{formatINR(reservation.advanceAmount || reservation.amount)}</span>
+          <div className="flex justify-between gap-3 border-t border-gray-50 px-3 py-2">
+            <span className="text-xs font-semibold text-muted">Advance before coupon ({reservation.advancePercent || 30}%)</span>
+            <span className={coupon ? 'text-sm font-bold text-muted line-through' : 'text-sm font-bold text-navy'}>{formatINR(originalAdvance)}</span>
           </div>
-          <div className="flex justify-between py-2">
+          {coupon && (
+            <div className="flex justify-between gap-3 border-t border-gray-50 px-3 py-2">
+              <span className="text-xs font-semibold text-emerald-700">Coupon {coupon.code}</span>
+              <span className="text-sm font-bold text-emerald-700">-{formatINR(discountAmount)}</span>
+            </div>
+          )}
+          <div className="flex justify-between gap-3 border-t border-primary/10 bg-primary-soft/60 px-3 py-3">
+            <span className="text-sm font-extrabold text-primary">Pay now by Razorpay</span>
+            <span className="text-lg font-extrabold text-primary">{formatINR(payableAdvance)}</span>
+          </div>
+          <div className="flex justify-between gap-3 border-t border-gray-50 px-3 py-2">
             <span className="text-xs font-semibold text-muted">Balance after advance</span>
-            <span className="text-sm font-bold text-navy">{formatINR(reservation.balanceAmount || 0)}</span>
+            <span className="text-sm font-bold text-navy">{formatINR(balanceAfterAdvance)}</span>
           </div>
         </div>
-        <div className="text-[11px] text-muted">Pay only the advance now. The remaining balance is handled later as per vendor terms.</div>
+        <div className="mt-3 text-[11px] text-muted">Pay only the advance now. The remaining balance is handled later as per vendor terms.</div>
         {error && <div className="text-xs text-red-500 mt-3">{error}</div>}
-        <button onClick={pay} disabled={busy} className="mt-4 w-full rounded-2xl bg-primary text-white text-sm font-extrabold py-3 disabled:opacity-60">
-          {busy ? 'Opening payment…' : `Confirm & Pay Advance ${formatINR(reservation.advanceAmount || reservation.amount)}`}
+        <button onClick={pay} disabled={!canPay} className="mt-4 w-full rounded-2xl bg-primary text-white text-sm font-extrabold py-3 disabled:opacity-60">
+          {busy ? 'Opening payment...' : couponBusy ? 'Checking coupon...' : `Confirm & Pay Advance ${formatINR(payableAdvance)}`}
         </button>
         {/* TODO_REMOVE_BEFORE_PRODUCTION: temporary QA shortcut for payment-success testing. */}
         {showDevPaymentButton && (
@@ -230,7 +321,14 @@ export default function BookingsPage() {
               {payments.map((p) => (
                 <tr key={p.id} className="border-b border-gray-50 last:border-0">
                   <td className="py-2">{new Date(p.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</td>
-                  <td className="py-2 font-semibold">{formatINR(p.amount)}</td>
+                  <td className="py-2 font-semibold">
+                    {formatINR(p.amount)}
+                    {p.coupon?.code && (
+                      <div className="text-[10px] font-bold text-emerald-600">
+                        {p.coupon.code} saved {formatINR(p.coupon.discountAmount)}
+                      </div>
+                    )}
+                  </td>
                   <td className={`py-2 ${p.status === 'verified' ? 'text-emerald-600 font-bold' : p.status === 'failed' ? 'text-red-500' : 'text-muted'}`}>
                     {PAYMENT_STATUS[p.status]}{p.failureReason ? ` — ${p.failureReason}` : ''}
                   </td>

@@ -201,6 +201,13 @@ const paymentSchema = new Schema(
     provider: { type: String, default: 'razorpay' },
     providerOrderId: { type: String, default: undefined },
     providerRef: { type: String, default: null },
+    coupon: {
+      code: { type: String, default: null },
+      discountAmount: { type: Number, default: 0, min: 0 },
+      originalAmount: { type: Number, default: null, min: 0 },
+      orderAmount: { type: Number, default: null, min: 0 },
+      usageRecorded: { type: Boolean, default: false },
+    },
     verifiedAt: { type: Date, default: null },
     verifiedBy: { type: String, default: null },
     failureReason: { type: String, default: null },

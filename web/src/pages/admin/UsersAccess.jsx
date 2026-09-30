@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { adminApi } from '../../lib/api.js';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
+import { AdminEmptyState, AdminErrorState, AdminPageHeader, AdminTableSkeleton } from './adminUi.jsx';
 
 /**
  * Users & Access — SUPER_ADMIN only. List admins, create admins with an
@@ -15,18 +16,25 @@ export default function UsersAccess() {
   const [editor, setEditor] = useState(null); // null | {mode:'create'} | {mode:'edit', admin}
   const [form, setForm] = useState({ fullName: '', email: '', password: '', permissions: [] });
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
+    setLoading(true);
+    setError('');
     const [u, c] = await Promise.all([
       adminApi.call('/users'),
       adminApi.call('/permissions/catalog'),
     ]);
     setAdmins(u.admins);
     setCatalog(c.catalog);
+    setLoading(false);
   }
 
   useEffect(() => {
-    load().catch((e) => setError(e.data?.error || 'Failed to load'));
+    load().catch((e) => {
+      setError(e.data?.error || 'Failed to load');
+      setLoading(false);
+    });
   }, []);
 
   function openCreate() {
@@ -76,95 +84,104 @@ export default function UsersAccess() {
   const catalogGroups = useMemo(() => Object.entries(catalog), [catalog]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">Users & Access</h1>
-          <p className="text-sm text-muted">
-            Only Super Admins manage internal access. Every change is audited.
-          </p>
-        </div>
+    <div className="space-y-5">
+      <AdminPageHeader
+        title="Users & Access"
+        description="Only Super Admins manage internal access. Every permission and status change is audited."
+        meta={admins.length ? `${admins.length} admins` : undefined}
+        action={(
         <button
           onClick={openCreate}
           className="rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2.5 transition"
         >
           + New Admin
         </button>
-      </div>
+        )}
+      />
 
-      {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
+      {error && <AdminErrorState message={error} onRetry={load} />}
 
-      <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
-        <table className="w-full text-sm min-w-[640px]">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wider text-muted border-b border-gray-100">
-              <th className="px-5 py-3">Admin</th>
-              <th className="px-5 py-3">Role</th>
-              <th className="px-5 py-3">Permissions</th>
-              <th className="px-5 py-3">Status</th>
-              <th className="px-5 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {admins.map((a) => (
-              <tr key={a.id} className="border-b border-gray-50">
-                <td className="px-5 py-3">
-                  <div className="font-semibold">{a.fullName}</div>
-                  <div className="text-xs text-muted">{a.email}</div>
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className={`text-[10px] font-bold uppercase rounded px-2 py-0.5 ${
-                      a.role === 'SUPER_ADMIN' ? 'bg-navy text-white' : 'bg-primary-soft text-primary'
-                    }`}
-                  >
-                    {a.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-xs text-muted">
-                  {a.role === 'SUPER_ADMIN' ? 'ALL_PERMISSIONS' : `${a.permissions.length} granted`}
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className={`text-xs font-semibold ${
-                      a.status === 'ACTIVE' ? 'text-green-600' : 'text-red-500'
-                    }`}
-                  >
-                    {a.status}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-right space-x-2">
-                  {a.role !== 'SUPER_ADMIN' && a.id !== me.id && (
-                    <>
-                      <button
-                        onClick={() => openEdit(a)}
-                        className="text-xs font-semibold text-primary hover:underline"
-                      >
-                        Permissions
-                      </button>
-                      {a.status === 'ACTIVE' ? (
-                        <button
-                          onClick={() => setStatus(a, 'disable')}
-                          className="text-xs font-semibold text-red-500 hover:underline"
+      {!error && (
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-white/80">
+          {loading ? (
+            <AdminTableSkeleton columns={5} rows={6} />
+          ) : admins.length ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[760px]">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wider text-muted border-b border-gray-100 bg-slate-50/80">
+                    <th className="px-5 py-3">Admin</th>
+                    <th className="px-5 py-3">Role</th>
+                    <th className="px-5 py-3">Permissions</th>
+                    <th className="px-5 py-3">Status</th>
+                    <th className="px-5 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {admins.map((a) => (
+                    <tr key={a.id} className="border-b border-gray-50 last:border-0 hover:bg-lavender/40">
+                      <td className="px-5 py-3">
+                        <div className="font-semibold text-navy">{a.fullName}</div>
+                        <div className="text-xs text-muted">{a.email}</div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`text-[10px] font-bold uppercase rounded px-2 py-0.5 ${
+                            a.role === 'SUPER_ADMIN' ? 'bg-navy text-white' : 'bg-primary-soft text-primary'
+                          }`}
                         >
-                          Disable
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setStatus(a, 'enable')}
-                          className="text-xs font-semibold text-green-600 hover:underline"
+                          {a.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-muted">
+                        {a.role === 'SUPER_ADMIN' ? 'ALL_PERMISSIONS' : `${a.permissions.length} granted`}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`text-xs font-semibold ${
+                            a.status === 'ACTIVE' ? 'text-green-600' : 'text-red-500'
+                          }`}
                         >
-                          Enable
-                        </button>
-                      )}
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right space-x-2">
+                        {a.role !== 'SUPER_ADMIN' && a.id !== me.id && (
+                          <>
+                            <button
+                              onClick={() => openEdit(a)}
+                              className="text-xs font-semibold text-primary hover:underline"
+                            >
+                              Permissions
+                            </button>
+                            {a.status === 'ACTIVE' ? (
+                              <button
+                                onClick={() => setStatus(a, 'disable')}
+                                className="text-xs font-semibold text-red-500 hover:underline"
+                              >
+                                Disable
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setStatus(a, 'enable')}
+                                className="text-xs font-semibold text-green-600 hover:underline"
+                              >
+                                Enable
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <AdminEmptyState title="No admins found" message="Create an admin user to share controlled access with your team." />
+          )}
+        </div>
+      )}
 
       {editor && (
         <div className="fixed inset-0 z-50 bg-navy/50 grid place-items-center p-4">

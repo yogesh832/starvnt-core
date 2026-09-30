@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { customerApi } from './customerApi.js';
-import { Empty } from './customerUi.jsx';
+import { CustomerErrorScreen, CustomerLoadingScreen, Empty } from './customerUi.jsx';
 import { Link } from 'react-router-dom';
 
 /**
@@ -33,13 +33,16 @@ function writeStored(id) {
 export function CurrentEventProvider({ children }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(readStored());
 
   const refresh = useCallback(() => {
+    setError(null);
+    setLoading(true);
     return customerApi
       .events()
       .then((d) => setEvents(d.events || []))
-      .catch(() => {})
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   }, []);
 
@@ -58,12 +61,12 @@ export function CurrentEventProvider({ children }) {
     writeStored(id);
   }, []);
 
-  const value = useMemo(() => ({ events, current, setCurrent, refresh, loading }), [events, current, setCurrent, refresh, loading]);
+  const value = useMemo(() => ({ events, current, setCurrent, refresh, loading, error }), [events, current, setCurrent, refresh, loading, error]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useCurrentEvent() {
-  return useContext(Ctx) || { events: [], current: null, setCurrent: () => {}, refresh: () => Promise.resolve(), loading: false };
+  return useContext(Ctx) || { events: [], current: null, setCurrent: () => {}, refresh: () => Promise.resolve(), loading: false, error: null };
 }
 
 const SECTION_PATH = {
@@ -79,8 +82,17 @@ const SECTION_PATH = {
 /** /customer/go/:section → the current event's page for that section. */
 export function GoToSection() {
   const { section } = useParams();
-  const { current, loading } = useCurrentEvent();
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  const { current, loading, error, refresh } = useCurrentEvent();
+  if (loading) return <CustomerLoadingScreen title="Opening your event" detail="Finding your latest plan, quotes and bookings..." />;
+  if (error) {
+    return (
+      <CustomerErrorScreen
+        title="Could not open your event"
+        message="STARVNT could not load your event list. Check the server and try again."
+        onRetry={refresh}
+      />
+    );
+  }
   if (!current) {
     return (
       <div className="max-w-xl mx-auto">

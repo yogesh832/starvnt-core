@@ -73,6 +73,14 @@ export function movePayment(id, from, set) {
   return Payment.findOneAndUpdate({ _id: id, status: { $in: from } }, { $set: set }, { new: true }).lean();
 }
 
+export function markCouponUsageRecorded(paymentId) {
+  return Payment.findOneAndUpdate(
+    { _id: paymentId, 'coupon.code': { $ne: null }, 'coupon.usageRecorded': { $ne: true } },
+    { $set: { 'coupon.usageRecorded': true } },
+    { new: true }
+  ).lean();
+}
+
 /** Failed payments the customer can still retry (hold live, no newer attempt). */
 export async function countRetryableFailedByEvent(eventIds) {
   const failed = await Payment.find({ event: { $in: eventIds }, status: 'failed' }).select('event reservation').lean();

@@ -25,6 +25,7 @@ import VendorsPage from './VendorsPage.jsx';
 import { DocumentsPage, FavoritesPage, SettingsPage } from './PlaceholderPages.jsx';
 import { CurrentEventProvider, GoToSection, useCurrentEvent } from './currentEvent.jsx';
 import { customerApi } from './customerApi.js';
+import { CustomerErrorScreen } from './customerUi.jsx';
 import { takePendingPrompt } from './pendingPrompt.js';
 
 /* Sidebar (reference screen set 4). Per-event sections open the current event. */
@@ -32,6 +33,7 @@ const SIDEBAR = [
   { key: 'home', label: 'Home', icon: 'dashboard', to: '/customer' },
   { key: 'events', label: 'My Events', icon: 'events', to: '/customer/events' },
   { key: 'new', label: 'New Event', icon: 'plus', to: '/customer/events/new' },
+  { key: 'aura', label: 'Aura+', icon: 'bolt', to: '/customer/aura' },
   { key: 'messages', label: 'Messages', icon: 'message', to: '/customer/updates', badge: true },
   { key: 'quotes', label: 'Plans & Quotes', icon: 'quotes', to: '/customer/go/quotes' },
   { key: 'bookings', label: 'Bookings', icon: 'bookings', to: '/customer/go/bookings' },
@@ -174,7 +176,7 @@ function Shell() {
   const { user, logout } = useExternalAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { refresh: refreshEvents } = useCurrentEvent();
+  const { error: eventLoadError, refresh: refreshEvents } = useCurrentEvent();
   const firstName = user?.fullName?.split(' ')[0] || 'there';
   const tab = activeKey(pathname);
 
@@ -255,6 +257,14 @@ function Shell() {
         {tab === 'aura' ? (
           <main className="flex-1 min-h-0 flex flex-col pb-28 md:pb-0">
             <AuraChat firstName={firstName} />
+          </main>
+        ) : eventLoadError ? (
+          <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-28 md:pb-6">
+            <CustomerErrorScreen
+              title="Could not load customer workspace"
+              message="The customer dashboard could not reach the server. Please check the API and try again."
+              onRetry={refreshEvents}
+            />
           </main>
         ) : (
           <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-28 md:pb-6">

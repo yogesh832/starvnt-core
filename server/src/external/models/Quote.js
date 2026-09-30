@@ -75,6 +75,10 @@ const quoteSchema = new Schema(
       provider: { type: String, default: 'razorpay' },
       providerOrderId: { type: String, default: '' },
       providerPaymentId: { type: String, default: '' },
+      couponCode: { type: String, default: '' },
+      couponDiscountAmount: { type: Number, default: 0 },
+      originalAdvanceAmount: { type: Number, default: 0 },
+      couponUsageRecorded: { type: Boolean, default: false },
       paidAt: { type: Date, default: null },
     },
     notes: {

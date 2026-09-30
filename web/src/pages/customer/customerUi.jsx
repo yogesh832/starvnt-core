@@ -272,6 +272,60 @@ export function ArtTile({ option, className = 'h-28' }) {
   );
 }
 
+export function CustomerLoadingScreen({ title = 'Loading your workspace', detail = 'Getting the latest STARVNT details...' }) {
+  return (
+    <div className="min-h-[60vh] grid place-items-center px-4">
+      <div className="w-full max-w-3xl bg-white rounded-3xl shadow-sm border border-gray-100 p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <span className="w-11 h-11 rounded-2xl bg-primary-soft text-primary grid place-items-center shrink-0">
+            <Icon name="bolt" size={18} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-extrabold text-navy">{title}</div>
+            <div className="text-xs text-muted mt-0.5">{detail}</div>
+          </div>
+        </div>
+        <div className="mt-5 grid sm:grid-cols-3 gap-3">
+          <div className="sm:col-span-2 space-y-3">
+            <div className="h-24 rounded-2xl bg-lavender/80 animate-pulse" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="h-20 rounded-2xl bg-gray-100 animate-pulse" />
+              <div className="h-20 rounded-2xl bg-gray-100 animate-pulse" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="h-10 rounded-2xl bg-gray-100 animate-pulse" />
+            <div className="h-10 rounded-2xl bg-gray-100 animate-pulse" />
+            <div className="h-10 rounded-2xl bg-gray-100 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function CustomerErrorScreen({ title = 'Could not load this screen', message = 'Please try again.', onRetry, action }) {
+  return (
+    <div className="min-h-[60vh] grid place-items-center px-4">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-red-100 p-6 text-center">
+        <div className="w-12 h-12 mx-auto rounded-2xl bg-red-50 text-red-500 grid place-items-center">
+          <Icon name="help" size={20} />
+        </div>
+        <div className="mt-3 text-base font-extrabold text-navy">{title}</div>
+        <p className="text-xs text-muted mt-1 leading-relaxed">{message}</p>
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5">
+              Try again
+            </button>
+          )}
+          {action}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Tiny fetch hook: { data, error, loading, reload, setData }. */
 export function useLoad(loader, deps) {
   const [state, setState] = useState({ data: null, error: null, loading: true });

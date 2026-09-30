@@ -87,6 +87,8 @@ const coreBookingSchema = new Schema(
       provider: { type: String, default: 'razorpay' },
       providerOrderId: { type: String, default: '' },
       providerPaymentId: { type: String, default: '' },
+      couponCode: { type: String, default: '' },
+      couponDiscountAmount: { type: Number, default: 0 },
       paidAt: { type: Date, default: null },
     },
     bookingStatus: {

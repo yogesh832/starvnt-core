@@ -14,6 +14,7 @@ import { Quote } from '../../external/models/Quote.js';
 import { ExternalUser } from '../../external/models/ExternalUser.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
+import { publicCoupon, validateCouponForPayment, recordCouponUsageOnce, normalizeCouponCode } from './coupon.service.js';
 
 /**
  * Reserve → pay → verify → book (Blueprint §6, phases 9–10).
@@ -64,6 +65,12 @@ export function serializePayment(p) {
     createdAt: p.createdAt,
     verifiedAt: p.verifiedAt,
     failureReason: p.status === 'failed' ? p.failureReason || 'Payment failed' : null,
+    coupon: p.coupon?.code ? {
+      code: p.coupon.code,
+      discountAmount: Number(p.coupon.discountAmount || 0),
+      originalAmount: p.coupon.originalAmount,
+      orderAmount: p.coupon.orderAmount,
+    } : null,
   };
 }
 
@@ -174,8 +181,19 @@ export async function bookingsView(customerId, eventId) {
   };
 }
 
+export async function previewReservationCoupon(customerId, eventId, reservationId, code) {
+  const event = await getOwnedEventOr404(customerId, eventId);
+  const reservation = await commerceRepo.findReservation(event._id, reservationId);
+  if (!reservation) throw notFound('Reservation not found');
+  if (reservation.status !== 'pending_payment') throw conflict('RESERVATION_NOT_PAYABLE', 'This reservation is not awaiting payment');
+  const baseAmount = advanceAmountOf(reservation);
+  const orderAmount = packageTotalOf(reservation);
+  const { coupon, discountAmount } = await validateCouponForPayment(code, { orderAmount, baseAmount });
+  return { ok: true, coupon: publicCoupon(coupon, { discountAmount, baseAmount, orderAmount }) };
+}
+
 // ── Pay a reservation (creates or reuses a Razorpay order) ──────────────────
-export async function payReservation(customer, eventId, reservationId) {
+export async function payReservation(customer, eventId, reservationId, body = {}) {
   const customerId = customer._id;
   const event = await getOwnedEventOr404(customerId, eventId);
   assertCommerceAllowed(event);
@@ -188,8 +206,12 @@ export async function payReservation(customer, eventId, reservationId) {
   }
 
   let payment = await commerceRepo.findOpenPaymentForReservation(reservation._id);
-  const payableAmount = advanceAmountOf(reservation);
+  const baseAmount = advanceAmountOf(reservation);
+  const orderAmount = packageTotalOf(reservation);
+  const { coupon, discountAmount } = await validateCouponForPayment(body.couponCode, { orderAmount, baseAmount });
+  const payableAmount = Math.max(1, baseAmount - discountAmount);
   if (payment && payment.amount !== payableAmount && payment.status === 'pending') payment = null;
+  if (payment && payment.status === 'pending' && normalizeCouponCode(payment.coupon?.code) !== normalizeCouponCode(coupon?.code)) payment = null;
   if (payment && ['paid', 'verified'].includes(payment.status)) throw conflict('ALREADY_PAID', 'This reservation is already paid');
   if (!payment || !payment.providerOrderId) {
     let order;
@@ -203,6 +225,8 @@ export async function payReservation(customer, eventId, reservationId) {
           paymentType: 'advance',
           packageTotal: String(packageTotalOf(reservation)),
           advancePercent: String(reservation.advancePercent ?? ADVANCE_PERCENT),
+          couponCode: coupon?.code || '',
+          couponDiscount: discountAmount ? String(discountAmount) : '',
         },
       });
     } catch (err) {
@@ -217,6 +241,13 @@ export async function payReservation(customer, eventId, reservationId) {
       currency: 'INR',
       status: 'pending',
       providerOrderId: order.id,
+      coupon: coupon ? {
+        code: coupon.code,
+        discountAmount,
+        originalAmount: baseAmount,
+        orderAmount,
+        usageRecorded: false,
+      } : undefined,
     });
   }
 
@@ -228,7 +259,7 @@ export async function payReservation(customer, eventId, reservationId) {
       amount: razorpay.toPaise(payment.amount),
       currency: payment.currency,
       name: 'STARVNT',
-      description: `${categoryLabel(reservation.category)} · ${reservation.vendorName}`,
+      description: `${categoryLabel(reservation.category)} · ${reservation.vendorName}${payment.coupon?.code ? ` · ${payment.coupon.code}` : ''}`,
       prefill: { name: customer.fullName || '', email: customer.email || '', contact: customer.phone || '' },
     },
   };
@@ -361,6 +392,10 @@ export async function confirmBookingFor(payment) {
         provider: payment.provider || 'razorpay',
         providerOrderId: payment.providerOrderId || '',
         providerPaymentId: payment.providerRef || '',
+        couponCode: payment.coupon?.code || '',
+        couponDiscountAmount: Number(payment.coupon?.discountAmount || 0),
+        originalAdvanceAmount: Number(payment.coupon?.originalAmount || payment.amount),
+        couponUsageRecorded: Boolean(payment.coupon?.usageRecorded),
         paidAt: payment.verifiedAt || new Date(),
       };
       await vq.save();
@@ -395,6 +430,8 @@ export async function confirmBookingFor(payment) {
               advanceAmount: paidAmount,
               paidAmount,
               balanceAmount: reservation.balanceAmount ?? Math.max(0, totalAmount - paidAmount),
+              couponCode: payment.coupon?.code || '',
+              couponDiscountAmount: Number(payment.coupon?.discountAmount || 0),
               provider: payment.provider || 'razorpay',
               providerOrderId: payment.providerOrderId || '',
               providerPaymentId: payment.providerRef || '',
@@ -452,6 +489,11 @@ export async function verifyPayment(paymentId, { actorType, actorId }) {
     verifiedBy: actorType === 'ops' ? `ops:${actorId}` : actorType,
   });
   if (moved) {
+    if (moved.coupon?.code && !moved.coupon?.usageRecorded) {
+      await recordCouponUsageOnce(moved.coupon.code);
+      await commerceRepo.markCouponUsageRecorded(moved._id);
+      moved.coupon.usageRecorded = true;
+    }
     await eventsRepo.appendHistory({ eventId: payment.event, actorType, actorId, action: 'payment_verified', details: { amount: payment.amount } });
     
     await publishOutboxEvent({

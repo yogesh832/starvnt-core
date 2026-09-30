@@ -41,6 +41,7 @@ customerRouter.post('/quotes/:quoteId/accept', h(c.acceptQuote));
 
 customerRouter.get('/events/:id/reservations', h(c.bookings));
 customerRouter.get('/events/:id/bookings', h(c.bookings));
+customerRouter.post('/events/:id/reservations/:rid/coupon-preview', h(c.previewCoupon));
 customerRouter.post('/events/:id/reservations/:rid/pay', h(c.pay));
 // TODO_REMOVE_BEFORE_PRODUCTION: QA-only shortcut to mark a reservation advance as paid.
 customerRouter.post('/events/:id/reservations/:rid/dev-success-payment', h(c.devVerifyReservationPayment));
