@@ -104,8 +104,10 @@ export default function VendorPortal() {
     enquiriesCount: 0,
     quotesCount: 0,
     bookingsCount: 0,
+    messagesCount: 0,
     unreadNotificationsCount: 0,
   });
+  const [dismissedBadges, setDismissedBadges] = useState({});
   const [notifications, setNotifications] = useState([]);
 
   // Fetch real dynamic badge counts and notifications from backend
@@ -121,6 +123,7 @@ export default function VendorPortal() {
           enquiriesCount: bRes.enquiriesCount || 0,
           quotesCount: bRes.quotesCount || 0,
           bookingsCount: bRes.bookingsCount || 0,
+          messagesCount: bRes.messagesCount || 0,
           unreadNotificationsCount: bRes.unreadNotificationsCount || 0,
         });
       }
@@ -138,6 +141,18 @@ export default function VendorPortal() {
     const interval = setInterval(fetchLiveBadges, 15000); // Polling every 15s for live reactivity
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const handleRefresh = () => fetchLiveBadges();
+    window.addEventListener('vendorBadgesRefresh', handleRefresh);
+    return () => window.removeEventListener('vendorBadgesRefresh', handleRefresh);
+  }, []);
+
+  useEffect(() => {
+    if (['enquiries', 'quotes', 'bookings', 'messages'].includes(currentPage)) {
+      dismissBadge(currentPage);
+    }
+  }, [currentPage, badgeCounts]);
 
   // Close header dropdowns on click outside
   useEffect(() => {
@@ -193,18 +208,43 @@ export default function VendorPortal() {
     }
   }
 
+  function rawBadgeCount(page) {
+    if (page === 'enquiries') return badgeCounts.enquiriesCount || 0;
+    if (page === 'quotes') return badgeCounts.quotesCount || 0;
+    if (page === 'bookings') return badgeCounts.bookingsCount || 0;
+    if (page === 'messages') return badgeCounts.messagesCount || 0;
+    return 0;
+  }
+
+  function dismissBadge(page) {
+    setDismissedBadges((prev) => ({ ...prev, [page]: rawBadgeCount(page) }));
+  }
+
+  function navBadge(page, count) {
+    const dismissedCount = Number(dismissedBadges[page] || 0);
+    if (!count || count <= dismissedCount) return null;
+    return count - dismissedCount;
+  }
+
+  function handleNavClick(page) {
+    setNavOpen(false);
+    if (['enquiries', 'quotes', 'bookings', 'messages'].includes(page)) {
+      dismissBadge(page);
+    }
+  }
+
   const navItems = [
     { to: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: badgeCounts.enquiriesCount || null },
-    { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: badgeCounts.quotesCount || null },
-    { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: badgeCounts.bookingsCount || null },
+    { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
+    { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
+    { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
     { to: 'portfolio', label: 'Portfolio', icon: 'gallery' },
     { to: 'services', label: 'Services', icon: 'services' },
     { to: 'availability', label: 'Availability', icon: 'availability' },
     { to: 'payments', label: 'Payments', icon: 'payments' },
     { to: 'reviews', label: 'Reviews', icon: 'star' },
     { to: 'analytics', label: 'Analytics', icon: 'reports' },
-    { to: 'messages', label: 'Messages', icon: 'message' },
+    { to: 'messages', label: 'Messages', icon: 'message', badge: navBadge('messages', badgeCounts.messagesCount) },
     { to: 'profile', label: 'Profile & Hub', icon: 'profile' },
   ];
 
@@ -240,7 +280,7 @@ export default function VendorPortal() {
             <NavLink
               key={item.to}
               to={item.to}
-              onClick={() => setNavOpen(false)}
+              onClick={() => handleNavClick(item.to)}
               title={isSidebarMini ? item.label : undefined}
               className={({ isActive }) =>
                 `relative flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[13px] transition ${
@@ -509,7 +549,17 @@ export default function VendorPortal() {
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="reviews" element={<ReviewsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="messages" element={<Messages />} />
+            <Route
+              path="messages"
+              element={
+                <Messages
+                  onMessagesRead={() => {
+                    setBadgeCounts((prev) => ({ ...prev, messagesCount: 0 }));
+                    setDismissedBadges((prev) => ({ ...prev, messages: 0 }));
+                  }}
+                />
+              }
+            />
             <Route path="documents" element={<DocumentsPage user={user} business={businessName} />} />
             <Route path="profile" element={<ProfilePage user={user} business={businessName} />} />
             <Route path="settings" element={<SettingsPage user={user} business={businessName} />} />
@@ -545,9 +595,9 @@ export default function VendorPortal() {
           >
             <Icon name="message" size={19} />
             <span>Leads</span>
-            {badgeCounts.enquiriesCount > 0 && (
+            {navBadge('enquiries', badgeCounts.enquiriesCount) > 0 && (
               <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {badgeCounts.enquiriesCount}
+                {navBadge('enquiries', badgeCounts.enquiriesCount)}
               </span>
             )}
           </NavLink>
@@ -562,9 +612,9 @@ export default function VendorPortal() {
           >
             <Icon name="bookings" size={19} />
             <span>Bookings</span>
-            {badgeCounts.bookingsCount > 0 && (
+            {navBadge('bookings', badgeCounts.bookingsCount) > 0 && (
               <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {badgeCounts.bookingsCount}
+                {navBadge('bookings', badgeCounts.bookingsCount)}
               </span>
             )}
           </NavLink>

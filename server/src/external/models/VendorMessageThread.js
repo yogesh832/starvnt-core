@@ -62,6 +62,24 @@ const vendorMessageThreadSchema = new Schema(
       default: null,
       index: true,
     },
+    customerBooking: {
+      type: Schema.Types.ObjectId,
+      ref: 'CustomerBooking',
+      default: null,
+      index: true,
+    },
+    customerEvent: {
+      type: Schema.Types.ObjectId,
+      ref: 'CustomerEvent',
+      default: null,
+      index: true,
+    },
+    customerRequirement: {
+      type: Schema.Types.ObjectId,
+      ref: 'EventRequirement',
+      default: null,
+      index: true,
+    },
     clientName: {
       type: String,
       required: true,

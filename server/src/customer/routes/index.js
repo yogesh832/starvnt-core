@@ -34,6 +34,7 @@ customerRouter.get('/events/:id/services/compare', h(c.compare));
 customerRouter.get('/events/:id/services/:serviceId', h(c.serviceDetail));
 
 customerRouter.get('/events/:id/quotes', h(c.listQuotes));
+customerRouter.post('/events/:id/vendor-quote-requests', h(c.requestVendorQuotes));
 customerRouter.post('/events/:id/quotes', h(c.createQuote));
 customerRouter.get('/quotes/:quoteId', h(c.getQuote));
 customerRouter.post('/quotes/:quoteId/accept', h(c.acceptQuote));

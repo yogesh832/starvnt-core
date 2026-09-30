@@ -94,6 +94,7 @@ export function friendlyApiMessage(code, status) {
     ACCOUNT_DISABLED_OR_MISSING: "This account is not available. Please contact support.",
     FORBIDDEN: "You do not have permission to perform this action.",
     NO_VENDOR_ORGANIZATION: "Your vendor workspace is not ready yet. Please complete vendor setup.",
+    ACCOUNT_TYPE_MISMATCH: "This account belongs to the other login tab. Please switch Customer/Vendor and try again.",
     CLOUDINARY_NOT_CONFIGURED: "Media storage is not configured. Add the Cloudinary API key on the server and restart it.",
     MEDIA_UPLOAD_FAILED: "Media upload failed. Please check Cloudinary settings or try a smaller file.",
     PRIMARY_CATEGORY_SINGLE_ONLY: "Choose exactly one primary category. Add secondary services separately.",

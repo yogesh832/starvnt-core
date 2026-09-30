@@ -67,7 +67,7 @@ function normalizePrimaryCategory(category) {
 }
 
 /**
- * Creates a refresh session acting as `accountType` (the tab chosen at sign-in).
+ * Creates a refresh session acting as `accountType` (the DB-owned product surface).
  * Also marks the in-memory user so toSafeJSON() reports that surface.
  */
 async function createSession(user, req, accountType = user.accountType) {
@@ -97,15 +97,13 @@ function issueTokens(user, session) {
   };
 }
 
-// ── One email, two surfaces ─────────────────────────────────────────────────
-// The tab chosen at sign-in decides whether this session is the Customer App
-// or Vendor OS. Choosing a surface the user hasn't used yet adds that role.
+// ── One auth domain, DB-owned account surface ───────────────────────────────
+// New signups use the selected Customer/Vendor tab. Existing identities always
+// sign in with their primary DB accountType, so a wrong tab cannot convert a
+// customer into a vendor or create vendor records during login.
 
-/** The surface to sign in as: the chosen tab, else the account's primary type. */
-function resolveAccountType(user, requested) {
-  return requested === "CUSTOMER" || requested === "VENDOR"
-    ? requested
-    : user.accountType;
+function resolveExistingAccountType(user) {
+  return user.accountType || userRoles(user)[0] || "CUSTOMER";
 }
 
 function grantRole(user, role) {
@@ -300,7 +298,7 @@ router.post("/login", authLimiter, async (req, res, next) => {
       return res.status(401).json({ error: "ACCOUNT_DISABLED" });
     }
 
-    const signInAs = resolveAccountType(user, accountType);
+    const signInAs = resolveExistingAccountType(user);
     await prepareAccountType(user, signInAs, {
       businessName,
       brandName,
@@ -350,7 +348,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
-      signInAs = resolveAccountType(user, accountType);
+      signInAs = resolveExistingAccountType(user);
       await prepareAccountType(user, signInAs, {
         businessName,
         brandName,
@@ -433,6 +431,7 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
       email,
       mode,
       authMode,
+      accountType,
       fullName,
       businessName,
       brandName,
@@ -551,7 +550,7 @@ router.post("/password/set", authLimiter, async (req, res, next) => {
 
     user.passwordHash = await hashPassword(password);
     user.authProvider = user.googleId ? "GOOGLE" : user.phone ? "PHONE" : "EMAIL";
-    const signInAs = resolveAccountType(user, accountType);
+    const signInAs = resolveExistingAccountType(user);
     await prepareAccountType(user, signInAs);
     user.lastLoginAt = new Date();
     await user.save();
@@ -651,7 +650,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
 
     let signInAs;
     if (user) {
-      signInAs = resolveAccountType(user, accountType);
+      signInAs = resolveExistingAccountType(user);
       await prepareAccountType(user, signInAs, {
         businessName,
         brandName,
@@ -774,7 +773,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
 
     let signInAs;
     if (user) {
-      signInAs = resolveAccountType(user, accountType);
+      signInAs = resolveExistingAccountType(user);
       await prepareAccountType(user, signInAs, {
         businessName,
         brandName,
@@ -877,14 +876,11 @@ router.post("/refresh", async (req, res, next) => {
         .json({ ok: false, error: "ACCOUNT_DISABLED_OR_MISSING" });
     }
 
-    // Rotate: revoke old session, create new one (same surface it signed in as).
+    // Rotate: revoke old session and re-resolve from the DB primary surface.
+    // This also heals old sessions minted with the wrong Customer/Vendor tab.
     session.revokedAt = new Date();
     await session.save();
-    const fresh = await createSession(
-      user,
-      req,
-      session.accountType || user.accountType,
-    );
+    const fresh = await createSession(user, req, resolveExistingAccountType(user));
     res.cookie(
       config.refreshCookieName,
       fresh.refreshToken,

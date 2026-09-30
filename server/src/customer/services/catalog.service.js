@@ -127,9 +127,16 @@ export function listedTotal(pricing, guestCount) {
   return null;
 }
 
-function fromVendor({ service, vendor }, { guestCount } = {}) {
+function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { guestCount } = {}) {
   const reviewCount = vendor?.rating?.count || 0;
   const price = listedTotal(service.pricing, guestCount);
+  const resolvedLocation = matchedLocation || null;
+  const locationLabel = [
+    resolvedLocation?.locality,
+    resolvedLocation?.city,
+    resolvedLocation?.state,
+  ].filter(Boolean).join(', ');
+  const vendorLocation = locationLabel || vendor.location || '';
   return {
     id: vsId(service._id),
     source: 'vendor',
@@ -138,7 +145,7 @@ function fromVendor({ service, vendor }, { guestCount } = {}) {
     description: service.description || '',
     vendorId: String(vendor._id),
     vendorName: vendor.businessName,
-    vendorLocation: vendor.location || '',
+    vendorLocation,
     vendorBio: vendor.bio || '',
     price,
     costBreakdown: price == null ? null : { base: price, travel: null, additional: null },
@@ -151,8 +158,13 @@ function fromVendor({ service, vendor }, { guestCount } = {}) {
     rating: reviewCount > 0 ? vendor.rating.average : null,
     reviewCount,
     cancellationPolicy: service.cancellationPolicy || null,
-    location: { address: vendor.location || '', locality: vendor.location || '', city: vendor.location || '', coordinates: null },
-    serviceRadiusKm: null,
+    location: {
+      address: resolvedLocation?.address || vendor.location || '',
+      locality: resolvedLocation?.locality || '',
+      city: resolvedLocation?.city || matchedCoverage?.city || vendor.location || '',
+      coordinates: resolvedLocation?.coordinates || null,
+    },
+    serviceRadiusKm: matchedCoverage?.radiusKm || null,
     strengths: [],
     limitations: [],
     negotiable: [],
@@ -283,9 +295,8 @@ export async function optionsForCategory(event, categoryParam) {
 export async function getOption(event, optionId) {
   let option = null;
   if (typeof optionId === 'string' && optionId.startsWith('vs_')) {
-    const row = await catalogRepo.findBookableService(optionId.slice(3));
-    // Real options are only offered in the event's city.
-    if (row && (!event?.city || (row.vendor.location || '').toLowerCase().includes(event.city.toLowerCase()))) {
+    const row = await catalogRepo.findBookableService(optionId.slice(3), { city: event?.city || null });
+    if (row) {
       option = fromVendor(row, event || {});
     }
   } else if (typeof optionId === 'string' && optionId.startsWith('demo_') && demoListingsEnabled()) {

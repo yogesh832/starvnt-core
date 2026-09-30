@@ -3,6 +3,9 @@ import { requireExternalAuth, requireAccountType } from '../middleware/requireEx
 import { Opportunity } from '../models/Opportunity.js';
 import { Quote } from '../models/Quote.js';
 import { Notification } from '../models/Notification.js';
+import { VendorMessageThread } from '../models/VendorMessageThread.js';
+import mongoose from 'mongoose';
+import { EventMessage, CustomerEvent, EventRequirement, EventHistory, Reservation } from '../../customer/models/index.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
 import { activeAccountType } from '../models/ExternalUser.js';
@@ -36,6 +39,7 @@ function quoteForCustomer(quote) {
   return {
     id: String(quote._id),
     quoteReference: quote.quoteReference,
+    opportunityId: quote.opportunity ? String(quote.opportunity) : null,
     serviceName: quote.serviceName,
     eventDate: quote.eventDate,
     serviceLocation: quote.serviceLocation,
@@ -455,6 +459,20 @@ router.post('/customer/vendor-quotes/:id/negotiate', requireExternalAuth, requir
       return res.status(400).json({ error: 'QUOTE_NOT_NEGOTIABLE', message: 'Only submitted quotes can be negotiated.' });
     }
 
+    const formattedBudget = counterBudget ? ('₹' + Number(counterBudget).toLocaleString('en-IN')) : null;
+    const formattedOriginal = quote.pricingBreakdown?.totalAmount
+      ? ('₹' + Number(quote.pricingBreakdown.totalAmount).toLocaleString('en-IN'))
+      : null;
+
+    let completeMessage = '';
+    if (counterBudget && message) {
+      completeMessage = `💬 Counter Quote Proposal: ${formattedBudget}${formattedOriginal ? ' (Original Quote: ' + formattedOriginal + ')' : ''}\n\n"${message}"\n\nThis is my proposed budget for ${quote.serviceName}. Can we do it within this budget? Is this acceptable to you? Please review and send a revised quotation if possible. Thank you!`;
+    } else if (counterBudget) {
+      completeMessage = `💬 Counter Quote Proposal: ${formattedBudget}${formattedOriginal ? ' (Original Quote: ' + formattedOriginal + ')' : ''}\n\nThis is my proposed budget for ${quote.serviceName}. Can we do it within this budget? Is this acceptable to you? Please review and send a revised quotation if possible. Thank you!`;
+    } else {
+      completeMessage = `💬 Quote Negotiation Request:\n\n"${message}"\n\nCould you please review and send a revised quotation based on my request? Thank you!`;
+    }
+
     const reasonParts = [];
     if (counterBudget) reasonParts.push(`Proposed Budget: ₹${counterBudget}`);
     if (message) reasonParts.push(`Message: ${message}`);
@@ -463,25 +481,248 @@ router.post('/customer/vendor-quotes/:id/negotiate', requireExternalAuth, requir
     quote.history.push({
       fromStatus: quote.status,
       toStatus: quote.status,
-      changedBy: req.externalUser.fullName || req.externalUser.email,
+      changedBy: req.externalUser.fullName || req.externalUser.email || 'Customer',
       reason: fullReason,
       timestamp: new Date(),
     });
-    
-    // Vendor quote logic: If they negotiate, maybe it goes to DRAFT or stays SUBMITTED for vendor to re-review.
-    // The previous code kept it as quote.status (SUBMITTED).
     await quote.save();
 
+    // Find or create direct contextual thread in VendorMessageThread
+    let thread = await VendorMessageThread.findOne({
+      vendor: quote.vendor,
+      $or: [
+        { customer: quote.customer },
+        ...(quote.opportunity ? [{ opportunity: quote.opportunity }] : []),
+      ],
+    });
+
+    if (!thread) {
+      thread = new VendorMessageThread({
+        vendor: quote.vendor,
+        customer: quote.customer,
+        opportunity: quote.opportunity || null,
+        clientName: req.externalUser.fullName || req.externalUser.email || 'Client',
+        clientPhone: req.externalUser.phone || '',
+        clientEmail: req.externalUser.email || '',
+        eventName: quote.serviceName || 'Event Service',
+        eventType: 'Quote Negotiation',
+        eventDate: quote.eventDate || '',
+        venueLocation: quote.serviceLocation?.address || quote.serviceLocation?.city || '',
+        messages: [
+          {
+            sender: 'SYSTEM',
+            senderName: 'STARVNT Core',
+            text: `Quote ${quote.quoteReference || ''} was submitted for ${quote.serviceName}${formattedOriginal ? ' at ' + formattedOriginal : ''}.`,
+            isRead: true,
+            createdAt: new Date(Date.now() - 1000),
+          },
+        ],
+      });
+    }
+
+    const newMsg = {
+      sender: 'CLIENT',
+      senderName: req.externalUser.fullName || 'Client',
+      text: completeMessage,
+      isRead: false,
+      metadata: {
+        type: 'COUNTER_QUOTE',
+        quoteId: quote._id,
+        quoteReference: quote.quoteReference,
+        counterBudget,
+        originalAmount: quote.pricingBreakdown?.totalAmount,
+        customerNote: message,
+      },
+      createdAt: new Date(),
+    };
+
+    thread.messages.push(newMsg);
+    thread.lastMessageText = completeMessage;
+    thread.lastMessageAt = new Date();
+    thread.unreadVendorCount = (thread.unreadVendorCount || 0) + 1;
+    await thread.save();
+
+    // Create vendor notification linking directly to chat thread
     await Notification.create({
       vendor: quote.vendor,
       title: 'Customer requested quote change',
       message: fullReason,
-      type: 'QUOTE',
-      link: '/vendor/quotes',
-      metadata: { quoteId: quote._id },
+      type: 'MESSAGE',
+      link: '/vendor/messages',
+      metadata: {
+        quoteId: quote._id,
+        threadId: thread._id,
+        counterBudget,
+        note: message,
+      },
     });
 
-    res.json({ ok: true, quote: quoteForCustomer(await quote.populate('vendor', 'businessName category location')) });
+    // If linked to an opportunity with customer event, sync to Event Circle as well
+    if (quote.opportunity) {
+      try {
+        const opp = await Opportunity.findById(quote.opportunity).lean();
+        if (opp?.customerEvent) {
+          await EventMessage.create({
+            event: opp.customerEvent,
+            senderType: 'customer',
+            senderCustomer: req.externalUser._id,
+            senderName: req.externalUser.fullName || 'You',
+            body: completeMessage,
+          });
+        }
+      } catch (e) {
+        console.warn('[Negotiate] EventMessage sync skipped:', e.message);
+      }
+    }
+
+    res.json({ ok: true, quote: quoteForCustomer(await quote.populate('vendor', 'businessName category location')), threadId: thread._id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
+  try {
+    const quote = await Quote.findOne({ _id: req.params.id, customer: req.externalUser._id })
+      .populate('vendor', 'businessName category location');
+    if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND', message: 'Quote not found.' });
+
+    // Locate customer's event
+    let event = null;
+    if (req.body?.eventId) {
+      event = await CustomerEvent.findOne({ _id: req.body.eventId, customer: req.externalUser._id });
+    }
+    if (!event && quote.opportunity) {
+      const opp = await Opportunity.findById(quote.opportunity).lean();
+      if (opp?.customerEvent) {
+        event = await CustomerEvent.findOne({ _id: opp.customerEvent, customer: req.externalUser._id });
+      }
+    }
+    if (!event) {
+      event = await CustomerEvent.findOne({
+        customer: req.externalUser._id,
+        status: { $in: ['draft', 'planning'] },
+      }).sort({ updatedAt: -1 });
+    }
+
+    if (quote.status === 'SUBMITTED') {
+      await transitionQuote(quote._id, 'APPROVED', {
+        actor: req.externalUser.fullName || req.externalUser.email || 'Customer',
+        reason: 'Customer accepted vendor offer',
+      });
+      quote.status = 'APPROVED';
+      await quote.save();
+
+      await Notification.create({
+        vendor: quote.vendor?._id || quote.vendor,
+        title: 'Client Approved Your Quote! 🎉',
+        message: `${req.externalUser.fullName || 'Client'} accepted your quote for ${quote.serviceName} (${quote.eventDate}) at ₹${(quote.pricingBreakdown?.totalAmount || 0).toLocaleString('en-IN')}. Advance payment reservation opened.`,
+        type: 'QUOTE',
+        link: '/vendor/bookings',
+        metadata: { quoteId: quote._id },
+      });
+    } else if (quote.status !== 'APPROVED') {
+      return res.status(400).json({
+        error: 'QUOTE_NOT_ACCEPTABLE',
+        message: 'Only submitted quotes can be accepted.',
+      });
+    }
+
+    let reservation = null;
+    if (event) {
+      const category = quote.vendor?.category || 'other';
+      let reqDoc = await EventRequirement.findOne({ event: event._id, category });
+      if (!reqDoc) {
+        reqDoc = await EventRequirement.create({
+          event: event._id,
+          category,
+          status: 'confirmed',
+          source: 'customer',
+          providedValue: quote.serviceName,
+          selectedOptionId: quote.vendorService ? `vs_${quote.vendorService}` : `quote_${quote._id}`,
+          selectedOption: {
+            vendorName: quote.vendor?.businessName || 'Vendor',
+            packageName: quote.serviceName,
+            price: quote.pricingBreakdown?.totalAmount || 0,
+            isDemo: false,
+          },
+        });
+      } else {
+        reqDoc.status = 'confirmed';
+        reqDoc.selectedOptionId = quote.vendorService ? `vs_${quote.vendorService}` : `quote_${quote._id}`;
+        reqDoc.selectedOption = {
+          vendorName: quote.vendor?.businessName || 'Vendor',
+          packageName: quote.serviceName,
+          price: quote.pricingBreakdown?.totalAmount || 0,
+          isDemo: false,
+        };
+        await reqDoc.save();
+      }
+
+      await Reservation.updateMany(
+        { requirement: reqDoc._id, status: 'pending_payment' },
+        { $set: { status: 'cancelled' } }
+      );
+
+      const total = Number(quote.pricingBreakdown?.totalAmount || 0);
+      const advance = quote.advancePayment?.amount || Math.ceil((total * ADVANCE_PERCENTAGE) / 100);
+      const expiresAt = new Date(Date.now() + 48 * 3600000);
+
+      reservation = await Reservation.findOne({
+        event: event._id,
+        customer: req.externalUser._id,
+        quote: quote._id,
+      });
+
+      if (reservation) {
+        reservation.category = category;
+        reservation.requirement = reqDoc._id;
+        reservation.vendorName = quote.vendor?.businessName || 'Vendor';
+        reservation.packageName = quote.serviceName;
+        reservation.packageTotal = total;
+        reservation.advancePercent = quote.advancePayment?.percentage || ADVANCE_PERCENTAGE;
+        reservation.amount = advance;
+        reservation.balanceAmount = Math.max(0, total - advance);
+        reservation.isDemo = false;
+        reservation.status = 'pending_payment';
+        reservation.expiresAt = expiresAt;
+        await reservation.save();
+      } else {
+        reservation = await Reservation.create({
+          event: event._id,
+          customer: req.externalUser._id,
+          quote: quote._id,
+          quoteItem: new mongoose.Types.ObjectId(),
+          requirement: reqDoc._id,
+          category,
+          optionId: quote.vendorService ? `vs_${quote.vendorService}` : `quote_${quote._id}`,
+          vendorName: quote.vendor?.businessName || 'Vendor',
+          packageName: quote.serviceName,
+          packageTotal: total,
+          advancePercent: quote.advancePayment?.percentage || ADVANCE_PERCENTAGE,
+          amount: advance,
+          balanceAmount: Math.max(0, total - advance),
+          isDemo: false,
+          status: 'pending_payment',
+          expiresAt,
+        });
+      }
+
+      await EventHistory.create({
+        event: event._id,
+        actorType: 'customer',
+        actorId: String(req.externalUser._id),
+        action: 'quote_accepted',
+        details: { quoteId: quote._id, total, vendorName: quote.vendor?.businessName },
+      });
+    }
+
+    res.json({
+      ok: true,
+      quote: quoteForCustomer(quote),
+      eventId: event?._id,
+      reservationId: reservation?._id,
+    });
   } catch (err) {
     next(err);
   }
@@ -724,10 +965,18 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
       });
     }
 
-    const message = String(req.body?.notes || req.body?.message || '').trim();
+    const rawMessage = String(req.body?.notes || req.body?.message || '').trim();
+    let cleanMessage = rawMessage;
+    while (/^(Vendor revised offer:\s*|Revised proposal in response to customer counter offer:\s*|Customer requested change\s*-\s*)/i.test(cleanMessage)) {
+      cleanMessage = cleanMessage.replace(/^(Vendor revised offer:\s*|Revised proposal in response to customer counter offer:\s*|Customer requested change\s*-\s*)/i, '').trim();
+    }
+    const reasonText = cleanMessage
+      ? `Vendor revised offer: ${cleanMessage}`
+      : `Vendor revised offer to ₹${pricing.totalAmount.toLocaleString('en-IN')}`;
+
     const previousStatus = quote.status;
     quote.pricingBreakdown = pricing;
-    quote.notes = message;
+    quote.notes = cleanMessage || reasonText;
     quote.status = 'SUBMITTED';
     quote.validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     quote.advancePayment = {
@@ -743,10 +992,48 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
       fromStatus: previousStatus,
       toStatus: 'SUBMITTED',
       changedBy: req.externalUser.fullName || req.externalUser.email || 'Vendor',
-      reason: message ? `Vendor revised offer: ${message}` : `Vendor revised offer to ₹${pricing.totalAmount.toLocaleString('en-IN')}`,
+      reason: reasonText,
       timestamp: new Date(),
     });
     await quote.save();
+
+    // Sync notification and chat thread message
+    try {
+      await Notification.create({
+        customer: quote.customer,
+        title: 'Vendor Revised Offer',
+        message: `${quote.vendor?.businessName || 'Vendor'} sent a revised quotation for ${quote.serviceName}: ₹${pricing.totalAmount.toLocaleString('en-IN')}.`,
+        type: 'QUOTE',
+        link: '/customer/events',
+        metadata: { quoteId: quote._id },
+      });
+
+      const thread = await VendorMessageThread.findOne({
+        vendor: quote.vendor,
+        customer: quote.customer,
+      });
+      if (thread) {
+        const text = `📄 Vendor Revised Quotation:\nTotal: ₹${pricing.totalAmount.toLocaleString('en-IN')}${cleanMessage ? '\nNotes: ' + cleanMessage : ''}`;
+        thread.messages.push({
+          sender: 'VENDOR',
+          senderName: req.externalUser.fullName || 'Vendor',
+          text,
+          isRead: false,
+          metadata: {
+            type: 'QUOTE_REVISION',
+            quoteId: quote._id,
+            totalAmount: pricing.totalAmount,
+          },
+          createdAt: new Date(),
+        });
+        thread.lastMessageText = text;
+        thread.lastMessageAt = new Date();
+        thread.unreadClientCount = (thread.unreadClientCount || 0) + 1;
+        await thread.save();
+      }
+    } catch (e) {
+      console.warn('[ReviseQuote] Thread message sync skipped:', e.message);
+    }
 
     res.json({
       ok: true,
@@ -869,12 +1156,15 @@ router.post(
   async (req, res) => {
     try {
       const vendorId = req.externalUser.vendorOrganization;
-      const { deliverablesUrl, checklist, notes } = req.body || {};
+      const { deliverablesUrl, checklist, notes, files, photos, videos } = req.body || {};
 
       const booking = await submitCompletionEvidence(req.params.id, vendorId, {
         deliverablesUrl,
         checklist,
         notes,
+        files,
+        photos,
+        videos,
       });
 
       res.json({ ok: true, booking });

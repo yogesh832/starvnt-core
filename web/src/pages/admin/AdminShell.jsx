@@ -1,5 +1,5 @@
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { useState } from 'react';
+import { Routes, Route, NavLink, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import { useTheme } from '../../lib/ThemeContext.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -34,6 +34,25 @@ export default function AdminShell() {
   const { admin, logout, can } = useAdminAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const [navOpen, setNavOpen] = useState(false);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const currentSearch = searchParams.get('search') || '';
+  const [topbarSearch, setTopbarSearch] = useState(currentSearch);
+
+  useEffect(() => {
+    setTopbarSearch(currentSearch);
+  }, [currentSearch]);
+
+  function handleTopbarSearch(e) {
+    e.preventDefault();
+    const query = topbarSearch.trim();
+    const targetModule = location.pathname.startsWith('/admin/') && location.pathname !== '/admin/dashboard'
+      ? location.pathname
+      : '/admin/vendors';
+    navigate(`${targetModule}${query ? `?search=${encodeURIComponent(query)}` : ''}`);
+  }
 
   const visible = MODULES.filter((m) => {
     if (m.superOnly) return admin.role === 'SUPER_ADMIN';
@@ -101,10 +120,28 @@ export default function AdminShell() {
           >
             <Icon name="menu" size={20} />
           </button>
-          <div className="flex-1 max-w-lg flex items-center gap-2 bg-lavender rounded-xl px-3.5 py-2 text-sm text-muted">
+          <form onSubmit={handleTopbarSearch} className="flex-1 max-w-lg flex items-center gap-2 bg-lavender rounded-xl px-3.5 py-2 text-sm text-muted">
             <Icon name="search" size={16} />
-            <input className="bg-transparent flex-1 outline-none placeholder:text-muted/70" placeholder="Search anything..." />
-          </div>
+            <input
+              value={topbarSearch}
+              onChange={(e) => setTopbarSearch(e.target.value)}
+              className="bg-transparent flex-1 outline-none placeholder:text-muted/70 text-navy"
+              placeholder="Search vendors, customers, bookings..."
+            />
+            {topbarSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTopbarSearch('');
+                  navigate(location.pathname);
+                }}
+                className="text-muted hover:text-navy text-xs font-bold px-1 cursor-pointer"
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </form>
           <div className="ml-auto flex items-center gap-1.5">
             <button className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60">
               <Icon name="bell" size={18} />
@@ -122,7 +159,7 @@ export default function AdminShell() {
                 <div className="text-[13px] font-bold leading-tight">{admin.fullName}</div>
                 <div className="text-[10px] text-muted">{admin.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}</div>
               </div>
-              <button onClick={logout} className="text-[11px] text-muted hover:text-ink ml-1">Sign out</button>
+              <button onClick={logout} className="text-[11px] text-muted hover:text-ink ml-1 cursor-pointer">Sign out</button>
             </div>
           </div>
         </header>

@@ -16,8 +16,10 @@ import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
 import { VendorDocument } from '../models/VendorDocument.js';
+import { Booking as CustomerBooking, EventMessage, CustomerNotification } from '../../customer/models/index.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { generateVendorInsights } from '../services/auraIntelligence.service.js';
+import { verifyGstin } from '../services/gstinVerification.service.js';
 import { v2 as cloudinary } from 'cloudinary';
 import vendorAuraRoutes from './vendorAura.routes.js';
 
@@ -275,9 +277,14 @@ router.get('/locations', async (req, res, next) => {
 router.post('/locations', async (req, res, next) => {
   try {
     const { label, type, address, locality, city, state, postalCode, coordinates, isPrimary } = req.body || {};
-    if (!label || !address || !city) {
-      return res.status(400).json({ error: 'MISSING_LOCATION_FIELDS' });
+    const trimmedLabel = (label && String(label).trim()) || 'Main Studio';
+    const trimmedCity = (city && String(city).trim()) || (req.vendor.location ? String(req.vendor.location).split(',')[0].trim() : '');
+    if (!trimmedCity) {
+      return res.status(400).json({ error: 'MISSING_LOCATION_FIELDS', message: 'City is required for operating origin.' });
     }
+
+    const trimmedLocality = locality ? String(locality).trim() : '';
+    const trimmedAddress = (address && String(address).trim()) || [trimmedLocality, trimmedCity].filter(Boolean).join(', ') || trimmedCity;
 
     const existingCount = await OperatingLocation.countDocuments({ vendor: req.vendorId });
     const shouldBePrimary = Boolean(isPrimary || existingCount === 0);
@@ -288,13 +295,13 @@ router.post('/locations', async (req, res, next) => {
 
     const location = await OperatingLocation.create({
       vendor: req.vendorId,
-      label: label.trim(),
+      label: trimmedLabel,
       type: type || 'STUDIO',
-      address: address.trim(),
-      locality: locality ? locality.trim() : '',
-      city: city.trim(),
-      state: state ? state.trim() : 'Maharashtra',
-      postalCode: postalCode ? postalCode.trim() : '',
+      address: trimmedAddress,
+      locality: trimmedLocality,
+      city: trimmedCity,
+      state: state ? String(state).trim() : 'West Bengal',
+      postalCode: postalCode ? String(postalCode).trim() : '',
       coordinates: coordinates && typeof coordinates.lat === 'number' && typeof coordinates.lng === 'number'
         ? { lat: Number(coordinates.lat), lng: Number(coordinates.lng) }
         : { lat: 0, lng: 0 },
@@ -324,13 +331,18 @@ router.put('/locations/:id', async (req, res, next) => {
     }
 
     const { label, type, address, locality, city, state, postalCode, coordinates, isPrimary } = req.body || {};
-    if (label) loc.label = label.trim();
-    if (type) loc.type = type;
-    if (address) loc.address = address.trim();
-    if (locality !== undefined) loc.locality = locality.trim();
-    if (city) loc.city = city.trim();
-    if (state !== undefined) loc.state = state.trim();
-    if (postalCode !== undefined) loc.postalCode = postalCode.trim();
+    if (label !== undefined && String(label).trim()) loc.label = String(label).trim();
+    if (type !== undefined) loc.type = type;
+    if (city !== undefined && String(city).trim()) loc.city = String(city).trim();
+    if (locality !== undefined) loc.locality = String(locality).trim();
+    if (address !== undefined) {
+      const trimmed = String(address).trim();
+      loc.address = trimmed || [loc.locality, loc.city].filter(Boolean).join(', ') || loc.city || 'Studio Base';
+    } else if (!loc.address) {
+      loc.address = [loc.locality, loc.city].filter(Boolean).join(', ') || loc.city || 'Studio Base';
+    }
+    if (state !== undefined) loc.state = String(state).trim();
+    if (postalCode !== undefined) loc.postalCode = String(postalCode).trim();
     if (coordinates && typeof coordinates.lat === 'number' && typeof coordinates.lng === 'number') {
       loc.coordinates = { lat: Number(coordinates.lat), lng: Number(coordinates.lng) };
     }
@@ -365,6 +377,9 @@ router.patch('/locations/:id/primary', async (req, res, next) => {
 
     await OperatingLocation.updateMany({ vendor: req.vendorId }, { isPrimary: false });
     loc.isPrimary = true;
+    if (!loc.address) {
+      loc.address = [loc.locality, loc.city].filter(Boolean).join(', ') || loc.city || 'Studio Base';
+    }
     await loc.save();
 
     req.vendor.location = `${loc.locality ? loc.locality + ', ' : ''}${loc.city}`;
@@ -388,6 +403,9 @@ router.delete('/locations/:id', async (req, res, next) => {
       const remaining = await OperatingLocation.findOne({ vendor: req.vendorId }).sort({ createdAt: 1 });
       if (remaining) {
         remaining.isPrimary = true;
+        if (!remaining.address) {
+          remaining.address = [remaining.locality, remaining.city].filter(Boolean).join(', ') || remaining.city || 'Studio Base';
+        }
         await remaining.save();
         req.vendor.location = `${remaining.locality ? remaining.locality + ', ' : ''}${remaining.city}`;
         await req.vendor.save();
@@ -726,10 +744,15 @@ router.put('/notifications/read-all', async (req, res, next) => {
 
 router.get('/badge-counts', async (req, res, next) => {
   try {
-    const [enquiriesCount, quotesCount, bookingsCount, unreadNotificationsCount] = await Promise.all([
+    const [enquiriesCount, quotesCount, bookingsCount, messagesCount, unreadNotificationsCount] = await Promise.all([
       Opportunity.countDocuments({ vendor: req.vendorId, status: 'NEW' }),
       Quote.countDocuments({ vendor: req.vendorId, status: { $in: ['DRAFT', 'SUBMITTED'] } }),
       CoreBooking.countDocuments({ vendorId: req.vendorId, bookingStatus: 'CONFIRMED' }),
+      VendorMessageThread.countDocuments({
+        vendor: req.vendorId,
+        status: { $ne: 'BLOCKED' },
+        unreadVendorCount: { $gt: 0 },
+      }),
       Notification.countDocuments({ vendor: req.vendorId, isRead: false }),
     ]);
 
@@ -738,6 +761,7 @@ router.get('/badge-counts', async (req, res, next) => {
       enquiriesCount,
       quotesCount,
       bookingsCount,
+      messagesCount,
       unreadNotificationsCount,
     });
   } catch (err) {
@@ -947,6 +971,19 @@ router.get('/messages/threads/:id', async (req, res, next) => {
     if (updated) {
       await thread.save();
     }
+    await Notification.updateMany(
+      {
+        vendor: req.vendorId,
+        type: 'MESSAGE',
+        isRead: false,
+        $or: [
+          { 'metadata.threadId': String(thread._id) },
+          ...(thread.customerBooking ? [{ 'metadata.customerBookingId': String(thread.customerBooking) }] : []),
+          ...(thread.customerRequirement ? [{ 'metadata.customerRequirementId': String(thread.customerRequirement) }] : []),
+        ],
+      },
+      { isRead: true }
+    );
 
     res.json({ ok: true, thread });
   } catch (err) {
@@ -982,6 +1019,45 @@ router.post('/messages/threads/:id', async (req, res, next) => {
     thread.lastMessageText = text.trim();
     thread.lastMessageAt = new Date();
     await thread.save();
+
+    if (thread.customerBooking) {
+      const booking = await CustomerBooking.findById(thread.customerBooking).lean();
+      if (booking) {
+        await Promise.all([
+          EventMessage.create({
+            event: booking.event,
+            booking: booking._id,
+            senderType: 'vendor',
+            senderName: req.vendor.businessName || 'Vendor',
+            body: text.trim(),
+          }),
+          CustomerNotification.create({
+            customer: booking.customer,
+            event: booking.event,
+            type: 'message',
+            title: `${req.vendor.businessName || 'Vendor'} replied`,
+            body: text.trim().slice(0, 180),
+          }),
+        ]);
+      }
+    } else if (thread.customerEvent && thread.customerRequirement && thread.customer) {
+      await Promise.all([
+        EventMessage.create({
+          event: thread.customerEvent,
+          requirement: thread.customerRequirement,
+          senderType: 'vendor',
+          senderName: req.vendor.businessName || 'Vendor',
+          body: text.trim(),
+        }),
+        CustomerNotification.create({
+          customer: thread.customer,
+          event: thread.customerEvent,
+          type: 'message',
+          title: `${req.vendor.businessName || 'Vendor'} replied`,
+          body: text.trim().slice(0, 180),
+        }),
+      ]);
+    }
 
     res.status(201).json({ ok: true, thread, message: newMsg });
   } catch (err) {
@@ -1056,20 +1132,73 @@ router.post('/documents', async (req, res, next) => {
       return res.status(400).json({ error: 'TITLE_REQUIRED' });
     }
 
+    const normalizedType = type || 'OTHER';
+    const normalizedDocumentNumber = documentNumber ? String(documentNumber).trim().toUpperCase() : '';
+    let status = 'SUBMITTED';
+    let verificationSource = 'MANUAL';
+    let verificationResult = undefined;
+    let resolvedNotes = notes ? notes.trim() : '';
+
+    if (normalizedType === 'GST') {
+      verificationSource = 'GSTIN_API';
+      const result = await verifyGstin(normalizedDocumentNumber, req.vendor.businessName);
+      verificationResult = {
+        matched: Boolean(result.matched),
+        confidence: result.confidence || 'NONE',
+        legalName: result.legalName || '',
+        tradeName: result.tradeName || '',
+        taxpayerType: result.taxpayerType || '',
+        gstinStatus: result.gstinStatus || '',
+        registrationDate: result.registrationDate || '',
+        address: result.address || '',
+        raw: result.raw || null,
+        checkedAt: result.checkedAt || new Date(),
+        error: result.error || '',
+      };
+
+      if (result.ok && result.matched) {
+        status = 'VERIFIED';
+        resolvedNotes = `GSTIN verified. Legal name: ${result.legalName || 'not provided'}${result.tradeName ? `; Trade name: ${result.tradeName}` : ''}`;
+      } else {
+        status = 'SUBMITTED';
+        const reason = result.ok
+          ? `GSTIN found, but name did not confidently match "${req.vendor.businessName}".`
+          : `GSTIN check could not auto-verify: ${result.error || 'unknown error'}.`;
+        resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
+      }
+    }
+
     const doc = await VendorDocument.create({
       vendor: req.vendorId,
       title: title.trim(),
-      type: type || 'OTHER',
-      documentNumber: documentNumber ? documentNumber.trim() : '',
+      type: normalizedType,
+      documentNumber: normalizedDocumentNumber,
       fileName: fileName ? fileName.trim() : `${title.trim().replace(/\s+/g, '_')}.pdf`,
       fileUrl: fileUrl || '',
       fileSize: fileSize || '1.2 MB',
-      status: 'SUBMITTED',
-      notes: notes ? notes.trim() : '',
+      status,
+      notes: resolvedNotes,
       expiryDate: expiryDate || '',
+      verificationSource,
+      verificationResult,
+      verifiedAt: status === 'VERIFIED' ? new Date() : null,
     });
 
-    res.status(201).json({ ok: true, document: doc });
+    let activation = null;
+    if (status === 'VERIFIED' && normalizedType === 'GST') {
+      req.vendor.verification = {
+        ...(req.vendor.verification?.toObject?.() || req.vendor.verification || {}),
+        isVerified: true,
+        verifiedAt: new Date(),
+        documentType: 'GST',
+        documentRef: doc._id,
+        notes: 'Auto-verified by GSTIN API legal/trade name match.',
+      };
+      await req.vendor.save();
+      activation = await evaluateVendorActivation(req.vendorId);
+    }
+
+    res.status(201).json({ ok: true, document: doc, activation });
   } catch (err) {
     next(err);
   }

@@ -65,7 +65,11 @@ export async function startService(bookingId, vendorId) {
  *
  * Vendor can submit facts/evidence, but cannot verify completion.
  */
-export async function submitCompletionEvidence(bookingId, vendorId, { deliverablesUrl, checklist = [], notes = '' } = {}) {
+export async function submitCompletionEvidence(
+  bookingId,
+  vendorId,
+  { deliverablesUrl, checklist = [], notes = '', files = [], photos = [], videos = [] } = {}
+) {
   const booking = await CoreBooking.findById(bookingId);
   if (!booking) {
     const err = new Error(`CoreBooking with ID ${bookingId} not found`);
@@ -82,11 +86,27 @@ export async function submitCompletionEvidence(bookingId, vendorId, { deliverabl
     throw err;
   }
 
+  const filePhotos = files
+    .filter((f) => (f.resourceType || '').toUpperCase() !== 'VIDEO')
+    .map((f) => (typeof f === 'string' ? f : f.url))
+    .filter(Boolean);
+
+  const fileVideos = files
+    .filter((f) => (f.resourceType || '').toUpperCase() === 'VIDEO')
+    .map((f) => (typeof f === 'string' ? f : f.url))
+    .filter(Boolean);
+
+  const allPhotos = [...new Set([...(Array.isArray(photos) ? photos : []), ...filePhotos])];
+  const allVideos = [...new Set([...(Array.isArray(videos) ? videos : []), ...fileVideos])];
+
   booking.completionEvidence.push({
     submittedBy: vendorId.toString(),
     submittedAt: new Date(),
-    deliverablesUrl: deliverablesUrl || '',
-    checklist: checklist.map(item => typeof item === 'string' ? { item, checked: true } : item),
+    deliverablesUrl: deliverablesUrl || allPhotos[0] || allVideos[0] || '',
+    photos: allPhotos,
+    videos: allVideos,
+    files: Array.isArray(files) ? files : [],
+    checklist: checklist.map((item) => (typeof item === 'string' ? { item, checked: true } : item)),
     notes: notes || '',
   });
 

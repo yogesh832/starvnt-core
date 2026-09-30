@@ -45,10 +45,9 @@ const externalUserSchema = new Schema(
       default: 'ACTIVE',
       index: true,
     },
-    // Every surface this identity may use. One email can be both a customer and
-    // a vendor; the tab chosen at sign-in picks the active one (stored on the
-    // session). `accountType` stays the original/primary type. Older documents
-    // have no `roles` — see userRoles().
+    // Historical role list. Sign-in uses accountType as the primary product
+    // surface; do not use these roles to switch Customer/Vendor at login.
+    // Older documents have no `roles` — see userRoles().
     roles: { type: [{ type: String, enum: ['CUSTOMER', 'VENDOR'] }], default: undefined, index: true },
     vendorOrganization: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', default: null },
     lastLoginAt: { type: Date, default: null },

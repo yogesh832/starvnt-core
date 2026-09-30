@@ -68,6 +68,7 @@ function OptionCard({ eventId, eventStatus, option, best, selected, onSelected, 
     try {
       await customerApi.postMessage(eventId, {
         requirementId,
+        optionId: option.id,
         body: `${option.vendorName} - ${option.packageName}: ${question}`,
       });
       setMessageState('sent');
@@ -180,6 +181,8 @@ function CategoryOptions({ eventId, category }) {
   const { data, error, loading, setData } = useLoad(() => customerApi.services(eventId, category), [eventId, category]);
   const [sort, setSort] = useState('recommended');
   const [picked, setPicked] = useState([]);
+  const [requestBusy, setRequestBusy] = useState(false);
+  const [requestError, setRequestError] = useState('');
 
   const sorted = useMemo(() => {
     const list = [...(data?.options || [])];
@@ -194,6 +197,24 @@ function CategoryOptions({ eventId, category }) {
   const chosen = options.find((o) => o.id === selectedOptionId);
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const meta = [event.city, event.eventDate && formatDate(event.eventDate)].filter(Boolean).join(' · ');
+
+  async function requestSelectedQuote() {
+    if (!chosen) return;
+    if (chosen.isDemo) {
+      navigate(`/customer/events/${eventId}/quotes`);
+      return;
+    }
+    setRequestBusy(true);
+    setRequestError('');
+    try {
+      await customerApi.requestVendorQuotes(eventId);
+      navigate(`/customer/events/${eventId}/quotes`);
+    } catch (err) {
+      setRequestError(errorText(err, 'Could not send quote request to vendor.'));
+    } finally {
+      setRequestBusy(false);
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-4 pb-20">
@@ -221,7 +242,15 @@ function CategoryOptions({ eventId, category }) {
           {chosen && (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-xs">
               <span className="text-emerald-800">You selected <b>{chosen.vendorName}</b>{chosen.isDemo ? ' (demo listing)' : ''}. Nothing is reserved yet.</span>
-              <Link to={`/customer/events/${eventId}/quotes`} className="ml-auto rounded-xl bg-emerald-600 text-white font-bold px-3 py-1.5">Get a quote →</Link>
+              <button
+                type="button"
+                onClick={requestSelectedQuote}
+                disabled={requestBusy}
+                className="ml-auto rounded-xl bg-emerald-600 text-white font-bold px-3 py-1.5 disabled:opacity-50"
+              >
+                {requestBusy ? 'Sending...' : chosen.isDemo ? 'Create test quote →' : 'Request quote →'}
+              </button>
+              {requestError && <span className="basis-full text-[11px] font-bold text-red-500">{requestError}</span>}
             </div>
           )}
           {options.some((o) => o.isDemo) && (

@@ -24,7 +24,7 @@ const notificationSchema = new Schema(
     },
     type: {
       type: String,
-      enum: ['ENQUIRY', 'QUOTE', 'BOOKING', 'PAYMENT', 'SYSTEM'],
+      enum: ['ENQUIRY', 'QUOTE', 'BOOKING', 'PAYMENT', 'MESSAGE', 'SYSTEM'],
       default: 'SYSTEM',
       index: true,
     },
