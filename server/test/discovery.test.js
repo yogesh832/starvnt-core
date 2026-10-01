@@ -6,18 +6,20 @@ import { setup, teardown, makeUser, uniqueDate, scriptLlm, sid } from './helpers
 let app;
 let models;
 let seedDemoListings;
+let demoCount;
 let ids = {};
 const DATE = uniqueDate();
 
 before(async () => {
   ({ app, models } = await setup());
-  ({ seedDemoListings } = await import('../src/customer/seeds/demoListings.js'));
+  ({ seedDemoListings, DEMO_LISTINGS: { length: demoCount } } = await import('../src/customer/seeds/demoListings.js'));
   const { VendorOrganization } = await import('../src/external/models/VendorOrganization.js');
   const { VendorService } = await import('../src/external/models/VendorService.js');
   const { VendorBlockout } = await import('../src/external/models/VendorBlockout.js');
+  const { OperatingLocation } = await import('../src/external/models/OperatingLocation.js');
 
   const first = await seedDemoListings();
-  assert.equal(first.inserted, 12);
+  assert.equal(first.inserted, demoCount);
 
   const owner = await makeUser('VENDOR');
   const live = await VendorOrganization.create({
@@ -27,14 +29,33 @@ before(async () => {
     businessName: 'Busy Lens', owner: owner.user._id, location: 'Kolkata', isCommerciallyActive: true, status: 'VERIFIED', rating: { average: 4.6, count: 12 },
   });
   const unverified = await VendorOrganization.create({ businessName: 'Hidden Studio', owner: owner.user._id, location: 'Kolkata', isCommerciallyActive: false });
-  const [a, b, c, d] = await VendorService.create([
+  const multiCity = await VendorOrganization.create({
+    businessName: 'Mahiman Tent House Test',
+    owner: owner.user._id,
+    location: 'Mumbai',
+    isCommerciallyActive: true,
+    status: 'VERIFIED',
+  });
+  const [a, b, c, d, e] = await VendorService.create([
     { vendor: live._id, name: 'Wedding Photography', category: 'Photography', status: 'ACTIVE', pricing: { pricingType: 'FIXED', basePrice: 48000, conditionalCharges: [{ name: 'Travel outside city', amount: 3000, condition: 'Beyond 30 km' }] }, deliverables: ['2 photographers'] },
     { vendor: busy._id, name: 'Budget Photos', category: 'Photography', status: 'ACTIVE', pricing: { pricingType: 'FIXED', basePrice: 30000 } },
     { vendor: unverified._id, name: 'Hidden', category: 'Photography', status: 'ACTIVE', pricing: { pricingType: 'FIXED', basePrice: 100 } },
     { vendor: live._id, name: 'Hourly Video', category: 'Photography', status: 'ACTIVE', pricing: { pricingType: 'HOURLY', basePrice: 5000 } },
+    { vendor: multiCity._id, name: 'Delhi DJ Setup', category: 'Entertainment', status: 'ACTIVE', pricing: { pricingType: 'FIXED', basePrice: 22000 }, deliverables: ['DJ', 'Lighting'] },
   ]);
+  await OperatingLocation.create({
+    vendor: multiCity._id,
+    label: 'Hari Nagar Branch',
+    type: 'STUDIO',
+    address: 'Hari Nagar, West, Delhi, West Delhi, Delhi, 110064, India',
+    locality: 'Hari Nagar',
+    city: 'Delhi',
+    state: 'Delhi',
+    postalCode: '110064',
+    coordinates: { lat: 28.6296, lng: 77.1119 },
+  });
   await VendorBlockout.create({ vendor: busy._id, date: DATE });
-  ids = { live: `vs_${a._id}`, busy: `vs_${b._id}`, hidden: `vs_${c._id}`, hourly: `vs_${d._id}` };
+  ids = { live: `vs_${a._id}`, busy: `vs_${b._id}`, hidden: `vs_${c._id}`, hourly: `vs_${d._id}`, delhiDj: `vs_${e._id}` };
 });
 after(teardown);
 
@@ -62,8 +83,8 @@ test('open categories with option counts', async () => {
   const ev = await plannedWedding(user, token);
   const r = await request(app).get(`/api/customer/events/${ev._id}/services`).set(auth(token)).expect(200);
   const photo = r.body.categories.find((c) => c.category === 'photography');
-  // live + busy + hourly (real) + 2 demo; the unverified vendor never counts.
-  assert.equal(photo.optionCount, 5);
+  // live + busy + hourly (real) + demo photography rows; the unverified vendor never counts.
+  assert.equal(photo.optionCount, 6);
   assert.equal(photo.lowestPrice, 30000);
 });
 
@@ -82,7 +103,7 @@ test('options: honest availability, demo labels, no invented ratings, best value
   const demo = byId.get('demo_pho_02');
   assert.equal(demo.isDemo, true);
   assert.equal(demo.price, 64000);
-  assert.equal(r.body.bestValueId, ids.live, 'lowest bookable total; the blocked cheaper vendor is excluded');
+  assert.equal(r.body.bestValueId, 'demo_corp_photo_del_01', 'lowest bookable total; the blocked cheaper vendor is excluded');
   assert.equal(r.body.options.at(-1).id, ids.busy, 'unbookable options sort last');
 
   // A draft without a date can still browse options.
@@ -110,6 +131,21 @@ test('details, ownership and unknown options', async () => {
 
   const delhi = await plannedWedding(user, token, { city: 'Delhi' });
   await request(app).get(`/api/customer/events/${delhi._id}/services/${ids.live}`).set(auth(token)).expect(404);
+});
+
+test('real vendors match by operating location, not only profile city', async () => {
+  const { user, token } = await makeUser();
+  const ev = await plannedWedding(user, token, {
+    city: 'Delhi',
+    eventType: 'corporate',
+    location: { city: 'Delhi', locality: 'Hari Nagar', coordinates: { lat: 28.6307, lng: 77.1149 } },
+  });
+  const r = await request(app).get(`/api/customer/events/${ev._id}/services?category=entertainment`).set(auth(token)).expect(200);
+  const byId = new Map(r.body.options.map((o) => [o.id, o]));
+  assert.ok(byId.has(ids.delhiDj), 'vendor with a Delhi operating hub is discoverable for a Delhi event');
+  assert.equal(byId.get(ids.delhiDj).vendorName, 'Mahiman Tent House Test');
+  assert.equal(byId.get(ids.delhiDj).vendorLocation, 'Hari Nagar, Delhi, Delhi');
+  assert.equal(byId.get(ids.delhiDj).location.coordinates.lat, 28.6296);
 });
 
 test('compare: 2–4 options of one service', async () => {

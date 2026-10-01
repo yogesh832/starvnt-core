@@ -32,6 +32,8 @@ export const applyServiceStatement = (customerId, eventId, category, statement) 
   events.applyServiceStatement(customerId, eventId, category, statement, AURA);
 export const mergePreferences = (customerId, eventId, category, prefs) =>
   events.mergePreferences(customerId, eventId, category, prefs, AURA);
+export const applyServiceLocation = (customerId, eventId, category, location) =>
+  events.applyServiceLocation(customerId, eventId, category, location, AURA);
 
 /** Aura+'s own notes (aura_context). Never business state. */
 export const setNote = (eventId, field, value, state, source = 'aura') => auraRepo.setContext(eventId, field, { value, state, source });

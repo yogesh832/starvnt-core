@@ -87,4 +87,8 @@ export const config = {
     process.env.BACKEND_PUBLIC_URL ||
     "",
   keepAliveIntervalMs: Number(process.env.KEEP_ALIVE_INTERVAL_MS || 10000),
+
+  // ── GSTIN verification ──
+  gstinApiKey: process.env.GSTIN_API_KEY || "",
+  gstinApiBaseUrl: process.env.GSTIN_API_BASE_URL || "https://www.gstinapi.in/v1",
 };

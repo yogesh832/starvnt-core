@@ -15,6 +15,9 @@ const externalSessionSchema = new Schema(
     userAgent: { type: String, default: '' },
     expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
     revokedAt: { type: Date, default: null },
+    // Product surface for this session. Refresh re-resolves this from the user's
+    // primary accountType so old wrong-tab sessions do not keep the wrong app.
+    accountType: { type: String, enum: ['CUSTOMER', 'VENDOR', null], default: null },
   },
   { timestamps: true }
 );

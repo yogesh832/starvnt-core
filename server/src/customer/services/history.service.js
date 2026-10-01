@@ -16,7 +16,27 @@ const STATUS_WORDS = {
 };
 const EXECUTION_WORDS = { checked_in: 'checked in', started: 'started', completed: 'completed' };
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
-const FIELD_WORDS = { eventType: 'event type', eventDate: 'date', city: 'location', guestCount: 'guest count', budget: 'budget', budgetRange: 'budget', title: 'name' };
+const FIELD_WORDS = {
+  eventType: 'event type',
+  customType: 'event type',
+  eventDate: 'date',
+  city: 'city',
+  guestCount: 'guest count',
+  budget: 'budget',
+  budgetRange: 'budget',
+  title: 'name',
+  country: 'location',
+  state: 'location',
+  locality: 'area',
+  venueName: 'venue',
+  address: 'address',
+  pincode: 'pincode',
+  landmark: 'landmark',
+  coordinates: 'map location',
+  specialRequirements: 'special requirements',
+  notes: 'notes',
+};
+const LOCATION_MODE_WORDS = { event: 'at the event location', custom: 'location added', unspecified: 'location not decided yet' };
 
 function describe(row) {
   const d = row.details || {};
@@ -39,6 +59,8 @@ function describe(row) {
       return { group: 'booking', text: `${categoryLabel(d.category)}: choice removed` };
     case 'quote_created':
       return { group: 'booking', text: `Quote created for ₹${Number(d.total).toLocaleString('en-IN')} (${d.itemCount} service${d.itemCount === 1 ? '' : 's'})` };
+    case 'service_location_updated':
+      return { group: 'planning', text: `${categoryLabel(d.category)}: ${LOCATION_MODE_WORDS[d.mode] || 'location updated'}` };
     case 'event_created_manually':
       return { group: 'planning', text: `${EVENT_TYPE_LABELS[d.eventType] || 'Event'} plan created from your details` };
     case 'quote_accepted':

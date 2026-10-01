@@ -78,7 +78,7 @@ const CATEGORY_SYNONYMS = {
   hospitality: ['hospitality', 'guest management'],
   invitation: ['invitation', 'invitations', 'invite', 'invites', 'invitation cards', 'wedding cards'],
   anchor: ['anchor', 'host', 'emcee', 'mc'],
-  entertainment: ['entertainment', 'dj', 'band', 'music', 'magic show', 'magician', 'dancers'],
+  entertainment: ['entertainment', 'dj', 'dj & music', 'dj and music', 'band', 'music', 'magic show', 'magician', 'dancers'],
   photo_booth: ['photo booth', 'photobooth', 'photo_booth'],
   special_effects: ['special effects', 'special_effects', 'fireworks', 'pyro', 'cold pyro'],
   live_streaming: ['live streaming', 'live stream', 'livestream', 'live_streaming'],

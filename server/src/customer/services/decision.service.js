@@ -2,6 +2,8 @@ import * as eventsRepo from '../repositories/events.repo.js';
 import * as reqRepo from '../repositories/requirements.repo.js';
 import * as quotesRepo from '../repositories/quotes.repo.js';
 import * as catalog from './catalog.service.js';
+import { Opportunity } from '../../external/models/Opportunity.js';
+import { Notification } from '../../external/models/Notification.js';
 import { getOwnedEventOr404 } from './events.service.js';
 import { serializeEvent, serializeRequirement } from './understanding.js';
 import { categoryLabel, normalizeCategory } from './planCatalog.js';
@@ -16,6 +18,83 @@ import { badRequest, conflict, notFound, HttpError } from '../utils/http.js';
 
 const QUOTE_VALID_DAYS = 7;
 export const EMPTY_SELECTION = { vendorName: null, packageName: null, price: null, isDemo: false };
+
+function eventServiceLocation(event) {
+  const location = event?.location || {};
+  return {
+    address: location.address || [location.venueName, location.locality, event?.city].filter(Boolean).join(', '),
+    locality: location.locality || '',
+    city: event?.city || location.city || '',
+    coordinates: location.coordinates || undefined,
+  };
+}
+
+function serviceRequirementSummary(requirement, option, event) {
+  const parts = [
+    option.packageName,
+    requirement?.specialRequirements,
+    requirement?.preferences && Object.keys(requirement.preferences || {}).length
+      ? Object.entries(requirement.preferences)
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+          .join(' | ')
+      : '',
+    event?.guestCount ? `${event.guestCount} guests` : '',
+  ].filter(Boolean);
+  return parts.join(' · ') || 'Customer selected this vendor option and requested a formal quote.';
+}
+
+async function createVendorOpportunityForSelection({ customerId, event, requirement, option, optionId }) {
+  if (!option?.vendorId || option.isDemo || typeof optionId !== 'string' || !optionId.startsWith('vs_')) return;
+  const vendorServiceId = optionId.slice(3);
+  const eventDate = event.eventDate || new Date().toISOString().slice(0, 10);
+  const serviceLocation = eventServiceLocation(event);
+  const existing = await Opportunity.findOne({
+    vendor: option.vendorId,
+    customer: customerId,
+    vendorService: vendorServiceId,
+    eventDate,
+    status: { $ne: 'EXPIRED' },
+  }).sort({ createdAt: -1 });
+
+  const payload = {
+    serviceName: option.packageName || categoryLabel(option.category),
+    eventDate,
+    serviceLocation,
+    guestCount: event.guestCount || 100,
+    requiredCapability: serviceRequirementSummary(requirement, option, event),
+    estimatedTravel: `${option.vendorLocation || 'Vendor base'} -> ${serviceLocation.locality || serviceLocation.city || 'Event location'}`,
+    travelCost: Number(option.costBreakdown?.travel || 0),
+    action: 'Respond / Quote',
+  };
+
+  if (existing) {
+    Object.assign(existing, payload);
+    if (existing.status === 'DECLINED') existing.status = 'NEW';
+    await existing.save();
+    return;
+  }
+
+  const opportunity = await Opportunity.create({
+    vendor: option.vendorId,
+    customer: customerId,
+    vendorService: vendorServiceId,
+    status: 'NEW',
+    ...payload,
+  });
+
+  await Notification.create({
+    vendor: option.vendorId,
+    title: 'New quote request',
+    message: `${payload.serviceName} · ${eventDate} · ${serviceLocation.locality || serviceLocation.city || 'Event location'} · ${payload.guestCount} guests`,
+    type: 'ENQUIRY',
+    link: '/vendor/enquiries',
+    metadata: {
+      opportunityId: opportunity._id,
+      customerEventId: event._id,
+      selectedOptionId: optionId,
+    },
+  });
+}
 
 export function assertCommerceAllowed(event) {
   if (event.status === 'draft') throw badRequest('EVENT_NOT_CONFIRMED', 'Please confirm your event details first');
@@ -74,6 +153,7 @@ export async function selectOption(customerId, eventId, categoryParam, optionId)
     action: 'option_selected',
     details: { category, vendorName: option.vendorName, isDemo: option.isDemo },
   });
+  await createVendorOpportunityForSelection({ customerId, event, requirement: row, option, optionId });
   return serializeRequirement(event.eventType, row);
 }
 
@@ -151,6 +231,42 @@ export async function createQuote(customerId, eventId) {
     details: { total: quote.total, itemCount: items.length, superseded: supersededCount },
   });
   return serializeQuote(quote);
+}
+
+export async function requestVendorQuotes(customerId, eventId) {
+  const event = await getOwnedEventOr404(customerId, eventId);
+  assertCommerceAllowed(event);
+  const selected = (await reqRepo.listRequirements(event._id)).filter((r) => r.selectedOptionId && r.status === 'pending');
+  if (!selected.length) throw badRequest('NO_SELECTIONS', 'Select at least one real vendor option first');
+
+  let requestedCount = 0;
+  let skippedDemoCount = 0;
+  const problems = [];
+  for (const r of selected) {
+    try {
+      const option = await catalog.getOption(event, r.selectedOptionId);
+      if (!option.vendorId || option.isDemo) {
+        skippedDemoCount += 1;
+        continue;
+      }
+      await createVendorOpportunityForSelection({ customerId, event, requirement: r, option, optionId: r.selectedOptionId });
+      requestedCount += 1;
+    } catch {
+      problems.push(categoryLabel(r.category));
+    }
+  }
+  if (!requestedCount && skippedDemoCount > 0) {
+    throw badRequest('NO_REAL_VENDOR_SELECTIONS', 'Select a real vendor option first. Demo listings only support sandbox test estimates.');
+  }
+  if (!requestedCount) throw badRequest('NO_VENDOR_REQUESTS_CREATED', 'No vendor quote request could be created for the current selections.');
+  await eventsRepo.appendHistory({
+    eventId: event._id,
+    actorType: 'customer',
+    actorId: customerId,
+    action: 'vendor_quote_requested',
+    details: { requestedCount, skippedDemoCount, problems },
+  });
+  return { ok: true, requestedCount, skippedDemoCount, problems };
 }
 
 export async function listQuotes(customerId, eventId) {

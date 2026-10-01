@@ -4,6 +4,10 @@ import * as commerceRepo from '../repositories/commerce.repo.js';
 import * as reqRepo from '../repositories/requirements.repo.js';
 import * as eventsRepo from '../repositories/events.repo.js';
 import * as auraRepo from '../repositories/aura.repo.js';
+import * as catalog from './catalog.service.js';
+import { VendorMessageThread } from '../../external/models/VendorMessageThread.js';
+import { Notification } from '../../external/models/Notification.js';
+import { Opportunity } from '../../external/models/Opportunity.js';
 import { getOwnedEventOr404 } from './events.service.js';
 import { serializeEvent } from './understanding.js';
 import { categoryLabel } from './planCatalog.js';
@@ -22,6 +26,182 @@ const serializeMessage = (m) => ({
   bookingId: m.booking ? String(m.booking) : null,
   requirementId: m.requirement ? String(m.requirement) : null,
 });
+
+async function syncCustomerBookingMessageToVendor({ event, bookingId, customerId, text }) {
+  if (!bookingId) return;
+  const booking = await commerceRepo.getBooking(bookingId);
+  if (!booking || String(booking.event) !== String(event._id)) return;
+
+  let option = null;
+  try {
+    option = await catalog.getOption(event, booking.optionId);
+  } catch {
+    return;
+  }
+  if (!option?.vendorId) return;
+
+  const now = new Date();
+  const senderName = event.contactName || event.hostName || 'Customer';
+  const thread = await VendorMessageThread.findOneAndUpdate(
+    { vendor: option.vendorId, customerBooking: booking._id },
+    {
+      $setOnInsert: {
+        vendor: option.vendorId,
+        customer: customerId,
+        customerBooking: booking._id,
+        customerEvent: event._id,
+        clientName: senderName,
+        eventName: event.title || booking.packageName || 'Event Booking',
+        eventType: categoryLabel(booking.category),
+        eventDate: event.eventDate || '',
+        venueLocation: event.location?.address || event.city || '',
+      },
+      $set: {
+        lastMessageText: text,
+        lastMessageAt: now,
+        status: 'ACTIVE',
+      },
+      $push: {
+        messages: {
+          sender: 'CLIENT',
+          senderName,
+          text,
+          isRead: false,
+          createdAt: now,
+        },
+      },
+      $inc: { unreadVendorCount: 1 },
+    },
+    { upsert: true, new: true }
+  ).lean();
+
+  await Notification.create({
+    vendor: option.vendorId,
+    title: 'New customer message',
+    message: `${senderName}: ${text.slice(0, 160)}`,
+    type: 'MESSAGE',
+    link: '/vendor/messages',
+    metadata: {
+      threadId: thread?._id ? String(thread._id) : null,
+      customerBookingId: String(booking._id),
+      customerEventId: String(event._id),
+    },
+  });
+}
+
+async function syncCustomerRequirementMessageToVendor({ event, requirementId, optionId, customerId, text, customerMessageId = null }) {
+  if (!requirementId) return;
+  const requirements = await reqRepo.listRequirements(event._id);
+  const requirement = requirements.find((r) => String(r._id) === String(requirementId));
+  const selectedOptionId =
+    typeof optionId === 'string' && optionId.startsWith('vs_')
+      ? optionId
+      : requirement?.selectedOptionId;
+  if (!selectedOptionId) return;
+
+  let option = null;
+  try {
+    option = await catalog.getOption(event, selectedOptionId);
+  } catch {
+    return;
+  }
+  if (!option?.vendorId || option.isDemo) return;
+
+  const now = new Date();
+  const senderName = event.contactName || event.hostName || 'Customer';
+  const vendorServiceId = selectedOptionId.slice(3);
+  if (customerMessageId) {
+    const alreadySynced = await VendorMessageThread.exists({
+      vendor: option.vendorId,
+      customerRequirement: requirement._id,
+      'messages.metadata.customerMessageId': String(customerMessageId),
+    });
+    if (alreadySynced) return;
+  }
+  const opportunity = await Opportunity.findOne({
+    vendor: option.vendorId,
+    customer: customerId,
+    vendorService: vendorServiceId,
+    eventDate: event.eventDate || new Date().toISOString().slice(0, 10),
+    status: { $ne: 'EXPIRED' },
+  }).sort({ createdAt: -1 }).lean();
+  await VendorMessageThread.updateMany(
+    {
+      vendor: option.vendorId,
+      customerRequirement: requirement._id,
+      $or: [{ messages: { $exists: false } }, { messages: { $type: 'object' } }],
+    },
+    { $set: { messages: [] } }
+  );
+  const thread = await VendorMessageThread.findOneAndUpdate(
+    { vendor: option.vendorId, customerRequirement: requirement._id },
+    {
+      $setOnInsert: {
+        vendor: option.vendorId,
+        customer: customerId,
+        opportunity: opportunity?._id || null,
+        customerRequirement: requirement._id,
+        customerEvent: event._id,
+        clientName: senderName,
+        eventName: event.title || categoryLabel(requirement.category),
+        eventType: categoryLabel(requirement.category),
+        eventDate: event.eventDate || '',
+        venueLocation: event.location?.address || event.city || '',
+      },
+      $set: {
+        lastMessageText: text,
+        lastMessageAt: now,
+        status: 'ACTIVE',
+      },
+      $push: {
+        messages: {
+          sender: 'CLIENT',
+          senderName,
+          text,
+          isRead: false,
+          createdAt: now,
+          metadata: {
+            customerEventId: String(event._id),
+            customerRequirementId: String(requirement._id),
+            selectedOptionId,
+            customerMessageId: customerMessageId ? String(customerMessageId) : null,
+          },
+        },
+      },
+      $inc: { unreadVendorCount: 1 },
+    },
+    { upsert: true, new: true }
+  ).lean();
+
+  await Notification.create({
+    vendor: option.vendorId,
+    title: 'New service message',
+    message: `${senderName} · ${categoryLabel(requirement.category)}: ${text.slice(0, 140)}`,
+    type: 'MESSAGE',
+    link: '/vendor/messages',
+    metadata: {
+      threadId: thread?._id ? String(thread._id) : null,
+      customerEventId: String(event._id),
+      customerRequirementId: String(requirement._id),
+      selectedOptionId,
+    },
+  });
+}
+
+async function backfillCustomerRequirementMessagesToVendor({ event, requirementId, customerId }) {
+  if (!requirementId) return;
+  const messages = await circleRepo.listMessages(event._id, { requirementId });
+  for (const message of messages) {
+    if (message.senderType !== 'customer') continue;
+    await syncCustomerRequirementMessageToVendor({
+      event,
+      requirementId,
+      customerId,
+      text: message.body,
+      customerMessageId: message._id,
+    });
+  }
+}
 
 async function resolveContext(event, { bookingId, requirementId }) {
   if (bookingId) {
@@ -61,8 +241,13 @@ export async function circle(customerId, eventId) {
       .map((r) => ({
         key: `requirement:${r._id}`,
         requirementId: String(r._id),
-        label: categoryLabel(r.category),
-        path: [event.title, categoryLabel(r.category)],
+        label: r.selectedOption?.vendorName || categoryLabel(r.category),
+        path: [
+          event.title,
+          categoryLabel(r.category),
+          r.selectedOption?.vendorName,
+          r.selectedOption?.packageName,
+        ].filter(Boolean),
         messageCount: count((m) => String(m.requirement) === String(r._id)),
       })),
   ];
@@ -72,6 +257,7 @@ export async function circle(customerId, eventId) {
 export async function listMessages(customerId, eventId, query = {}) {
   const event = await getOwnedEventOr404(customerId, eventId);
   const ctx = await resolveContext(event, query);
+  await backfillCustomerRequirementMessagesToVendor({ event, requirementId: ctx.requirementId, customerId });
   return { messages: (await circleRepo.listMessages(event._id, ctx)).map(serializeMessage) };
 }
 
@@ -79,7 +265,10 @@ export async function postMessage(customerId, eventId, body = {}) {
   const event = await getOwnedEventOr404(customerId, eventId);
   const text = typeof body.body === 'string' ? body.body.trim() : '';
   if (!text || text.length > 2000) throw badRequest('INVALID_BODY', 'Message must be 1–2000 characters');
-  const ctx = await resolveContext(event, body);
+  const ctx = await resolveContext(event, {
+    bookingId: body.bookingId || body.booking,
+    requirementId: body.requirementId || body.service,
+  });
   const m = await circleRepo.addMessage({
     event: event._id,
     booking: ctx.bookingId || null,
@@ -87,6 +276,15 @@ export async function postMessage(customerId, eventId, body = {}) {
     senderType: 'customer',
     senderCustomer: customerId,
     body: text,
+  });
+  await syncCustomerBookingMessageToVendor({ event, bookingId: ctx.bookingId, customerId, text });
+  await syncCustomerRequirementMessageToVendor({
+    event,
+    requirementId: ctx.requirementId,
+    optionId: body.optionId || body.selectedOptionId,
+    customerId,
+    text,
+    customerMessageId: m._id,
   });
   return { message: serializeMessage(m) };
 }
@@ -117,7 +315,7 @@ export async function updates(customerId) {
       createdAt: n.createdAt,
     })),
     vendorMessages: messages
-      .filter((m) => m.senderType === 'vendor' || m.senderType === 'team')
+      .filter((m) => m.senderType === 'vendor' || m.senderType === 'team' || m.senderType === 'customer')
       .slice(0, 30)
       .map((m) => ({ ...serializeMessage(m), eventId: String(m.event), eventTitle: titles.get(String(m.event)) || null })),
     auraConversations: sessions.map((s) => ({

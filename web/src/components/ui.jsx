@@ -8,7 +8,7 @@ export function LogoMark({ size = 22, className = '' }) {
   return (
     <img
       src={BRAND_ASSETS.mark}
-      alt="StarVnt"
+      alt=""
       width={size}
       height={size}
       className={`rounded-lg object-cover shadow-[0_0_20px_rgba(14,165,233,0.34)] ring-1 ring-cyan-300/35 ${className}`}
@@ -58,6 +58,7 @@ export function StatusChip({ status }) {
     Pending: 'bg-orange-50 text-orange-500',
     Scheduled: 'bg-violet-50 text-violet-600',
     'In Progress': 'bg-violet-50 text-violet-600',
+    'Work Done - Core Review': 'bg-emerald-50 text-emerald-700',
     Inactive: 'bg-orange-50 text-orange-500',
     Rejected: 'bg-red-50 text-red-500',
     New: 'bg-primary-soft text-primary',
@@ -66,6 +67,20 @@ export function StatusChip({ status }) {
     Cancelled: 'bg-red-50 text-red-500',
     Disabled: 'bg-red-50 text-red-500',
     Draft: 'bg-gray-100 text-gray-500',
+    // Execution & Settlement statuses
+    NOT_STARTED: 'bg-gray-100 text-gray-600',
+    SERVICE_SCHEDULED: 'bg-blue-50 text-blue-600',
+    SERVICE_STARTED: 'bg-indigo-50 text-indigo-600',
+    COMPLETION_SUBMITTED: 'bg-amber-50 text-amber-700',
+    COMPLETION_VERIFIED: 'bg-emerald-50 text-emerald-700',
+    NOT_ELIGIBLE: 'bg-gray-100 text-gray-500',
+    SETTLEMENT_ELIGIBLE: 'bg-teal-50 text-teal-700',
+    SETTLEMENT_HOLD: 'bg-amber-50 text-amber-700',
+    SETTLED: 'bg-emerald-50 text-emerald-700',
+    PAID: 'bg-emerald-50 text-emerald-600',
+    PARTIAL: 'bg-amber-50 text-amber-600',
+    FAILED: 'bg-rose-50 text-rose-600',
+    DISPUTED: 'bg-rose-50 text-rose-600',
   };
   return (
     <span

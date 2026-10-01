@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import Icon from './Icon.jsx';
 
 // SVG Google Maps-style Pin Marker
-const pinIcon = L.divIcon({
+export const pinIcon = L.divIcon({
   className: 'starvnt-map-pin',
   html: `
     <div style="position: relative; width: 34px; height: 42px; transform: translate(-50%, -100%); cursor: grab;">
@@ -35,6 +35,7 @@ export default function MapLocationPicker({
   onChange,
   height = '340px',
   readOnly = false,
+  guidance = 'Drag or click pointer to pin exact studio entrance',
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -58,46 +59,56 @@ export default function MapLocationPicker({
       if (readOnly) return;
       try {
         setReverseLoading(true);
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${lat}&lon=${lng}`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data && data.address) {
-          const addr = data.address;
-          const road = addr.road || addr.pedestrian || addr.street || '';
-          const locality =
-            addr.suburb ||
-            addr.neighbourhood ||
-            addr.residential ||
-            addr.locality ||
-            addr.subdistrict ||
-            '';
-          const city =
-            addr.city ||
-            addr.town ||
-            addr.village ||
-            addr.municipality ||
-            addr.county ||
-            '';
-          const state = addr.state || '';
-          const postalCode = addr.postcode || '';
+        let geoData = {
+          lat: Number(lat),
+          lng: Number(lng),
+        };
 
-          // Format clean street address
-          const formattedAddress = data.display_name || [road, locality, city].filter(Boolean).join(', ');
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${lat}&lon=${lng}`,
+            { headers: { 'Accept-Language': 'en' } }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.address) {
+              const addr = data.address;
+              const road = addr.road || addr.pedestrian || addr.street || '';
+              const locality =
+                addr.suburb ||
+                addr.neighbourhood ||
+                addr.residential ||
+                addr.locality ||
+                addr.subdistrict ||
+                '';
+              const city =
+                addr.city ||
+                addr.town ||
+                addr.village ||
+                addr.municipality ||
+                addr.county ||
+                '';
+              const state = addr.state || '';
+              const postalCode = addr.postcode || '';
+              const formattedAddress = data.display_name || [road, locality, city].filter(Boolean).join(', ');
 
-          if (onChange) {
-            onChange({
-              lat: Number(lat),
-              lng: Number(lng),
-              address: formattedAddress,
-              locality,
-              city,
-              state,
-              postalCode,
-              displayName: data.display_name,
-            });
+              geoData = {
+                ...geoData,
+                address: formattedAddress,
+                locality,
+                city,
+                state,
+                postalCode,
+                displayName: data.display_name,
+              };
+            }
           }
+        } catch (fetchErr) {
+          console.warn('[MapLocationPicker] Reverse geocode network error:', fetchErr.message);
+        }
+
+        if (onChange) {
+          onChange(geoData);
         }
       } catch (err) {
         console.warn('[MapLocationPicker] Reverse geocode error:', err.message);
@@ -412,7 +423,7 @@ export default function MapLocationPicker({
           <span>
             {reverseLoading
               ? 'Detecting address…'
-              : 'Drag or click pointer to pin exact studio entrance'}
+              : guidance}
           </span>
           <span className="text-[10px] text-muted font-mono pl-1 border-l border-gray-200">
             {Number(value?.lat || initialLat).toFixed(4)}, {Number(value?.lng || initialLng).toFixed(4)}

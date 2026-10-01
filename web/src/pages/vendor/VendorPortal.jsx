@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { NavLink, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { NavLink, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import Icon from '../../components/Icon.jsx';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
@@ -19,10 +19,54 @@ import {
   ProfilePage,
   SettingsPage,
 } from './pages/BusinessPages.jsx';
+import VendorAura from './VendorAura.jsx';
 
 export default function VendorPortal() {
   const { user, logout } = useExternalAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const currentPage = location.pathname.split('/')[2] || 'dashboard';
+  const [auraOpen, setAuraOpen] = useState(false);
+  const [auraPrompt, setAuraPrompt] = useState(null);
+
+  function askAura(text) {
+    if (text) setAuraPrompt({ id: Date.now(), text });
+    setAuraOpen(true);
+  }
+
+  // Profile setup status (same checklist as the dashboard's 5 onboarding steps).
+  const [setup, setSetup] = useState(null);
+  async function loadSetup() {
+    try {
+      const res = await externalApi.call('/vendor/activation-status');
+      if (res?.status?.checklist) setSetup({ percent: res.status.completionPercentage ?? 0, checklist: res.status.checklist });
+    } catch {
+      /* setup card simply stays hidden */
+    }
+  }
+
+  // Re-check when the vendor moves between pages (they may have finished a step there)
+  // and whenever a profile change is announced (Profile page, Aura+ chat).
+  useEffect(() => {
+    loadSetup();
+  }, [location.pathname]);
+  useEffect(() => {
+    const onUpdate = () => loadSetup();
+    window.addEventListener('vendorProfileUpdated', onUpdate);
+    return () => window.removeEventListener('vendorProfileUpdated', onUpdate);
+  }, []);
+
+  // New vendor (setup incomplete): open Aura+ once per sign-in so it can walk them through setup.
+  useEffect(() => {
+    if (!setup || setup.percent >= 100) return;
+    try {
+      if (sessionStorage.getItem('vendor_aura_setup_opened')) return;
+      sessionStorage.setItem('vendor_aura_setup_opened', '1');
+    } catch {
+      return;
+    }
+    setAuraOpen(true);
+  }, [setup]);
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -60,8 +104,11 @@ export default function VendorPortal() {
     enquiriesCount: 0,
     quotesCount: 0,
     bookingsCount: 0,
+    messagesCount: 0,
     unreadNotificationsCount: 0,
   });
+  // abcd
+  const [dismissedBadges, setDismissedBadges] = useState({});
   const [notifications, setNotifications] = useState([]);
 
   // Fetch real dynamic badge counts and notifications from backend
@@ -77,6 +124,7 @@ export default function VendorPortal() {
           enquiriesCount: bRes.enquiriesCount || 0,
           quotesCount: bRes.quotesCount || 0,
           bookingsCount: bRes.bookingsCount || 0,
+          messagesCount: bRes.messagesCount || 0,
           unreadNotificationsCount: bRes.unreadNotificationsCount || 0,
         });
       }
@@ -94,6 +142,18 @@ export default function VendorPortal() {
     const interval = setInterval(fetchLiveBadges, 15000); // Polling every 15s for live reactivity
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const handleRefresh = () => fetchLiveBadges();
+    window.addEventListener('vendorBadgesRefresh', handleRefresh);
+    return () => window.removeEventListener('vendorBadgesRefresh', handleRefresh);
+  }, []);
+
+  useEffect(() => {
+    if (['enquiries', 'quotes', 'bookings', 'messages'].includes(currentPage)) {
+      dismissBadge(currentPage);
+    }
+  }, [currentPage, badgeCounts]);
 
   // Close header dropdowns on click outside
   useEffect(() => {
@@ -149,18 +209,43 @@ export default function VendorPortal() {
     }
   }
 
+  function rawBadgeCount(page) {
+    if (page === 'enquiries') return badgeCounts.enquiriesCount || 0;
+    if (page === 'quotes') return badgeCounts.quotesCount || 0;
+    if (page === 'bookings') return badgeCounts.bookingsCount || 0;
+    if (page === 'messages') return badgeCounts.messagesCount || 0;
+    return 0;
+  }
+
+  function dismissBadge(page) {
+    setDismissedBadges((prev) => ({ ...prev, [page]: rawBadgeCount(page) }));
+  }
+
+  function navBadge(page, count) {
+    const dismissedCount = Number(dismissedBadges[page] || 0);
+    if (!count || count <= dismissedCount) return null;
+    return count - dismissedCount;
+  }
+
+  function handleNavClick(page) {
+    setNavOpen(false);
+    if (['enquiries', 'quotes', 'bookings', 'messages'].includes(page)) {
+      dismissBadge(page);
+    }
+  }
+
   const navItems = [
     { to: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: badgeCounts.enquiriesCount || null },
-    { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: badgeCounts.quotesCount || null },
-    { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: badgeCounts.bookingsCount || null },
+    { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
+    { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
+    { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
     { to: 'portfolio', label: 'Portfolio', icon: 'gallery' },
     { to: 'services', label: 'Services', icon: 'services' },
     { to: 'availability', label: 'Availability', icon: 'availability' },
     { to: 'payments', label: 'Payments', icon: 'payments' },
     { to: 'reviews', label: 'Reviews', icon: 'star' },
     { to: 'analytics', label: 'Analytics', icon: 'reports' },
-    { to: 'messages', label: 'Messages', icon: 'message' },
+    { to: 'messages', label: 'Messages', icon: 'message', badge: navBadge('messages', badgeCounts.messagesCount) },
     { to: 'profile', label: 'Profile & Hub', icon: 'profile' },
   ];
 
@@ -196,7 +281,7 @@ export default function VendorPortal() {
             <NavLink
               key={item.to}
               to={item.to}
-              onClick={() => setNavOpen(false)}
+              onClick={() => handleNavClick(item.to)}
               title={isSidebarMini ? item.label : undefined}
               className={({ isActive }) =>
                 `relative flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[13px] transition ${
@@ -245,7 +330,7 @@ export default function VendorPortal() {
       </aside>
 
       {/* Main Container */}
-      <div className="flex-1 min-w-0 h-full flex flex-col overflow-y-auto overflow-x-hidden pb-40 lg:pb-0 w-full">
+      <div className="flex-1 min-w-0 h-full flex flex-col overflow-y-auto overflow-x-hidden pb-28 lg:pb-0 w-full">
         {/* Top bar with Dynamic Notification Bell & Mobile Search */}
         <header className="bg-white/95 backdrop-blur-md sticky top-0 z-20 border-b border-gray-100 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-4 shadow-xs shrink-0 w-full">
           <button
@@ -264,6 +349,16 @@ export default function VendorPortal() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 ml-auto shrink-0 relative" ref={notifRef}>
+            {/* Aura+ assistant */}
+            <button
+              onClick={() => setAuraOpen((o) => !o)}
+              className="hidden lg:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-gradient-to-r from-primary to-[#9b6dff] text-white text-xs font-bold shadow-md shadow-primary/25 hover:opacity-95 transition shrink-0"
+              title="Ask Aura+"
+            >
+              <Icon name="bolt" size={15} />
+              Aura+
+            </button>
+
             <button
               className="hidden sm:grid w-9 h-9 place-items-center rounded-xl hover:bg-lavender text-ink/60 transition shrink-0"
               title="Help & Support"
@@ -441,10 +536,10 @@ export default function VendorPortal() {
         </header>
 
         {/* Workspace Routes */}
-        <div className="flex-1 min-h-0 w-full min-w-0 pb-32 lg:pb-0">
+        <div className="flex-1 min-h-0 w-full min-w-0">
           <Routes>
             <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardHome business={businessName} />} />
+            <Route path="dashboard" element={<DashboardHome business={businessName} onAskAura={askAura} />} />
             <Route path="enquiries" element={<Enquiries />} />
             <Route path="quotes" element={<Quotes />} />
             <Route path="bookings" element={<Bookings />} />
@@ -455,7 +550,17 @@ export default function VendorPortal() {
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="reviews" element={<ReviewsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="messages" element={<Messages />} />
+            <Route
+              path="messages"
+              element={
+                <Messages
+                  onMessagesRead={() => {
+                    setBadgeCounts((prev) => ({ ...prev, messagesCount: 0 }));
+                    setDismissedBadges((prev) => ({ ...prev, messages: 0 }));
+                  }}
+                />
+              }
+            />
             <Route path="documents" element={<DocumentsPage user={user} business={businessName} />} />
             <Route path="profile" element={<ProfilePage user={user} business={businessName} />} />
             <Route path="settings" element={<SettingsPage user={user} business={businessName} />} />
@@ -491,9 +596,9 @@ export default function VendorPortal() {
           >
             <Icon name="message" size={19} />
             <span>Leads</span>
-            {badgeCounts.enquiriesCount > 0 && (
+            {navBadge('enquiries', badgeCounts.enquiriesCount) > 0 && (
               <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {badgeCounts.enquiriesCount}
+                {navBadge('enquiries', badgeCounts.enquiriesCount)}
               </span>
             )}
           </NavLink>
@@ -508,9 +613,9 @@ export default function VendorPortal() {
           >
             <Icon name="bookings" size={19} />
             <span>Bookings</span>
-            {badgeCounts.bookingsCount > 0 && (
+            {navBadge('bookings', badgeCounts.bookingsCount) > 0 && (
               <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {badgeCounts.bookingsCount}
+                {navBadge('bookings', badgeCounts.bookingsCount)}
               </span>
             )}
           </NavLink>
@@ -535,7 +640,20 @@ export default function VendorPortal() {
             <span>More</span>
           </button>
         </div>
+
+        {/* Mobile Aura+ button, above the bottom navigation */}
+        {!auraOpen && (
+          <button
+            onClick={() => setAuraOpen(true)}
+            className="lg:hidden fixed right-4 bottom-20 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/40 border-4 border-white"
+            aria-label="Ask Aura+"
+          >
+            <Icon name="bolt" size={18} />
+          </button>
+        )}
       </div>
+
+      <VendorAura open={auraOpen} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} setup={setup} />
     </div>
   );
 }

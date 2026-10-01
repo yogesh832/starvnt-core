@@ -11,7 +11,7 @@ import { findBudgetRange, budgetRangesFor, normalizeEventType } from '../service
 import { badRequest, forbidden, notFound, HttpError } from '../utils/http.js';
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{8,80}$/;
-const SKIP_TOPIC_RE = /^(event|requirement)\.[a-z_]+$/;
+const SKIP_TOPIC_RE = /^(event|requirement|location)\.[a-z_]+$/;
 const MAX_MESSAGE = 2000;
 
 const FALLBACK_REPLY =
@@ -96,13 +96,14 @@ function composeReply(reply, { event, nextQuestion: q, assumedDate }) {
 // The draft starts with its type only; the other facts go through the writer,
 // so one invalid fact (e.g. a past date) can't block creating the event.
 function createDraftFrom(customerId, facts) {
-  return core.createDraftEvent(customerId, { eventType: normalizeEventType(facts.eventType) });
+  const eventType = normalizeEventType(facts.eventType);
+  return core.createDraftEvent(customerId, { eventType, ...(eventType === 'other' && facts.customType ? { customType: facts.customType } : {}) });
 }
 
 /**
  * POST /aura/chat pipeline (Blueprint §5.1).
  */
-export async function chat(customer, { sessionId, message, eventId, skipTopic, budgetRange } = {}) {
+export async function chat(customer, { sessionId, message, eventId, skipTopic, budgetRange, serviceLocation } = {}) {
   const customerId = customer._id;
   const text = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE) : '';
   if (!text) throw badRequest('MESSAGE_REQUIRED', 'Please type a message');
@@ -143,6 +144,16 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
     await core.patchEventFacts(customerId, event._id, { budgetRange: range.id });
     chipWrites.push('budgetRange');
   }
+  // "At the event venue" chip for a service location.
+  if (serviceLocation !== undefined && serviceLocation !== null) {
+    if (typeof serviceLocation !== 'object' || serviceLocation.mode !== 'event' || typeof serviceLocation.category !== 'string') {
+      throw badRequest('INVALID_SERVICE_LOCATION', 'Invalid service location');
+    }
+    if (!event) throw badRequest('NO_ACTIVE_EVENT', 'Tell me about your event first');
+    const r = await core.applyServiceLocation(customerId, event._id, serviceLocation.category, { mode: 'event' });
+    if (r.reason === 'unknown_category') throw badRequest('INVALID_SERVICE_LOCATION', 'Unknown service');
+    chipWrites.push(`location.${serviceLocation.category}`);
+  }
   if (event && chipWrites.length) event = await core.getEvent(customerId, event._id);
 
   // 4. Context
@@ -163,8 +174,13 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
 
   // 6–7. Guards, then the deterministic fallback parser (blanks only)
   const { extracted: guarded, dropped } = applyGuards(rawExtracted, text, { askedTopic });
-  let x = backfillFacts(text, guarded);
-  if (chipWrites.includes('budgetRange')) delete x.budget; // the chip is the statement
+  let x = backfillFacts(text, guarded, { askedTopic });
+  if (chipWrites.includes('budgetRange')) {
+    // the chip is the statement
+    delete x.budget;
+    delete x.budgetMin;
+    delete x.budgetMax;
+  }
   if (hasNewEventFields(x)) {
     // These leak from the current event into the new one.
     delete x.photographyStyle;
@@ -178,7 +194,7 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   if (!event) {
     const facts = newEventFacts(x);
     if (facts.eventType) {
-      event = await createDraftFrom(customerId, facts);
+      event = await createDraftFrom(customerId, { ...facts, customType: x.customType });
       createdEventId = event._id;
       x = { ...salvageOntoCurrent({ ...x, ...facts }), eventType: undefined };
     }
@@ -188,13 +204,18 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
       // A different event: its own draft ("second event" flow).
       // Facts in the message that introduces the new event belong to it.
       const facts = { ...newEventFacts(x), eventType: requestedType };
-      event = await createDraftFrom(customerId, facts);
+      event = await createDraftFrom(customerId, { ...facts, customType: x.customType });
       createdEventId = event._id;
       x = {
         date: facts.date,
         guestCount: facts.guestCount,
         budget: facts.budget,
+        budgetMin: x.budgetMin,
+        budgetMax: x.budgetMax,
         city: facts.city,
+        venueName: x.venueName,
+        area: x.area,
+        serviceLocations: x.serviceLocations,
         neededCategories: x.neededCategories,
         providedCategory: x.providedCategory,
         providedValue: x.providedValue,
@@ -211,7 +232,7 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   let writes = { written: [], skipped: [] };
   if (event) {
     try {
-      writes = await writeExtraction({ customerId, event, extracted: x, yearStated });
+      writes = await writeExtraction({ customerId, event, extracted: x, yearStated, isQuestion: text.includes('?') });
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
       writes.skipped.push({ field: '*', reason: err.code });

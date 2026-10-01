@@ -27,6 +27,24 @@ const customerEventSchema = new Schema(
     budgetMin: { type: Number, min: 0, default: null },
     budgetMax: { type: Number, min: 0, default: null },
     status: { type: String, enum: EVENT_STATUSES, default: 'draft', index: true },
+    // Customer's own words when eventType is 'other' (e.g. "Housewarming").
+    customType: { type: String, trim: true, maxlength: 60, default: null },
+    // Event location beyond the city. Same shape family as Vendor OS
+    // serviceLocation ({ address, locality, city, coordinates }); `city`
+    // stays the top-level field above so it is never stored twice.
+    location: {
+      country: { type: String, trim: true, maxlength: 60, default: null },
+      state: { type: String, trim: true, maxlength: 60, default: null },
+      locality: { type: String, trim: true, maxlength: 80, default: null },
+      venueName: { type: String, trim: true, maxlength: 120, default: null },
+      address: { type: String, trim: true, maxlength: 300, default: null },
+      pincode: { type: String, trim: true, maxlength: 12, default: null },
+      landmark: { type: String, trim: true, maxlength: 120, default: null },
+      notes: { type: String, trim: true, maxlength: 500, default: null },
+      coordinates: { lat: { type: Number, default: null }, lng: { type: Number, default: null } },
+    },
+    specialRequirements: { type: String, trim: true, maxlength: 1000, default: null },
+    notes: { type: String, trim: true, maxlength: 1000, default: null },
   },
   { timestamps: true, collection: 'customer_events' }
 );
@@ -41,8 +59,24 @@ const eventRequirementSchema = new Schema(
     status: { type: String, enum: REQUIREMENT_STATUSES, default: 'missing' },
     source: { type: String, enum: ['customer', 'aura_inferred', 'system'], default: 'system' },
     providedValue: { type: String, trim: true, maxlength: 200, default: null },
-    // Merged key by key, never overwritten wholesale.
+    // Service-specific requirements (dynamic per category). Merged key by key, never overwritten wholesale.
     preferences: { type: Schema.Types.Mixed, default: {} },
+    // Where THIS service happens. Event location ≠ service location:
+    //   event       → same as the event location
+    //   custom      → somewhere else (place and/or pickup → drop for transport)
+    //   unspecified → not decided yet (honest default)
+    serviceLocation: {
+      mode: { type: String, enum: ['unspecified', 'event', 'custom'], default: 'unspecified' },
+      place: { type: String, trim: true, maxlength: 200, default: null },
+      address: { type: String, trim: true, maxlength: 300, default: null },
+      locality: { type: String, trim: true, maxlength: 80, default: null },
+      city: { type: String, trim: true, maxlength: 80, default: null },
+      pickup: { type: String, trim: true, maxlength: 200, default: null },
+      drop: { type: String, trim: true, maxlength: 200, default: null },
+      dropIsEventLocation: { type: Boolean, default: false },
+      notes: { type: String, trim: true, maxlength: 300, default: null },
+    },
+    specialRequirements: { type: String, trim: true, maxlength: 1000, default: null },
     // The customer's explicit choice: 'vs_<VendorService id>' or 'demo_<ref>'. Status stays 'pending'.
     selectedOptionId: { type: String, default: null },
     // What the customer saw when choosing (display only; quotes re-validate).
@@ -143,7 +177,10 @@ const reservationSchema = new Schema(
     optionId: { type: String, required: true },
     vendorName: { type: String, required: true },
     packageName: { type: String, required: true },
-    amount: { type: Number, required: true, min: 0 },
+    packageTotal: { type: Number, default: null, min: 0 },
+    advancePercent: { type: Number, default: 30, min: 0, max: 100 },
+    amount: { type: Number, required: true, min: 0 }, // advance payable now
+    balanceAmount: { type: Number, default: null, min: 0 },
     isDemo: { type: Boolean, default: false },
     // A reservation is a 48 h hold. It is never a booking.
     status: { type: String, enum: ['pending_payment', 'held', 'expired', 'cancelled', 'converted'], default: 'pending_payment', index: true },
@@ -164,6 +201,13 @@ const paymentSchema = new Schema(
     provider: { type: String, default: 'razorpay' },
     providerOrderId: { type: String, default: undefined },
     providerRef: { type: String, default: null },
+    coupon: {
+      code: { type: String, default: null },
+      discountAmount: { type: Number, default: 0, min: 0 },
+      originalAmount: { type: Number, default: null, min: 0 },
+      orderAmount: { type: Number, default: null, min: 0 },
+      usageRecorded: { type: Boolean, default: false },
+    },
     verifiedAt: { type: Date, default: null },
     verifiedBy: { type: String, default: null },
     failureReason: { type: String, default: null },
@@ -196,7 +240,9 @@ const bookingSchema = new Schema(
     packageName: { type: String, required: true },
     reservation: { type: Schema.Types.ObjectId, ref: 'CustomerReservation', required: true, unique: true },
     payment: { type: Schema.Types.ObjectId, ref: 'CustomerPayment', required: true },
-    amount: { type: Number, required: true, min: 0 },
+    amount: { type: Number, required: true, min: 0 }, // package total
+    paidAmount: { type: Number, default: null, min: 0 },
+    balanceAmount: { type: Number, default: null, min: 0 },
     isDemo: { type: Boolean, default: false },
     status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending', index: true },
     reviewReason: { type: String, default: null },
@@ -265,6 +311,16 @@ const demoListingSchema = new Schema(
       travel: { type: Number, default: 0 },
       additional: { type: Number, default: 0 },
     },
+    location: {
+      address: { type: String, default: null },
+      locality: { type: String, default: null },
+      city: { type: String, default: null },
+      coordinates: { lat: { type: Number, default: null }, lng: { type: Number, default: null } },
+    },
+    serviceRadiusKm: { type: Number, default: 25 },
+    negotiable: [{ type: String }],
+    strengths: [{ type: String }],
+    limitations: [{ type: String }],
     includes: [{ type: String }],
     isDemo: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true },

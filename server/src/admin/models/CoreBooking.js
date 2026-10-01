@@ -79,6 +79,18 @@ const coreBookingSchema = new Schema(
       type: Number,
       required: true,
     },
+    paymentSummary: {
+      advancePercentage: { type: Number, default: 30 },
+      advanceAmount: { type: Number, default: 0 },
+      paidAmount: { type: Number, default: 0 },
+      balanceAmount: { type: Number, default: 0 },
+      provider: { type: String, default: 'razorpay' },
+      providerOrderId: { type: String, default: '' },
+      providerPaymentId: { type: String, default: '' },
+      couponCode: { type: String, default: '' },
+      couponDiscountAmount: { type: Number, default: 0 },
+      paidAt: { type: Date, default: null },
+    },
     bookingStatus: {
       type: String,
       enum: ['CONFIRMED', 'CANCELLED', 'FAILED'],
@@ -114,6 +126,18 @@ const coreBookingSchema = new Schema(
         submittedBy: String,
         submittedAt: { type: Date, default: Date.now },
         deliverablesUrl: { type: String, default: '' },
+        photos: [{ type: String }],
+        videos: [{ type: String }],
+        files: [
+          {
+            url: { type: String, default: '' },
+            thumbnailUrl: { type: String, default: '' },
+            publicId: { type: String, default: '' },
+            resourceType: { type: String, default: 'IMAGE' },
+            name: { type: String, default: '' },
+            size: { type: String, default: '' },
+          },
+        ],
         checklist: [
           {
             item: String,

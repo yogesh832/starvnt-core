@@ -10,7 +10,6 @@ import commercialRoutes from './external/routes/commercial.routes.js';
 import transactionRoutes from './external/routes/transaction.routes.js';
 import portfolioRoutes from './external/routes/portfolio.routes.js';
 import aiRoutes from './external/routes/ai.routes.js';
-import vendorsGoogleRoutes from './external/routes/vendors.google.routes.js';
 import { requireExternalAuth, requireAccountType } from './external/middleware/requireExternalAuth.js';
 import { customerRouter, auraRouter, internalRouter, webhookRouter } from './customer/routes/index.js';
 
@@ -20,9 +19,11 @@ import adminPermissionsRoutes from './admin/routes/permissions.routes.js';
 import adminAuditRoutes from './admin/routes/audit.routes.js';
 import adminAutomationRoutes from './admin/routes/automation.routes.js';
 import adminOperationsRoutes from './admin/routes/operations.routes.js';
+import adminEventsRoutes from './admin/routes/events.routes.js';
 import adminDisputesRoutes from './admin/routes/disputes.routes.js';
 import adminPolicyRoutes from './admin/routes/policy.routes.js';
 import adminExternalUsersRoutes from './admin/routes/external-users.routes.js';
+import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
 
 export function createApp() {
@@ -57,7 +58,6 @@ export function createApp() {
   app.use('/api/internal', internalRouter);
 
   app.use('/api/vendor', vendorRoutes);
-  app.use('/api/vendors', vendorsGoogleRoutes);
   app.use('/api/commercial', commercialRoutes);
   app.use('/api', transactionRoutes);
   app.use('/api', portfolioRoutes);
@@ -70,9 +70,11 @@ export function createApp() {
   app.use('/api/admin/audit', adminAuditRoutes);
   app.use('/api/admin/automation', adminAutomationRoutes);
   app.use('/api/admin/operations', adminOperationsRoutes);
+  app.use('/api/admin/events', adminEventsRoutes);
   app.use('/api/admin/disputes', adminDisputesRoutes);
   app.use('/api/admin/policy', adminPolicyRoutes);
   app.use('/api/admin/external-users', adminExternalUsersRoutes);
+  app.use('/api/admin/coupons', requireAdminAuth, adminCouponsRoutes);
 
   // Admin probe — requires admin session AND analytics.read (SUPER_ADMIN bypass).
   app.get(

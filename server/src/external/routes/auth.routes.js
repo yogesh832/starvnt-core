@@ -7,7 +7,7 @@ import {
 } from "../services/emailOtp.service.js";
 import rateLimit from "express-rate-limit";
 import { config } from "../../config.js";
-import { ExternalUser } from "../models/ExternalUser.js";
+import { ExternalUser, userRoles } from "../models/ExternalUser.js";
 import { VendorOrganization } from "../models/VendorOrganization.js";
 import { OperatingLocation } from "../models/OperatingLocation.js";
 import { ExternalSession } from "../models/ExternalSession.js";
@@ -66,7 +66,11 @@ function normalizePrimaryCategory(category) {
   return { value };
 }
 
-async function createSession(user, req) {
+/**
+ * Creates a refresh session acting as `accountType` (the DB-owned product surface).
+ * Also marks the in-memory user so toSafeJSON() reports that surface.
+ */
+async function createSession(user, req, accountType = user.accountType) {
   const refreshToken = generateRefreshToken();
   const expiresAt = new Date(
     Date.now() + config.refreshTtlDays * 24 * 60 * 60 * 1000,
@@ -77,12 +81,44 @@ async function createSession(user, req) {
     ip: req.ip,
     userAgent: req.headers["user-agent"] || "",
     expiresAt,
+    accountType,
   });
+  user.$locals.activeAccountType = accountType;
   return { session, refreshToken };
 }
 
 function issueTokens(user, session) {
-  return { accessToken: signExternalAccessToken(user, session._id) };
+  return {
+    accessToken: signExternalAccessToken(
+      user,
+      session._id,
+      session.accountType || user.accountType,
+    ),
+  };
+}
+
+// ── One auth domain, DB-owned account surface ───────────────────────────────
+// New signups use the selected Customer/Vendor tab. Existing identities always
+// sign in with their primary DB accountType, so a wrong tab cannot convert a
+// customer into a vendor or create vendor records during login.
+
+function resolveExistingAccountType(user) {
+  return user.accountType || userRoles(user)[0] || "CUSTOMER";
+}
+
+function grantRole(user, role) {
+  const roles = userRoles(user);
+  if (!roles.includes(role)) roles.push(role);
+  user.roles = roles;
+}
+
+/** Give the user the chosen role (vendors also need an organization). */
+async function prepareAccountType(user, accountType, vendorDetails) {
+  if (accountType === "VENDOR") {
+    await ensureVendorOrganization(user, vendorDetails);
+  } else {
+    grantRole(user, "CUSTOMER");
+  }
 }
 
 async function ensureVendorOrganization(
@@ -125,7 +161,8 @@ async function ensureVendorOrganization(
     }
     user.vendorOrganization = org._id;
   }
-  user.accountType = "VENDOR";
+  // Adds the vendor role; the primary accountType is left as it was.
+  grantRole(user, "VENDOR");
   await user.save();
 }
 
@@ -177,6 +214,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
       phone: normalizedPhone,
       passwordHash: await hashPassword(password),
       accountType,
+      roles: [accountType],
     });
 
     if (accountType === "VENDOR") {
@@ -260,20 +298,19 @@ router.post("/login", authLimiter, async (req, res, next) => {
       return res.status(401).json({ error: "ACCOUNT_DISABLED" });
     }
 
-    if (accountType === "VENDOR") {
-      await ensureVendorOrganization(user, {
-        businessName,
-        brandName,
-        category: normalizedCategory.value,
-        city,
-        location,
-      });
-    }
+    const signInAs = resolveExistingAccountType(user);
+    await prepareAccountType(user, signInAs, {
+      businessName,
+      brandName,
+      category: normalizedCategory.value,
+      city,
+      location,
+    });
 
     user.lastLoginAt = new Date();
     await user.save();
 
-    const { session, refreshToken } = await createSession(user, req);
+    const { session, refreshToken } = await createSession(user, req, signInAs);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
@@ -306,30 +343,32 @@ router.post("/google", authLimiter, async (req, res, next) => {
       $or: [{ email: googleUser.email }, { googleId: googleUser.googleId }],
     });
 
+    let signInAs;
     if (user) {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
-      if (accountType === "VENDOR") {
-        await ensureVendorOrganization(user, {
-          businessName,
-          brandName,
-          category: normalizedCategory.value,
-          city,
-          location,
-        });
-      }
+      signInAs = resolveExistingAccountType(user);
+      await prepareAccountType(user, signInAs, {
+        businessName,
+        brandName,
+        category: normalizedCategory.value,
+        city,
+        location,
+      });
       user.lastLoginAt = new Date();
       await user.save();
     } else {
       const targetAccountType =
         accountType === "VENDOR" ? "VENDOR" : "CUSTOMER";
+      signInAs = targetAccountType;
       user = await ExternalUser.create({
         fullName: googleUser.fullName,
         email: googleUser.email,
         googleId: googleUser.googleId,
         avatarUrl: googleUser.avatarUrl,
         accountType: targetAccountType,
+        roles: [targetAccountType],
         authProvider: "GOOGLE",
         status: "ACTIVE",
         lastLoginAt: new Date(),
@@ -371,7 +410,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
       return res.status(401).json({ error: "ACCOUNT_DISABLED" });
     }
 
-    const { session, refreshToken } = await createSession(user, req);
+    const { session, refreshToken } = await createSession(user, req, signInAs);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
@@ -392,6 +431,7 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
       email,
       mode,
       authMode,
+      accountType,
       fullName,
       businessName,
       brandName,
@@ -485,7 +525,7 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
 // ── Set Password / Link Email Password Login ────────────────────────────────
 router.post("/password/set", authLimiter, async (req, res, next) => {
   try {
-    const { email, otp, password } = req.body || {};
+    const { email, otp, password, accountType } = req.body || {};
     if (!email || !otp || !password) {
       return res.status(400).json({ error: "EMAIL_OTP_PASSWORD_REQUIRED" });
     }
@@ -510,10 +550,12 @@ router.post("/password/set", authLimiter, async (req, res, next) => {
 
     user.passwordHash = await hashPassword(password);
     user.authProvider = user.googleId ? "GOOGLE" : user.phone ? "PHONE" : "EMAIL";
+    const signInAs = resolveExistingAccountType(user);
+    await prepareAccountType(user, signInAs);
     user.lastLoginAt = new Date();
     await user.save();
 
-    const { session, refreshToken } = await createSession(user, req);
+    const { session, refreshToken } = await createSession(user, req, signInAs);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
@@ -606,21 +648,22 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
     const normalizedPhone = verification.phone;
     let user = await ExternalUser.findOne({ phone: normalizedPhone });
 
+    let signInAs;
     if (user) {
-      if (accountType === "VENDOR") {
-        await ensureVendorOrganization(user, {
-          businessName,
-          brandName,
-          category: normalizedCategory.value,
-          city,
-          location,
-        });
-      }
+      signInAs = resolveExistingAccountType(user);
+      await prepareAccountType(user, signInAs, {
+        businessName,
+        brandName,
+        category: normalizedCategory.value,
+        city,
+        location,
+      });
       user.lastLoginAt = new Date();
       await user.save();
     } else {
       const targetAccountType =
         accountType === "VENDOR" ? "VENDOR" : "CUSTOMER";
+      signInAs = targetAccountType;
       const cleanDigits = normalizedPhone.replace(/\D/g, "");
       const defaultName =
         fullName ||
@@ -633,6 +676,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
         email: `${cleanDigits}@phone.starvnt.com`,
         phone: normalizedPhone,
         accountType: targetAccountType,
+        roles: [targetAccountType],
         authProvider: "PHONE",
         status: "ACTIVE",
         lastLoginAt: new Date(),
@@ -672,7 +716,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
       return res.status(401).json({ error: "ACCOUNT_DISABLED" });
     }
 
-    const { session, refreshToken } = await createSession(user, req);
+    const { session, refreshToken } = await createSession(user, req, signInAs);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
@@ -727,21 +771,22 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
 
     let user = await ExternalUser.findOne({ phone: normalizedPhone });
 
+    let signInAs;
     if (user) {
-      if (accountType === "VENDOR") {
-        await ensureVendorOrganization(user, {
-          businessName,
-          brandName,
-          category: normalizedCategory.value,
-          city,
-          location,
-        });
-      }
+      signInAs = resolveExistingAccountType(user);
+      await prepareAccountType(user, signInAs, {
+        businessName,
+        brandName,
+        category: normalizedCategory.value,
+        city,
+        location,
+      });
       user.lastLoginAt = new Date();
       await user.save();
     } else {
       const targetAccountType =
         accountType === "VENDOR" ? "VENDOR" : "CUSTOMER";
+      signInAs = targetAccountType;
       const cleanDigits = normalizedPhone.replace(/\D/g, "");
       const defaultName =
         fullName ||
@@ -754,6 +799,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
         email: `${cleanDigits}@phone.starvnt.com`,
         phone: normalizedPhone,
         accountType: targetAccountType,
+        roles: [targetAccountType],
         authProvider: "PHONE",
         status: "ACTIVE",
         lastLoginAt: new Date(),
@@ -793,7 +839,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
       return res.status(401).json({ error: "ACCOUNT_DISABLED" });
     }
 
-    const { session, refreshToken } = await createSession(user, req);
+    const { session, refreshToken } = await createSession(user, req, signInAs);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
@@ -830,10 +876,11 @@ router.post("/refresh", async (req, res, next) => {
         .json({ ok: false, error: "ACCOUNT_DISABLED_OR_MISSING" });
     }
 
-    // Rotate: revoke old session, create new one.
+    // Rotate: revoke old session and re-resolve from the DB primary surface.
+    // This also heals old sessions minted with the wrong Customer/Vendor tab.
     session.revokedAt = new Date();
     await session.save();
-    const fresh = await createSession(user, req);
+    const fresh = await createSession(user, req, resolveExistingAccountType(user));
     res.cookie(
       config.refreshCookieName,
       fresh.refreshToken,

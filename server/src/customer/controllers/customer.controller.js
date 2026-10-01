@@ -38,18 +38,26 @@ export const selectOption = async (req, res) => {
   res.json({ requirement });
 };
 export const listQuotes = async (req, res) => res.json(await decision.listQuotes(me(req), req.params.id));
+export const requestVendorQuotes = async (req, res) => res.status(201).json(await decision.requestVendorQuotes(me(req), req.params.id));
 export const createQuote = async (req, res) => res.status(201).json({ quote: await decision.createQuote(me(req), req.params.id) });
 export const getQuote = async (req, res) => res.json({ quote: await decision.getQuote(me(req), req.params.quoteId) });
 export const createEvent = async (req, res) => res.status(201).json(await events.createManualEvent(me(req), req.body));
 export const acceptQuote = async (req, res) => res.json(await commerce.acceptQuote(me(req), req.params.quoteId));
 export const bookings = async (req, res) => res.json(await commerce.bookingsView(me(req), req.params.id));
-export const pay = async (req, res) => res.json(await commerce.payReservation(req.externalUser, req.params.id, req.params.rid));
+export const previewCoupon = async (req, res) =>
+  res.json(await commerce.previewReservationCoupon(me(req), req.params.id, req.params.rid, req.body?.couponCode));
+export const pay = async (req, res) => res.json(await commerce.payReservation(req.externalUser, req.params.id, req.params.rid, req.body));
+export const devVerifyReservationPayment = async (req, res) =>
+  res.json(await commerce.devVerifyReservationPayment(req.externalUser, req.params.id, req.params.rid));
 export const checkoutComplete = async (req, res) =>
   res.json(await commerce.checkoutComplete(me(req), req.params.id, req.params.pid, req.body));
 export const eventDay = async (req, res) => res.json(await events.eventDay(me(req), req.params.id));
 export const circle = async (req, res) => res.json(await circleSvc.circle(me(req), req.params.id));
 export const listMessages = async (req, res) =>
-  res.json(await circleSvc.listMessages(me(req), req.params.id, { bookingId: req.query.bookingId, requirementId: req.query.requirementId }));
+  res.json(await circleSvc.listMessages(me(req), req.params.id, {
+    bookingId: req.query.bookingId || req.query.booking,
+    requirementId: req.query.requirementId || req.query.service,
+  }));
 export const postMessage = async (req, res) => res.status(201).json(await circleSvc.postMessage(me(req), req.params.id, req.body));
 export const updates = async (req, res) => res.json(await circleSvc.updates(me(req)));
 export const notifications = async (req, res) => {

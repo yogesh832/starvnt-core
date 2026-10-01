@@ -37,11 +37,40 @@ export async function createOrder({ amount, receipt, notes = {} }) {
   return data; // { id, amount, currency, ... }
 }
 
+export async function listOrderPayments(orderId) {
+  const { keyId, keySecret } = env();
+  const res = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(orderId)}/payments`, {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`,
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data?.error?.description || `Razorpay payment lookup failed (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  return Array.isArray(data.items) ? data.items : [];
+}
+
 /** HMAC-SHA256 of the raw body with the webhook secret, compared in constant time. */
 export function verifyWebhookSignature(rawBody, signature) {
   const { webhookSecret } = env();
   if (!webhookSecret || !signature || !rawBody) return false;
   const expected = crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(signature));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+export function verifyCheckoutSignature({ orderId, paymentId, signature }) {
+  const { keySecret } = env();
+  if (!keySecret || !orderId || !paymentId || !signature) return false;
+  const expected = crypto
+    .createHmac('sha256', keySecret)
+    .update(`${orderId}|${paymentId}`)
+    .digest('hex');
   const a = Buffer.from(expected);
   const b = Buffer.from(String(signature));
   return a.length === b.length && crypto.timingSafeEqual(a, b);

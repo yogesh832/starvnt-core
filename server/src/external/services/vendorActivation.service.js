@@ -122,7 +122,7 @@ export async function evaluateVendorActivation(vendorId) {
     isCommerciallyActive,
     isModelComplete,
     completionPercentage,
-    is100Percent: completionPercentage === 100,
+    is100Percent: completionPercentage === 100 && targetState === 'ACTIVE',
     checklist: {
       profile: hasProfile,
       services: hasActiveService,

@@ -10,7 +10,11 @@ import { assertCommerceAllowed, serializeQuote } from './decision.service.js';
 import { HANDLED_STATUSES, serializeEvent } from './understanding.js';
 import { categoryLabel, templateFor } from './planCatalog.js';
 import { LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
+import { Quote } from '../../external/models/Quote.js';
+import { ExternalUser } from '../../external/models/ExternalUser.js';
+import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
+import { publicCoupon, validateCouponForPayment, recordCouponUsageOnce, normalizeCouponCode } from './coupon.service.js';
 
 /**
  * Reserve → pay → verify → book (Blueprint §6, phases 9–10).
@@ -22,17 +26,28 @@ import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
  */
 
 const HOLD_HOURS = 48;
+const ADVANCE_PERCENT = 30;
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
+const advanceOf = (total) => Math.ceil((Number(total || 0) * ADVANCE_PERCENT) / 100);
+const packageTotalOf = (reservation) => reservation.packageTotal ?? reservation.amount;
+const advanceAmountOf = (reservation) => reservation.packageTotal == null ? advanceOf(reservation.amount) : reservation.amount;
+const balanceAmountOf = (reservation, paid = advanceAmountOf(reservation)) => Math.max(0, packageTotalOf(reservation) - paid);
 
 // ── Serializers (customer-safe) ─────────────────────────────────────────────
 export function serializeReservation(r) {
+  const packageTotal = packageTotalOf(r);
+  const advanceAmount = advanceAmountOf(r);
   return {
     id: String(r._id),
     category: r.category,
     label: categoryLabel(r.category),
     vendorName: r.vendorName,
     packageName: r.packageName,
-    amount: r.amount,
+    amount: advanceAmount,
+    advanceAmount,
+    packageTotal,
+    advancePercent: r.advancePercent ?? ADVANCE_PERCENT,
+    balanceAmount: r.balanceAmount ?? balanceAmountOf(r, advanceAmount),
     isDemo: r.isDemo,
     status: r.status,
     expiresAt: r.expiresAt,
@@ -50,10 +65,18 @@ export function serializePayment(p) {
     createdAt: p.createdAt,
     verifiedAt: p.verifiedAt,
     failureReason: p.status === 'failed' ? p.failureReason || 'Payment failed' : null,
+    coupon: p.coupon?.code ? {
+      code: p.coupon.code,
+      discountAmount: Number(p.coupon.discountAmount || 0),
+      originalAmount: p.coupon.originalAmount,
+      orderAmount: p.coupon.orderAmount,
+    } : null,
   };
 }
 
 export function serializeBooking(b) {
+  const packageTotal = b.amount;
+  const paidAmount = b.paidAmount ?? b.amount;
   return {
     id: String(b._id),
     reference: String(b._id).slice(-6).toUpperCase(),
@@ -62,6 +85,9 @@ export function serializeBooking(b) {
     vendorName: b.vendorName,
     packageName: b.packageName,
     amount: b.amount,
+    packageTotal,
+    paidAmount,
+    balanceAmount: b.balanceAmount ?? Math.max(0, packageTotal - paidAmount),
     isDemo: b.isDemo,
     status: b.status,
     underReviewReason: b.status === 'pending' ? b.reviewReason : null,
@@ -106,21 +132,27 @@ export async function acceptQuote(customerId, quoteId) {
   await commerceRepo.cancelPendingForRequirements(quote.items.map((i) => i.requirement));
   const expiresAt = new Date(Date.now() + HOLD_HOURS * 3600000);
   const reservations = await commerceRepo.createReservations(
-    quote.items.map((i) => ({
-      event: event._id,
-      customer: customerId,
-      quote: quote._id,
-      quoteItem: i._id,
-      requirement: i.requirement,
-      category: i.category,
-      optionId: i.optionId,
-      vendorName: i.vendorName,
-      packageName: i.packageName,
-      amount: i.price,
-      isDemo: i.isDemo,
-      status: 'pending_payment',
-      expiresAt,
-    }))
+    quote.items.map((i) => {
+      const advance = advanceOf(i.price);
+      return {
+        event: event._id,
+        customer: customerId,
+        quote: quote._id,
+        quoteItem: i._id,
+        requirement: i.requirement,
+        category: i.category,
+        optionId: i.optionId,
+        vendorName: i.vendorName,
+        packageName: i.packageName,
+        packageTotal: i.price,
+        advancePercent: ADVANCE_PERCENT,
+        amount: advance,
+        balanceAmount: Math.max(0, i.price - advance),
+        isDemo: i.isDemo,
+        status: 'pending_payment',
+        expiresAt,
+      };
+    })
   );
   await eventsRepo.appendHistory({
     eventId: event._id,
@@ -149,8 +181,19 @@ export async function bookingsView(customerId, eventId) {
   };
 }
 
+export async function previewReservationCoupon(customerId, eventId, reservationId, code) {
+  const event = await getOwnedEventOr404(customerId, eventId);
+  const reservation = await commerceRepo.findReservation(event._id, reservationId);
+  if (!reservation) throw notFound('Reservation not found');
+  if (reservation.status !== 'pending_payment') throw conflict('RESERVATION_NOT_PAYABLE', 'This reservation is not awaiting payment');
+  const baseAmount = advanceAmountOf(reservation);
+  const orderAmount = packageTotalOf(reservation);
+  const { coupon, discountAmount } = await validateCouponForPayment(code, { orderAmount, baseAmount });
+  return { ok: true, coupon: publicCoupon(coupon, { discountAmount, baseAmount, orderAmount }) };
+}
+
 // ── Pay a reservation (creates or reuses a Razorpay order) ──────────────────
-export async function payReservation(customer, eventId, reservationId) {
+export async function payReservation(customer, eventId, reservationId, body = {}) {
   const customerId = customer._id;
   const event = await getOwnedEventOr404(customerId, eventId);
   assertCommerceAllowed(event);
@@ -163,14 +206,28 @@ export async function payReservation(customer, eventId, reservationId) {
   }
 
   let payment = await commerceRepo.findOpenPaymentForReservation(reservation._id);
+  const baseAmount = advanceAmountOf(reservation);
+  const orderAmount = packageTotalOf(reservation);
+  const { coupon, discountAmount } = await validateCouponForPayment(body.couponCode, { orderAmount, baseAmount });
+  const payableAmount = Math.max(1, baseAmount - discountAmount);
+  if (payment && payment.amount !== payableAmount && payment.status === 'pending') payment = null;
+  if (payment && payment.status === 'pending' && normalizeCouponCode(payment.coupon?.code) !== normalizeCouponCode(coupon?.code)) payment = null;
   if (payment && ['paid', 'verified'].includes(payment.status)) throw conflict('ALREADY_PAID', 'This reservation is already paid');
   if (!payment || !payment.providerOrderId) {
     let order;
     try {
       order = await razorpay.createOrder({
-        amount: reservation.amount,
+        amount: payableAmount,
         receipt: `res_${reservation._id}`,
-        notes: { eventId: String(event._id), reservationId: String(reservation._id) },
+        notes: {
+          eventId: String(event._id),
+          reservationId: String(reservation._id),
+          paymentType: 'advance',
+          packageTotal: String(packageTotalOf(reservation)),
+          advancePercent: String(reservation.advancePercent ?? ADVANCE_PERCENT),
+          couponCode: coupon?.code || '',
+          couponDiscount: discountAmount ? String(discountAmount) : '',
+        },
       });
     } catch (err) {
       console.error('[payments] order failed:', err.message);
@@ -180,10 +237,17 @@ export async function payReservation(customer, eventId, reservationId) {
       event: event._id,
       customer: customerId,
       reservation: reservation._id,
-      amount: reservation.amount,
+      amount: payableAmount,
       currency: 'INR',
       status: 'pending',
       providerOrderId: order.id,
+      coupon: coupon ? {
+        code: coupon.code,
+        discountAmount,
+        originalAmount: baseAmount,
+        orderAmount,
+        usageRecorded: false,
+      } : undefined,
     });
   }
 
@@ -195,7 +259,7 @@ export async function payReservation(customer, eventId, reservationId) {
       amount: razorpay.toPaise(payment.amount),
       currency: payment.currency,
       name: 'STARVNT',
-      description: `${categoryLabel(reservation.category)} · ${reservation.vendorName}`,
+      description: `${categoryLabel(reservation.category)} · ${reservation.vendorName}${payment.coupon?.code ? ` · ${payment.coupon.code}` : ''}`,
       prefill: { name: customer.fullName || '', email: customer.email || '', contact: customer.phone || '' },
     },
   };
@@ -211,11 +275,32 @@ export async function checkoutComplete(customerId, eventId, paymentId, body = {}
   return { payment: serializePayment(moved || payment) };
 }
 
+// TODO_REMOVE_BEFORE_PRODUCTION: local customer test helper for bypassing Razorpay during QA.
+export async function devVerifyReservationPayment(customer, eventId, reservationId) {
+  if (process.env.NODE_ENV === 'production') {
+    throw notFound('Not found');
+  }
+  const { payment } = await payReservation(customer, eventId, reservationId);
+  const result = await verifyPayment(payment.id, { actorType: 'ops', actorId: 'dev-test-success-button' });
+  return { payment: serializePayment(result.payment), booking: result.booking ? serializeBooking(result.booking) : null };
+}
+
+import { publishOutboxEvent } from '../../automation/services/outbox.service.js';
+
 // ── Verification & booking confirmation (webhook / ops only) ────────────────
 async function markFailed(payment, reason, actor) {
   const moved = await commerceRepo.movePayment(payment._id, ['pending', 'processing', 'paid'], { status: 'failed', failureReason: reason });
   if (!moved) return null;
   await eventsRepo.appendHistory({ eventId: payment.event, ...actor, action: 'payment_failed', details: { amount: payment.amount } });
+
+  await publishOutboxEvent({
+    eventType: 'PAYMENT_FAILED',
+    aggregateType: 'Payment',
+    aggregateId: payment._id.toString(),
+    payload: { paymentId: payment._id.toString(), reason, eventId: payment.event.toString() },
+    idempotencyKey: `payment_failed_${payment._id}`
+  });
+
   await circleRepo.notify({
     customerId: payment.customer,
     eventId: payment.event,
@@ -258,15 +343,21 @@ export async function confirmBookingFor(payment) {
     const req = await reqRepo.findRequirement(event._id, reservation.category);
     if (req && LOCKED_REQUIREMENT_STATUSES.includes(req.status)) reason = `${categoryLabel(reservation.category)} is already ${req.status}`;
   }
+  let vq = null;
   if (!reason) {
-    try {
-      const o = await catalog.getOption(event, reservation.optionId);
-      if (!catalog.isBookable(o)) reason = 'The vendor is not available on your date';
-    } catch {
-      reason = 'The option is no longer offered';
+    if (reservation.quote) {
+      vq = await Quote.findById(reservation.quote).populate('vendor').catch(() => null);
+    }
+    if (!vq) {
+      try {
+        const o = await catalog.getOption(event, reservation.optionId);
+        if (!catalog.isBookable(o)) reason = 'The vendor is not available on your date';
+      } catch {
+        reason = 'The option is no longer offered';
+      }
     }
   }
-  if (!reason && event.eventDate) {
+  if (!reason && event.eventDate && !vq) {
     const claimed = await commerceRepo.claimOptionDate(reservation.optionId, event.eventDate, event._id);
     if (!claimed) reason = 'The vendor was just booked by someone else for your date';
   }
@@ -281,7 +372,9 @@ export async function confirmBookingFor(payment) {
     packageName: reservation.packageName,
     reservation: reservation._id,
     payment: payment._id,
-    amount: reservation.amount,
+    amount: packageTotalOf(reservation),
+    paidAmount: payment.amount,
+    balanceAmount: reservation.balanceAmount ?? balanceAmountOf(reservation, payment.amount),
     isDemo: reservation.isDemo,
     status: reason ? 'pending' : 'confirmed',
     reviewReason: reason,
@@ -289,10 +382,87 @@ export async function confirmBookingFor(payment) {
   if (!created) return booking;
   await commerceRepo.setReservationStatus(reservation._id, 'converted');
 
+  if (vq && !reason) {
+    try {
+      vq.advancePayment = {
+        ...(vq.advancePayment?.toObject?.() || vq.advancePayment || {}),
+        percentage: reservation.advancePercent || ADVANCE_PERCENT,
+        amount: payment.amount,
+        status: 'VERIFIED',
+        provider: payment.provider || 'razorpay',
+        providerOrderId: payment.providerOrderId || '',
+        providerPaymentId: payment.providerRef || '',
+        couponCode: payment.coupon?.code || '',
+        couponDiscountAmount: Number(payment.coupon?.discountAmount || 0),
+        originalAdvanceAmount: Number(payment.coupon?.originalAmount || payment.amount),
+        couponUsageRecorded: Boolean(payment.coupon?.usageRecorded),
+        paidAt: payment.verifiedAt || new Date(),
+      };
+      await vq.save();
+
+      const customerUser = await ExternalUser.findById(event.customer);
+      const customerName = customerUser?.fullName || customerUser?.email || 'Customer';
+      const totalAmount = packageTotalOf(reservation);
+      const paidAmount = payment.amount;
+
+      await CoreBooking.findOneAndUpdate(
+        { quoteId: String(vq._id) },
+        {
+          $setOnInsert: {
+            quoteId: String(vq._id),
+            opportunityId: vq.opportunity ? String(vq.opportunity) : null,
+            vendorId: vq.vendor?._id || vq.vendor,
+            customerId: event.customer,
+            serviceName: vq.serviceName || reservation.packageName,
+            eventDate: vq.eventDate || event.eventDate || new Date().toISOString().split('T')[0],
+            serviceLocation: vq.serviceLocation || event.location || {},
+            pricing: vq.pricingBreakdown || { totalAmount },
+            totalAmount,
+            bookingStatus: 'CONFIRMED',
+            settlementStatus: 'NOT_ELIGIBLE',
+          },
+          $set: {
+            vendorName: reservation.vendorName,
+            customerName,
+            category: vq.vendor?.category || reservation.category,
+            paymentSummary: {
+              advancePercentage: reservation.advancePercent || ADVANCE_PERCENT,
+              advanceAmount: paidAmount,
+              paidAmount,
+              balanceAmount: reservation.balanceAmount ?? Math.max(0, totalAmount - paidAmount),
+              couponCode: payment.coupon?.code || '',
+              couponDiscountAmount: Number(payment.coupon?.discountAmount || 0),
+              provider: payment.provider || 'razorpay',
+              providerOrderId: payment.providerOrderId || '',
+              providerPaymentId: payment.providerRef || '',
+              paidAt: payment.verifiedAt || new Date(),
+            },
+            paymentStatus: 'PAYMENT_VERIFIED',
+            executionStatus: 'SERVICE_SCHEDULED',
+          },
+        },
+        { new: true, upsert: true }
+      );
+    } catch (e) {
+      console.warn('[confirmBookingFor] CoreBooking sync error:', e.message);
+    }
+  }
+
   const label = categoryLabel(reservation.category);
   if (!reason) {
     await reqRepo.upsertRequirement(event._id, reservation.category, { status: 'booked', source: 'system' }, { onlyIfStatusIn: ['missing', 'pending', 'customer_provided'] });
-    await eventsRepo.appendHistory({ eventId: event._id, actorType: 'system', action: 'booking_confirmed', details: { category: reservation.category, vendorName: reservation.vendorName, amount: reservation.amount } });
+    await eventsRepo.appendHistory({
+      eventId: event._id,
+      actorType: 'system',
+      action: 'booking_confirmed',
+      details: {
+        category: reservation.category,
+        vendorName: reservation.vendorName,
+        amount: packageTotalOf(reservation),
+        paidAmount: payment.amount,
+        balanceAmount: reservation.balanceAmount ?? balanceAmountOf(reservation, payment.amount),
+      },
+    });
     await circleRepo.notify({ customerId: event.customer, eventId: event._id, type: 'booking', title: `${label} booked`, body: `${reservation.vendorName} is confirmed for ${event.title}.` });
     await maybeMarkEventBooked(event._id);
   } else {
@@ -319,7 +489,26 @@ export async function verifyPayment(paymentId, { actorType, actorId }) {
     verifiedBy: actorType === 'ops' ? `ops:${actorId}` : actorType,
   });
   if (moved) {
+    if (moved.coupon?.code && !moved.coupon?.usageRecorded) {
+      await recordCouponUsageOnce(moved.coupon.code);
+      await commerceRepo.markCouponUsageRecorded(moved._id);
+      moved.coupon.usageRecorded = true;
+    }
     await eventsRepo.appendHistory({ eventId: payment.event, actorType, actorId, action: 'payment_verified', details: { amount: payment.amount } });
+
+    await publishOutboxEvent({
+      eventType: 'PAYMENT_CONFIRMED',
+      aggregateType: 'Payment',
+      aggregateId: payment._id.toString(),
+      payload: {
+        paymentId: payment._id.toString(),
+        eventId: payment.event.toString(),
+        reservationId: payment.reservation.toString(),
+        amount: payment.amount,
+        currency: payment.currency
+      },
+      idempotencyKey: `payment_confirmed_${payment._id}`
+    });
   }
   const booking = await confirmBookingFor(moved || payment);
   return { payment: moved || (await commerceRepo.getPayment(paymentId)), booking };

@@ -51,12 +51,6 @@ const vendorOrganizationSchema = new Schema(
     website: { type: String, trim: true, default: '' },
     bio: { type: String, trim: true, default: '' },
     profilePicUrl: { type: String, trim: true, default: '' },
-    googlePlaceId: { type: String, trim: true, default: null },
-    googleBusinessUrl: { type: String, trim: true, default: '' },
-    googleRating: {
-      type: Schema.Types.Mixed,
-      default: null,
-    },
     verification: {
       isVerified: { type: Boolean, default: false },
       verifiedAt: { type: Date, default: null },
@@ -69,6 +63,7 @@ const vendorOrganizationSchema = new Schema(
       average: { type: Number, default: 0, min: 0, max: 5 },
       count: { type: Number, default: 0 },
     },
+    googlePlaceId: { type: String, default: null, trim: true },
     workingHours: {
       type: Schema.Types.Mixed,
       default: {

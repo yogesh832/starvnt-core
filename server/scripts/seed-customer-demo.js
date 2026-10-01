@@ -1,5 +1,5 @@
 /**
- * Seed the 12 demo vendor packages for the Customer App (development only).
+ * Seed demo vendor packages for the Customer App (development only).
  * Safe to re-run: existing listings are left untouched.
  *
  *   npm run seed:customer-demo -w server

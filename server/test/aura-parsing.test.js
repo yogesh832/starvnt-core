@@ -60,12 +60,47 @@ test('guards: provided value must be in the message; asked topic counts as menti
 });
 
 test('clarification asks one question in order and honours skips', () => {
-  const ev = { eventType: 'birthday', status: 'draft', city: 'Pune', eventDate: null, guestCount: null, budget: null };
+  // Order (prompt §12): type → date → city → guests → venue → area → budget → essentials → service locations.
+  const ev = { eventType: 'birthday', status: 'draft', city: null, eventDate: null, guestCount: null, budget: null };
   assert.equal(nextQuestion(null, [], []).topic, 'event.type');
-  assert.equal(nextQuestion(ev, [], []).topic, 'requirement.venue');
+  assert.equal(nextQuestion(ev, [], []).topic, 'event.date');
+  assert.match(nextQuestion(ev, [], []).question, /What date are you planning the birthday/);
+  assert.equal(nextQuestion({ ...ev, eventDate: '2090-01-01' }, [], []).topic, 'event.city');
+  assert.equal(nextQuestion({ ...ev, eventDate: '2090-01-01', city: 'Pune' }, [], []).topic, 'event.guest_count');
+  const known = { ...ev, eventDate: '2090-01-01', city: 'Pune', guestCount: 40 };
+  assert.equal(nextQuestion(known, [], []).topic, 'requirement.venue');
+  assert.equal(nextQuestion({ ...known, location: { venueName: 'Kisan Palace' } }, [], []).topic, 'event.area');
   const skip = [{ field: 'skip:requirement.venue', value: true, state: 'KNOWN' }];
-  assert.equal(nextQuestion(ev, [], skip).topic, 'event.date');
-  const q = nextQuestion({ ...ev, eventDate: '2090-01-01', guestCount: 40 }, [], skip);
+  const q = nextQuestion(known, [], skip);
   assert.equal(q.topic, 'event.budget');
   assert.equal(q.options[0].budgetRange, 'o_under_50k');
+
+  // Service locations are asked for location-sensitive services only, never assumed.
+  const all = { ...known, budget: 5000 };
+  const handled = ['venue', 'catering', 'decor', 'cake'].map((c) => ({ category: c, status: 'customer_provided' }));
+  const makeup = { category: 'makeup', status: 'pending', serviceLocation: { mode: 'unspecified' } };
+  const lq = nextQuestion(all, [...handled, makeup], skip);
+  assert.equal(lq.topic, 'location.makeup');
+  assert.deepEqual(lq.options.map((o) => o.label), ['At the event venue', 'Somewhere else', 'Not decided yet']);
+  assert.equal(nextQuestion(all, [...handled, { ...makeup, serviceLocation: { mode: 'custom', place: 'my hotel' } }], skip), null);
+});
+
+test('location parsing: venue, short answers, service locations, budget range', async () => {
+  const { parseVenue, parseShortAnswer, parseServiceLocations, parseBudgetRange } = await import('../src/customer/aura/factBackfill.js');
+  assert.equal(parseVenue('It is at Kisan Palace.'), 'Kisan Palace');
+  assert.equal(parseVenue('No, the venue is actually ABC Banquet'), 'ABC Banquet');
+  assert.equal(parseVenue('The venue is Kisan Palace. Maybe a DJ.'), 'Kisan Palace');
+  assert.equal(parseVenue('Makeup will be at Hotel Hindustan'), null, 'another service is the subject');
+  assert.equal(parseVenue('party at 7 pm'), null);
+  assert.equal(parseShortAnswer('New Town.', 'event.area'), 'New Town');
+  assert.equal(parseShortAnswer('New Town.', 'event.guest_count'), null, 'only for the question just asked');
+  assert.equal(parseShortAnswer('Is New Town ok?', 'event.area'), null);
+  assert.deepEqual(parseServiceLocations('Makeup will be at my hotel.'), [{ category: 'makeup', mode: 'custom', place: 'my hotel' }]);
+  assert.deepEqual(parseServiceLocations('Guests will be picked up from Salt Lake and taken to the venue.'), [
+    { category: 'transport', mode: 'custom', pickup: 'Salt Lake', drop: null, dropIsEventLocation: true },
+  ]);
+  assert.deepEqual(parseServiceLocations('Photography will be at the venue'), [{ category: 'photography', mode: 'event' }]);
+  assert.deepEqual(parseBudgetRange('Budget is 10 to 15 lakh.'), { min: 1000000, max: 1500000 });
+  assert.deepEqual(parseBudgetRange('5-8 lakh ka budget'), { min: 500000, max: 800000 });
+  assert.equal(parseBudgetRange('budget 10 lakh'), null);
 });

@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Page, Card} from './shared.jsx';
+import { Page, Card } from './shared.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
-import { CardListSkeleton } from '../../../components/LoadingSkeleton.jsx';
 
 function formatMessageTime(dateStr) {
   if (!dateStr) return '';
@@ -16,7 +15,7 @@ function formatMessageTime(dateStr) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export default function Messages() {
+export default function Messages({ onMessagesRead }) {
   const [threads, setThreads] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [activeThread, setActiveThread] = useState(null);
@@ -26,9 +25,31 @@ export default function Messages() {
   const [showMobileChat, setShowMobileChat] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const loadThreads = useCallback(async (selectId = null) => {
+  const announceMessagesRead = useCallback(() => {
+    if (typeof onMessagesRead === 'function') onMessagesRead();
+    window.dispatchEvent(new Event('vendorBadgesRefresh'));
+  }, [onMessagesRead]);
+
+  const markThreadRead = useCallback(async (thread) => {
     try {
-      setLoading(true);
+      const res = await externalApi.call(`/vendor/messages/threads/${thread._id}`);
+      if (res.ok && res.thread) {
+        setActiveThread(res.thread);
+        setThreads((prev) =>
+          prev.map((item) => (item._id === thread._id ? { ...res.thread, unreadVendorCount: 0 } : item))
+        );
+        announceMessagesRead();
+        return res.thread;
+      }
+    } catch (err) {
+      console.warn('[Messages] Mark read error:', err.message);
+    }
+    return thread;
+  }, [announceMessagesRead]);
+
+  const loadThreads = useCallback(async (selectId = null, options = {}) => {
+    try {
+      if (!options.silent) setLoading(true);
       const res = await externalApi.call('/vendor/messages/threads');
       if (res.ok && Array.isArray(res.threads)) {
         setThreads(res.threads);
@@ -37,7 +58,11 @@ export default function Messages() {
           const match = res.threads.find((t) => t._id === targetId) || res.threads[0];
           if (match) {
             setActiveThreadId(match._id);
-            setActiveThread(match);
+            if (match.unreadVendorCount > 0) {
+              await markThreadRead(match);
+            } else {
+              setActiveThread(match);
+            }
           }
         } else {
           setActiveThread(null);
@@ -47,13 +72,15 @@ export default function Messages() {
     } catch (err) {
       console.warn('[Messages] Failed to load threads:', err.message);
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
-  }, [activeThreadId]);
+  }, [activeThreadId, markThreadRead]);
 
   useEffect(() => {
     loadThreads();
-  }, []);
+    const interval = setInterval(() => loadThreads(activeThreadId, { silent: true }), 10000);
+    return () => clearInterval(interval);
+  }, [activeThreadId, loadThreads]);
 
   // Auto-scroll messages to bottom
   useEffect(() => {
@@ -69,43 +96,41 @@ export default function Messages() {
     setShowMobileChat(true);
 
     if (t.unreadVendorCount > 0) {
-      try {
-        const res = await externalApi.call(`/vendor/messages/threads/${t._id}`);
-        if (res.ok && res.thread) {
-          setActiveThread(res.thread);
-          setThreads((prev) =>
-            prev.map((item) => (item._id === t._id ? { ...item, unreadVendorCount: 0 } : item))
-          );
-        }
-      } catch (err) {
-        console.warn('[Messages] Mark read error:', err.message);
-      }
+      await markThreadRead(t);
     }
   }
 
   // Send message
   async function handleSendMessage(e) {
     e.preventDefault();
-    if (!msgText.trim() || !activeThreadId || sending) return;
+    if (!msgText.trim() || !activeThread?._id || sending) return;
 
-    const sendingText = msgText.trim();
-    setMsgText('');
     setSending(true);
-
+    const textToSend = msgText.trim();
     try {
-      const res = await externalApi.call(`/vendor/messages/threads/${activeThreadId}`, {
+      const res = await externalApi.call(`/vendor/messages/threads/${activeThread._id}`, {
         method: 'POST',
-        body: { text: sendingText },
+        body: { text: textToSend },
       });
 
-      if (res.ok && res.thread) {
-        setActiveThread(res.thread);
+      if (res.ok && res.message) {
+        setMsgText('');
+        setActiveThread((prev) => ({
+          ...prev,
+          messages: [...(prev?.messages || []), res.message],
+          lastMessageText: textToSend,
+          lastMessageAt: new Date(),
+        }));
         setThreads((prev) =>
-          prev.map((item) => (item._id === activeThreadId ? res.thread : item))
+          prev.map((t) =>
+            t._id === activeThread._id
+              ? { ...t, lastMessageText: textToSend, lastMessageAt: new Date() }
+              : t
+          )
         );
       }
     } catch (err) {
-      console.warn('[Messages] Send error:', err.message);
+      alert(`Could not send message: ${err.message}`);
     } finally {
       setSending(false);
     }
@@ -113,28 +138,30 @@ export default function Messages() {
 
   return (
     <Page
-      title="Messages"
-      sub="Direct, authenticated client communications and booking coordination."
+      title="Enquiries & Messages"
+      sub="Direct, context-backed customer messaging. Respond to client opportunities and quote negotiations in real-time."
     >
       {loading && threads.length === 0 ? (
-        <CardListSkeleton count={4} />
+        <Card className="text-center py-16">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-xs text-muted font-medium">Loading conversation threads...</p>
+        </Card>
       ) : threads.length === 0 ? (
-        <Card className="text-center py-16 px-6 max-w-2xl mx-auto">
-          <div className="w-16 h-16 rounded-3xl bg-primary-soft text-primary grid place-items-center mx-auto mb-4 shadow-xs">
-            <Icon name="message" size={28} />
+        <Card className="text-center py-16 px-4">
+          <div className="w-14 h-14 rounded-3xl bg-primary-soft text-primary grid place-items-center mx-auto mb-3 shadow-xs">
+            <Icon name="message" size={24} />
           </div>
-          <h2 className="text-lg font-black text-navy">No Client Messages Yet</h2>
-          <p className="text-xs text-muted max-w-md mx-auto mt-2 leading-relaxed">
-            Direct client messaging unlocks automatically when clients enquire about your services or confirm bookings.
-            All messages are strictly tied to validated event requirements to prevent unqualified spam.
+          <h3 className="text-base font-extrabold text-navy">No Active Inquiries Yet</h3>
+          <p className="text-xs text-muted max-w-sm mx-auto mt-1 leading-relaxed">
+            When prospective clients discover your profile or negotiate quotes, structured communication threads will appear here.
           </p>
-          <div className="mt-6 flex justify-center gap-3">
+          <div className="mt-4">
             <a
               href="/vendor/enquiries"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition shadow-sm"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold shadow-xs hover:bg-primary-dark transition"
             >
-              <Icon name="search" size={14} />
-              <span>Browse Inbound Enquiries</span>
+              <span>View Open Enquiries</span>
+              <Icon name="chevronRight" size={13} />
             </a>
           </div>
         </Card>
@@ -152,7 +179,7 @@ export default function Messages() {
               </span>
               <button
                 onClick={() => loadThreads()}
-                className="p-1.5 rounded-lg hover:bg-lavender text-muted hover:text-navy transition"
+                className="p-1.5 rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
                 title="Refresh messages"
                 aria-label="Refresh"
               >
@@ -170,11 +197,13 @@ export default function Messages() {
                   .join('')
                   .toUpperCase();
 
+                const isCounterQuote = (t.lastMessageText || '').includes('Counter Quote Proposal');
+
                 return (
                   <button
                     key={t._id}
                     onClick={() => handleSelectThread(t)}
-                    className={`w-full flex items-start gap-3 p-4 text-left transition ${
+                    className={`w-full flex items-start gap-3 p-4 text-left transition cursor-pointer ${
                       isSelected
                         ? 'bg-primary-soft/60 border-l-4 border-l-primary'
                         : 'hover:bg-lavender/40'
@@ -198,7 +227,13 @@ export default function Messages() {
                         {t.eventName} {t.eventDate ? `· ${t.eventDate}` : ''}
                       </div>
                       <p className="text-xs text-muted truncate mt-1">
-                        {t.lastMessageText || 'New inquiry received'}
+                        {isCounterQuote ? (
+                          <span className="text-amber-800 font-bold inline-flex items-center gap-1">
+                            <span>💬 Counter Quote Proposal</span>
+                          </span>
+                        ) : (
+                          t.lastMessageText || 'New inquiry received'
+                        )}
                       </p>
                     </div>
                     {t.unreadVendorCount > 0 && (
@@ -224,7 +259,7 @@ export default function Messages() {
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setShowMobileChat(false)}
-                    className="lg:hidden p-1.5 -ml-1 rounded-xl hover:bg-lavender text-muted hover:text-navy"
+                    className="lg:hidden p-1.5 -ml-1 rounded-xl hover:bg-lavender text-muted hover:text-navy cursor-pointer"
                     aria-label="Back to threads"
                   >
                     <Icon name="chevronLeft" size={16} />
@@ -260,15 +295,13 @@ export default function Messages() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {activeThread.opportunity && (
-                    <a
-                      href="/vendor/enquiries"
-                      className="px-3 py-1.5 rounded-xl border border-primary/30 text-primary hover:bg-primary-soft text-xs font-bold transition flex items-center gap-1.5"
-                    >
-                      <span>Prepare Quote</span>
-                      <Icon name="chevronRight" size={12} />
-                    </a>
-                  )}
+                  <a
+                    href="/vendor/quotes"
+                    className="px-3 py-1.5 rounded-xl border border-primary/30 text-primary hover:bg-primary-soft text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <span>View / Revise Quotes</span>
+                    <Icon name="chevronRight" size={12} />
+                  </a>
                 </div>
               </div>
 
@@ -278,6 +311,7 @@ export default function Messages() {
                   activeThread.messages.map((m, idx) => {
                     const isVendor = m.sender === 'VENDOR';
                     const isSystem = m.sender === 'SYSTEM' || m.sender === 'SUPPORT';
+                    const isCounterQuote = m.metadata?.type === 'COUNTER_QUOTE' || m.text.includes('Counter Quote Proposal');
 
                     if (isSystem) {
                       return (
@@ -296,13 +330,34 @@ export default function Messages() {
                         className={`flex ${isVendor ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
-                          className={`max-w-[80%] sm:max-w-[70%] rounded-3xl px-4.5 py-3 text-xs leading-relaxed shadow-xs ${
+                          className={`max-w-[85%] sm:max-w-[75%] rounded-3xl px-4.5 py-3.5 text-xs leading-relaxed shadow-xs ${
                             isVendor
                               ? 'bg-primary text-white rounded-br-xs'
                               : 'bg-white text-navy border border-gray-100 rounded-bl-xs'
                           }`}
                         >
-                          <p className="break-words font-medium">{m.text}</p>
+                          <p className="break-words font-medium whitespace-pre-line leading-relaxed">{m.text}</p>
+
+                          {/* Interactive Counter Quote Proposal CTA Card */}
+                          {isCounterQuote && (
+                            <div className={`mt-3 pt-2.5 border-t flex flex-wrap items-center justify-between gap-2 ${isVendor ? 'border-white/20' : 'border-gray-100'}`}>
+                              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${isVendor ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}>
+                                💰 Proposed Budget: {m.metadata?.counterBudget ? `₹${Number(m.metadata.counterBudget).toLocaleString('en-IN')}` : 'Budget Revision Requested'}
+                              </span>
+                              <a
+                                href="/vendor/quotes"
+                                className={`text-[11px] font-bold inline-flex items-center gap-1 px-3 py-1.5 rounded-xl transition cursor-pointer shadow-xs ${
+                                  isVendor
+                                    ? 'bg-white text-primary hover:bg-white/90'
+                                    : 'bg-primary text-white hover:bg-primary-dark shadow-primary/20'
+                                }`}
+                              >
+                                <span>Send New Quotation</span>
+                                <Icon name="chevronRight" size={11} />
+                              </a>
+                            </div>
+                          )}
+
                           <div
                             className={`text-[9px] mt-1.5 font-semibold flex items-center justify-end gap-1 ${
                               isVendor ? 'text-white/70' : 'text-muted'
@@ -337,36 +392,29 @@ export default function Messages() {
                   <button
                     type="submit"
                     disabled={!msgText.trim() || sending}
-                    className="px-5 py-2.5 rounded-2xl bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-bold text-xs inline-flex items-center gap-1.5 transition shadow-sm"
+                    className="rounded-2xl bg-primary hover:bg-primary-dark text-white px-5 py-2.5 text-xs font-bold transition disabled:opacity-40 cursor-pointer shadow-xs shadow-primary/20 flex items-center gap-1.5"
                   >
-                    <span>Send</span>
+                    <span>{sending ? 'Sending...' : 'Send'}</span>
                     <Icon name="send" size={13} />
                   </button>
                 </form>
-                <div className="mt-2 text-[10px] text-muted text-center flex items-center justify-center gap-1.5">
-                  <Icon name="shield" size={11} className="text-emerald-600 shrink-0" />
-                  <span>
-                    Sensitive KYC and bank details are protected by STARVNT Core escrow and should not be shared in chat.
-                  </span>
-                </div>
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center p-8 text-center bg-lavender/20">
+            <div className="hidden lg:grid place-items-center text-center p-8 bg-slate-50/50">
               <div className="max-w-xs space-y-2">
-                <div className="w-12 h-12 rounded-2xl bg-lavender text-muted grid place-items-center mx-auto">
-                  <Icon name="message" size={20} />
+                <div className="w-12 h-12 rounded-2xl bg-primary-soft text-primary grid place-items-center mx-auto mb-2 shadow-xs">
+                  <Icon name="message" size={22} />
                 </div>
-                <h3 className="text-sm font-bold text-navy">Select a Conversation</h3>
+                <h4 className="text-sm font-bold text-navy">Select a Conversation</h4>
                 <p className="text-xs text-muted">
-                  Choose an active inquiry from the left rail to view message history and reply.
+                  Choose an inquiry or quote negotiation from the left rail to view communication history and reply.
                 </p>
               </div>
             </div>
           )}
         </div>
       )}
-
     </Page>
   );
 }

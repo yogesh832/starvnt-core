@@ -4,13 +4,96 @@ import Icon from '../../../components/Icon.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import { externalApi } from '../../../lib/api.js';
 import { useExternalAuth } from '../../../auth/ExternalAuthContext.jsx';
-import { CardListSkeleton, MetricSkeleton, SkeletonBlock, SkeletonLine, TableSkeleton } from '../../../components/LoadingSkeleton.jsx';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+function SkeletonLine({ className = '' }) {
+  return <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />;
+}
+
+function VendorDashboardSkeleton({ business = 'Your Brand' }) {
+  return (
+    <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
+      <div className="space-y-6 min-w-0 w-full">
+        <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-xs border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
+            <div className="w-12 h-12 rounded-2xl bg-gray-200 animate-pulse shrink-0" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <SkeletonLine className="h-6 w-56 max-w-full" />
+              <SkeletonLine className="h-3 w-72 max-w-full" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <SkeletonLine className="h-9 w-24 rounded-xl" />
+            <SkeletonLine className="h-9 w-24 rounded-xl" />
+          </div>
+        </div>
+
+        <div className="rounded-3xl p-5 sm:p-6 border border-primary/15 bg-white shadow-sm space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-3 flex-1">
+              <SkeletonLine className="h-4 w-44" />
+              <SkeletonLine className="h-6 w-80 max-w-full" />
+              <SkeletonLine className="h-3 w-full max-w-2xl" />
+            </div>
+            <SkeletonLine className="h-10 w-36 rounded-xl" />
+          </div>
+          <div className="pt-4 border-t border-gray-100 space-y-3">
+            <div className="flex justify-between">
+              <SkeletonLine className="h-3 w-48" />
+              <SkeletonLine className="h-3 w-20" />
+            </div>
+            <SkeletonLine className="h-2.5 w-full" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3.5 pt-2">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <div key={idx} className="p-4 rounded-2xl border border-gray-100 bg-white space-y-3">
+                  <SkeletonLine className="h-3 w-16" />
+                  <SkeletonLine className="h-4 w-28" />
+                  <SkeletonLine className="h-3 w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <div key={idx} className="bg-white rounded-3xl p-4 border border-gray-100 shadow-xs space-y-3">
+              <SkeletonLine className="h-9 w-9 rounded-2xl" />
+              <SkeletonLine className="h-6 w-20" />
+              <SkeletonLine className="h-3 w-28 max-w-full" />
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-xs space-y-4">
+          <SkeletonLine className="h-5 w-44" />
+          <div className="grid sm:grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <SkeletonLine key={idx} className="h-20 w-full rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-xs space-y-4">
+          <SkeletonLine className="h-5 w-32" />
+          <SkeletonLine className="h-64 w-full rounded-2xl" />
+        </div>
+        <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-xs space-y-3">
+          <SkeletonLine className="h-5 w-40" />
+          <SkeletonLine className="h-12 w-full rounded-2xl" />
+          <SkeletonLine className="h-12 w-full rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Live Interactive Mini Calendar
@@ -518,88 +601,52 @@ function NotificationsCard({
   );
 }
 
-function VendorDashboardSkeleton({ business }) {
+const AURA_CHIPS = ['Aaj kya karna hai?', 'Pending enquiries dikhao', 'Is hafte ki bookings'];
+
+/** Ask Aura+ from the dashboard: opens the Aura+ panel and sends the question. */
+function AskAuraCard({ onAsk }) {
+  const [text, setText] = useState('');
+  function submit(e) {
+    e.preventDefault();
+    if (!text.trim()) return onAsk();
+    onAsk(text.trim());
+    setText('');
+  }
   return (
-    <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
-      <div className="space-y-6 min-w-0 w-full">
-        <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-xs border border-gray-100">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <SkeletonBlock className="w-12 h-12 rounded-2xl shrink-0" />
-              <div className="space-y-2 min-w-0 flex-1">
-                <SkeletonLine className="w-56 h-5" />
-                <SkeletonLine className="w-72 max-w-full" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <SkeletonLine className="w-24 h-9" />
-              <SkeletonLine className="w-24 h-9" />
-            </div>
-          </div>
+    <div className="rounded-3xl p-4 sm:p-5 bg-gradient-to-br from-primary via-[#7b5cf0] to-[#b18cff] text-white shadow-lg shadow-primary/20">
+      <div className="flex items-center gap-2">
+        <span className="w-8 h-8 rounded-xl bg-white/20 grid place-items-center">
+          <Icon name="bolt" size={15} />
+        </span>
+        <div>
+          <div className="text-sm font-extrabold">Ask Aura+</div>
+          <div className="text-[11px] text-white/80">Enquiries, quotes, bookings, payments — pooch lo, main batata hoon.</div>
         </div>
-
-        <div className="rounded-3xl p-5 sm:p-6 border border-primary/15 bg-white shadow-xs space-y-5">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-3 flex-1">
-              <SkeletonLine className="w-64 h-4" />
-              <SkeletonLine className="w-96 max-w-full h-5" />
-              <SkeletonLine className="w-full max-w-2xl" />
-              <SkeletonLine className="w-5/6 max-w-xl" />
-            </div>
-            <div className="flex gap-2">
-              <SkeletonLine className="w-36 h-10" />
-              <SkeletonLine className="w-24 h-10" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <SkeletonLine className="w-48" />
-              <SkeletonLine className="w-20" />
-            </div>
-            <SkeletonLine className="w-full h-2.5" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3.5">
-            {Array.from({ length: 5 }).map((_, idx) => (
-              <div key={idx} className="p-4 rounded-2xl border border-gray-100 bg-white space-y-3">
-                <div className="flex justify-between gap-3">
-                  <SkeletonLine className="w-16" />
-                  <SkeletonLine className="w-14" />
-                </div>
-                <SkeletonLine className="w-32 h-4" />
-                <SkeletonLine className="w-full" />
-                <SkeletonLine className="w-24" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <MetricSkeleton count={4} />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <CardListSkeleton count={3} />
-          <CardListSkeleton count={3} />
-        </div>
-        <TableSkeleton columns={6} rows={4} minWidth={500} />
       </div>
-
-      <aside className="min-w-0 w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-5 xl:space-y-5 xl:gap-0">
-        <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-4">
-          <div className="flex justify-between">
-            <SkeletonLine className="w-28 h-4" />
-            <SkeletonLine className="w-16" />
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            {Array.from({ length: 4 }).map((_, idx) => (
-              <SkeletonBlock key={idx} className="h-24 rounded-2xl" />
-            ))}
-          </div>
-        </div>
-        <CardListSkeleton count={4} compact />
-      </aside>
+      <form onSubmit={submit} className="mt-3 flex items-center gap-2 bg-white rounded-2xl px-3 py-1.5">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={2000}
+          placeholder="e.g. Kaunse quotes pending hain?"
+          className="flex-1 min-w-0 bg-transparent outline-none text-[13px] text-navy py-1"
+        />
+        <button type="submit" className="w-8 h-8 rounded-xl bg-primary text-white grid place-items-center shrink-0" aria-label="Ask Aura+">
+          <Icon name="send" size={14} />
+        </button>
+      </form>
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {AURA_CHIPS.map((c) => (
+          <button key={c} onClick={() => onAsk(c)} className="rounded-full bg-white/15 hover:bg-white/25 text-[11px] font-semibold px-3 py-1 transition">
+            {c}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-export default function DashboardHome({ business = 'Your Brand' }) {
+export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const { user } = useExternalAuth();
   const [selectedEnquiry, setSelectedEnquiry] = useState(null);
   const [quoteEnquiry, setQuoteEnquiry] = useState(null);
@@ -732,6 +779,8 @@ export default function DashboardHome({ business = 'Your Brand' }) {
           eventDate: b.eventDate,
           date: b.eventDate,
           totalAmount: b.totalAmount || 0,
+          advancePaid: Number(b.paymentSummary?.paidAmount || 0),
+          balanceAmount: Number(b.paymentSummary?.balanceAmount ?? Math.max(0, Number(b.totalAmount || 0) - Number(b.paymentSummary?.paidAmount || 0))),
           status: b.bookingStatus === 'CONFIRMED'
             ? (b.executionStatus === 'SERVICE_STARTED' ? 'In Progress' : 'Confirmed')
             : b.bookingStatus || 'Confirmed',
@@ -776,10 +825,6 @@ export default function DashboardHome({ business = 'Your Brand' }) {
   useEffect(() => {
     loadLiveDashboard();
   }, [loadLiveDashboard]);
-
-  if (loading && !activation && !vendorProfile) {
-    return <VendorDashboardSkeleton business={business} />;
-  }
 
   async function handleSendQuote(q, enquiry) {
     try {
@@ -1016,7 +1061,7 @@ export default function DashboardHome({ business = 'Your Brand' }) {
   const completionPercentage = activation?.completionPercentage !== undefined
     ? activation.completionPercentage
     : 0;
-  const is100Percent = completionPercentage === 100 || Boolean(activation?.is100Percent);
+  const is100Percent = Boolean(activation?.is100Percent || activation?.isCommerciallyActive);
 
   const checklist = activation?.checklist || {
     profile: false,
@@ -1035,7 +1080,8 @@ export default function DashboardHome({ business = 'Your Brand' }) {
   ].filter(Boolean).length;
 
   // Real KPI calculations
-  const totalRevenue = bookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
+  const advanceReceived = bookings.reduce((sum, b) => sum + (Number(b.advancePaid) || 0), 0);
+  const confirmedBookingValue = bookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
   const activeBookingsCount = bookings.filter((b) => b.status !== 'CANCELLED').length;
   const activeEnquiriesCount = enquiries.filter((e) => e.status === 'New' || e.status === 'NEW').length;
   const avgRatingDisplay = reviewStats?.averageRating && reviewStats.averageRating !== '0.0'
@@ -1044,10 +1090,10 @@ export default function DashboardHome({ business = 'Your Brand' }) {
 
   const dynamicStats = [
     {
-      label: 'Total Revenue',
-      value: `₹${totalRevenue.toLocaleString()}`,
-      foot: totalRevenue > 0 ? 'Verified via Core Bookings' : '₹0 settled payouts yet',
-      footClass: totalRevenue > 0 ? 'text-emerald-600' : 'text-muted',
+      label: 'Advance Received',
+      value: `₹${advanceReceived.toLocaleString()}`,
+      foot: confirmedBookingValue > 0 ? `₹${confirmedBookingValue.toLocaleString()} confirmed booking value` : '₹0 received yet',
+      footClass: advanceReceived > 0 ? 'text-emerald-600' : 'text-muted',
       icon: 'wallet',
       iconBg: 'bg-emerald-50 text-emerald-600',
     },
@@ -1097,6 +1143,10 @@ export default function DashboardHome({ business = 'Your Brand' }) {
     day: 'numeric',
     year: 'numeric',
   });
+
+  if (loading && !activation) {
+    return <VendorDashboardSkeleton business={business} />;
+  }
 
   return (
     <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
@@ -1168,6 +1218,9 @@ export default function DashboardHome({ business = 'Your Brand' }) {
             </Link>
           </div>
         </div>
+
+        {/* Aura+ assistant */}
+        {onAskAura && <AskAuraCard onAsk={onAskAura} />}
 
         {/* 5-STEP MANDATORY ONBOARDING READINESS */}
         {(!is100Percent || !gotItAcknowledged) && (

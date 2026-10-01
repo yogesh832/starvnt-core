@@ -1,5 +1,5 @@
 import { verifyExternalAccessToken } from '../utils/tokens.js';
-import { ExternalUser } from '../models/ExternalUser.js';
+import { ExternalUser, activeAccountType } from '../models/ExternalUser.js';
 import { ExternalSession } from '../models/ExternalSession.js';
 
 /**
@@ -33,6 +33,9 @@ export async function requireExternalAuth(req, res, next) {
       return res.status(401).json({ error: 'SESSION_REVOKED' });
     }
 
+    // Active surface comes from the session (the tab chosen at sign-in), not the
+    // user document. $locals is never persisted, so a later user.save() can't flip it.
+    user.$locals.activeAccountType = session.accountType || user.accountType;
     req.externalUser = user;
     req.externalSession = session;
     next();
@@ -44,7 +47,7 @@ export async function requireExternalAuth(req, res, next) {
 /** Surface-level authorization: Customer App vs Vendor OS. */
 export function requireAccountType(...types) {
   return (req, res, next) => {
-    if (!req.externalUser || !types.includes(req.externalUser.accountType)) {
+    if (!req.externalUser || !types.includes(activeAccountType(req.externalUser))) {
       return res.status(403).json({ error: 'FORBIDDEN' });
     }
     next();

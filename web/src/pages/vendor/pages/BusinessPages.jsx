@@ -4,14 +4,95 @@ import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
-import MapLocationPicker from '../../../components/MapLocationPicker.jsx';
+import MapLocationPicker, { pinIcon } from '../../../components/MapLocationPicker.jsx';
 import { useTheme } from '../../../lib/ThemeContext.jsx';
-import { CardListSkeleton, MetricSkeleton, SkeletonLine } from '../../../components/LoadingSkeleton.jsx';
+import L from 'leaflet';
+
+function SkeletonLine({ className = '' }) {
+  return <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />;
+}
+
+function activationStepList(activation) {
+  const checklist = activation?.checklist || {};
+  return [
+    { key: 'profile', label: 'Business profile', detail: 'Brand name, one primary category, and base city', done: Boolean(checklist.profile), href: '/vendor/profile?tab=profile', action: 'Complete profile' },
+    { key: 'services', label: 'Active service with price', detail: 'At least one ACTIVE service package with a base price', done: Boolean(checklist.services), href: '/vendor/services', action: 'Add service' },
+    { key: 'capabilities', label: 'Gear and capability', detail: 'Crew size, formats, styles, and equipment for the service', done: Boolean(checklist.capabilities), href: '/vendor/services?action=gear', action: 'Add gear' },
+    { key: 'coverage', label: 'Coverage and travel', detail: 'Operating hub plus service coverage radius/localities', done: Boolean(checklist.locations && checklist.coverage), href: '/vendor/services?action=coverage', action: 'Set coverage' },
+    { key: 'portfolio', label: 'Portfolio project', detail: 'At least one published photo/video showcase', done: Boolean(checklist.portfolio), href: '/vendor/portfolio', action: 'Add portfolio' },
+    { key: 'verified', label: 'KYC verification', detail: 'Documents uploaded and verified by STARVNT', done: Boolean(checklist.verified), href: '/vendor/profile?tab=documents', action: 'Upload documents' },
+  ];
+}
+
+function VendorActivationCard({ activation, compact = false }) {
+  if (!activation) return null;
+  const steps = activationStepList(activation);
+  const next = steps.find((step) => !step.done);
+  const complete = steps.every((step) => step.done);
+
+  return (
+    <div className={`rounded-2xl border ${complete ? 'border-emerald-200 bg-emerald-50/80' : 'border-amber-200 bg-amber-50/70'} p-4 sm:p-5 shadow-xs`}>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
+          <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${complete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+            <Icon name={complete ? 'check' : 'lock'} size={12} />
+            {complete ? 'Client matching active' : 'Client matching locked'}
+          </div>
+          <h2 className="mt-2 text-base font-extrabold text-navy">
+            {complete ? 'Your vendor profile is live for customers' : 'Finish these steps to appear in customer search'}
+          </h2>
+          <p className="mt-1 text-xs text-muted leading-relaxed">
+            There is no manual vendor toggle. STARVNT turns commercial matching on automatically after service, coverage, portfolio, and verification are complete.
+          </p>
+        </div>
+        <div className="shrink-0 text-left sm:text-right">
+          <div className="text-2xl font-extrabold text-navy">{activation.completionPercentage ?? 0}%</div>
+          <div className="text-[11px] font-bold text-muted">readiness</div>
+        </div>
+      </div>
+
+      <div className={`mt-4 grid ${compact ? 'grid-cols-1' : 'sm:grid-cols-2 xl:grid-cols-3'} gap-2.5`}>
+        {steps.map((step) => (
+          <a
+            key={step.key}
+            href={step.href}
+            className={`rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-sm ${step.done ? 'border-emerald-200 bg-white text-emerald-900' : 'border-amber-200 bg-white text-navy'}`}
+          >
+            <div className="flex items-start gap-2">
+              <span className={`mt-0.5 h-5 w-5 rounded-full grid place-items-center shrink-0 ${step.done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                <Icon name={step.done ? 'check' : 'chevronRight'} size={11} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-extrabold">{step.label}</span>
+                <span className="block text-[11px] text-muted leading-snug mt-0.5">{step.done ? 'Done' : step.detail}</span>
+                {!step.done && <span className="block text-[11px] font-bold text-primary mt-1">{step.action}</span>}
+              </span>
+            </div>
+          </a>
+        ))}
+      </div>
+
+      {!complete && next && (
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-white border border-amber-100 p-3">
+          <div className="text-xs">
+            <div className="font-extrabold text-navy">Next step: {next.label}</div>
+            <div className="text-muted mt-0.5">{next.detail}</div>
+          </div>
+          <a href={next.href} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark">
+            {next.action}
+            <Icon name="chevronRight" size={12} />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── Services ─────────────────────────────────────────────────────────────── */
 export function ServicesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [services, setServices] = useState([]);
+  const [activation, setActivation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [deletingServiceId, setDeletingServiceId] = useState(null);
@@ -51,9 +132,15 @@ export function ServicesPage() {
   const loadServices = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await externalApi.call('/vendor/services');
+      const [res, actRes] = await Promise.all([
+        externalApi.call('/vendor/services'),
+        externalApi.call('/vendor/activation-status').catch(() => ({ ok: false })),
+      ]);
       if (res.ok && res.services) {
         setServices(res.services);
+      }
+      if (actRes.ok && actRes.status) {
+        setActivation(actRes.status);
       }
     } catch (err) {
       console.warn('[ServicesPage] Error loading services:', err.message);
@@ -332,6 +419,8 @@ export function ServicesPage() {
         </button>
       }
     >
+      <VendorActivationCard activation={activation} compact />
+
       {gearFeedback && (
         <div className="mb-4 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-2">
           <Icon name="check" size={15} />
@@ -346,10 +435,24 @@ export function ServicesPage() {
         </div>
       )}
 
-      {loading && services.length === 0 ? (
-        <CardListSkeleton count={4} />
-      ) : (
       <div className="grid sm:grid-cols-2 gap-4">
+        {loading && services.length === 0 && Array.from({ length: 4 }).map((_, idx) => (
+          <Card key={`service-loading-${idx}`} className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2 flex-1">
+                <SkeletonLine className="h-4 w-40 max-w-full" />
+                <SkeletonLine className="h-3 w-52 max-w-full" />
+              </div>
+              <SkeletonLine className="h-6 w-16 rounded-lg" />
+            </div>
+            <SkeletonLine className="h-20 w-full rounded-xl" />
+            <SkeletonLine className="h-20 w-full rounded-xl" />
+            <div className="flex justify-between pt-2 border-t border-gray-100">
+              <SkeletonLine className="h-3 w-20" />
+              <SkeletonLine className="h-3 w-36" />
+            </div>
+          </Card>
+        ))}
         {services.map((s) => {
           const hasCap = s.capabilities && s.capabilities.length > 0;
           const primaryCap = hasCap ? s.capabilities[0] : null;
@@ -495,34 +598,34 @@ export function ServicesPage() {
                 })()}
               </div>
 
-              <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-gray-100 text-xs">
-                <div className="flex gap-2 text-muted font-medium">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-3 pt-2.5 border-t border-gray-100 text-xs">
+                <div className="flex gap-2 text-muted font-medium min-w-0">
                   <span>{s.leadTimeDays || 7}d lead time</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
                   <button
                     type="button"
                     onClick={() => handleOpenGearModal(s)}
-                    className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                    className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="settings" size={12} />
                     <span>{hasCap ? 'Edit Gear' : 'Gear (Step 3)'}</span>
                   </button>
-                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-300 hidden sm:inline">|</span>
                   <button
                     type="button"
                     onClick={() => handleOpenCoverageModal(s)}
-                    className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                    className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="mapPin" size={12} />
                     <span>{s.coverage?.length ? 'Edit Transit' : 'Transit (Step 4)'}</span>
                   </button>
-                  <span className="text-gray-300">|</span>
+                  <span className="text-gray-300 hidden sm:inline">|</span>
                   <button
                     type="button"
                     onClick={() => handleDeleteService(s)}
                     disabled={deletingServiceId === s._id}
-                    className="font-bold text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                    className="font-bold text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="trash" size={12} />
                     <span>{deletingServiceId === s._id ? 'Deleting...' : 'Delete'}</span>
@@ -533,12 +636,25 @@ export function ServicesPage() {
           );
         })}
         {services.length === 0 && !loading && (
-          <div className="sm:col-span-2 text-center py-10 text-xs text-muted border-2 border-dashed border-gray-200 rounded-3xl bg-lavender/20">
-            No services configured yet. Click "+ Add Service" to define your offerings and gear.
+          <div className="sm:col-span-2 text-center py-10 px-4 text-xs text-muted border-2 border-dashed border-amber-200 rounded-3xl bg-amber-50/60">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 grid place-items-center mx-auto mb-3">
+              <Icon name="services" size={22} />
+            </div>
+            <h3 className="text-sm font-extrabold text-navy">No active services yet</h3>
+            <p className="max-w-lg mx-auto mt-1 leading-relaxed">
+              This is why the vendor is not visible in customer options. Add one service, choose its price, then add gear and coverage.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-primary-dark"
+            >
+              <Icon name="plus" size={14} />
+              Add first service
+            </button>
           </div>
         )}
       </div>
-      )}
 
       {/* Add Service Modal */}
       {showAddModal && (
@@ -578,7 +694,7 @@ export function ServicesPage() {
                   <option value="Decor">Decor & Styling</option>
                   <option value="Catering">Catering</option>
                   <option value="Makeup">Makeup & Styling</option>
-                  <option value="Music">DJ & Music</option>
+                  <option value="Entertainment">DJ & Music / Entertainment</option>
                   <option value="Venue">Venue</option>
                   <option value="Planning">Event Planning</option>
                 </select>
@@ -975,6 +1091,7 @@ export function ServicesPage() {
 export function AvailabilityPage() {
   const [blockouts, setBlockouts] = useState([]);
   const [resources, setResources] = useState([]);
+  const [loadingAvailability, setLoadingAvailability] = useState(true);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [showAddResourceModal, setShowAddResourceModal] = useState(false);
 
@@ -1019,6 +1136,7 @@ export function AvailabilityPage() {
 
   const loadAvailability = useCallback(async () => {
     try {
+      setLoadingAvailability(true);
       const [blRes, resRes, hrsRes, tpRes] = await Promise.all([
         externalApi.call('/vendor/availability/blockouts'),
         externalApi.call('/vendor/resources'),
@@ -1040,6 +1158,8 @@ export function AvailabilityPage() {
       }
     } catch (err) {
       console.warn('[AvailabilityPage] Error loading availability:', err.message);
+    } finally {
+      setLoadingAvailability(false);
     }
   }, []);
 
@@ -1202,6 +1322,12 @@ export function AvailabilityPage() {
 
   return (
     <Page title="Availability & Operations" sub="Availability = date + time + location + team + equipment.">
+      {loadingAvailability && (
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 text-xs font-bold text-muted shadow-xs flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          Loading saved availability, block dates, resources, and travel policy...
+        </div>
+      )}
       <div className="grid lg:grid-cols-2 gap-5">
         {/* Weekly Working Hours - 100% User Maintained in DB */}
         <Card
@@ -1809,7 +1935,7 @@ export function DocumentsManager({ isTab = false }) {
         <div>
           <h2 className="font-extrabold text-base text-navy">KYC & Business Documents</h2>
           <p className="text-xs text-muted mt-0.5">
-            Verified documents authenticate your brand and unlock high-trust placement in client search results.
+            GSTIN is checked automatically. Matching legal/trade names are verified instantly; mismatches go to admin review.
           </p>
         </div>
         <button
@@ -1853,6 +1979,32 @@ export function DocumentsManager({ isTab = false }) {
                     </div>
                     {doc.notes && (
                       <p className="text-[11px] text-muted italic mt-1">{doc.notes}</p>
+                    )}
+                    {doc.verificationSource === 'GSTIN_API' && (
+                      <div className={`mt-2 rounded-xl border p-3 text-[11px] ${
+                        doc.status === 'VERIFIED'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                          : 'border-amber-200 bg-amber-50 text-amber-950'
+                      }`}>
+                        <div className="flex items-center gap-1.5 font-extrabold">
+                          <Icon name={doc.status === 'VERIFIED' ? 'shieldCheck' : 'help'} size={13} />
+                          <span>{doc.status === 'VERIFIED' ? 'GSTIN auto-verified' : 'GSTIN needs admin review'}</span>
+                          {doc.verificationResult?.confidence && (
+                            <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] uppercase">
+                              {doc.verificationResult.confidence}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 grid sm:grid-cols-2 gap-x-3 gap-y-1">
+                          <span>Legal: <strong>{doc.verificationResult?.legalName || 'Not provided'}</strong></span>
+                          <span>Trade: <strong>{doc.verificationResult?.tradeName || 'Not provided'}</strong></span>
+                          <span>Status: <strong>{doc.verificationResult?.gstinStatus || 'Unknown'}</strong></span>
+                          <span>Type: <strong>{doc.verificationResult?.taxpayerType || 'Unknown'}</strong></span>
+                        </div>
+                        {doc.verificationResult?.error && (
+                          <div className="mt-1 text-rose-600 font-bold">Provider: {doc.verificationResult.error}</div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1905,8 +2057,10 @@ export function DocumentsManager({ isTab = false }) {
           </button>
         </Card>
       ) : (
-        <Card className="text-center py-8 text-xs text-muted">
-          Loading verification records…
+        <Card className="space-y-3">
+          <SkeletonLine className="h-5 w-48" />
+          <SkeletonLine className="h-16 w-full rounded-2xl" />
+          <SkeletonLine className="h-16 w-full rounded-2xl" />
         </Card>
       )}
 
@@ -1917,7 +2071,7 @@ export function DocumentsManager({ isTab = false }) {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h3 className="font-extrabold text-base text-navy">Upload KYC / Business Document</h3>
-                <p className="text-xs text-muted mt-0.5">Secure partner onboarding & Core platform verification</p>
+                <p className="text-xs text-muted mt-0.5">Enter GSTIN to auto-check legal name and tax status.</p>
               </div>
               <button
                 type="button"
@@ -1984,6 +2138,11 @@ export function DocumentsManager({ isTab = false }) {
                   placeholder="e.g. 27AABCU9603R1ZM or PAN number"
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20 font-mono"
                 />
+                {docForm.type === 'GST' && (
+                  <span className="text-[10px] text-muted mt-1 block">
+                    If GST legal/trade name matches your business profile, STARVNT verifies KYC automatically. If not, it goes to admin review.
+                  </span>
+                )}
               </div>
 
               <div>
@@ -2259,6 +2418,304 @@ export function SettingsManager({ isTab = false }) {
   );
 }
 
+/* ── Google Business Profile & Maps Rating Section with Search & Map ─── */
+function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) {
+  const [isSearching, setIsSearching] = useState(!googlePlaceId);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [currentPlace, setCurrentPlace] = useState(initialRating || null);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState('');
+
+  const mapRef = useRef(null);
+  const mapInstance = useRef(null);
+  const markerInstance = useRef(null);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    if (initialRating) {
+      setCurrentPlace(initialRating);
+      if (initialRating.rating) {
+        setIsSearching(false);
+      }
+    }
+  }, [initialRating]);
+
+  // Leaflet map setup with Google Maps tiles
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const lat = currentPlace?.lat || 19.076;
+    const lng = currentPlace?.lng || 72.8777;
+    const hasPin = Boolean(currentPlace?.lat && currentPlace?.lng);
+
+    if (!mapInstance.current) {
+      const map = L.map(mapRef.current, {
+        center: [lat, lng],
+        zoom: hasPin ? 15 : 12,
+        zoomControl: false,
+      });
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: '&copy; Google Maps',
+      }).addTo(map);
+
+      if (hasPin) {
+        markerInstance.current = L.marker([lat, lng], { icon: pinIcon }).addTo(map);
+      }
+      mapInstance.current = map;
+    } else {
+      if (hasPin) {
+        mapInstance.current.setView([lat, lng], 15);
+        if (markerInstance.current) {
+          markerInstance.current.setLatLng([lat, lng]);
+        } else {
+          markerInstance.current = L.marker([lat, lng], { icon: pinIcon }).addTo(mapInstance.current);
+        }
+      }
+    }
+
+    return () => {
+      // Keep instance intact across renders
+    };
+  }, [currentPlace?.lat, currentPlace?.lng]);
+
+  function handleSearchChange(e) {
+    const val = e.target.value;
+    setSearchQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!val || val.trim().length < 2) {
+      setResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await externalApi.call(`/vendor/google-places/search?query=${encodeURIComponent(val.trim())}`);
+        if (res.ok && Array.isArray(res.places)) {
+          setResults(res.places);
+          setShowDropdown(true);
+        }
+      } catch (err) {
+        console.warn('[GoogleBusiness] Place search error:', err.message);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }
+
+  async function handleSelectPlace(place) {
+    setShowDropdown(false);
+    setSearchQuery(place.name || place.address);
+    setCurrentPlace(place);
+    setIsSearching(false);
+    setSaving(true);
+    try {
+      await onSavePlaceId(place.id);
+      setFeedback(`Connected to "${place.name}"! Google Maps rating and reviews synced.`);
+      setTimeout(() => setFeedback(''), 4500);
+    } catch (err) {
+      alert(`Could not connect place: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!window.confirm('Disconnect this Google Business profile from your account? Your Google rating will be removed from your public profiles.')) return;
+    setSaving(true);
+    try {
+      await onSavePlaceId(null);
+      setCurrentPlace(null);
+      setIsSearching(true);
+      setSearchQuery('');
+      setFeedback('Google Business listing disconnected.');
+      setTimeout(() => setFeedback(''), 4000);
+    } catch (err) {
+      alert(`Error disconnecting: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card title="Google Business Profile & Maps Rating">
+      <div className="space-y-4">
+        {feedback && (
+          <div className="p-3 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200 animate-fadeIn">
+            ✓ {feedback}
+          </div>
+        )}
+
+        {/* If connected and not re-searching, show the Connected Google Rating Card */}
+        {currentPlace?.rating && !isSearching ? (
+          <div className="space-y-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-amber-50/50 rounded-2xl border border-amber-200/70">
+              <div className="flex items-center gap-3.5">
+                <div className="w-14 h-14 rounded-2xl bg-white text-amber-500 font-extrabold text-2xl grid place-items-center shadow-xs border border-amber-200/60 shrink-0">
+                  {currentPlace.rating || '—'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-extrabold text-navy">
+                      {currentPlace.name || 'Google Business Listing'}
+                    </span>
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      ✓ Connected
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="text-amber-500 text-sm">
+                      {'★'.repeat(Math.round(currentPlace.rating || 0))}
+                      {'☆'.repeat(5 - Math.round(currentPlace.rating || 0))}
+                    </div>
+                    <span className="text-xs text-muted font-bold">
+                      · {currentPlace.reviewCount || 0} reviews on Google Maps
+                    </span>
+                  </div>
+                  {currentPlace.address && (
+                    <div className="text-xs text-muted mt-1 leading-snug">
+                      📍 {currentPlace.address}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 ml-auto">
+                {currentPlace.googleMapsUrl && (
+                  <a
+                    href={currentPlace.googleMapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-white border border-primary/20 text-primary text-xs font-bold hover:bg-primary-soft transition"
+                  >
+                    <span>View on Maps</span>
+                    <span>↗</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsSearching(true)}
+                  className="px-3.5 py-2 rounded-xl bg-lavender/60 text-navy text-xs font-bold hover:bg-lavender transition cursor-pointer"
+                >
+                  Change Place
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDisconnect}
+                  disabled={saving}
+                  className="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold transition cursor-pointer"
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive Map Preview */}
+            <div className="overflow-hidden rounded-2xl border border-gray-200">
+              <div ref={mapRef} style={{ width: '100%', height: '240px' }} />
+            </div>
+          </div>
+        ) : (
+          /* Search Bar & Map Search Mode */
+          <div className="space-y-3">
+            <p className="text-xs text-muted leading-relaxed">
+              Search your business name or studio address on Google Maps below. Selecting your listing will automatically import your verified Google star rating, review count, and public map link to your STARVNT profile.
+            </p>
+
+            {/* Search Bar Input */}
+            <div className="relative">
+              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 shadow-xs focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary transition">
+                <Icon name="search" size={16} className="text-muted shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  placeholder='Search your business or venue name (e.g. "CineMandap Studios Mumbai" or street address)...'
+                  className="w-full text-xs font-bold text-navy outline-none placeholder:font-normal placeholder:text-muted/60"
+                />
+                {searching && <span className="text-[10px] text-primary font-bold animate-pulse">Searching Google...</span>}
+                {searchQuery && !searching && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setResults([]);
+                      setShowDropdown(false);
+                    }}
+                    className="text-muted hover:text-navy text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Suggestions Dropdown */}
+              {showDropdown && results.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-30 max-h-72 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 shadow-xl animate-fadeIn space-y-1">
+                  {results.map((place) => (
+                    <div
+                      key={place.id}
+                      onClick={() => handleSelectPlace(place)}
+                      className="flex items-start justify-between gap-3 p-3 rounded-xl hover:bg-lavender/40 transition cursor-pointer group"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 grid place-items-center shrink-0 mt-0.5">
+                          <Icon name="star" size={14} className="fill-amber-500 text-amber-500" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-extrabold text-navy group-hover:text-primary transition">
+                            {place.name}
+                          </div>
+                          <div className="text-[11px] text-muted line-clamp-1 mt-0.5">
+                            {place.address}
+                          </div>
+                          {place.rating > 0 && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-amber-500 text-[10px] font-bold">★ {place.rating}</span>
+                              <span className="text-muted text-[10px]">({place.reviewCount} Google reviews)</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-bold text-primary shrink-0 opacity-0 group-hover:opacity-100 transition">
+                        Select →
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Interactive Map */}
+            <div className="overflow-hidden rounded-2xl border border-gray-200">
+              <div ref={mapRef} style={{ width: '100%', height: '240px' }} />
+            </div>
+
+            {currentPlace?.rating && (
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsSearching(false)}
+                  className="text-xs font-bold text-muted hover:text-navy cursor-pointer"
+                >
+                  Cancel search & keep current place
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 /* ── Unified Profile Hub with Sub-Sidebar (Business Profile, Locations, Documents, Settings) ── */
 export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2276,25 +2733,19 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     category: '',
     location: '',
     phone: user?.phone || '',
+    website: '',
     bio: '',
+    googlePlaceId: '',
   });
 
   const [profilePicUrl, setProfilePicUrl] = useState('');
-  const [googleInfo, setGoogleInfo] = useState(null);
-  const [loadingGoogle, setLoadingGoogle] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGoogleLocationId, setSelectedGoogleLocationId] = useState('');
-  const [manualGoogleUrl, setManualGoogleUrl] = useState('');
-  const [googleFeedback, setGoogleFeedback] = useState('');
-  const [googleEditMode, setGoogleEditMode] = useState(false);
-  const [linkingGoogle, setLinkingGoogle] = useState(false);
-  const [vendorId, setVendorId] = useState(null);
   const [uploadingPic, setUploadingPic] = useState(false);
   const picInputRef = useRef(null);
 
   const [activation, setActivation] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [googleRating, setGoogleRating] = useState(null);
 
   // Operating Locations state
   const [locations, setLocations] = useState([]);
@@ -2315,27 +2766,6 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const [savingLocation, setSavingLocation] = useState(false);
   const [locationFeedback, setLocationFeedback] = useState('');
 
-  const loadGoogleInfo = useCallback(async (id, locationId = '', query = '') => {
-    if (!id) return;
-    try {
-      setLoadingGoogle(true);
-      const params = new URLSearchParams();
-      if (locationId) params.set('locationId', locationId);
-      if (query) params.set('q', query);
-      const suffix = params.toString() ? `?${params.toString()}` : '';
-      const res = await externalApi.call(`/vendors/${id}/google${suffix}`);
-      if (res.ok) {
-        setGoogleInfo(res);
-        setManualGoogleUrl(res.manualUrl || res.googleMapsUrl || '');
-        if (res.searchQuery) setSearchQuery((prev) => prev || res.searchQuery);
-      }
-    } catch (err) {
-      console.warn('[ProfilePage] Error loading google info:', err.message);
-    } finally {
-      setLoadingGoogle(false);
-    }
-  }, []);
-
   const loadProfile = useCallback(async () => {
     try {
       setLoadingProfile(true);
@@ -2344,20 +2774,19 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
         externalApi.call('/vendor/activation-status'),
       ]);
       if (profRes.ok && profRes.vendor) {
-        setVendorId(profRes.vendor._id);
         setProfile({
           businessName: profRes.vendor.businessName || business || '',
           category: profRes.vendor.category || '',
           location: profRes.vendor.location || '',
           phone: profRes.vendor.phone || user?.phone || '',
+          website: profRes.vendor.website || '',
           bio: profRes.vendor.bio || '',
+          googlePlaceId: profRes.vendor.googlePlaceId || '',
         });
         if (profRes.vendor.profilePicUrl) {
           setProfilePicUrl(profRes.vendor.profilePicUrl);
         }
-      }
-      if (profRes.ok && profRes.vendor) {
-        loadGoogleInfo(profRes.vendor._id);
+        setGoogleRating(profRes.googleRating || null);
       }
       if (actRes.ok && actRes.status) {
         setActivation(actRes.status);
@@ -2367,58 +2796,18 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     } finally {
       setLoadingProfile(false);
     }
-  }, [business, user, loadGoogleInfo]);
+  }, [business, user]);
 
-  const handleSearchGoogle = async (e) => {
-    e.preventDefault();
-    if (!vendorId) return;
-    await loadGoogleInfo(vendorId, selectedGoogleLocationId, searchQuery);
-  };
-
-  const handleLinkGoogle = async (placeId) => {
-    if (!vendorId) return;
-    try {
-      setLinkingGoogle(true);
-      const res = await externalApi.call(`/vendors/${vendorId}/google`, {
-        method: 'POST',
-        body: { placeId }
-      });
-      if (res.ok) {
-        setGoogleFeedback('Google Business listing linked.');
-        setGoogleEditMode(false);
-        setGoogleInfo(res);
-        setManualGoogleUrl(res.manualUrl || res.googleMapsUrl || '');
-        setTimeout(() => setGoogleFeedback(''), 4000);
-      }
-    } catch (err) {
-      alert('Could not link profile: ' + err.message);
-    } finally {
-      setLinkingGoogle(false);
+  async function handleUpdateGooglePlaceId(placeId) {
+    const res = await externalApi.call('/vendor/profile', {
+      method: 'PUT',
+      body: { googlePlaceId: placeId || '' },
+    });
+    if (res.ok) {
+      setProfile((prev) => ({ ...prev, googlePlaceId: placeId || '' }));
+      await loadProfile();
     }
-  };
-
-  const handleSaveGoogleUrl = async (e) => {
-    e.preventDefault();
-    if (!vendorId || !manualGoogleUrl.trim()) return;
-    try {
-      setLinkingGoogle(true);
-      const res = await externalApi.call(`/vendors/${vendorId}/google`, {
-        method: 'POST',
-        body: { googleMapsUrl: manualGoogleUrl.trim() },
-      });
-      if (res.ok) {
-        setGoogleFeedback('Google Business/Maps URL saved.');
-        setGoogleEditMode(false);
-        setGoogleInfo(res);
-        setManualGoogleUrl(res.manualUrl || res.googleMapsUrl || manualGoogleUrl.trim());
-        setTimeout(() => setGoogleFeedback(''), 4000);
-      }
-    } catch (err) {
-      alert(`Could not save Google Business URL: ${err.message}`);
-    } finally {
-      setLinkingGoogle(false);
-    }
-  };
+  }
 
   const loadLocations = useCallback(async () => {
     try {
@@ -2426,11 +2815,6 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
       const res = await externalApi.call('/vendor/locations');
       if (res.ok && res.locations) {
         setLocations(res.locations);
-        setSelectedGoogleLocationId((current) => {
-          if (current) return current;
-          const primary = res.locations.find((loc) => loc.isPrimary) || res.locations[0];
-          return primary?._id || '';
-        });
       }
     } catch (err) {
       console.warn('[ProfilePage] Error loading locations:', err.message);
@@ -2539,10 +2923,14 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
   async function handleSaveLocation(e) {
     e.preventDefault();
-    if (!locationForm.address || !locationForm.city) {
-      alert('Please select or enter an address and city for this location.');
+    const city = (locationForm.city && locationForm.city.trim()) || (profile.location ? profile.location.split(',')[0].trim() : '');
+    if (!city) {
+      alert('Please enter a city for this location.');
       return;
     }
+
+    const locality = (locationForm.locality && locationForm.locality.trim()) || '';
+    const resolvedAddress = (locationForm.address && locationForm.address.trim()) || [locality, city].filter(Boolean).join(', ') || city;
 
     try {
       setSavingLocation(true);
@@ -2553,7 +2941,12 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
       const res = await externalApi.call(url, {
         method,
-        body: locationForm,
+        body: {
+          ...locationForm,
+          address: resolvedAddress,
+          city,
+          locality,
+        },
       });
 
       if (res.ok) {
@@ -2610,31 +3003,20 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     <Page
       title="Vendor Profile & Business Hub"
       sub={
-        loadingProfile
-          ? 'Loading vendor profile and readiness details.'
+        loadingProfile && !activation
+          ? 'Loading your vendor details, readiness, locations, and account settings.'
           : `${profile.businessName || 'Your Brand'} — ${profile.category || 'Setup Pending'} · Central administration for brand profile, operational locations, KYC documents, and account settings.`
       }
     >
-    {loadingProfile ? (
-      <div className="space-y-5">
-        <MetricSkeleton count={3} />
-        <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
-          <div className="bg-white rounded-2xl p-3 border border-gray-100 shadow-xs space-y-2">
-            {Array.from({ length: 4 }).map((_, idx) => (
-              <SkeletonLine key={idx} className="h-10 w-full" />
-            ))}
-          </div>
-          <CardListSkeleton count={4} />
-        </div>
-      </div>
-    ) : (
     <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
       {/* Profile Sub-Sidebar Navigation */}
         <div className="bg-white rounded-2xl p-2 border border-gray-100 shadow-xs lg:sticky lg:top-20 shrink-0">
           {/* Header row: label + readiness badge on mobile */}
           <div className="flex items-center justify-between px-2 py-1.5">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">Profile Sections</span>
-            {activation && (
+            {loadingProfile && !activation ? (
+              <SkeletonLine className="lg:hidden h-5 w-16" />
+            ) : activation && (
               <span className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.is100Percent ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                 {activation.completionPercentage ?? 0}% {activation.is100Percent ? '✓ Active' : 'Setup'}
               </span>
@@ -2672,26 +3054,40 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           {/* Desktop-only readiness bar */}
           <div className="pt-3 mt-2 border-t border-gray-100 px-2 pb-1 hidden lg:block">
             <div className="text-[11px] font-semibold text-muted">Profile Readiness</div>
-            <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
-              <span>{activation?.completionPercentage ?? 0}% Complete</span>
-              <span className={activation?.is100Percent ? 'text-emerald-600' : 'text-amber-600'}>
-                {activation?.is100Percent ? '✓ Active' : '● Setup Required'}
-              </span>
-            </div>
-            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  activation?.is100Percent ? 'bg-emerald-500' : 'bg-primary'
-                }`}
-                style={{ width: `${activation?.completionPercentage ?? 0}%` }}
-              />
-            </div>
+            {loadingProfile && !activation ? (
+              <div className="space-y-2 mt-2">
+                <div className="flex items-center justify-between">
+                  <SkeletonLine className="h-3 w-24" />
+                  <SkeletonLine className="h-3 w-16" />
+                </div>
+                <SkeletonLine className="h-1.5 w-full" />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
+                  <span>{activation?.completionPercentage ?? 0}% Complete</span>
+                  <span className={activation?.is100Percent ? 'text-emerald-600' : 'text-amber-600'}>
+                    {activation?.is100Percent ? '✓ Active' : '● Setup Required'}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      activation?.is100Percent ? 'bg-emerald-500' : 'bg-primary'
+                    }`}
+                    style={{ width: `${activation?.completionPercentage ?? 0}%` }}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
 
 
         {/* Tab Content Area */}
         <div className="min-w-0 space-y-5">
+          <VendorActivationCard activation={activation} />
+
           {/* TAB 1: Business Profile */}
           {activeTab === 'profile' && (
             <div className="space-y-5">
@@ -2851,6 +3247,16 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   </div>
 
                   <div>
+                    <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">Website (Optional)</label>
+                    <input
+                      placeholder="https://yourbrand.com"
+                      value={profile.website}
+                      onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+                      className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+
+                  <div>
                     <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">About / Bio</label>
                     <textarea
                       rows={3}
@@ -2872,6 +3278,13 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   </div>
                 </form>
               </Card>
+
+              {/* Google Business Profile & Rating Section with Live Search & Map */}
+              <GoogleBusinessSection
+                googlePlaceId={profile.googlePlaceId}
+                initialRating={googleRating}
+                onSavePlaceId={handleUpdateGooglePlaceId}
+              />
             </div>
           )}
 
@@ -2973,179 +3386,6 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   <div className="text-center py-6 text-xs text-muted">Loading locations…</div>
                 )}
               </Card>
-
-              <Card title="Google Business Rating & Reviews">
-                <div className="space-y-4">
-                  {(!googleInfo?.linked || googleEditMode) && (
-                    <div className="flex flex-col lg:flex-row lg:items-end gap-3">
-                      <div className="flex-1 min-w-0">
-                        <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
-                          Match Google listing from operating location
-                        </label>
-                        <select
-                          value={selectedGoogleLocationId}
-                          onChange={(e) => {
-                            setSelectedGoogleLocationId(e.target.value);
-                            setGoogleInfo(null);
-                            setSearchQuery('');
-                            setGoogleEditMode(true);
-                          }}
-                          className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        >
-                          <option value="">Use primary / profile city</option>
-                          {locations.map((loc) => (
-                            <option key={loc._id} value={loc._id}>
-                              {loc.label} - {loc.city}{loc.isPrimary ? ' (Primary)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <form onSubmit={handleSearchGoogle} className="flex flex-col sm:flex-row gap-2 flex-[1.4]">
-                        <input
-                          type="text"
-                          placeholder="Search Google Business name, or leave blank to use selected hub"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        />
-                        <button
-                          type="submit"
-                          disabled={loadingGoogle}
-                          className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 shadow-xs hover:bg-primary-dark transition disabled:opacity-60"
-                        >
-                          {loadingGoogle ? 'Checking...' : 'Find Rating'}
-                        </button>
-                      </form>
-                    </div>
-                  )}
-
-                  {googleFeedback && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-                      {googleFeedback}
-                    </div>
-                  )}
-
-                  {googleInfo?.linked && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-white text-amber-500 grid place-items-center text-xl font-extrabold shadow-xs">
-                          ★
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-extrabold text-navy truncate">{googleInfo.businessName || profile.businessName}</div>
-                          <div className="text-xs text-muted mt-0.5 break-words">{googleInfo.address || 'Google Business listing linked'}</div>
-                          <div className="text-xs font-bold text-amber-600 mt-1">
-                            {googleInfo.rating || 0} rating · {googleInfo.reviewCount || 0} Google reviews
-                          </div>
-                        </div>
-                        {googleInfo.googleMapsUrl && (
-                          <a
-                            href={googleInfo.googleMapsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs font-bold text-primary hover:underline shrink-0"
-                          >
-                            Open Google Maps
-                          </a>
-                        )}
-                        {!googleEditMode && (
-                          <button
-                            type="button"
-                            onClick={() => setGoogleEditMode(true)}
-                            className="text-xs font-bold text-primary hover:underline shrink-0"
-                          >
-                            Change listing
-                          </button>
-                        )}
-                      </div>
-
-                      {Array.isArray(googleInfo.reviews) && googleInfo.reviews.length > 0 && (
-                        <div className="grid sm:grid-cols-2 gap-3 mt-4">
-                          {googleInfo.reviews.map((review, idx) => (
-                            <div key={idx} className="rounded-2xl bg-white border border-emerald-100 p-3">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-bold text-navy truncate">
-                                  {review.authorAttribution?.displayName || 'Google reviewer'}
-                                </span>
-                                <span className="text-[11px] font-bold text-amber-500">{review.rating || 5}★</span>
-                              </div>
-                              <p className="text-xs text-muted mt-2 leading-relaxed break-words">
-                                {review.text?.text || 'No review text provided.'}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {(!googleInfo?.linked || googleEditMode) && Array.isArray(googleInfo?.matches) && googleInfo.matches.length > 0 && (
-                    <div className="space-y-3">
-                      <div className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-2xl p-3">
-                        Select the correct Google listing. Ratings and review count will sync from this listing.
-                      </div>
-                      {googleInfo.matches.map((match) => (
-                        <div key={match.placeId} className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="font-extrabold text-sm text-navy truncate">{match.businessName}</div>
-                            <div className="text-xs text-muted mt-1 break-words">{match.address}</div>
-                            <div className="text-xs font-bold text-amber-600 mt-1">
-                              {match.rating || 0} rating · {match.reviewCount || 0} reviews
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleLinkGoogle(match.placeId)}
-                            disabled={linkingGoogle}
-                            className="rounded-xl bg-primary-soft text-primary px-4 py-2 text-xs font-extrabold hover:bg-primary/20 transition disabled:opacity-60"
-                          >
-                            Link Listing
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {(!googleInfo?.linked || googleEditMode) && googleInfo?.needsApiKey && (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 leading-relaxed">
-                      Google Places API is not configured on the server. Add <span className="font-mono font-bold">GOOGLE_PLACES_API_KEY</span> to enable automatic rating search, or save the business URL below.
-                    </div>
-                  )}
-
-                  {(!googleInfo?.linked || googleEditMode) && googleInfo?.notFound && (
-                    <div className="rounded-2xl border border-gray-200 bg-lavender/40 p-3 text-xs text-muted">
-                      No Google listing was found for that location/search. Save the vendor's Google Business or Google Maps URL manually.
-                    </div>
-                  )}
-
-                  {(!googleInfo?.linked || googleEditMode) && (
-                    <form onSubmit={handleSaveGoogleUrl} className="rounded-2xl border border-gray-100 bg-lavender/30 p-3 space-y-2">
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
-                        Manual Google Business / Maps URL
-                      </label>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="url"
-                          placeholder="https://maps.app.goo.gl/... or Google business profile URL"
-                          value={manualGoogleUrl}
-                          onChange={(e) => setManualGoogleUrl(e.target.value)}
-                          className="flex-1 rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        />
-                        <button
-                          type="submit"
-                          disabled={linkingGoogle || !manualGoogleUrl.trim()}
-                          className="rounded-xl bg-white text-primary border border-primary/20 px-4 py-2.5 text-xs font-extrabold hover:bg-primary-soft transition disabled:opacity-60"
-                        >
-                          Save URL
-                        </button>
-                      </div>
-                      <p className="text-[11px] text-muted">
-                        Use this when Google search cannot confidently find the listing. The saved URL can still be shown on the vendor profile.
-                      </p>
-                    </form>
-                  )}
-                </div>
-              </Card>
             </div>
           )}
 
@@ -3160,7 +3400,6 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           )}
         </div>
       </div>
-    )}
 
       {/* Add / Edit Location Map Modal */}
       {showMapModal && (
@@ -3229,11 +3468,10 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Full Street Address</label>
+                <label className="block text-muted font-semibold mb-1">Full Street Address <span className="text-[11px] font-normal text-muted/70">(Optional, defaults to Locality/City)</span></label>
                 <input
                   type="text"
-                  required
-                  placeholder="Street address, building, road..."
+                  placeholder="e.g. 12/A Park Street, Studio Suite 4B..."
                   value={locationForm.address}
                   onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })}
                   className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/25"

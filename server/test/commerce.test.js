@@ -85,6 +85,9 @@ test('accepting a quote creates 48 h holds, never bookings', async () => {
   const { quote, reservations } = await reserve(token, ev, [['photography', 'demo_pho_01']]);
   assert.equal(reservations.length, 1);
   assert.equal(reservations[0].status, 'pending_payment');
+  assert.equal(reservations[0].packageTotal, 60000);
+  assert.equal(reservations[0].advanceAmount, 18000);
+  assert.equal(reservations[0].balanceAmount, 42000);
   const hours = (new Date(reservations[0].expiresAt) - Date.now()) / 3600000;
   assert.ok(hours > 47.9 && hours <= 48);
   assert.equal(await models.Booking.countDocuments({ event: ev._id }), 0);
@@ -106,7 +109,7 @@ test('payments: 503 without keys; checkout-complete only reaches processing', as
   process.env.RAZORPAY_KEY_SECRET = saved;
 
   const p1 = await startPayment(token, ev, reservations[0]);
-  assert.equal(p1.checkout.amount, 60000 * 100);
+  assert.equal(p1.checkout.amount, 18000 * 100);
   assert.equal(p1.checkout.key, 'rzp_test_key');
   const p2 = await startPayment(token, ev, reservations[0]);
   assert.equal(p2.checkout.orderId, p1.checkout.orderId, 'a pending order is reused');
@@ -278,6 +281,12 @@ test('Event Circle contexts, messages and updates', async () => {
   assert.match(ctx.path[3], /^Booking #/);
 
   await request(app).post(`/api/customer/events/${ev._id}/messages`).set(auth(token)).send({ body: 'Can we add marigolds?', bookingId: booking.id }).expect(201);
+  const decorReq = await models.EventRequirement.findOne({ event: ev._id, category: 'decor' }).lean();
+  await request(app)
+    .post(`/api/customer/events/${ev._id}/messages`)
+    .set(auth(token))
+    .send({ body: 'Can you share theme options?', requirementId: String(decorReq._id) })
+    .expect(201);
   await request(app).post(`/api/customer/events/${ev._id}/messages`).set(auth(token)).send({ body: '' }).expect(400);
   await request(app).post(`/api/customer/events/${ev._id}/messages`).set(auth(other.token)).send({ body: 'hi' }).expect(404);
   await internal(`/ops/events/${ev._id}/messages`).send({ operator: 'ops', senderType: 'vendor', body: 'Yes, marigolds added.', bookingId: booking.id }).expect(201);
@@ -285,12 +294,15 @@ test('Event Circle contexts, messages and updates', async () => {
 
   const thread = await request(app).get(`/api/customer/events/${ev._id}/messages?bookingId=${booking.id}`).set(auth(token)).expect(200);
   assert.deepEqual(thread.body.messages.map((m) => m.senderName), ['You', 'Royal Decor Co.']);
+  const bookingAliasThread = await request(app).get(`/api/customer/events/${ev._id}/messages?booking=${booking.id}`).set(auth(token)).expect(200);
+  assert.deepEqual(bookingAliasThread.body.messages.map((m) => m.body), ['Can we add marigolds?', 'Yes, marigolds added.']);
   const whole = await request(app).get(`/api/customer/events/${ev._id}/messages`).set(auth(token)).expect(200);
   assert.equal(whole.body.messages.length, 0, 'booking threads stay in their context');
 
   const u = await request(app).get('/api/customer/updates').set(auth(token)).expect(200);
   assert.ok(u.body.unread >= 2);
   assert.equal(u.body.vendorMessages[0].body, 'Yes, marigolds added.');
+  assert.ok(u.body.vendorMessages.some((m) => m.body === 'Can you share theme options?' && m.requirementId === String(decorReq._id)));
   const home1 = await request(app).get('/api/customer/home').set(auth(token)).expect(200);
   assert.equal(home1.body.unreadUpdates, u.body.unread);
   await request(app).post('/api/customer/notifications/read-all').set(auth(token)).expect(200);
@@ -302,7 +314,7 @@ test('manual form validates everything before writing', async () => {
   const { user, token } = await makeUser();
   const before = await models.CustomerEvent.countDocuments({ customer: user._id });
   const base = { eventType: 'birthday', eventDate: uniqueDate(), city: 'Pune', guestCount: 40, budgetRange: 'o_50k_1l' };
-  await request(app).post('/api/customer/events').set(auth(token)).send({ ...base, services: [{ category: 'cake', status: 'customer_provided' }] }).expect(400);
+  await request(app).post('/api/customer/events').set(auth(token)).send({ ...base, services: [{ category: 'cake', status: 'customer_provided', details: { flavour: 'x' } }] }).expect(400);
   await request(app).post('/api/customer/events').set(auth(token)).send({ ...base, services: [{ category: 'spaceship', status: 'pending' }] }).expect(400);
   await request(app).post('/api/customer/events').set(auth(token)).send({ ...base, city: '' }).expect(400);
   assert.equal(await models.CustomerEvent.countDocuments({ customer: user._id }), before, 'no half-created events');

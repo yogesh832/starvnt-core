@@ -4,34 +4,6 @@ import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 
-function EnquiriesSkeleton() {
-  return (
-    <div className="space-y-4">
-      {Array.from({ length: 4 }).map((_, idx) => (
-        <Card key={idx} className="!p-0 overflow-hidden">
-          <div className="p-4 sm:p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex-1 min-w-0 space-y-2">
-                <div className="h-4 w-56 max-w-full rounded-full bg-gray-200 animate-pulse" />
-                <div className="h-3 w-80 max-w-full rounded-full bg-gray-100 animate-pulse" />
-              </div>
-              <div className="w-12 h-10 rounded-xl bg-primary-soft animate-pulse" />
-            </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-              {Array.from({ length: 6 }).map((__, innerIdx) => (
-                <div key={innerIdx} className="rounded-xl bg-lavender p-3 space-y-2">
-                  <div className="h-2.5 w-20 rounded-full bg-gray-200 animate-pulse" />
-                  <div className="h-3 w-full rounded-full bg-gray-100 animate-pulse" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
 export default function Enquiries() {
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +11,9 @@ export default function Enquiries() {
   const [quoteModalOpp, setQuoteModalOpp] = useState(null);
   const [basePrice, setBasePrice] = useState(0);
   const [travelFee, setTravelFee] = useState(0);
+  const [equipmentFee, setEquipmentFee] = useState(0);
+  const [setupFee, setSetupFee] = useState(0);
+  const [additionalFee, setAdditionalFee] = useState(0);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -84,14 +59,17 @@ export default function Enquiries() {
     setQuoteModalOpp(opp);
     setBasePrice(opp.basePrice || 48000);
     setTravelFee(parseInt(opp.travelCost?.replace(/[^0-9]/g, '')) || 2000);
-    setNotes(`Full day coverage at ${opp.location} on ${opp.date}`);
+    setEquipmentFee(0);
+    setSetupFee(0);
+    setAdditionalFee(0);
+    setNotes(`Offer includes ${opp.service} for ${opp.guests} guests on ${opp.date}. Please reply here if you want any change in timing, package, or price.`);
   }
 
   async function handleSendQuote() {
     if (!quoteModalOpp) return;
     setSubmitting(true);
     try {
-      const totalAmount = Number(basePrice) + Number(travelFee);
+      const totalAmount = Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee);
       if (quoteModalOpp.dbId) {
         await externalApi.call('/quotes', {
           method: 'POST',
@@ -105,6 +83,9 @@ export default function Enquiries() {
             pricingBreakdown: {
               basePrice: Number(basePrice),
               travelFee: Number(travelFee),
+              equipmentFee: Number(equipmentFee),
+              setupFee: Number(setupFee),
+              additionalFee: Number(additionalFee),
               totalAmount,
             },
             status: 'SUBMITTED',
@@ -115,7 +96,7 @@ export default function Enquiries() {
       setOpportunities((prev) =>
         prev.map((o) => (o.id === quoteModalOpp.id ? { ...o, status: 'Responded' } : o))
       );
-      setFeedback(`Quote of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. Saved to backend with Central Automation event.`);
+      setFeedback(`Offer of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. Customer can now negotiate or pay 30% advance.`);
       setQuoteModalOpp(null);
     } catch (err) {
       setFeedback(`Notice: ${err.message}`);
@@ -141,9 +122,6 @@ export default function Enquiries() {
         </div>
       )}
 
-      {loading && opportunities.length === 0 ? (
-        <EnquiriesSkeleton />
-      ) : (
       <div className="space-y-4">
         {opportunities.map((o) => (
           <Card key={o.id} className="!p-0 overflow-hidden">
@@ -221,7 +199,6 @@ export default function Enquiries() {
           </Card>
         )}
       </div>
-      )}
 
       {/* Quote Submission Modal */}
       {quoteModalOpp && (
@@ -229,7 +206,7 @@ export default function Enquiries() {
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
-                <h2 className="text-base font-extrabold text-navy">Submit Official Quote</h2>
+                <h2 className="text-base font-extrabold text-navy">Send Customer Offer</h2>
                 <p className="text-xs text-muted">{quoteModalOpp.service} · {quoteModalOpp.date}</p>
               </div>
               <button
@@ -243,7 +220,7 @@ export default function Enquiries() {
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-muted font-semibold mb-1">Base Price (₹)</label>
+                <label className="block text-muted font-semibold mb-1">Your price for this quote (₹)</label>
                 <input
                   type="number"
                   value={basePrice}
@@ -253,7 +230,7 @@ export default function Enquiries() {
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Travel & Logistics (₹)</label>
+                <label className="block text-muted font-semibold mb-1">Travel & logistics (₹)</label>
                 <input
                   type="number"
                   value={travelFee}
@@ -262,19 +239,46 @@ export default function Enquiries() {
                 />
               </div>
 
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  ['Equipment', equipmentFee, setEquipmentFee],
+                  ['Setup', setupFee, setSetupFee],
+                  ['Other', additionalFee, setAdditionalFee],
+                ].map(([label, value, setter]) => (
+                  <div key={label}>
+                    <label className="block text-muted font-semibold mb-1">{label} (₹)</label>
+                    <input
+                      type="number"
+                      value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3 py-2.5 font-bold text-navy outline-none focus:border-primary"
+                    />
+                  </div>
+                ))}
+              </div>
+
               <div className="p-3.5 rounded-2xl bg-primary-soft/60 border border-primary/20 flex justify-between items-baseline">
-                <span className="font-extrabold text-navy">Validated Total Cost</span>
-                <span className="font-extrabold text-lg text-primary">₹{(Number(basePrice) + Number(travelFee)).toLocaleString()}</span>
+                <span className="font-extrabold text-navy">Customer quote total</span>
+                <span className="font-extrabold text-lg text-primary">
+                  ₹{(Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee)).toLocaleString()}
+                </span>
+              </div>
+              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 flex justify-between text-xs">
+                <span className="font-bold text-emerald-800">Customer pays 30% advance</span>
+                <span className="font-extrabold text-emerald-700">
+                  ₹{Math.ceil((Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee)) * 0.3).toLocaleString()}
+                </span>
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Terms / Notes</label>
+                <label className="block text-muted font-semibold mb-1">Message shown to customer with this quote</label>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl p-3 text-navy outline-none focus:border-primary resize-none"
                 />
+                <p className="text-[10px] text-muted mt-1">Mention what is included, any condition, and what can be negotiated.</p>
               </div>
             </div>
 
@@ -290,7 +294,7 @@ export default function Enquiries() {
                 disabled={submitting}
                 className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark shadow-md shadow-primary/25"
               >
-                {submitting ? 'Sending...' : 'Send Quote'}
+                {submitting ? 'Sending...' : 'Send Offer'}
               </button>
             </div>
           </div>

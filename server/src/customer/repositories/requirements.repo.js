@@ -34,7 +34,7 @@ export async function insertMissingRequirements(eventId, categories) {
 export async function upsertRequirement(
   eventId,
   category,
-  { status, source, providedValue, preferences, selectedOptionId, selectedOption },
+  { status, source, providedValue, preferences, selectedOptionId, selectedOption, serviceLocation, specialRequirements },
   { onlyIfStatusIn } = {}
 ) {
   const set = {};
@@ -43,6 +43,8 @@ export async function upsertRequirement(
   if (providedValue !== undefined) set.providedValue = providedValue;
   if (selectedOptionId !== undefined) set.selectedOptionId = selectedOptionId;
   if (selectedOption !== undefined) set.selectedOption = selectedOption;
+  if (serviceLocation !== undefined) set.serviceLocation = serviceLocation;
+  if (specialRequirements !== undefined) set.specialRequirements = specialRequirements;
   for (const [k, v] of Object.entries(preferences || {})) set[`preferences.${k}`] = v;
 
   const existing = await EventRequirement.findOne({ event: eventId, category }).lean();
@@ -56,6 +58,8 @@ export async function upsertRequirement(
       preferences: preferences || {},
       selectedOptionId: selectedOptionId ?? null,
       ...(selectedOption ? { selectedOption } : {}),
+      ...(serviceLocation ? { serviceLocation } : {}),
+      ...(specialRequirements !== undefined ? { specialRequirements } : {}),
     });
     return { row: doc.toObject(), changed: true };
   }
