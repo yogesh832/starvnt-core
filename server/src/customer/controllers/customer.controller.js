@@ -44,7 +44,9 @@ export const getQuote = async (req, res) => res.json({ quote: await decision.get
 export const createEvent = async (req, res) => res.status(201).json(await events.createManualEvent(me(req), req.body));
 export const acceptQuote = async (req, res) => res.json(await commerce.acceptQuote(me(req), req.params.quoteId));
 export const bookings = async (req, res) => res.json(await commerce.bookingsView(me(req), req.params.id));
-export const pay = async (req, res) => res.json(await commerce.payReservation(req.externalUser, req.params.id, req.params.rid));
+export const previewCoupon = async (req, res) =>
+  res.json(await commerce.previewReservationCoupon(me(req), req.params.id, req.params.rid, req.body?.couponCode));
+export const pay = async (req, res) => res.json(await commerce.payReservation(req.externalUser, req.params.id, req.params.rid, req.body));
 export const devVerifyReservationPayment = async (req, res) =>
   res.json(await commerce.devVerifyReservationPayment(req.externalUser, req.params.id, req.params.rid));
 export const checkoutComplete = async (req, res) =>

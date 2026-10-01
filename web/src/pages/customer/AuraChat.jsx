@@ -57,6 +57,50 @@ function Bubble({ from, children }) {
   );
 }
 
+function AuraLoadingState() {
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2.5">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-[#9b6dff]/20 animate-pulse shrink-0 mt-0.5" />
+        <div className="bg-white border border-gray-100 rounded-3xl rounded-tl-xs p-4 shadow-xs w-full max-w-md">
+          <div className="h-3 w-28 rounded-full bg-gray-200 animate-pulse" />
+          <div className="h-3 w-5/6 rounded-full bg-gray-100 animate-pulse mt-3" />
+          <div className="h-3 w-2/3 rounded-full bg-gray-100 animate-pulse mt-2" />
+        </div>
+      </div>
+      <div className="flex justify-end pr-2">
+        <div className="bg-primary/15 rounded-3xl rounded-br-xs h-12 w-48 sm:w-64 animate-pulse" />
+      </div>
+      <div className="pl-10 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-10 rounded-2xl bg-white border border-gray-100 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AuraErrorState({ message, onRetry }) {
+  return (
+    <div className="pl-0 sm:pl-10">
+      <div className="bg-white border border-red-100 rounded-3xl p-4 shadow-xs max-w-xl">
+        <div className="flex items-start gap-3">
+          <span className="w-9 h-9 rounded-2xl bg-red-50 text-red-500 grid place-items-center shrink-0">
+            <Icon name="help" size={16} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-extrabold text-navy">Aura+ could not load</div>
+            <div className="text-xs text-muted mt-0.5">{message}</div>
+            <button type="button" onClick={onRetry} className="mt-3 rounded-xl bg-primary text-white text-xs font-bold px-4 py-2">
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
@@ -186,6 +230,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const askedRef = useRef(false);
@@ -234,7 +279,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, loadAttempt]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -402,15 +447,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto">
         <Bubble from="model">Hi{firstName ? ` ${firstName}` : ''}! 👋 What are you planning? Tell me in your own words. I'll figure out the rest.</Bubble>
 
-        {loading && (
-          <div className="space-y-4">
-            <div className="flex justify-end pr-2"><div className="bg-primary/20 rounded-3xl rounded-br-xs h-10 w-48 sm:w-64 animate-pulse" /></div>
-            <div className="flex gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse shrink-0 mt-0.5" />
-              <div className="bg-white border border-gray-100 rounded-3xl rounded-tl-xs h-16 w-64 sm:w-80 animate-pulse shadow-xs" />
-            </div>
-          </div>
-        )}
+        {loading && <AuraLoadingState />}
         {messages.map((m, i) => (
           <Bubble key={i} from={m.role}>{m.content}</Bubble>
         ))}
@@ -426,7 +463,11 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Aura+ is thinking…
           </div>
         )}
-        {error && <div className="pl-10 text-[11px] text-red-500">{error}</div>}
+        {error && !loading && messages.length === 0 ? (
+          <AuraErrorState message={error} onRetry={() => setLoadAttempt((n) => n + 1)} />
+        ) : error ? (
+          <div className="pl-10 text-[11px] text-red-500">{error}</div>
+        ) : null}
 
         {showAnswerPanel && (
           <div className="pl-10 space-y-2">

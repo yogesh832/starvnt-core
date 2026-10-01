@@ -14,6 +14,7 @@ import { matchVendorsForRequirement } from '../services/matching.service.js';
 import { createQuote, transitionQuote } from '../services/quoteStateMachine.service.js';
 import { startService, submitCompletionEvidence, validateCompletionFromCore } from '../../admin/services/executionSettlement.service.js';
 import * as razorpay from '../../customer/services/payments/razorpay.js';
+import { validateCouponForPayment, recordCouponUsageOnce } from '../../customer/services/coupon.service.js';
 
 const router = express.Router();
 const ADVANCE_PERCENTAGE = 30;
@@ -36,6 +37,8 @@ function normalizePricingBreakdown(input = {}) {
 function quoteForCustomer(quote) {
   const total = Number(quote.pricingBreakdown?.totalAmount || 0);
   const advanceAmount = Math.ceil((total * ADVANCE_PERCENTAGE) / 100);
+  const couponDiscountAmount = Number(quote.advancePayment?.couponDiscountAmount || 0);
+  const payableAdvance = quote.advancePayment?.amount || Math.max(1, advanceAmount - couponDiscountAmount);
   return {
     id: String(quote._id),
     quoteReference: quote.quoteReference,
@@ -50,7 +53,12 @@ function quoteForCustomer(quote) {
     pricingBreakdown: quote.pricingBreakdown,
     totalAmount: total,
     advancePercentage: quote.advancePayment?.percentage || ADVANCE_PERCENTAGE,
-    advanceAmount: quote.advancePayment?.amount || advanceAmount,
+    advanceAmount: payableAdvance,
+    originalAdvanceAmount: quote.advancePayment?.originalAdvanceAmount || advanceAmount,
+    coupon: quote.advancePayment?.couponCode ? {
+      code: quote.advancePayment.couponCode,
+      discountAmount: couponDiscountAmount,
+    } : null,
     advanceStatus: quote.advancePayment?.status || 'NOT_STARTED',
     notes: quote.notes || '',
     history: Array.isArray(quote.history)
@@ -93,6 +101,10 @@ async function completePaidVendorQuote({ quote, actorName, paymentId }) {
   quote.advancePayment.status = 'VERIFIED';
   quote.advancePayment.providerPaymentId = paymentId || quote.advancePayment.providerPaymentId || '';
   quote.advancePayment.paidAt = quote.advancePayment.paidAt || new Date();
+  if (quote.advancePayment?.couponCode && !quote.advancePayment?.couponUsageRecorded) {
+    await recordCouponUsageOnce(quote.advancePayment.couponCode);
+    quote.advancePayment.couponUsageRecorded = true;
+  }
   await quote.save();
 
   if (quote.status === 'SUBMITTED') {
@@ -129,6 +141,8 @@ async function completePaidVendorQuote({ quote, actorName, paymentId }) {
           advanceAmount: paidAmount,
           paidAmount,
           balanceAmount: Math.max(0, totalAmount - paidAmount),
+          couponCode: quote.advancePayment?.couponCode || '',
+          couponDiscountAmount: Number(quote.advancePayment?.couponDiscountAmount || 0),
           provider: quote.advancePayment?.provider || 'razorpay',
           providerOrderId: quote.advancePayment?.providerOrderId || '',
           providerPaymentId: paymentId || quote.advancePayment?.providerPaymentId || '',
@@ -146,6 +160,8 @@ async function completePaidVendorQuote({ quote, actorName, paymentId }) {
           advanceAmount: paidAmount,
           paidAmount,
           balanceAmount: Math.max(0, totalAmount - paidAmount),
+          couponCode: quote.advancePayment?.couponCode || '',
+          couponDiscountAmount: Number(quote.advancePayment?.couponDiscountAmount || 0),
           provider: quote.advancePayment?.provider || 'razorpay',
           providerOrderId: quote.advancePayment?.providerOrderId || '',
           providerPaymentId: paymentId || quote.advancePayment?.providerPaymentId || '',
@@ -741,13 +757,24 @@ router.post('/customer/vendor-quotes/:id/pay-advance', requireExternalAuth, requ
     }
 
     const total = Number(quote.pricingBreakdown?.totalAmount || 0);
-    const amount = Math.ceil((total * ADVANCE_PERCENTAGE) / 100);
+    const originalAdvanceAmount = Math.ceil((total * ADVANCE_PERCENTAGE) / 100);
+    const { coupon, discountAmount } = await validateCouponForPayment(req.body?.couponCode, {
+      orderAmount: total,
+      baseAmount: originalAdvanceAmount,
+    });
+    const amount = Math.max(1, originalAdvanceAmount - discountAmount);
     if (!amount) return res.status(400).json({ error: 'INVALID_QUOTE_AMOUNT' });
 
     const order = await razorpay.createOrder({
       amount,
       receipt: `vq_${quote._id}`,
-      notes: { quoteId: String(quote._id), customerId: String(req.externalUser._id), advancePercentage: ADVANCE_PERCENTAGE },
+      notes: {
+        quoteId: String(quote._id),
+        customerId: String(req.externalUser._id),
+        advancePercentage: ADVANCE_PERCENTAGE,
+        couponCode: coupon?.code || '',
+        couponDiscount: discountAmount ? String(discountAmount) : '',
+      },
     });
     const orderId = order.id;
     quote.advancePayment = {
@@ -757,6 +784,10 @@ router.post('/customer/vendor-quotes/:id/pay-advance', requireExternalAuth, requ
       provider: 'razorpay',
       providerOrderId: orderId,
       providerPaymentId: '',
+      couponCode: coupon?.code || '',
+      couponDiscountAmount: discountAmount,
+      originalAdvanceAmount,
+      couponUsageRecorded: false,
       paidAt: null,
     };
     await quote.save();

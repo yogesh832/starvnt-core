@@ -1,5 +1,6 @@
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import Icon from '../../components/Icon.jsx';
+import { AdminEmptyState, AdminPageHeader, AdminStatCard } from './adminUi.jsx';
 
 const STATS = [
   { label: 'Total Customers', value: '0', delta: '0% this month', icon: 'customers', iconBg: 'bg-primary-soft text-primary' },
@@ -22,7 +23,7 @@ const DONUT = [
 
 function BookingsTrend() {
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-white/80">
       <div className="flex items-center justify-between">
         <h2 className="font-bold text-[15px]">Bookings Trend</h2>
         <span className="text-[11px] text-muted bg-lavender rounded-lg px-2 py-1">Last 30 Days</span>
@@ -59,7 +60,7 @@ function EventsDonut() {
   const C = 2 * Math.PI * R;
   let offset = 0;
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm">
+    <div className="bg-white rounded-2xl p-5 shadow-sm border border-white/80">
       <h2 className="font-bold text-[15px]">Events by Status</h2>
       <div className="flex items-center gap-6 mt-4">
         <div className="relative w-32 h-32 shrink-0">
@@ -81,7 +82,7 @@ function EventsDonut() {
           </svg>
           <div className="absolute inset-0 grid place-items-center text-center">
             <div>
-              <div className="text-xl font-extrabold">892</div>
+              <div className="text-xl font-extrabold">0</div>
               <div className="text-[9px] text-muted">Events</div>
             </div>
           </div>
@@ -104,23 +105,16 @@ export default function Dashboard() {
   const { admin } = useAdminAuth();
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   return (
-    <div className="space-y-5 max-w-6xl">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-navy">Good morning, {admin.fullName.split(' ')[0]}</h1>
-          <p className="text-sm text-muted mt-0.5">Here's what's happening across STARVNT today.</p>
-        </div>
-        <span className="text-xs text-muted bg-white rounded-xl px-3 py-2 shadow-sm">{today}</span>
-      </div>
+    <div className="space-y-5">
+      <AdminPageHeader
+        title={`Good morning, ${admin.fullName.split(' ')[0]}`}
+        description="Here's what's happening across STARVNT today."
+        meta={today}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {STATS.map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl p-4 shadow-sm">
-            <div className={`w-9 h-9 rounded-xl grid place-items-center ${s.iconBg}`}><Icon name={s.icon} size={17} /></div>
-            <div className="mt-3 text-xl sm:text-2xl font-extrabold truncate">{s.value}</div>
-            <div className="text-xs text-muted mt-0.5">{s.label}</div>
-            <div className="text-[11px] mt-1.5 font-medium text-emerald-600">{s.delta}</div>
-          </div>
+          <AdminStatCard key={s.label} icon={s.icon} value={s.value} label={s.label} foot={s.delta} />
         ))}
       </div>
 
@@ -130,7 +124,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-white/80">
           <h2 className="font-bold text-[15px] mb-3">Recent Activities</h2>
           {ACTIVITIES.length > 0 ? (
             <ul className="space-y-3">
@@ -147,10 +141,10 @@ export default function Dashboard() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted">No recent activities.</p>
+            <AdminEmptyState title="No recent activities" message="New admin actions, booking updates, and verification changes will appear here." />
           )}
         </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="bg-white rounded-2xl p-5 shadow-sm border border-white/80">
           <h2 className="font-bold text-[15px] mb-3">Needs Attention</h2>
           {ATTENTION.length > 0 ? (
             <ul className="space-y-2.5">
@@ -162,7 +156,7 @@ export default function Dashboard() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted">No items need attention.</p>
+            <AdminEmptyState title="Everything is clear" message="Pending verifications, disputes, and operational alerts will be listed here." />
           )}
         </div>
       </div>

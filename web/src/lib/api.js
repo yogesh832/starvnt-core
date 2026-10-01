@@ -99,6 +99,12 @@ export function friendlyApiMessage(code, status) {
     MEDIA_UPLOAD_FAILED: "Media upload failed. Please check Cloudinary settings or try a smaller file.",
     PRIMARY_CATEGORY_SINGLE_ONLY: "Choose exactly one primary category. Add secondary services separately.",
     RATE_LIMITED: "Too many attempts. Please wait a few minutes and try again.",
+    COUPON_INVALID: "This coupon code is not valid.",
+    COUPON_NOT_STARTED: "This coupon is not active yet.",
+    COUPON_EXPIRED: "This coupon has expired.",
+    COUPON_USAGE_LIMIT_REACHED: "This coupon has already been fully used.",
+    COUPON_MIN_ORDER_NOT_MET: "This order does not meet the coupon minimum amount.",
+    COUPON_NO_DISCOUNT: "This coupon does not reduce this payment.",
   };
   return messages[code] || (status ? `Request failed (${status}). Please try again.` : "Request failed. Please try again.");
 }

@@ -6,6 +6,7 @@ import { StatusChip } from '../../components/ui.jsx';
 import EventWorkspace from './EventWorkspace.jsx';
 import CouponModal from './CouponModal.jsx';
 import BookingDetailModal from './BookingDetailModal.jsx';
+import { AdminEmptyState, AdminErrorState, AdminPageHeader, AdminStatCard, AdminTableSkeleton } from './adminUi.jsx';
 
 /**
  * Generic Core module table screen (Customers / Vendors / Events / Bookings /
@@ -95,6 +96,18 @@ const MODULE_DATA = {
   },
 };
 
+function adminEventStatusLabel(status) {
+  const labels = {
+    draft: 'Draft',
+    planning: 'Planning',
+    booked: 'Confirmed',
+    in_progress: 'In Progress',
+    completed: 'Completed',
+    cancelled: 'Cancelled',
+  };
+  return labels[status] || status || 'Draft';
+}
+
 export default function ModuleTable({ kind }) {
   const m = MODULE_DATA[kind];
   const [searchParams, setSearchParams] = useSearchParams();
@@ -122,7 +135,9 @@ export default function ModuleTable({ kind }) {
 
   const [apiData, setApiData] = useState({ rows: [], total: 0, pages: 1, raw: [] });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [page, setPage] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
   const limit = 10;
 
   // Sync debounced search query and reflect into URL search param
@@ -179,10 +194,10 @@ export default function ModuleTable({ kind }) {
           notes: approved ? 'Approved from admin Vendors panel.' : 'Rejected from admin Vendors panel.',
         },
       });
-      setPage((p) => p);
-      window.location.reload();
+      setReloadKey((k) => k + 1);
     } catch (e) {
-      alert(e.message || `Failed to ${action} vendor`);
+      setError(e.message || `Failed to ${action} vendor`);
+    } finally {
       setLoading(false);
     }
   }
@@ -190,6 +205,7 @@ export default function ModuleTable({ kind }) {
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
+    setError('');
 
     const searchParam = debouncedSearch.trim() ? `&search=${encodeURIComponent(debouncedSearch.trim())}` : '';
     const tabParam = tab && tab !== 'All' ? `&tab=${encodeURIComponent(tab)}` : '';
@@ -205,6 +221,8 @@ export default function ModuleTable({ kind }) {
       const cParam = bookingCategoryFilter && bookingCategoryFilter !== 'All' ? `&category=${encodeURIComponent(bookingCategoryFilter)}` : '';
       const cityParam = bookingCityFilter && bookingCityFilter !== 'All' ? `&city=${encodeURIComponent(bookingCityFilter)}` : '';
       endpoint = `/operations/bookings?limit=${limit}&skip=${skip}${searchParam}${tabParam}${vParam}${cParam}${cityParam}`;
+    } else if (kind === 'events') {
+      endpoint = `/events?limit=${limit}&skip=${skip}${searchParam}${tabParam}`;
     } else if (kind === 'coupons') {
       endpoint = `/coupons?limit=${limit}&skip=${skip}${searchParam}${tabParam}`;
     }
@@ -257,6 +275,15 @@ export default function ModuleTable({ kind }) {
               v.status || 'PENDING'
             ]);
           }
+          if (kind === 'events' && res.events) {
+            mappedRows = res.events.map(e => [
+              e.displayTitle || e.title || 'Event',
+              e.customerName || e.customer?.fullName || e.customerEmail || 'Customer',
+              e.eventDate ? new Date(`${e.eventDate}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date TBD',
+              e.locationLabel || e.city || 'Location not set',
+              adminEventStatusLabel(e.status),
+            ]);
+          }
           if (kind === 'customers' && res.customers) {
             mappedRows = res.customers.map(cu => [
               cu.fullName || '—',
@@ -268,12 +295,16 @@ export default function ModuleTable({ kind }) {
           }
           setApiData({
             rows: mappedRows,
-            raw: res.organizations || res.coupons || res.bookings || res.customers || res.users || [],
+            raw: res.organizations || res.coupons || res.bookings || res.events || res.customers || res.users || [],
             total: totalItems,
             pages: Math.ceil(totalItems / limit) || 1,
           });
         })
-        .catch(console.error)
+        .catch((err) => {
+          if (!isMounted) return;
+          setError(err.data?.error || err.message || `Failed to load ${m.title.toLowerCase()}.`);
+          setApiData({ rows: [], total: 0, pages: 1, raw: [] });
+        })
         .finally(() => {
           if (isMounted) setLoading(false);
         });
@@ -289,7 +320,7 @@ export default function ModuleTable({ kind }) {
     }
 
     return () => { isMounted = false; };
-  }, [kind, page, tab, debouncedSearch, bookingVendorFilter, bookingCategoryFilter, bookingCityFilter]);
+  }, [kind, page, tab, debouncedSearch, bookingVendorFilter, bookingCategoryFilter, bookingCityFilter, reloadKey]);
 
   if (kind === 'events' && selectedEventWorkspace) {
     return <EventWorkspace onBack={() => setSelectedEventWorkspace(null)} />;
@@ -305,86 +336,40 @@ export default function ModuleTable({ kind }) {
   const currentRows = filteredRows;
   const currentTotal = (!isServerFiltered && debouncedSearch.trim()) ? filteredRows.length : apiData.total;
   const currentPages = (!isServerFiltered && debouncedSearch.trim()) ? Math.ceil(filteredRows.length / limit) || 1 : apiData.pages;
+  const tableMinWidth = kind === 'bookings' ? 'min-w-[1120px]' : kind === 'vendors' ? 'min-w-[880px]' : 'min-w-[760px]';
+  const hasRows = currentRows.length > 0;
+  const loadingFresh = loading && !hasRows;
 
   return (
-    <div className="space-y-4 max-w-6xl">
-      {/* Header row */}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold mr-auto">{m.title}</h1>
-        <div className="flex items-center gap-2 bg-white rounded-xl px-3.5 py-2 text-sm text-muted shadow-sm w-full sm:w-72">
-          <Icon name="search" size={15} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="bg-transparent flex-1 outline-none placeholder:text-muted/70 text-navy"
-            placeholder={`Search ${m.title.toLowerCase()}...`}
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              className="text-muted hover:text-navy text-xs font-bold px-1 cursor-pointer"
-              title="Clear search"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-        {m.add && (
-          <button onClick={() => { if (kind === 'coupons') setShowAddModal(true); }} className="rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2.5 transition whitespace-nowrap">
+    <div className="space-y-5">
+      <AdminPageHeader
+        title={m.title}
+        description={kind === 'bookings'
+          ? 'Track booking value, payment verification, execution progress, and settlement readiness.'
+          : 'Review, search, filter, and manage platform records from one admin workspace.'}
+        meta={currentTotal ? `${currentTotal.toLocaleString('en-IN')} records` : undefined}
+        searchValue={search}
+        onSearchChange={setSearch}
+        onClearSearch={() => setSearch('')}
+        searchPlaceholder={`Search ${m.title.toLowerCase()}...`}
+        action={m.add ? (
+          <button
+            onClick={() => { if (kind === 'coupons') setShowAddModal(true); }}
+            className="rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-extrabold px-4 py-2.5 transition whitespace-nowrap"
+          >
             {m.add}
           </button>
-        )}
-      </div>
+        ) : null}
+      />
 
       {/* Bookings KPI Stats Cards */}
       {kind === 'bookings' && bookingMeta.stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-primary-soft text-primary">
-              <Icon name="wallet" size={18} />
-            </div>
-            <div>
-              <div className="text-base sm:text-lg font-extrabold text-navy">₹{Number(bookingMeta.stats.totalGmv || 0).toLocaleString('en-IN')}</div>
-              <div className="text-[11px] text-muted">Platform GMV</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-blue-50 text-blue-600">
-              <Icon name="bookings" size={18} />
-            </div>
-            <div>
-              <div className="text-base sm:text-lg font-extrabold text-navy">{bookingMeta.stats.totalBookings || 0}</div>
-              <div className="text-[11px] text-muted">Total Bookings</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-violet-50 text-violet-600">
-              <Icon name="operations" size={18} />
-            </div>
-            <div>
-              <div className="text-base sm:text-lg font-extrabold text-navy">{bookingMeta.stats.inProgressCount || 0}</div>
-              <div className="text-[11px] text-muted">In Progress</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-emerald-50 text-emerald-600">
-              <Icon name="check" size={18} />
-            </div>
-            <div>
-              <div className="text-base sm:text-lg font-extrabold text-navy">{bookingMeta.stats.completedCount || 0}</div>
-              <div className="text-[11px] text-muted">Completed</div>
-            </div>
-          </div>
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3 col-span-2 sm:col-span-1">
-            <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-amber-50 text-amber-600">
-              <Icon name="payments" size={18} />
-            </div>
-            <div>
-              <div className="text-base sm:text-lg font-extrabold text-navy">{bookingMeta.stats.pendingPaymentCount || 0}</div>
-              <div className="text-[11px] text-muted">Pending Payment</div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3.5">
+          <AdminStatCard icon="wallet" value={`₹${Number(bookingMeta.stats.totalGmv || 0).toLocaleString('en-IN')}`} label="Platform GMV" tone="primary" />
+          <AdminStatCard icon="bookings" value={bookingMeta.stats.totalBookings || 0} label="Total Bookings" tone="blue" />
+          <AdminStatCard icon="operations" value={bookingMeta.stats.inProgressCount || 0} label="In Progress" tone="violet" />
+          <AdminStatCard icon="check" value={bookingMeta.stats.completedCount || 0} label="Completed" tone="emerald" />
+          <AdminStatCard icon="payments" value={bookingMeta.stats.pendingPaymentCount || 0} label="Pending Payment" tone="amber" />
         </div>
       )}
 
@@ -392,14 +377,7 @@ export default function ModuleTable({ kind }) {
       {m.stats && (
         <div className="grid sm:grid-cols-3 gap-3.5">
           {m.stats.map((s) => (
-            <div key={s.label} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${s.iconBg}`}><Icon name={s.icon} size={18} /></div>
-              <div>
-                <div className="text-lg font-extrabold">{s.value}</div>
-                <div className="text-[11px] text-muted">{s.label}</div>
-                <div className="text-[10px] text-emerald-600 font-medium">{s.foot}</div>
-              </div>
-            </div>
+            <AdminStatCard key={s.label} icon={s.icon} value={s.value} label={s.label} foot={s.foot} />
           ))}
         </div>
       )}
@@ -417,12 +395,12 @@ export default function ModuleTable({ kind }) {
 
       {/* Tabs */}
       {(m.tabs.length > 0 || m.filters.length > 0) && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {m.tabs.map((t) => (
             <button
               key={t}
               onClick={() => handleTabChange(t)}
-              className={`text-xs font-semibold rounded-full px-3.5 py-1.5 transition cursor-pointer ${
+              className={`shrink-0 text-xs font-semibold rounded-full px-3.5 py-1.5 transition cursor-pointer ${
                 tab === t ? 'bg-primary text-white' : 'bg-white text-ink/60 hover:bg-primary-soft hover:text-primary'
               }`}
             >
@@ -432,7 +410,7 @@ export default function ModuleTable({ kind }) {
           {m.filters.map((f) => (
             <button
               key={f}
-              className="inline-flex items-center gap-1.5 text-xs font-medium bg-white rounded-full px-3.5 py-1.5 text-ink/60 hover:bg-lavender transition"
+              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium bg-white rounded-full px-3.5 py-1.5 text-ink/60 hover:bg-lavender transition"
             >
               <span>{f}</span>
               <Icon name="chevronDown" size={11} className="text-muted" />
@@ -527,154 +505,162 @@ export default function ModuleTable({ kind }) {
               }}
               className="ml-auto text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl px-2.5 py-1 transition cursor-pointer"
             >
-              ✕ Reset Filters
+              Reset Filters
             </button>
           )}
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-x-auto relative min-h-[200px]">
-        {loading && (
-          <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] grid place-items-center z-10">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-        <table className="w-full text-[13px] min-w-[640px]">
-          <thead>
-            <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100">
-              {m.columns.map((c) => (
-                <th key={c} className="px-4 py-3 font-semibold">{c}</th>
-              ))}
-              <th className="px-4 py-3 font-semibold text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentRows.length === 0 && !loading && (
-              <tr>
-                <td colSpan={m.columns.length + 1} className="px-5 py-8 text-center text-muted">
-                  No records found{debouncedSearch ? ` matching "${debouncedSearch}"` : ''}.
-                </td>
-              </tr>
-            )}
-            {currentRows.map((row, i) => (
-              <tr
-                key={i}
-                onClick={() => {
-                  if (kind === 'events') setSelectedEventWorkspace(row[0]);
-                  if (kind === 'bookings' && apiData.raw?.[i]) setSelectedBookingForDetail(apiData.raw[i]);
-                }}
-                className={`border-b border-gray-50 last:border-0 hover:bg-lavender/40 transition ${
-                  ['events', 'bookings'].includes(kind) ? 'cursor-pointer' : ''
-                }`}
-              >
-                {row.map((cell, j) => (
-                  <td key={j} className="px-4 py-3">
-                    {typeof cell === 'string' && [
-                      'Active','Verified','Confirmed','Completed','Planning','Pending','Scheduled','In Progress','Inactive','Rejected','Cancelled','Draft',
-                      'NOT_STARTED','SERVICE_SCHEDULED','SERVICE_STARTED','COMPLETION_SUBMITTED','COMPLETION_VERIFIED',
-                      'NOT_ELIGIBLE','SETTLEMENT_ELIGIBLE','SETTLEMENT_HOLD','SETTLED',
-                      'PAID','PARTIAL','FAILED','DISPUTED'
-                    ].includes(cell) ? (
-                      <StatusChip status={cell} />
-                    ) : (
-                      <span className={j === 0 ? (['events', 'bookings'].includes(kind) ? 'font-bold text-navy hover:text-primary' : 'font-semibold') : 'text-ink/70'}>
-                        {cell}
-                      </span>
-                    )}
-                  </td>
-                ))}
-                <td className="px-4 py-3 text-right text-muted">
-                  {kind === 'vendors' && apiData.raw?.[i] ? (
-                    <div className="inline-flex items-center justify-end gap-2">
-                      {!apiData.raw[i].verification?.isVerified && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleVendorVerification(apiData.raw[i], true);
-                          }}
-                          className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
-                        >
-                          Approve
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleVendorVerification(apiData.raw[i], false);
-                        }}
-                        className="rounded-lg bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-100 cursor-pointer"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  ) : kind === 'bookings' && apiData.raw?.[i] ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedBookingForDetail(apiData.raw[i]);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-primary-soft text-primary hover:bg-primary hover:text-white transition cursor-pointer"
-                    >
-                      <Icon name="eye" size={13} />
-                      <span>View</span>
-                    </button>
-                  ) : (
-                    <button className="p-1 rounded-lg hover:bg-lavender text-muted hover:text-navy inline-flex items-center justify-center cursor-pointer">
-                      <Icon name="dotsVertical" size={15} strokeWidth={2.5} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Pagination */}
-        {currentTotal > 0 && (
-          <div className="flex items-center justify-between px-5 py-3 text-xs text-muted">
-            <span>Showing {((page - 1) * limit) + 1}–{Math.min(page * limit, currentTotal)} of {currentTotal}</span>
-            <div className="flex items-center gap-1">
-              <button 
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender disabled:opacity-50 cursor-pointer" 
-                aria-label="Previous page">
-                <Icon name="chevronLeft" size={13} />
-              </button>
-              <button className="w-7 h-7 grid place-items-center rounded-lg bg-primary text-white font-bold">{page}</button>
-              {page < currentPages && (
-                 <button onClick={() => setPage(p => p + 1)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender cursor-pointer">{page + 1}</button>
-              )}
-              {page + 1 < currentPages && (
-                 <button onClick={() => setPage(p => p + 2)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender cursor-pointer">{page + 2}</button>
-              )}
-              {page + 2 < currentPages && <span className="px-1">…</span>}
-              {page + 2 < currentPages && (
-                 <button onClick={() => setPage(currentPages)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender cursor-pointer">{currentPages}</button>
-              )}
-              <button 
-                onClick={() => setPage(p => Math.min(currentPages, p + 1))}
-                disabled={page === currentPages}
-                className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender disabled:opacity-50 cursor-pointer" 
-                aria-label="Next page">
-                <Icon name="chevronRight" size={13} />
-              </button>
+      {error ? (
+        <AdminErrorState message={error} onRetry={() => setReloadKey((k) => k + 1)} />
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden relative min-h-[260px] border border-white/80">
+          {loading && hasRows ? (
+            <div className="absolute left-0 right-0 top-0 z-10 h-1 overflow-hidden bg-primary-soft">
+              <div className="h-full w-1/3 animate-pulse bg-primary" />
             </div>
-          </div>
-        )}
-      </div>
+          ) : null}
+          {loadingFresh ? (
+            <AdminTableSkeleton columns={Math.min(m.columns.length + 1, 7)} rows={7} />
+          ) : hasRows ? (
+            <div className="overflow-x-auto">
+              <table className={`w-full text-[13px] ${tableMinWidth}`}>
+                <thead>
+                  <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100 bg-slate-50/80">
+                    {m.columns.map((c) => (
+                      <th key={c} className="px-4 py-3 font-extrabold">{c}</th>
+                    ))}
+                    <th className="px-4 py-3 font-extrabold text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentRows.map((row, i) => (
+                    <tr
+                      key={i}
+                      onClick={() => {
+                        if (kind === 'events') setSelectedEventWorkspace(row[0]);
+                        if (kind === 'bookings' && apiData.raw?.[i]) setSelectedBookingForDetail(apiData.raw[i]);
+                      }}
+                      className={`border-b border-gray-50 last:border-0 hover:bg-lavender/40 transition ${
+                        ['events', 'bookings'].includes(kind) ? 'cursor-pointer' : ''
+                      }`}
+                    >
+                      {row.map((cell, j) => (
+                        <td key={j} className="px-4 py-4 align-top">
+                          {typeof cell === 'string' && [
+                            'Active','Verified','Confirmed','Completed','Planning','Pending','Scheduled','In Progress','Inactive','Rejected','Cancelled','Draft',
+                            'NOT_STARTED','SERVICE_SCHEDULED','SERVICE_STARTED','COMPLETION_SUBMITTED','COMPLETION_VERIFIED',
+                            'NOT_ELIGIBLE','SETTLEMENT_ELIGIBLE','SETTLEMENT_HOLD','SETTLED',
+                            'PAID','PARTIAL','FAILED','DISPUTED','PAYMENT_VERIFIED','PENDING_PAYMENT'
+                          ].includes(cell) ? (
+                            <StatusChip status={cell} />
+                          ) : (
+                            <span className={`block leading-5 ${j === 0 ? (['events', 'bookings'].includes(kind) ? 'font-extrabold text-navy hover:text-primary' : 'font-semibold text-navy') : 'text-ink/70'}`}>
+                              {cell}
+                            </span>
+                          )}
+                        </td>
+                      ))}
+                      <td className="px-4 py-4 text-right text-muted align-top">
+                        {kind === 'vendors' && apiData.raw?.[i] ? (
+                          <div className="inline-flex items-center justify-end gap-2">
+                            {!apiData.raw[i].verification?.isVerified && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVendorVerification(apiData.raw[i], true);
+                                }}
+                                className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+                              >
+                                Approve
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleVendorVerification(apiData.raw[i], false);
+                              }}
+                              className="rounded-lg bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-100 cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : kind === 'bookings' && apiData.raw?.[i] ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBookingForDetail(apiData.raw[i]);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-primary-soft text-primary hover:bg-primary hover:text-white transition cursor-pointer"
+                          >
+                            <Icon name="eye" size={13} />
+                            <span>View</span>
+                          </button>
+                        ) : (
+                          <button className="p-1 rounded-lg hover:bg-lavender text-muted hover:text-navy inline-flex items-center justify-center cursor-pointer" aria-label="More actions">
+                            <Icon name="dotsVertical" size={15} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <AdminEmptyState
+              title="No records found"
+              message={debouncedSearch ? `Nothing matched "${debouncedSearch}". Try another search or clear filters.` : 'There is no data to show here yet.'}
+            />
+          )}
 
-      {showAddModal && kind === 'coupons' && <CouponModal onClose={() => setShowAddModal(false)} onSaved={() => { setShowAddModal(false); window.location.reload(); }} />}
+          {/* Pagination */}
+          {currentTotal > 0 && (
+            <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+              <span>Showing {((page - 1) * limit) + 1}-{Math.min(page * limit, currentTotal)} of {currentTotal}</span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender disabled:opacity-50 cursor-pointer"
+                  aria-label="Previous page">
+                  <Icon name="chevronLeft" size={13} />
+                </button>
+                <button className="w-7 h-7 grid place-items-center rounded-lg bg-primary text-white font-bold">{page}</button>
+                {page < currentPages && (
+                  <button onClick={() => setPage(p => p + 1)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender cursor-pointer">{page + 1}</button>
+                )}
+                {page + 1 < currentPages && (
+                  <button onClick={() => setPage(p => p + 2)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender cursor-pointer">{page + 2}</button>
+                )}
+                {page + 2 < currentPages && <span className="px-1">...</span>}
+                {page + 2 < currentPages && (
+                  <button onClick={() => setPage(currentPages)} className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender cursor-pointer">{currentPages}</button>
+                )}
+                <button
+                  onClick={() => setPage(p => Math.min(currentPages, p + 1))}
+                  disabled={page === currentPages}
+                  className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender disabled:opacity-50 cursor-pointer"
+                  aria-label="Next page">
+                  <Icon name="chevronRight" size={13} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showAddModal && kind === 'coupons' && <CouponModal onClose={() => setShowAddModal(false)} onSaved={() => { setShowAddModal(false); setReloadKey((k) => k + 1); }} />}
       
       {selectedBookingForDetail && (
         <BookingDetailModal
           booking={selectedBookingForDetail}
           onClose={() => setSelectedBookingForDetail(null)}
-          onRefresh={() => setPage((p) => p)}
+          onRefresh={() => setReloadKey((k) => k + 1)}
         />
       )}
     </div>

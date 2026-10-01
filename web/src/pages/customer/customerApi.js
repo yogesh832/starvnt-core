@@ -27,7 +27,10 @@ export const customerApi = {
   acceptQuote: (quoteId) => externalApi.call(`/customer/quotes/${quoteId}/accept`, { method: 'POST' }),
   generateVoice: (text) => externalApi.raw('/ai/voice', { method: 'POST', body: { text } }).then(r => r.blob()),
   bookings: (id) => externalApi.call(`/customer/events/${id}/bookings`),
-  pay: (id, reservationId) => externalApi.call(`/customer/events/${id}/reservations/${reservationId}/pay`, { method: 'POST' }),
+  previewCoupon: (id, reservationId, couponCode) =>
+    externalApi.call(`/customer/events/${id}/reservations/${reservationId}/coupon-preview`, { method: 'POST', body: { couponCode } }),
+  pay: (id, reservationId, couponCode = '') =>
+    externalApi.call(`/customer/events/${id}/reservations/${reservationId}/pay`, { method: 'POST', body: { couponCode } }),
   devSuccessPayment: (id, reservationId) =>
     externalApi.call(`/customer/events/${id}/reservations/${reservationId}/dev-success-payment`, { method: 'POST' }),
   checkoutComplete: (id, paymentId, body) =>
@@ -48,7 +51,8 @@ export const customerApi = {
     externalApi.call(`/customer/vendor-quotes/${quoteId}/accept`, { method: 'POST', body: { eventId } }),
   negotiateVendorQuote: (quoteId, message, counterBudget) =>
     externalApi.call(`/customer/vendor-quotes/${quoteId}/negotiate`, { method: 'POST', body: { message, counterBudget } }),
-  payVendorQuoteAdvance: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/pay-advance`, { method: 'POST' }),
+  payVendorQuoteAdvance: (quoteId, couponCode = '') =>
+    externalApi.call(`/customer/vendor-quotes/${quoteId}/pay-advance`, { method: 'POST', body: { couponCode } }),
   completeVendorQuoteCheckout: (quoteId, body) =>
     externalApi.call(`/customer/vendor-quotes/${quoteId}/checkout-complete`, { method: 'POST', body }),
   reconcileVendorQuotePayment: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/reconcile-payment`, { method: 'POST' }),
@@ -62,5 +66,5 @@ export const customerApi = {
 
 /** Human message for an API error. */
 export function errorText(err, fallback = 'Something went wrong. Please try again.') {
-  return err?.data?.message || fallback;
+  return err?.data?.message || err?.message || fallback;
 }
