@@ -1,13 +1,16 @@
 import { VendorAuraSession, VendorAuraMessage } from '../models/VendorAura.js';
+import { VendorService } from '../models/VendorService.js';
 import { getLlmAdapter } from './llmAdapter.js';
-import { buildVendorContext, PAGES, setupSummary, isAutoBusinessName } from './vendorContext.js';
+import { buildVendorContext, PAGES, CATEGORIES, setupSummary, isAutoBusinessName } from './vendorContext.js';
 import { applyProfileFromChat } from './profileWriter.js';
+import { validateAction, describeAction, executeAction, readConfirmation } from './setupActions.js';
 import { buildVendorSystemPrompt } from './vendorSystemPrompt.js';
 
 /**
  * Vendor Aura+ chat. It answers from the vendor's own data and suggests pages.
- * Its only write is profile setup (brand name, category, city — see profileWriter.js);
- * quotes, bookings, payments and availability are never touched.
+ * Its only writes are profile setup: brand basics (profileWriter.js) and — after
+ * the vendor confirms — a service, team & gear, location or coverage
+ * (setupActions.js). Quotes, bookings, payments and availability are never touched.
  */
 
 export const MAX_MESSAGE = 2000;
@@ -63,77 +66,189 @@ function serialize(m) {
   return { role: m.role, content: m.content, actions: m.actions || [], createdAt: m.createdAt };
 }
 
+const pendingView = (p) => (p ? { kind: p.kind, summary: describeAction(p) } : null);
+
 export async function getSession({ vendor, sessionId }) {
   if (!isValidSessionId(sessionId)) throw httpError(400, 'INVALID_SESSION_ID');
   const session = await ownedSession(sessionId, vendor._id);
-  if (!session) return { sessionId, messages: [] };
+  if (!session) return { sessionId, messages: [], pending: null };
   const messages = await VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: 1, _id: 1 }).limit(100).lean();
-  return { sessionId, messages: messages.map(serialize) };
+  return { sessionId, messages: messages.map(serialize), pending: pendingView(session.pending) };
 }
 
-export async function chat({ vendor, user, sessionId, message, page }) {
+/** What Aura+ says after a setup step is saved: the next step, as a question it can act on. */
+function nextStepText(activation, vendor) {
+  const setup = setupSummary(activation);
+  const next = setup?.nextStep;
+  if (!setup) return { text: '', actions: [], setup };
+  if (!next) {
+    const verified = Boolean(activation.checklist?.verified);
+    return {
+      text: verified
+        ? '\n🎉 Your profile setup is complete — you can now be matched with customers.'
+        : '\n🎉 All 5 setup steps are done. The last check is STARVNT verification (KYC documents) before customers can be matched with you.',
+      actions: verified ? [] : [{ label: 'KYC documents', to: '/vendor/documents' }],
+      setup,
+    };
+  }
+  const c = activation.checklist;
+  const ask = {
+    services: "Next: your first service. What service do you offer, and what's your base price?",
+    capabilities: 'Next: team & equipment. How many people are in your team, and what main equipment do you use?',
+    coverage: !c.locations
+      ? 'Next: your studio / office location. Which area and city is it in?'
+      : 'Next: coverage area. How far (in km) from your base do you travel for events?',
+    portfolio: `Everything I can set up is done ✅. Only your portfolio is left — it needs photo/video uploads, so add it from the Portfolio page whenever you like.${contactQuestion(vendor)}`,
+  }[next.key];
+  if (next.key === 'profile') {
+    return { text: `\n${brandQuestion(vendor)}`, actions: [], setup };
+  }
+  return {
+    text: `\n${ask}`,
+    actions: next.key === 'portfolio' ? [{ label: 'Add portfolio', to: next.to }] : [{ label: `${next.short} manually`, to: next.to }],
+    setup,
+  };
+}
+
+async function saveTurn(sessionId, text, reply, actions, pending) {
+  await VendorAuraMessage.insertMany([
+    { session: sessionId, role: 'user', content: text },
+    { session: sessionId, role: 'model', content: reply, actions },
+  ]);
+  await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date(), pending: pending ?? null } });
+}
+
+export async function chat({ vendor, user, sessionId, message, page, confirm }) {
   const text = typeof message === 'string' ? message.trim() : '';
   if (!text) throw httpError(400, 'MESSAGE_REQUIRED');
   if (text.length > MAX_MESSAGE) throw httpError(400, 'MESSAGE_TOO_LONG');
   if (!isValidSessionId(sessionId)) throw httpError(400, 'INVALID_SESSION_ID');
 
-  await ensureSession(sessionId, vendor._id, user._id);
+  const session = await ensureSession(sessionId, vendor._id, user._id);
+
+  // ── A setup action is waiting for "yes" / "no" (button or words/voice) ──────
+  if (session.pending) {
+    const answer = typeof confirm === 'boolean' ? confirm : readConfirmation(text);
+    if (answer === true) {
+      let reply;
+      let actions = [];
+      let setup = null;
+      try {
+        const activation = await executeAction(vendor, session.pending);
+        const next = nextStepText(activation, vendor);
+        setup = next.setup;
+        reply = `✅ Saved — ${describeAction(session.pending)}.${next.text}`;
+        actions = next.actions;
+      } catch (err) {
+        console.warn('[vendor-aura] setup action failed:', err?.message || err);
+        reply = "Sorry, I couldn't save that. Please try again, or do it from the page below.";
+        actions = [{ label: 'Open Services', to: '/vendor/services' }];
+      }
+      await saveTurn(sessionId, text, reply, actions, null);
+      return { reply, actions, fallback: false, profileUpdated: Boolean(setup), setup, pending: null };
+    }
+    if (answer === false) {
+      const reply = "Okay, I didn't save it. Tell me what to change, or ask me anything else.";
+      await saveTurn(sessionId, text, reply, [], null);
+      return { reply, actions: [], fallback: false, profileUpdated: false, setup: null, pending: null };
+    }
+    // Anything else (e.g. "make it 30k") goes to the model, which can propose a corrected action.
+  }
 
   const [context, recent] = await Promise.all([
     buildVendorContext(vendor, { page: typeof page === 'string' ? page : null }),
     VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(HISTORY).lean(),
   ]);
+  context.waitingForConfirmation = session.pending ? describeAction(session.pending) : null;
   const history = recent.reverse().map((m) => ({ role: m.role, content: m.content }));
 
   let reply = FALLBACK_REPLY;
   let actions = [{ label: 'Open dashboard', to: '/vendor/dashboard' }];
   let fallback = true;
   let extractedProfile = {};
+  let proposed = null;
   try {
     const res = await getLlmAdapter().chat({ systemPrompt: buildVendorSystemPrompt(context), history, message: text });
     if (res?.text) {
       reply = res.text.slice(0, 4000);
       actions = cleanActions(res.actions);
       extractedProfile = res.profile || {};
+      proposed = res.setupAction || null;
       fallback = false;
     }
   } catch (err) {
     console.warn('[vendor-aura] LLM failed, using fallback:', err?.code || err?.message || err);
   }
 
-  // Profile setup: save brand basics the vendor stated, then say exactly what was saved
+  // Brand basics: save what the vendor stated, then say exactly what was saved
   // (the server writes this line, so the reply never claims a save that didn't happen).
   let setup = null;
-  const { saved, activation } = await applyProfileFromChat(vendor, extractedProfile, text).catch((err) => {
+  const lastAura = [...history].reverse().find((m) => m.role === 'model')?.content || '';
+  const askedAbout = /about your work/i.test(lastAura);
+  const { saved, activation } = await applyProfileFromChat(vendor, extractedProfile, text, { askedAbout }).catch((err) => {
     console.warn('[vendor-aura] profile save failed:', err?.message || err);
     return { saved: [], activation: null };
   });
-  if (saved.length) {
-    setup = setupSummary(activation);
-    // The model often re-asks for what was just saved; the app asks the next question itself.
-    reply = `${withoutQuestions(reply) || 'Got it!'}\n\n✅ Saved to your profile — ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}.`;
-    const next = setup?.nextStep;
-    if (next) {
-      const missing = missingBrand(vendor);
-      reply += next.auraCanFill
-        ? missing.length
-          ? `\nStill needed for your brand: ${missing.join(', ')}. What's your ${missing[0]}?`
-          : '\nPlease review your brand details on the Profile page.'
-        : `\nNext step: ${next.step}. You can do it on the page below, or ask me how.`;
-      if (!next.auraCanFill) actions = [{ label: `Next: ${next.short}`, to: next.to }, ...actions].slice(0, MAX_ACTIONS);
-    } else if (setup?.complete) {
-      reply += '\n🎉 Your profile setup is complete.';
-    }
-    actions = dedupeActions(actions);
+  // Other setup steps: the model proposes, the server validates, the vendor confirms.
+  let pending = session.pending || null;
+  let proposal = null;
+  let missingForProposal = null;
+  if (proposed?.kind && !fallback) {
+    const said = [...history.filter((m) => m.role === 'user').slice(-6).map((m) => m.content), text].join('\n');
+    const services = await VendorService.find({ vendor: vendor._id }).lean();
+    const { action, error } = validateAction(proposed, { said, vendor, services });
+    if (action) pending = proposal = action;
+    else missingForProposal = error;
   }
 
-  await VendorAuraMessage.insertMany([
-    { session: sessionId, role: 'user', content: text },
-    { session: sessionId, role: 'model', content: reply, actions },
-  ]);
-  await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date() } });
+  // When the app adds its own lines (saved / confirm / next question), the model's
+  // questions and any "I saved it" claims are dropped — only the server reports saves.
+  if (saved.length || proposal || missingForProposal) {
+    const head = withoutClaims(withoutQuestions(reply));
+    const parts = [head || (proposal ? 'Great, here is what I will save:' : 'Got it!')];
+    if (saved.length) parts.push(`\n✅ Saved to your profile — ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}.`);
+    if (proposal) {
+      parts.push(`\n📝 ${describeAction(proposal)}\nShall I save this? Say “yes” to save or “no” to cancel.`);
+    } else if (missingForProposal) {
+      parts.push(`I still need ${missingForProposal} — what is it?`);
+    } else if (missingBrand(vendor).length) {
+      parts.push(brandQuestion(vendor));
+      setup = setupSummary(activation);
+    } else {
+      const next = nextStepText(activation, vendor);
+      setup = next.setup;
+      parts.push(next.text.trim());
+      actions = dedupeActions([...next.actions, ...actions]).slice(0, MAX_ACTIONS);
+    }
+    if (saved.length && !setup) setup = setupSummary(activation);
+    reply = parts.filter(Boolean).join('\n');
+  }
 
-  return { reply, actions, fallback, profileUpdated: saved.length > 0, setup };
+  await saveTurn(sessionId, text, reply, actions, pending);
+  return { reply, actions, fallback, profileUpdated: saved.length > 0, setup, pending: pendingView(pending) };
+}
+
+/** Optional profile details still empty (phone, about) — asked once setup steps are done. */
+function contactQuestion(vendor) {
+  const want = [!vendor?.phone && 'your contact number', !vendor?.bio && 'a line about your work'].filter(Boolean);
+  return want.length ? ` Meanwhile, tell me ${want.join(' and ')}, and I’ll add it to your profile.` : '';
+}
+
+/** Ask for exactly what the brand step still lacks (with the category choices when needed). */
+function brandQuestion(vendor) {
+  const missing = missingBrand(vendor);
+  if (!missing.length) return 'Please check your brand details on the Profile page.';
+  const ask = missing[0] === 'category' ? `What's your main category — ${CATEGORIES.join(', ')}?` : `What's your ${missing[0]}?`;
+  return `Still needed for your brand: ${missing.join(', ')}. ${ask}`;
+}
+
+/** Drop sentences where the model claims something was saved — only the server says that. */
+export function withoutClaims(text) {
+  return String(text || '')
+    .split(/(?<=[.!?])\s+/)
+    .filter((s) => !/\bsav(e|ed|ing)\b|\bupdat(e|ed|ing)\b|\badded\b|save kar|update kar|kar liya|kar li hai|kar diya|kar di hai|set kar (rahe|diya|di)/i.test(s))
+    .join(' ')
+    .trim();
 }
 
 function missingBrand(vendor) {

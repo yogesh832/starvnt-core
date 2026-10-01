@@ -5,6 +5,7 @@ import MapLocationPicker from '../../components/MapLocationPicker.jsx';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import UnderstandingCard from './UnderstandingCard.jsx';
+import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
 
 const QUICK_PROMPTS = [
   "My daughter's wedding",
@@ -255,10 +256,12 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         // A chat that just created an event keeps its history when opened from that event later.
         if (res.createdEventId) writeSession(sessionKey(user?.id, res.createdEventId), sessionId);
         onEventChanged?.(res);
+        return res.reply; // the voice agent speaks this
       } catch (err) {
         setMessages((prev) => prev.slice(0, -1));
         setInput(msg);
         setError(errorText(err, "Aura+ couldn't reply. Please try again."));
+        return null;
       } finally {
         setSending(false);
       }
@@ -267,6 +270,9 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
     [sessionId, sending, scopedEventId, applyState, onEventChanged, user?.id]
   );
   sendRef.current = send;
+
+  // Voice mode (orb): a continuous spoken conversation; each turn goes through send().
+  const agent = useVoiceAgent({ lang: voice.lang, onUtterance: (t) => sendRef.current?.(t) });
 
   // ?ask= auto-sends once, then leaves the URL clean.
   useEffect(() => {
@@ -595,17 +601,14 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
             voice.supported && (
               <button
                 type="button"
-                onClick={() => (voice.listening === 'converse' || voice.speaking ? voice.stop() : voice.start('converse'))}
-                disabled={(sending || loading || voice.listening === 'dictate') && !voice.speaking}
-                className={`relative w-9 h-9 grid place-items-center rounded-full text-white shadow-sm shrink-0 transition disabled:opacity-50 ${
-                  voice.listening === 'converse' ? 'bg-red-500' : 'bg-primary hover:bg-primary-dark'
-                }`}
-                title={voice.listening === 'converse' ? 'Done talking' : voice.speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
-                aria-label={voice.listening === 'converse' ? 'Done talking' : voice.speaking ? 'Stop speaking' : 'Voice mode'}
+                onClick={() => (voice.speaking ? voice.stop() : agent.start())}
+                disabled={(sending || loading || voice.listening) && !voice.speaking}
+                className="relative w-9 h-9 grid place-items-center rounded-full text-white shadow-sm shrink-0 transition disabled:opacity-50 bg-primary hover:bg-primary-dark"
+                title={voice.speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={voice.speaking ? 'Stop speaking' : 'Voice mode'}
               >
-                {voice.listening === 'converse' && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
                 <span className="relative">
-                  {voice.speaking ? <span className="block w-3 h-3 rounded-[3px] bg-white" /> : <WaveIcon active={voice.listening === 'converse'} />}
+                  {voice.speaking ? <span className="block w-3 h-3 rounded-[3px] bg-white" /> : <WaveIcon />}
                 </span>
               </button>
             )
@@ -613,6 +616,14 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         </div>
         <p className="text-[10px] text-muted text-center mt-1.5">You decide — Aura+ never books or pays without you.</p>
       </form>
+
+      <VoiceAgentOverlay
+        agent={agent}
+        title={activeEvent?.title || 'Aura+'}
+        subtitle="Your event assistant · voice"
+        lang={voice.lang}
+        onToggleLang={() => voice.setLang(voice.lang === 'en-IN' ? 'hi-IN' : 'en-IN')}
+      />
     </div>
   );
 }

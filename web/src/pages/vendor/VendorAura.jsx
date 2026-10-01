@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { externalApi } from '../../lib/api.js';
+import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
 
 /**
  * Vendor Aura+: answers from the vendor's own data and links to the page
@@ -347,14 +348,24 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         setSpeaking(true);
         speakText(res.reply, () => setSpeaking(false));
       }
+      return res.reply; // the voice agent speaks this
     } catch (err) {
       setMessages((m) => m.filter((x) => x !== optimistic));
       setInput(message);
       setError(ERRORS[err?.data?.error] || 'Aura+ could not reply. Please try again.');
+      return null;
     } finally {
       setSending(false);
     }
   }
+
+  // Voice mode (orb): a continuous spoken conversation; each turn goes through send(),
+  // so setup confirmations work by voice too ("haan" / "no").
+  const agent = useVoiceAgent({ lang: voiceLang, onUtterance: (t) => send(t) });
+  useEffect(() => {
+    if (!open && agent.open) agent.end();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // A prompt handed over from elsewhere (dashboard card) is sent once the panel is ready.
   useEffect(() => {
@@ -609,16 +620,13 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
             ) : (
               <button
                 type="button"
-                onClick={() => (listening === 'converse' || speaking ? stopVoice() : startVoice('converse'))}
-                disabled={(sending || listening === 'dictate') && !speaking}
-                className={`relative w-8 h-8 rounded-full text-white grid place-items-center shrink-0 transition disabled:opacity-50 ${
-                  listening === 'converse' ? 'bg-red-500' : 'bg-primary hover:bg-primary-dark'
-                }`}
-                title={listening === 'converse' ? 'Done talking' : speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
-                aria-label={listening === 'converse' ? 'Done talking' : speaking ? 'Stop speaking' : 'Voice mode'}
+                onClick={() => (speaking ? stopVoice() : agent.start())}
+                disabled={(sending || listening) && !speaking}
+                className="relative w-8 h-8 rounded-full text-white grid place-items-center shrink-0 transition disabled:opacity-50 bg-primary hover:bg-primary-dark"
+                title={speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={speaking ? 'Stop speaking' : 'Voice mode'}
               >
-                {listening === 'converse' && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
-                <span className="relative">{speaking ? <span className="block w-2.5 h-2.5 rounded-[3px] bg-white" /> : <WaveIcon active={listening === 'converse'} />}</span>
+                <span className="relative">{speaking ? <span className="block w-2.5 h-2.5 rounded-[3px] bg-white" /> : <WaveIcon />}</span>
               </button>
             )}
           </form>
@@ -631,6 +639,14 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         </div>
         )}
       </aside>
+
+      <VoiceAgentOverlay
+        agent={agent}
+        title="Aura+"
+        subtitle="Your business assistant · voice"
+        lang={voiceLang}
+        onToggleLang={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}
+      />
     </>
   );
 }

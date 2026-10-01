@@ -3,9 +3,12 @@ import { GoogleGenAI, Type } from '@google/genai';
 const TIMEOUT_MS = 12000;
 const ATTEMPTS = 3;
 
-// Vendor Aura+ answers and points at pages. The only thing it may extract is the
-// vendor's own brand basics during profile setup (validated server-side).
+// Vendor Aura+ answers and points at pages. During profile setup it may extract
+// the brand basics and propose setup actions (both validated server-side; actions
+// are only saved after the vendor confirms).
 const str = { type: Type.STRING, nullable: true };
+const num = { type: Type.NUMBER, nullable: true };
+const strList = { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true };
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -14,7 +17,18 @@ const RESPONSE_SCHEMA = {
     profile: {
       type: Type.OBJECT,
       nullable: true,
-      properties: { businessName: str, category: str, city: str },
+      properties: { businessName: str, category: str, city: str, phone: str, website: str, bio: str },
+    },
+    setupAction: {
+      type: Type.OBJECT,
+      nullable: true,
+      properties: {
+        kind: str, // service | capability | location | coverage
+        service: { type: Type.OBJECT, nullable: true, properties: { name: str, category: str, pricingType: str, basePrice: num } },
+        capability: { type: Type.OBJECT, nullable: true, properties: { serviceName: str, teamSize: num, equipment: strList, styles: strList, format: str } },
+        location: { type: Type.OBJECT, nullable: true, properties: { label: str, type: str, address: str, locality: str, city: str, state: str, postalCode: str } },
+        coverage: { type: Type.OBJECT, nullable: true, properties: { serviceName: str, radiusKm: num, city: str, localities: strList, outstationAllowed: { type: Type.BOOLEAN, nullable: true } } },
+      },
     },
     actions: {
       type: Type.ARRAY,
@@ -76,6 +90,7 @@ export function createGeminiAdapter() {
             text: String(parsed.reply || '').trim(),
             actions: Array.isArray(parsed.actions) ? parsed.actions : [],
             profile: parsed.profile && typeof parsed.profile === 'object' ? parsed.profile : {},
+            setupAction: parsed.setupAction && typeof parsed.setupAction === 'object' ? parsed.setupAction : null,
           };
         } catch (err) {
           lastErr = err;
