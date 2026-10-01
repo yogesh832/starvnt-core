@@ -32,8 +32,8 @@ router.get('/sessions/:sid', async (req, res, next) => {
 
 router.post('/chat', auraLimiter, async (req, res, next) => {
   try {
-    const { sessionId, message, page } = req.body || {};
-    res.json({ ok: true, ...(await chat({ vendor: req.vendor, user: req.externalUser, sessionId, message, page })) });
+    const { sessionId, message, page, confirm } = req.body || {};
+    res.json({ ok: true, ...(await chat({ vendor: req.vendor, user: req.externalUser, sessionId, message, page, confirm })) });
   } catch (err) {
     sendError(res, next, err);
   }

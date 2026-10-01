@@ -91,3 +91,67 @@ test('after a save, re-asked questions are dropped from the model reply', async 
   assert.equal(withoutQuestions('Which city?'), '');
   assert.equal(withoutQuestions('Nice name. Photography is popular here.'), 'Nice name. Photography is popular here.');
 });
+
+// ── Setup actions (service / team & gear / location / coverage) ─────────────
+test('setup actions use only numbers the vendor said, and need a confirmation', async () => {
+  const { validateAction, describeAction, readConfirmation, amountsIn } = await import('../src/external/aura/setupActions.js');
+  const vendor = { category: 'Photography', businessName: 'Shutter Stories', location: 'Kolkata' };
+  const services = [{ _id: 's1', name: 'Wedding photography', status: 'ACTIVE' }];
+
+  assert.deepEqual(amountsIn('45,000 or 45k or 1.5 lakh or 20 hazar'), [45000, 45000, 150000, 20000]);
+
+  // Model dropped the price → read from what the vendor said; FIXED_PER_EVENT → FIXED.
+  const svc = validateAction({ kind: 'service', service: { name: 'Wedding photography', pricingType: 'FIXED_PER_EVENT' } }, { said: 'starting price 45000 per event', vendor, services: [] });
+  assert.equal(svc.action.service.basePrice, 45000);
+  assert.equal(svc.action.service.pricingType, 'FIXED');
+  assert.match(describeAction(svc.action), /₹45,000 per event/);
+  // An invented price is rejected.
+  assert.equal(validateAction({ kind: 'service', service: { name: 'X', basePrice: 99000 } }, { said: 'price 45000', vendor, services: [] }).error, 'the base price');
+
+  const cap = validateAction({ kind: 'capability', capability: { equipment: ['Sony A7IV'] } }, { said: '4 log hain team mein', vendor, services });
+  assert.equal(cap.action.capability.teamSize, 4);
+  assert.equal(validateAction({ kind: 'capability', capability: { teamSize: 4 } }, { said: '4 log', vendor, services: [] }).error, 'a service first (add one before team & gear)');
+
+  const cov = validateAction({ kind: 'coverage', coverage: {} }, { said: '30 km tak jaate hain', vendor, services });
+  assert.equal(cov.action.coverage.radiusKm, 30);
+  assert.equal(cov.action.coverage.city, 'Kolkata');
+
+  const loc = validateAction({ kind: 'location', location: { locality: 'Salt Lake', city: 'Kolkata' } }, { said: 'Studio Salt Lake me hai, Kolkata', vendor, services });
+  assert.equal(loc.action.location.address, 'Salt Lake');
+  assert.equal(loc.action.location.type, 'STUDIO');
+
+  for (const yes of ['yes', 'haan', 'haan save karo', 'yes please', 'ok', 'हाँ', 'ঠিক আছে']) assert.equal(readConfirmation(yes), true, yes);
+  for (const no of ['no', 'nahi', 'cancel', 'नहीं']) assert.equal(readConfirmation(no), false, no);
+  for (const other of ['make it 30000', 'haan but price 30000 karo', 'what is coverage?']) assert.equal(readConfirmation(other), null, other);
+});
+
+test('equipment is read from the vendor message when the model leaves it out', async () => {
+  const { equipmentFrom, validateAction } = await import('../src/external/aura/setupActions.js');
+  assert.deepEqual(equipmentFrom('team me 3 photographers hain, Canon R6 aur gimbal'), ['Canon R6', 'gimbal']);
+  assert.deepEqual(equipmentFrom('We are 5 people. We use Sony FX3, DJI Ronin and lights'), ['Sony FX3', 'DJI Ronin', 'lights']);
+  assert.deepEqual(equipmentFrom('team of 2'), []);
+  const r = validateAction({ kind: 'capability', capability: { teamSize: 3 } }, { said: 'team me 3 photographers hain, Canon R6 aur gimbal', vendor: {}, services: [{ _id: 's', name: 'Candid', status: 'ACTIVE' }] });
+  assert.deepEqual(r.action.capability.equipment, ['Canon R6', 'gimbal']);
+});
+
+test('phone, website and about are saved only as the vendor wrote them', () => {
+  const msg = 'Call me on 98300 12345, website shutterstories.in. We shoot candid weddings across Bengal';
+  assert.deepEqual(guardProfile({ phone: '9830012345', website: 'shutterstories.in', bio: 'We shoot candid weddings across Bengal' }, msg), {
+    phone: '+91 9830012345',
+    website: 'shutterstories.in',
+    bio: 'We shoot candid weddings across Bengal',
+  });
+  // Invented phone / site / bio are dropped.
+  assert.deepEqual(guardProfile({ phone: '9999999999', website: 'fake.com', bio: 'Award winning luxury studio' }, msg), {});
+});
+
+test('bio falls back to the vendor’s own line only when Aura asked about their work', async () => {
+  const { bioFrom } = await import('../src/external/aura/profileWriter.js');
+  assert.equal(bioFrom('Number 98300 12345 hai. We make cinematic wedding films across Bengal'), 'We make cinematic wedding films across Bengal');
+  assert.equal(bioFrom('We charge 50000 per event'), null);
+  assert.equal(bioFrom('Kolkata'), null);
+  assert.deepEqual(guardProfile({}, 'We make cinematic wedding films across Bengal', { bioMissing: false }), {});
+  assert.equal(guardProfile({}, 'We make cinematic wedding films across Bengal', { bioMissing: true }).bio, 'We make cinematic wedding films across Bengal');
+  // Category from the vendor's words when they have none yet.
+  assert.equal(guardProfile({}, 'hum cinematic wedding films banate hain', { categoryMissing: true }).category, 'Cinematic Production');
+});
