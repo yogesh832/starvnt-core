@@ -91,4 +91,9 @@ export const config = {
   // ── GSTIN verification ──
   gstinApiKey: process.env.GSTIN_API_KEY || "",
   gstinApiBaseUrl: process.env.GSTIN_API_BASE_URL || "https://www.gstinapi.in/v1",
+
+  // ── Corporate PAN verification ──
+  panApiKey: process.env.PAN_API_KEY || process.env.GSTIN_API_KEY || "",
+  panApiBaseUrl: process.env.PAN_API_BASE_URL || process.env.GSTIN_API_BASE_URL || "https://www.gstinapi.in/v1",
+  panMockEnabled: process.env.PAN_MOCK_ENABLED === "true" || process.env.NODE_ENV === "test",
 };

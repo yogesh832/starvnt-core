@@ -21,6 +21,7 @@ import { notifyCustomer } from '../../notifications/notification.service.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { generateVendorInsights } from '../services/auraIntelligence.service.js';
 import { verifyGstin } from '../services/gstinVerification.service.js';
+import { verifyPan } from '../services/panVerification.service.js';
 import { v2 as cloudinary } from 'cloudinary';
 import vendorAuraRoutes from './vendorAura.routes.js';
 
@@ -1251,6 +1252,32 @@ router.get('/documents', async (req, res, next) => {
   }
 });
 
+router.post('/documents/verify-pan', async (req, res, next) => {
+  try {
+    const { pan } = req.body || {};
+    if (!pan || !String(pan).trim()) {
+      return res.status(400).json({ error: 'PAN_REQUIRED' });
+    }
+    const result = await verifyPan(String(pan).trim(), req.vendor.businessName);
+    res.json({ ok: true, result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/documents/verify-gstin', async (req, res, next) => {
+  try {
+    const { gstin } = req.body || {};
+    if (!gstin || !String(gstin).trim()) {
+      return res.status(400).json({ error: 'GSTIN_REQUIRED' });
+    }
+    const result = await verifyGstin(String(gstin).trim(), req.vendor.businessName);
+    res.json({ ok: true, result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/documents', async (req, res, next) => {
   try {
     const { title, type, documentNumber, fileName, fileUrl, fileSize, notes, expiryDate } = req.body || {};
@@ -1292,6 +1319,36 @@ router.post('/documents', async (req, res, next) => {
           : `GSTIN check could not auto-verify: ${result.error || 'unknown error'}.`;
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
       }
+    } else if (normalizedType === 'PAN') {
+      verificationSource = 'PAN_API';
+      const result = await verifyPan(normalizedDocumentNumber, req.vendor.businessName);
+      verificationResult = {
+        matched: Boolean(result.matched),
+        confidence: result.confidence || 'NONE',
+        legalName: result.legalName || result.registeredName || '',
+        tradeName: result.tradeName || '',
+        registeredName: result.registeredName || result.legalName || '',
+        pan: normalizedDocumentNumber,
+        panStatus: result.panStatus || '',
+        entityType: result.entityType || '',
+        taxpayerType: result.taxpayerType || '',
+        registrationDate: result.registrationDate || '',
+        address: result.address || '',
+        raw: result.raw || null,
+        checkedAt: result.checkedAt || new Date(),
+        error: result.error || '',
+      };
+
+      if (result.ok && result.matched) {
+        status = 'VERIFIED';
+        resolvedNotes = `Corporate PAN verified (${result.entityType || 'Corporate'}). Legal name: ${result.legalName || result.registeredName || 'not provided'}${result.tradeName ? `; Trade name: ${result.tradeName}` : ''}`;
+      } else {
+        status = 'SUBMITTED';
+        const reason = result.ok
+          ? `Corporate PAN found, but registered name did not confidently match "${req.vendor.businessName}".`
+          : `Corporate PAN check could not auto-verify: ${result.error || result.message || 'unknown error'}.`;
+        resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
+      }
     }
 
     const doc = await VendorDocument.create({
@@ -1311,14 +1368,17 @@ router.post('/documents', async (req, res, next) => {
     });
 
     let activation = null;
-    if (status === 'VERIFIED' && normalizedType === 'GST') {
+    if (status === 'VERIFIED' && (normalizedType === 'GST' || normalizedType === 'PAN')) {
+      const isPan = normalizedType === 'PAN';
       req.vendor.verification = {
         ...(req.vendor.verification?.toObject?.() || req.vendor.verification || {}),
         isVerified: true,
         verifiedAt: new Date(),
-        documentType: 'GST',
+        documentType: normalizedType,
         documentRef: doc._id,
-        notes: 'Auto-verified by GSTIN API legal/trade name match.',
+        notes: isPan
+          ? `Auto-verified by Corporation PAN API legal/trade name match (${verificationResult?.legalName || verificationResult?.registeredName || ''}).`
+          : 'Auto-verified by GSTIN API legal/trade name match.',
       };
       await req.vendor.save();
       activation = await evaluateVendorActivation(req.vendorId);

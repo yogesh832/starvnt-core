@@ -1855,6 +1855,8 @@ export function DocumentsManager({ isTab = false }) {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedDocForPreview, setSelectedDocForPreview] = useState(null);
+  const [checkingApi, setCheckingApi] = useState(false);
+  const [apiCheckResult, setApiCheckResult] = useState(null);
 
   const [docForm, setDocForm] = useState({
     title: 'GST Registration Certificate',
@@ -1884,6 +1886,30 @@ export function DocumentsManager({ isTab = false }) {
     loadDocuments();
   }, [loadDocuments]);
 
+  async function handleQuickCheck() {
+    if (!docForm.documentNumber?.trim()) return;
+    try {
+      setCheckingApi(true);
+      setApiCheckResult(null);
+      const isPan = docForm.type === 'PAN';
+      const endpoint = isPan ? '/vendor/documents/verify-pan' : '/vendor/documents/verify-gstin';
+      const payload = isPan ? { pan: docForm.documentNumber.trim() } : { gstin: docForm.documentNumber.trim() };
+      const res = await externalApi.call(endpoint, {
+        method: 'POST',
+        body: payload,
+      });
+      if (res.ok && res.result) {
+        setApiCheckResult(res.result);
+      } else {
+        setApiCheckResult({ ok: false, error: res.error || 'Verification check failed' });
+      }
+    } catch (err) {
+      setApiCheckResult({ ok: false, error: err.message });
+    } finally {
+      setCheckingApi(false);
+    }
+  }
+
   async function handleUpload(e) {
     e.preventDefault();
     if (!docForm.title.trim()) return;
@@ -1897,6 +1923,7 @@ export function DocumentsManager({ isTab = false }) {
 
       if (res.ok) {
         setShowUploadModal(false);
+        setApiCheckResult(null);
         setDocForm({
           title: 'GST Registration Certificate',
           type: 'GST',
@@ -1935,7 +1962,7 @@ export function DocumentsManager({ isTab = false }) {
         <div>
           <h2 className="font-extrabold text-base text-navy">KYC & Business Documents</h2>
           <p className="text-xs text-muted mt-0.5">
-            GSTIN is checked automatically. Matching legal/trade names are verified instantly; mismatches go to admin review.
+            GSTIN and Corporation PAN are verified automatically via API. Matching registered names are verified instantly; mismatches go to admin review.
           </p>
         </div>
         <button
@@ -1980,26 +2007,40 @@ export function DocumentsManager({ isTab = false }) {
                     {doc.notes && (
                       <p className="text-[11px] text-muted italic mt-1">{doc.notes}</p>
                     )}
-                    {doc.verificationSource === 'GSTIN_API' && (
+                    {(doc.verificationSource === 'GSTIN_API' || doc.verificationSource === 'PAN_API') && (
                       <div className={`mt-2 rounded-xl border p-3 text-[11px] ${
                         doc.status === 'VERIFIED'
                           ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
                           : 'border-amber-200 bg-amber-50 text-amber-950'
                       }`}>
-                        <div className="flex items-center gap-1.5 font-extrabold">
+                        <div className="flex items-center gap-1.5 font-extrabold flex-wrap">
                           <Icon name={doc.status === 'VERIFIED' ? 'shieldCheck' : 'help'} size={13} />
-                          <span>{doc.status === 'VERIFIED' ? 'GSTIN auto-verified' : 'GSTIN needs admin review'}</span>
+                          <span>
+                            {doc.status === 'VERIFIED'
+                              ? (doc.verificationSource === 'PAN_API' ? 'Corporate PAN Auto-Verified' : 'GSTIN Auto-Verified')
+                              : (doc.verificationSource === 'PAN_API' ? 'Corporate PAN Needs Admin Review' : 'GSTIN Needs Admin Review')}
+                          </span>
                           {doc.verificationResult?.confidence && (
                             <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] uppercase">
                               {doc.verificationResult.confidence}
                             </span>
                           )}
+                          {doc.verificationResult?.entityType && (
+                            <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] text-navy">
+                              {doc.verificationResult.entityType}
+                            </span>
+                          )}
                         </div>
                         <div className="mt-1 grid sm:grid-cols-2 gap-x-3 gap-y-1">
-                          <span>Legal: <strong>{doc.verificationResult?.legalName || 'Not provided'}</strong></span>
-                          <span>Trade: <strong>{doc.verificationResult?.tradeName || 'Not provided'}</strong></span>
-                          <span>Status: <strong>{doc.verificationResult?.gstinStatus || 'Unknown'}</strong></span>
-                          <span>Type: <strong>{doc.verificationResult?.taxpayerType || 'Unknown'}</strong></span>
+                          <span>Legal / Registered: <strong>{doc.verificationResult?.legalName || doc.verificationResult?.registeredName || 'Not provided'}</strong></span>
+                          <span>Trade / Brand: <strong>{doc.verificationResult?.tradeName || 'Not provided'}</strong></span>
+                          {doc.verificationResult?.gstinStatus ? (
+                            <span>GST Status: <strong>{doc.verificationResult.gstinStatus}</strong></span>
+                          ) : null}
+                          {doc.verificationResult?.panStatus ? (
+                            <span>PAN Status: <strong>{doc.verificationResult.panStatus}</strong></span>
+                          ) : null}
+                          <span>Type: <strong>{doc.verificationResult?.taxpayerType || doc.verificationResult?.entityType || 'Unknown'}</strong></span>
                         </div>
                         {doc.verificationResult?.error && (
                           <div className="mt-1 text-rose-600 font-bold">Provider: {doc.verificationResult.error}</div>
@@ -2071,11 +2112,14 @@ export function DocumentsManager({ isTab = false }) {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h3 className="font-extrabold text-base text-navy">Upload KYC / Business Document</h3>
-                <p className="text-xs text-muted mt-0.5">Enter GSTIN to auto-check legal name and tax status.</p>
+                <p className="text-xs text-muted mt-0.5">Enter GSTIN or Corporate PAN to auto-verify business name via API.</p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowUploadModal(false)}
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setApiCheckResult(null);
+                }}
                 className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition cursor-pointer"
               >
                 ✕
@@ -2091,7 +2135,7 @@ export function DocumentsManager({ isTab = false }) {
                     const t = e.target.value;
                     const defaultTitles = {
                       GST: 'GST Registration Certificate',
-                      PAN: 'Company / Proprietor PAN Card',
+                      PAN: 'Corporate / Firm PAN Card',
                       BANK_PROOF: 'Bank Statement / Cancelled Cheque',
                       BUSINESS_REG: 'Business Registration / Incorporation',
                       INSURANCE: 'Commercial Liability Insurance',
@@ -2104,11 +2148,12 @@ export function DocumentsManager({ isTab = false }) {
                       title: defaultTitles[t] || docForm.title,
                       fileName: `${t.toLowerCase()}_proof.pdf`,
                     });
+                    setApiCheckResult(null);
                   }}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 >
-                  <option value="GST">GST Registration Certificate</option>
-                  <option value="PAN">PAN Card (Company / Proprietor)</option>
+                  <option value="GST">GST Registration Certificate (API Checked)</option>
+                  <option value="PAN">Corporate / Firm PAN Card (API Checked)</option>
                   <option value="BANK_PROOF">Bank Statement / Cancelled Cheque</option>
                   <option value="BUSINESS_REG">Business Registration / Incorporation</option>
                   <option value="INSURANCE">Commercial Liability Insurance</option>
@@ -2124,24 +2169,70 @@ export function DocumentsManager({ isTab = false }) {
                   required
                   value={docForm.title}
                   onChange={(e) => setDocForm({ ...docForm, title: e.target.value })}
-                  placeholder="e.g. GST Registration Certificate"
+                  placeholder="e.g. Corporate PAN Card"
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Registration / Identifier Number</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-muted font-semibold">
+                    {docForm.type === 'PAN' ? 'Corporation PAN Number' : docForm.type === 'GST' ? 'GSTIN Number' : 'Registration / Identifier Number'}
+                  </label>
+                  {(docForm.type === 'PAN' || docForm.type === 'GST') && docForm.documentNumber.trim().length >= 10 && (
+                    <button
+                      type="button"
+                      disabled={checkingApi}
+                      onClick={handleQuickCheck}
+                      className="text-[10px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-50"
+                    >
+                      {checkingApi ? 'Verifying with API…' : '⚡ Check with API'}
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={docForm.documentNumber}
-                  onChange={(e) => setDocForm({ ...docForm, documentNumber: e.target.value })}
-                  placeholder="e.g. 27AABCU9603R1ZM or PAN number"
+                  onChange={(e) => {
+                    setDocForm({ ...docForm, documentNumber: e.target.value });
+                    setApiCheckResult(null);
+                  }}
+                  placeholder={docForm.type === 'PAN' ? 'e.g. AABCC1234D (10-char Corporate PAN)' : 'e.g. 27AABCU9603R1ZM or PAN number'}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20 font-mono"
                 />
                 {docForm.type === 'GST' && (
                   <span className="text-[10px] text-muted mt-1 block">
                     If GST legal/trade name matches your business profile, STARVNT verifies KYC automatically. If not, it goes to admin review.
                   </span>
+                )}
+                {docForm.type === 'PAN' && (
+                  <span className="text-[10px] text-muted mt-1 block">
+                    Enter corporate PAN (4th letter 'C' for Company, 'F' for Firm/LLP). STARVNT verifies corporate entity name via official API.
+                  </span>
+                )}
+
+                {apiCheckResult && (
+                  <div className={`mt-2 p-2.5 rounded-xl border text-[11px] ${
+                    apiCheckResult.matched
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : apiCheckResult.ok
+                      ? 'bg-amber-50 border-amber-200 text-amber-900'
+                      : 'bg-rose-50 border-rose-200 text-rose-900'
+                  }`}>
+                    <div className="font-bold flex items-center gap-1">
+                      <span>{apiCheckResult.matched ? '✓ Ready to Auto-Verify' : apiCheckResult.ok ? '⚠ Name Review Required' : '✕ Verification Failed'}</span>
+                      {apiCheckResult.entityType && <span className="text-[10px] text-muted font-normal">({apiCheckResult.entityType})</span>}
+                    </div>
+                    {apiCheckResult.legalName || apiCheckResult.registeredName ? (
+                      <div className="mt-0.5">Found Name: <strong>{apiCheckResult.legalName || apiCheckResult.registeredName}</strong></div>
+                    ) : null}
+                    {apiCheckResult.tradeName ? (
+                      <div>Trade: <strong>{apiCheckResult.tradeName}</strong></div>
+                    ) : null}
+                    {apiCheckResult.error && (
+                      <div className="text-rose-600 mt-0.5 font-medium">{apiCheckResult.message || apiCheckResult.error}</div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -2189,7 +2280,10 @@ export function DocumentsManager({ isTab = false }) {
               <div className="pt-2 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowUploadModal(false)}
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setApiCheckResult(null);
+                  }}
                   className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:bg-gray-50 transition cursor-pointer"
                 >
                   Cancel
@@ -2231,6 +2325,24 @@ export function DocumentsManager({ isTab = false }) {
                 <span className="text-muted font-medium">Document ID:</span>
                 <span className="font-mono font-bold text-navy">{selectedDocForPreview.documentNumber || 'N/A'}</span>
               </div>
+              {selectedDocForPreview.verificationSource && (
+                <div className="flex justify-between py-1 border-b border-gray-50">
+                  <span className="text-muted font-medium">Verification Engine:</span>
+                  <span className="font-bold text-navy">{selectedDocForPreview.verificationSource}</span>
+                </div>
+              )}
+              {selectedDocForPreview.verificationResult?.legalName && (
+                <div className="flex justify-between py-1 border-b border-gray-50">
+                  <span className="text-muted font-medium">Verified Legal Name:</span>
+                  <span className="font-bold text-navy text-right max-w-[180px] truncate">{selectedDocForPreview.verificationResult.legalName}</span>
+                </div>
+              )}
+              {selectedDocForPreview.verificationResult?.entityType && (
+                <div className="flex justify-between py-1 border-b border-gray-50">
+                  <span className="text-muted font-medium">Entity Classification:</span>
+                  <span className="font-semibold text-navy">{selectedDocForPreview.verificationResult.entityType}</span>
+                </div>
+              )}
               <div className="flex justify-between py-1 border-b border-gray-50">
                 <span className="text-muted font-medium">Attached File:</span>
                 <span className="font-semibold text-navy">{selectedDocForPreview.fileName}</span>
