@@ -56,6 +56,70 @@ function clearRefreshCookie(res) {
   res.clearCookie(config.refreshCookieName, options);
 }
 
+// ── Demo Accounts for Testing & Quick Login ────────────────────────────────
+router.get("/demo-accounts", async (req, res, next) => {
+  try {
+    const [vendors, customers] = await Promise.all([
+      ExternalUser.find({ accountType: "VENDOR", status: "ACTIVE" })
+        .populate("vendorOrganization")
+        .lean(),
+      ExternalUser.find({ accountType: "CUSTOMER", status: "ACTIVE" }).lean(),
+    ]);
+
+    const formattedVendors = vendors.map((u) => {
+      const org = u.vendorOrganization || {};
+      return {
+        id: u._id,
+        fullName: u.fullName,
+        email: u.email,
+        phone: u.phone,
+        businessName: org.businessName || u.fullName,
+        category: org.category || "Vendor",
+        location: org.location || "",
+        rating: org.rating || { average: 4.9, count: 50 },
+        profilePicUrl: org.profilePicUrl || u.avatarUrl || "",
+        googlePlaceId: org.googlePlaceId || null,
+        bio: org.bio || "",
+        type: "VENDOR",
+      };
+    });
+
+    const formattedCustomers = customers.map((c) => ({
+      id: c._id,
+      fullName: c.fullName,
+      email: c.email,
+      phone: c.phone,
+      type: "CUSTOMER",
+    }));
+
+    return res.json({
+      ok: true,
+      defaultPassword: "Password123",
+      vendors: formattedVendors,
+      customers: formattedCustomers,
+      admin: {
+        email: "admin@starvnt.com",
+        fullName: "Chief Systems Architect",
+        role: "SUPER_ADMIN",
+        type: "ADMIN",
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Reseed Real Vendors Trigger (Testing & QA Playground) ───────────────────
+router.post("/reseed", async (req, res, next) => {
+  try {
+    const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
+    await seedRealVendors();
+    res.json({ ok: true, message: "Real vendors re-seeded successfully!" });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function normalizePrimaryCategory(category) {
   if (category === undefined || category === null || category === "") return { value: "" };
   if (Array.isArray(category)) return { error: "PRIMARY_CATEGORY_SINGLE_ONLY" };

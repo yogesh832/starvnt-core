@@ -1222,8 +1222,10 @@ export default function PortfolioPage() {
       {activeTab === 'ALL_MEDIA' && (
         <div className="space-y-4">
           {mediaLoading && (
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 text-xs font-bold text-muted shadow-xs">
-              Loading media library...
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="aspect-square rounded-2xl bg-slate-200/70 animate-pulse border border-gray-100" />
+              ))}
             </div>
           )}
           <div className="flex items-center justify-between flex-wrap gap-2">

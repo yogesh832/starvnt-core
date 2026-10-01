@@ -1,4 +1,5 @@
 import { EventMessage, CustomerNotification } from '../models/index.js';
+import { notifyCustomer } from '../../notifications/notification.service.js';
 
 export function listMessages(eventId, { bookingId, requirementId } = {}) {
   const filter = { event: eventId };
@@ -21,10 +22,11 @@ export async function addMessage(data) {
 }
 
 export async function notify({ customerId, eventId = null, type, title, body = '' }) {
-  const doc = await CustomerNotification.create({ customer: customerId, event: eventId, type, title, body });
-  return doc.toObject();
+  const { notification } = await notifyCustomer({ customerId, eventId, type, title, body });
+  return notification;
 }
 
 export const listNotifications = (customerId) => CustomerNotification.find({ customer: customerId }).sort({ createdAt: -1 }).limit(200).lean();
 export const countUnread = (customerId) => CustomerNotification.countDocuments({ customer: customerId, readAt: null });
-export const markAllRead = (customerId) => CustomerNotification.updateMany({ customer: customerId, readAt: null }, { $set: { readAt: new Date() } });
+export const markAllRead = (customerId) =>
+  CustomerNotification.updateMany({ customer: customerId, readAt: null }, { $set: { readAt: new Date(), status: 'READ' } });

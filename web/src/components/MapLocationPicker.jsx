@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import Icon from './Icon.jsx';
 
 // SVG Google Maps-style Pin Marker
-const pinIcon = L.divIcon({
+export const pinIcon = L.divIcon({
   className: 'starvnt-map-pin',
   html: `
     <div style="position: relative; width: 34px; height: 42px; transform: translate(-50%, -100%); cursor: grab;">

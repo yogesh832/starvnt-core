@@ -63,6 +63,7 @@ const vendorOrganizationSchema = new Schema(
       average: { type: Number, default: 0, min: 0, max: 5 },
       count: { type: Number, default: 0 },
     },
+    googlePlaceId: { type: String, default: null, trim: true },
     workingHours: {
       type: Schema.Types.Mixed,
       default: {

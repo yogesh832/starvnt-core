@@ -4,8 +4,9 @@ import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
-import MapLocationPicker from '../../../components/MapLocationPicker.jsx';
+import MapLocationPicker, { pinIcon } from '../../../components/MapLocationPicker.jsx';
 import { useTheme } from '../../../lib/ThemeContext.jsx';
+import L from 'leaflet';
 
 function SkeletonLine({ className = '' }) {
   return <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />;
@@ -1322,9 +1323,9 @@ export function AvailabilityPage() {
   return (
     <Page title="Availability & Operations" sub="Availability = date + time + location + team + equipment.">
       {loadingAvailability && (
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 text-xs font-bold text-muted shadow-xs flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          Loading saved availability, block dates, resources, and travel policy...
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xs space-y-2">
+          <SkeletonLine className="h-4 w-56" />
+          <SkeletonLine className="h-3 w-80 max-w-full" />
         </div>
       )}
       <div className="grid lg:grid-cols-2 gap-5">
@@ -2417,6 +2418,304 @@ export function SettingsManager({ isTab = false }) {
   );
 }
 
+/* ── Google Business Profile & Maps Rating Section with Search & Map ─── */
+function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) {
+  const [isSearching, setIsSearching] = useState(!googlePlaceId);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [currentPlace, setCurrentPlace] = useState(initialRating || null);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState('');
+
+  const mapRef = useRef(null);
+  const mapInstance = useRef(null);
+  const markerInstance = useRef(null);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    if (initialRating) {
+      setCurrentPlace(initialRating);
+      if (initialRating.rating) {
+        setIsSearching(false);
+      }
+    }
+  }, [initialRating]);
+
+  // Leaflet map setup with Google Maps tiles
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const lat = currentPlace?.lat || 19.076;
+    const lng = currentPlace?.lng || 72.8777;
+    const hasPin = Boolean(currentPlace?.lat && currentPlace?.lng);
+
+    if (!mapInstance.current) {
+      const map = L.map(mapRef.current, {
+        center: [lat, lng],
+        zoom: hasPin ? 15 : 12,
+        zoomControl: false,
+      });
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: '&copy; Google Maps',
+      }).addTo(map);
+
+      if (hasPin) {
+        markerInstance.current = L.marker([lat, lng], { icon: pinIcon }).addTo(map);
+      }
+      mapInstance.current = map;
+    } else {
+      if (hasPin) {
+        mapInstance.current.setView([lat, lng], 15);
+        if (markerInstance.current) {
+          markerInstance.current.setLatLng([lat, lng]);
+        } else {
+          markerInstance.current = L.marker([lat, lng], { icon: pinIcon }).addTo(mapInstance.current);
+        }
+      }
+    }
+
+    return () => {
+      // Keep instance intact across renders
+    };
+  }, [currentPlace?.lat, currentPlace?.lng]);
+
+  function handleSearchChange(e) {
+    const val = e.target.value;
+    setSearchQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!val || val.trim().length < 2) {
+      setResults([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await externalApi.call(`/vendor/google-places/search?query=${encodeURIComponent(val.trim())}`);
+        if (res.ok && Array.isArray(res.places)) {
+          setResults(res.places);
+          setShowDropdown(true);
+        }
+      } catch (err) {
+        console.warn('[GoogleBusiness] Place search error:', err.message);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }
+
+  async function handleSelectPlace(place) {
+    setShowDropdown(false);
+    setSearchQuery(place.name || place.address);
+    setCurrentPlace(place);
+    setIsSearching(false);
+    setSaving(true);
+    try {
+      await onSavePlaceId(place.id);
+      setFeedback(`Connected to "${place.name}"! Google Maps rating and reviews synced.`);
+      setTimeout(() => setFeedback(''), 4500);
+    } catch (err) {
+      alert(`Could not connect place: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!window.confirm('Disconnect this Google Business profile from your account? Your Google rating will be removed from your public profiles.')) return;
+    setSaving(true);
+    try {
+      await onSavePlaceId(null);
+      setCurrentPlace(null);
+      setIsSearching(true);
+      setSearchQuery('');
+      setFeedback('Google Business listing disconnected.');
+      setTimeout(() => setFeedback(''), 4000);
+    } catch (err) {
+      alert(`Error disconnecting: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card title="Google Business Profile & Maps Rating">
+      <div className="space-y-4">
+        {feedback && (
+          <div className="p-3 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl border border-emerald-200 animate-fadeIn">
+            ✓ {feedback}
+          </div>
+        )}
+
+        {/* If connected and not re-searching, show the Connected Google Rating Card */}
+        {currentPlace?.rating && !isSearching ? (
+          <div className="space-y-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-amber-50/50 rounded-2xl border border-amber-200/70">
+              <div className="flex items-center gap-3.5">
+                <div className="w-14 h-14 rounded-2xl bg-white text-amber-500 font-extrabold text-2xl grid place-items-center shadow-xs border border-amber-200/60 shrink-0">
+                  {currentPlace.rating || '—'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-extrabold text-navy">
+                      {currentPlace.name || 'Google Business Listing'}
+                    </span>
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                      ✓ Connected
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="text-amber-500 text-sm">
+                      {'★'.repeat(Math.round(currentPlace.rating || 0))}
+                      {'☆'.repeat(5 - Math.round(currentPlace.rating || 0))}
+                    </div>
+                    <span className="text-xs text-muted font-bold">
+                      · {currentPlace.reviewCount || 0} reviews on Google Maps
+                    </span>
+                  </div>
+                  {currentPlace.address && (
+                    <div className="text-xs text-muted mt-1 leading-snug">
+                      📍 {currentPlace.address}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 ml-auto">
+                {currentPlace.googleMapsUrl && (
+                  <a
+                    href={currentPlace.googleMapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-white border border-primary/20 text-primary text-xs font-bold hover:bg-primary-soft transition"
+                  >
+                    <span>View on Maps</span>
+                    <span>↗</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsSearching(true)}
+                  className="px-3.5 py-2 rounded-xl bg-lavender/60 text-navy text-xs font-bold hover:bg-lavender transition cursor-pointer"
+                >
+                  Change Place
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDisconnect}
+                  disabled={saving}
+                  className="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold transition cursor-pointer"
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+
+            {/* Interactive Map Preview */}
+            <div className="overflow-hidden rounded-2xl border border-gray-200">
+              <div ref={mapRef} style={{ width: '100%', height: '240px' }} />
+            </div>
+          </div>
+        ) : (
+          /* Search Bar & Map Search Mode */
+          <div className="space-y-3">
+            <p className="text-xs text-muted leading-relaxed">
+              Search your business name or studio address on Google Maps below. Selecting your listing will automatically import your verified Google star rating, review count, and public map link to your STARVNT profile.
+            </p>
+
+            {/* Search Bar Input */}
+            <div className="relative">
+              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 shadow-xs focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary transition">
+                <Icon name="search" size={16} className="text-muted shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  placeholder='Search your business or venue name (e.g. "CineMandap Studios Mumbai" or street address)...'
+                  className="w-full text-xs font-bold text-navy outline-none placeholder:font-normal placeholder:text-muted/60"
+                />
+                {searching && <span className="text-[10px] text-primary font-bold animate-pulse">Searching Google...</span>}
+                {searchQuery && !searching && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setResults([]);
+                      setShowDropdown(false);
+                    }}
+                    className="text-muted hover:text-navy text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Suggestions Dropdown */}
+              {showDropdown && results.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-30 max-h-72 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 shadow-xl animate-fadeIn space-y-1">
+                  {results.map((place) => (
+                    <div
+                      key={place.id}
+                      onClick={() => handleSelectPlace(place)}
+                      className="flex items-start justify-between gap-3 p-3 rounded-xl hover:bg-lavender/40 transition cursor-pointer group"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 grid place-items-center shrink-0 mt-0.5">
+                          <Icon name="star" size={14} className="fill-amber-500 text-amber-500" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-extrabold text-navy group-hover:text-primary transition">
+                            {place.name}
+                          </div>
+                          <div className="text-[11px] text-muted line-clamp-1 mt-0.5">
+                            {place.address}
+                          </div>
+                          {place.rating > 0 && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-amber-500 text-[10px] font-bold">★ {place.rating}</span>
+                              <span className="text-muted text-[10px]">({place.reviewCount} Google reviews)</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-bold text-primary shrink-0 opacity-0 group-hover:opacity-100 transition">
+                        Select →
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Interactive Map */}
+            <div className="overflow-hidden rounded-2xl border border-gray-200">
+              <div ref={mapRef} style={{ width: '100%', height: '240px' }} />
+            </div>
+
+            {currentPlace?.rating && (
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsSearching(false)}
+                  className="text-xs font-bold text-muted hover:text-navy cursor-pointer"
+                >
+                  Cancel search & keep current place
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 /* ── Unified Profile Hub with Sub-Sidebar (Business Profile, Locations, Documents, Settings) ── */
 export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2434,7 +2733,9 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     category: '',
     location: '',
     phone: user?.phone || '',
+    website: '',
     bio: '',
+    googlePlaceId: '',
   });
 
   const [profilePicUrl, setProfilePicUrl] = useState('');
@@ -2444,6 +2745,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const [activation, setActivation] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [googleRating, setGoogleRating] = useState(null);
 
   // Operating Locations state
   const [locations, setLocations] = useState([]);
@@ -2477,11 +2779,14 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           category: profRes.vendor.category || '',
           location: profRes.vendor.location || '',
           phone: profRes.vendor.phone || user?.phone || '',
+          website: profRes.vendor.website || '',
           bio: profRes.vendor.bio || '',
+          googlePlaceId: profRes.vendor.googlePlaceId || '',
         });
         if (profRes.vendor.profilePicUrl) {
           setProfilePicUrl(profRes.vendor.profilePicUrl);
         }
+        setGoogleRating(profRes.googleRating || null);
       }
       if (actRes.ok && actRes.status) {
         setActivation(actRes.status);
@@ -2492,6 +2797,17 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
       setLoadingProfile(false);
     }
   }, [business, user]);
+
+  async function handleUpdateGooglePlaceId(placeId) {
+    const res = await externalApi.call('/vendor/profile', {
+      method: 'PUT',
+      body: { googlePlaceId: placeId || '' },
+    });
+    if (res.ok) {
+      setProfile((prev) => ({ ...prev, googlePlaceId: placeId || '' }));
+      await loadProfile();
+    }
+  }
 
   const loadLocations = useCallback(async () => {
     try {
@@ -2931,6 +3247,16 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   </div>
 
                   <div>
+                    <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">Website (Optional)</label>
+                    <input
+                      placeholder="https://yourbrand.com"
+                      value={profile.website}
+                      onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+                      className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+
+                  <div>
                     <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">About / Bio</label>
                     <textarea
                       rows={3}
@@ -2952,6 +3278,13 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   </div>
                 </form>
               </Card>
+
+              {/* Google Business Profile & Rating Section with Live Search & Map */}
+              <GoogleBusinessSection
+                googlePlaceId={profile.googlePlaceId}
+                initialRating={googleRating}
+                onSavePlaceId={handleUpdateGooglePlaceId}
+              />
             </div>
           )}
 
@@ -3050,7 +3383,14 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                     No operating locations configured. Click "+ Add Location" to pin your studio base on the interactive map.
                   </div>
                 ) : (
-                  <div className="text-center py-6 text-xs text-muted">Loading locations…</div>
+                  <div className="rounded-2xl border border-gray-100 p-4 space-y-3 bg-white">
+                    <div className="flex items-center justify-between">
+                      <div className="h-4 w-44 rounded-full bg-slate-200/80 animate-pulse" />
+                      <div className="h-5 w-16 rounded-full bg-slate-200/60 animate-pulse" />
+                    </div>
+                    <div className="h-3 w-72 rounded-full bg-slate-200/50 animate-pulse" />
+                    <div className="h-16 rounded-xl bg-slate-100/70 animate-pulse" />
+                  </div>
                 )}
               </Card>
             </div>

@@ -271,6 +271,21 @@ export default function Quotes() {
                 </tr>
               );
             })}
+            {loading && quotes.length === 0 && (
+              Array.from({ length: 4 }).map((_, i) => (
+                <tr key={i} className="border-b border-gray-50">
+                  <td className="px-5 py-4"><div className="h-3.5 w-20 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-28 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-28 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-20 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-20 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-6 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                </tr>
+              ))
+            )}
             {quotes.length === 0 && !loading && (
               <tr>
                 <td colSpan="9" className="py-8 text-center text-xs text-muted">

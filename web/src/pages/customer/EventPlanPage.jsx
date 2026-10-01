@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, Empty, EventMeta, ProgressBar, Tabs, categoryIcon, useLoad } from './customerUi.jsx';
+import { BackLink, Empty, EventMeta, PageSkeleton, ProgressBar, Tabs, categoryIcon, useLoad } from './customerUi.jsx';
 import { formatINR, planStatus } from './format.js';
 import { EMPTY_SERVICE_LOCATION, ServiceEditor, detailsPayload, serviceLocationPayload, serviceLocationText, usePlanOptions } from './eventForms.jsx';
 
@@ -148,7 +148,7 @@ export default function EventPlanPage() {
     }
   }
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <PageSkeleton title="Event Plan" count={4} type="cards" />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">

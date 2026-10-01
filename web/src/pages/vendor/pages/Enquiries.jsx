@@ -187,6 +187,28 @@ export default function Enquiries() {
           </Card>
         ))}
 
+        {loading && opportunities.length === 0 && (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-slate-200/80 animate-pulse" />
+                  <div className="space-y-1.5">
+                    <div className="h-4 w-44 bg-slate-200/80 animate-pulse rounded-full" />
+                    <div className="h-3 w-32 bg-slate-200/50 animate-pulse rounded-full" />
+                  </div>
+                </div>
+                <div className="h-6 w-24 bg-slate-200/60 animate-pulse rounded-full" />
+              </div>
+              <div className="h-12 bg-slate-100/70 rounded-xl animate-pulse" />
+              <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                <div className="h-3 w-28 bg-slate-200/60 animate-pulse rounded-full" />
+                <div className="h-8 w-28 bg-slate-200/70 animate-pulse rounded-xl" />
+              </div>
+            </Card>
+          ))
+        )}
+
         {opportunities.length === 0 && !loading && (
           <Card className="text-center py-12 px-6">
             <div className="w-14 h-14 rounded-2xl bg-primary-soft text-primary grid place-items-center mx-auto mb-3 shadow-xs">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
-import { ArtTile, AvailabilityPill, BackLink, DemoBadge, PriceText, RatingText, useLoad } from './customerUi.jsx';
+import { ArtTile, AvailabilityPill, BackLink, DemoBadge, DetailSkeleton, PriceText, RatingText, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
 import SelectOptionButton from './SelectOptionButton.jsx';
 
@@ -146,56 +146,202 @@ function CapabilitiesSection({ capabilities }) {
   );
 }
 
-/* ─── Reviews ─── */
-function ReviewsSection({ reviews, rating }) {
+/* ─── Reviews & Ratings ─── */
+function ReviewsSection({ reviews = [], rating, googleRating }) {
+  const [activeTab, setActiveTab] = useState('starvnt'); // 'starvnt' | 'google'
   const [showAll, setShowAll] = useState(false);
-  if (!reviews?.length) return null;
+
+  const hasStarvnt = reviews?.length > 0;
+  const hasGoogle = Boolean(googleRating?.rating);
+
+  if (!hasStarvnt && !hasGoogle) return null;
+
+  // Default to Google if no STARVNT reviews exist, or stick with user's selection
+  const currentTab = (!hasStarvnt && hasGoogle) ? 'google' : (hasStarvnt && !hasGoogle) ? 'starvnt' : activeTab;
   const display = showAll ? reviews : reviews.slice(0, 4);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
-      <SectionHeader icon="star" title="Customer Reviews" count={reviews.length} />
-      {rating && (
-        <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
-          <div className="text-3xl font-extrabold text-navy">{rating.average?.toFixed(1) || '—'}</div>
-          <div>
-            <div className="text-yellow-500 text-sm">{'★'.repeat(Math.round(rating.average || 0))}{'☆'.repeat(5 - Math.round(rating.average || 0))}</div>
-            <div className="text-[11px] text-muted font-semibold">{rating.count || 0} reviews</div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <SectionHeader
+          icon="star"
+          title="Ratings & Reviews"
+          count={hasStarvnt ? reviews.length : googleRating?.reviewCount}
+        />
+
+        {/* Rating Tabs: STARVNT Reviews vs Google Rating */}
+        {hasStarvnt && hasGoogle && (
+          <div className="flex gap-1 bg-lavender/50 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setActiveTab('starvnt')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                currentTab === 'starvnt' ? 'bg-white text-navy shadow-xs' : 'text-muted hover:text-navy'
+              }`}
+            >
+              <span>STARVNT Reviews</span>
+              <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-bold">
+                {reviews.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('google')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                currentTab === 'google' ? 'bg-white text-navy shadow-xs' : 'text-muted hover:text-navy'
+              }`}
+            >
+              <span>Google Rating</span>
+              <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">
+                ★ {googleRating.rating}
+              </span>
+            </button>
           </div>
-        </div>
-      )}
-      <div className="space-y-3">
-        {display.map(r => (
-          <div key={r._id} className="border border-gray-100 rounded-xl p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-primary/10 grid place-items-center text-[11px] font-bold text-primary">
-                  {r.customerName?.[0]?.toUpperCase() || '?'}
+        )}
+      </div>
+
+      {/* ─── Tab 1: STARVNT Reviews ─── */}
+      {currentTab === 'starvnt' && (
+        <div>
+          {rating && (
+            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-100">
+              <div className="text-3xl font-extrabold text-navy">{rating.average?.toFixed(1) || '—'}</div>
+              <div>
+                <div className="text-yellow-500 text-sm">
+                  {'★'.repeat(Math.round(rating.average || 0))}
+                  {'☆'.repeat(5 - Math.round(rating.average || 0))}
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-navy">{r.customerName}</div>
-                  <div className="text-[9px] text-muted">{r.eventType}{r.eventDate ? ` · ${r.eventDate}` : ''}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-yellow-500 text-[11px]">{'★'.repeat(r.rating)}</span>
-                {r.isVerified && <Icon name="shieldCheck" size={12} className="text-emerald-500" />}
+                <div className="text-[11px] text-muted font-semibold">{rating.count || 0} verified client reviews</div>
               </div>
             </div>
-            <p className="text-xs text-ink/80 leading-relaxed">{r.reviewText}</p>
-            {r.vendorReply?.text && (
-              <div className="mt-2 bg-lavender/40 rounded-lg p-2 text-[11px]">
-                <span className="font-bold text-navy">Vendor reply:</span>{' '}
-                <span className="text-ink/70">{r.vendorReply.text}</span>
+          )}
+
+          {reviews.length > 0 ? (
+            <div className="space-y-3">
+              {display.map(r => (
+                <div key={r._id} className="border border-gray-100 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 grid place-items-center text-[11px] font-bold text-primary">
+                        {r.customerName?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-navy">{r.customerName}</div>
+                        <div className="text-[9px] text-muted">{r.eventType}{r.eventDate ? ` · ${r.eventDate}` : ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-yellow-500 text-[11px]">{'★'.repeat(r.rating)}</span>
+                      {r.isVerified && <Icon name="shieldCheck" size={12} className="text-emerald-500" />}
+                    </div>
+                  </div>
+                  <p className="text-xs text-ink/80 leading-relaxed">{r.reviewText}</p>
+                  {r.vendorReply?.text && (
+                    <div className="mt-2 bg-lavender/40 rounded-lg p-2 text-[11px]">
+                      <span className="font-bold text-navy">Vendor reply:</span>{' '}
+                      <span className="text-ink/70">{r.vendorReply.text}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {reviews.length > 4 && !showAll && (
+                <button onClick={() => setShowAll(true)} className="mt-3 text-xs font-bold text-primary hover:underline cursor-pointer">
+                  See all {reviews.length} reviews →
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted">No verified STARVNT reviews yet.</p>
+          )}
+        </div>
+      )}
+
+      {/* ─── Tab 2: Google Rating & Reviews Section ─── */}
+      {currentTab === 'google' && googleRating && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-amber-50/50 border border-amber-200/60 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-white shadow-xs grid place-items-center font-extrabold text-lg text-navy border border-gray-100">
+                {googleRating.rating}
               </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <div className="text-yellow-500 text-sm">
+                    {'★'.repeat(Math.round(googleRating.rating || 0))}
+                    {'☆'.repeat(5 - Math.round(googleRating.rating || 0))}
+                  </div>
+                  <span className="text-xs font-bold text-navy">Google Maps Rating</span>
+                </div>
+                <div className="text-[11px] text-muted font-semibold">
+                  {googleRating.reviewCount} public reviews
+                  {googleRating.address ? ` · ${googleRating.address}` : ''}
+                </div>
+              </div>
+            </div>
+            {googleRating.googleMapsUrl && (
+              <a
+                href={googleRating.googleMapsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-bold bg-white text-primary px-3 py-1.5 rounded-lg border border-primary/20 hover:bg-primary-soft transition"
+              >
+                <span>View on Maps</span>
+                <span>↗</span>
+              </a>
             )}
           </div>
-        ))}
-      </div>
-      {reviews.length > 4 && !showAll && (
-        <button onClick={() => setShowAll(true)} className="mt-3 text-xs font-bold text-primary hover:underline cursor-pointer">
-          See all {reviews.length} reviews →
-        </button>
+
+          {/* Individual Google Reviews (if populated) */}
+          {googleRating.reviews?.length > 0 ? (
+            <div className="space-y-3">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-muted">Recent Google Reviews</div>
+              {googleRating.reviews.map((gr, idx) => {
+                const authorName = gr.authorAttribution?.displayName || gr.author || 'Google User';
+                const photoUrl = gr.authorAttribution?.photoUri;
+                const authorUri = gr.authorAttribution?.uri;
+                const reviewText = gr.text?.text || gr.originalText?.text || gr.text || '';
+                const ratingNum = Math.round(gr.rating || 5);
+                const publishTime = gr.relativePublishTimeDescription;
+
+                return (
+                  <div key={idx} className="border border-gray-100 rounded-xl p-3 bg-white">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        {photoUrl ? (
+                          <img src={photoUrl} alt={authorName} className="w-7 h-7 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-800 grid place-items-center text-[11px] font-bold">
+                            {authorName[0]?.toUpperCase() || 'G'}
+                          </div>
+                        )}
+                        <div>
+                          {authorUri ? (
+                            <a href={authorUri} target="_blank" rel="noreferrer" className="text-xs font-bold text-navy hover:underline">
+                              {authorName}
+                            </a>
+                          ) : (
+                            <div className="text-xs font-bold text-navy">{authorName}</div>
+                          )}
+                          {publishTime && <div className="text-[9px] text-muted">{publishTime}</div>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-yellow-500 text-[11px]">{'★'.repeat(ratingNum)}</span>
+                        <span className="text-[9px] bg-gray-100 text-muted px-1.5 py-0.5 rounded font-semibold">Google</span>
+                      </div>
+                    </div>
+                    {reviewText && <p className="text-xs text-ink/80 leading-relaxed">{reviewText}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-xs text-muted text-center py-2 bg-gray-50/50 rounded-xl">
+              Authentic rating synced from Google Places. Click "View on Maps ↗" above to read and verify all customer feedback.
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -338,7 +484,7 @@ export default function ServiceDetailPage() {
   const { id, serviceId } = useParams();
   const { data, error, loading, setData } = useLoad(() => customerApi.serviceDetail(id, serviceId), [id, serviceId]);
 
-  if (loading) return <div className="text-xs text-muted p-8 text-center">Loading vendor details…</div>;
+  if (loading) return <DetailSkeleton />;
   if (error) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -473,8 +619,8 @@ export default function ServiceDetailPage() {
       {/* ─── Resources ─── */}
       <ResourcesSection resources={resources} />
 
-      {/* ─── Reviews ─── */}
-      <ReviewsSection reviews={reviews} rating={vp.rating} />
+      {/* ─── Reviews & Ratings ─── */}
+      <ReviewsSection reviews={reviews} rating={vp.rating} googleRating={googleRating} />
 
       {/* ─── Google Rating ─── */}
       <GoogleRatingSection google={googleRating} />

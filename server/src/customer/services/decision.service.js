@@ -3,7 +3,7 @@ import * as reqRepo from '../repositories/requirements.repo.js';
 import * as quotesRepo from '../repositories/quotes.repo.js';
 import * as catalog from './catalog.service.js';
 import { Opportunity } from '../../external/models/Opportunity.js';
-import { Notification } from '../../external/models/Notification.js';
+import { notifyVendor } from '../../notifications/notification.service.js';
 import { getOwnedEventOr404 } from './events.service.js';
 import { serializeEvent, serializeRequirement } from './understanding.js';
 import { categoryLabel, normalizeCategory } from './planCatalog.js';
@@ -82,12 +82,14 @@ async function createVendorOpportunityForSelection({ customerId, event, requirem
     ...payload,
   });
 
-  await Notification.create({
-    vendor: option.vendorId,
+  await notifyVendor({
+    vendorId: option.vendorId,
     title: 'New quote request',
     message: `${payload.serviceName} · ${eventDate} · ${serviceLocation.locality || serviceLocation.city || 'Event location'} · ${payload.guestCount} guests`,
     type: 'ENQUIRY',
+    priority: 'HIGH',
     link: '/vendor/enquiries',
+    idempotencyKey: `vendor.enquiry.selection.${opportunity._id}`,
     metadata: {
       opportunityId: opportunity._id,
       customerEventId: event._id,

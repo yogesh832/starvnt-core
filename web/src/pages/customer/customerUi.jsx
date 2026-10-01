@@ -272,9 +272,124 @@ export function ArtTile({ option, className = 'h-28' }) {
   );
 }
 
+export function Skeleton({ className = 'h-4 w-full' }) {
+  return <div className={`animate-pulse rounded-2xl bg-slate-200/70 dark:bg-slate-800/60 ${className}`} />;
+}
+
+export function SkeletonLine({ className = 'w-full h-3.5' }) {
+  return <div className={`animate-pulse rounded-full bg-slate-200/80 dark:bg-slate-800/70 ${className}`} />;
+}
+
+export function CardSkeleton({ count = 3 }) {
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="bg-white rounded-2xl p-4 shadow-xs border border-gray-100 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-200/70 animate-pulse shrink-0" />
+            <div className="space-y-1.5 flex-1">
+              <div className="h-3.5 w-3/4 rounded-full bg-slate-200/80 animate-pulse" />
+              <div className="h-2.5 w-1/2 rounded-full bg-slate-200/50 animate-pulse" />
+            </div>
+          </div>
+          <div className="h-14 rounded-xl bg-slate-100/80 animate-pulse" />
+          <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+            <div className="h-3 w-16 rounded-full bg-slate-200/60 animate-pulse" />
+            <div className="h-7 w-20 rounded-xl bg-slate-200/70 animate-pulse" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PageSkeleton({ title = 'Loading…', count = 3, type = 'cards' }) {
+  return (
+    <div className="space-y-4 max-w-5xl mx-auto animate-fadeIn">
+      {/* Top Header Skeleton */}
+      <div className="flex items-center justify-between gap-4 py-1">
+        <div className="space-y-2">
+          <div className="h-6 w-48 rounded-xl bg-slate-200/80 animate-pulse" />
+          <div className="h-3 w-64 rounded-full bg-slate-200/60 animate-pulse" />
+        </div>
+        <div className="h-9 w-24 rounded-xl bg-slate-200/60 animate-pulse" />
+      </div>
+
+      {/* Hero / Overview Card Skeleton */}
+      <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-primary-soft animate-pulse shrink-0" />
+          <div className="space-y-2 flex-1">
+            <div className="h-4 w-1/3 rounded-full bg-slate-200/80 animate-pulse" />
+            <div className="h-3 w-1/2 rounded-full bg-slate-200/50 animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-50">
+          <div className="h-16 rounded-2xl bg-slate-100/70 animate-pulse" />
+          <div className="h-16 rounded-2xl bg-slate-100/70 animate-pulse" />
+          <div className="h-16 rounded-2xl bg-slate-100/70 animate-pulse" />
+          <div className="h-16 rounded-2xl bg-slate-100/70 animate-pulse" />
+        </div>
+      </div>
+
+      {/* Content Skeleton */}
+      {type === 'cards' && <CardSkeleton count={count} />}
+      {type === 'list' && (
+        <div className="space-y-3">
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl p-4 shadow-xs border border-gray-100 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="w-10 h-10 rounded-xl bg-slate-200/70 animate-pulse shrink-0" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-3.5 w-1/3 rounded-full bg-slate-200/80 animate-pulse" />
+                  <div className="h-2.5 w-1/4 rounded-full bg-slate-200/50 animate-pulse" />
+                </div>
+              </div>
+              <div className="h-8 w-24 rounded-xl bg-slate-200/60 animate-pulse shrink-0" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function DetailSkeleton() {
+  return (
+    <div className="max-w-4xl mx-auto space-y-4 animate-fadeIn">
+      <div className="h-4 w-28 rounded-full bg-slate-200/70 animate-pulse" />
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="h-48 sm:h-64 bg-slate-200/70 animate-pulse" />
+        <div className="p-5 sm:p-6 space-y-4">
+          <div className="space-y-2">
+            <div className="h-6 w-1/2 rounded-xl bg-slate-200/80 animate-pulse" />
+            <div className="h-3.5 w-1/3 rounded-full bg-slate-200/60 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
+            <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+            <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+            <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+            <div className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+          </div>
+        </div>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl p-5 shadow-xs border border-gray-100 space-y-3">
+          <div className="h-4 w-1/3 rounded-full bg-slate-200/80 animate-pulse" />
+          <div className="h-24 rounded-xl bg-slate-100 animate-pulse" />
+        </div>
+        <div className="bg-white rounded-2xl p-5 shadow-xs border border-gray-100 space-y-3">
+          <div className="h-4 w-1/3 rounded-full bg-slate-200/80 animate-pulse" />
+          <div className="h-24 rounded-xl bg-slate-100 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CustomerLoadingScreen({ title = 'Loading your workspace', detail = 'Getting the latest STARVNT details...' }) {
   return (
-    <div className="min-h-[60vh] grid place-items-center px-4">
+    <div className="min-h-[60vh] grid place-items-center px-4 animate-fadeIn">
       <div className="w-full max-w-3xl bg-white rounded-3xl shadow-sm border border-gray-100 p-5 sm:p-6">
         <div className="flex items-center gap-3">
           <span className="w-11 h-11 rounded-2xl bg-primary-soft text-primary grid place-items-center shrink-0">

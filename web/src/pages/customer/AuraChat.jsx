@@ -251,11 +251,14 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   // Load (or start) the session for this event scope; history comes from the server.
   useEffect(() => {
     let cancelled = false;
-    let sid = readSession(key);
+    const urlSession = !embedded ? params.get('session') : null;
+    let sid = urlSession || readSession(key);
     const fresh = !embedded && params.get('new') === '1';
     if (fresh || !sid) {
       sid = newSessionId();
       writeSession(key, sid);
+    } else if (urlSession) {
+      writeSession(key, urlSession);
     }
     if (fresh) {
       const next = new URLSearchParams(params);

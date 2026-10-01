@@ -58,6 +58,7 @@ export function StatusChip({ status }) {
     Pending: 'bg-orange-50 text-orange-500',
     Scheduled: 'bg-violet-50 text-violet-600',
     'In Progress': 'bg-violet-50 text-violet-600',
+    'Work Done - Core Review': 'bg-emerald-50 text-emerald-700',
     Inactive: 'bg-orange-50 text-orange-500',
     Rejected: 'bg-red-50 text-red-500',
     New: 'bg-primary-soft text-primary',

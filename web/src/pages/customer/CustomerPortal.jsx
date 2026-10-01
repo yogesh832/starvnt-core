@@ -179,6 +179,7 @@ function Shell() {
   const { error: eventLoadError, refresh: refreshEvents } = useCurrentEvent();
   const firstName = user?.fullName?.split(' ')[0] || 'there';
   const tab = activeKey(pathname);
+  const canOpenWithoutEventList = tab === 'messages' || ['me', 'settings', 'documents', 'favorites', 'events', 'new'].includes(tab);
 
   const [unread, setUnread] = useState(0);
   const refreshUnread = useCallback(() => {
@@ -258,7 +259,7 @@ function Shell() {
           <main className="flex-1 min-h-0 flex flex-col pb-28 md:pb-0">
             <AuraChat firstName={firstName} />
           </main>
-        ) : eventLoadError ? (
+        ) : eventLoadError && !canOpenWithoutEventList ? (
           <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-28 md:pb-6">
             <CustomerErrorScreen
               title="Could not load customer workspace"

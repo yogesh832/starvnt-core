@@ -13,6 +13,30 @@ function readFileAsDataURL(file) {
   });
 }
 
+function isExecutionDone(status) {
+  return status === 'COMPLETION_SUBMITTED' || status === 'COMPLETION_VERIFIED';
+}
+
+function isExecutionActive(status) {
+  return status === 'SERVICE_STARTED' || isExecutionDone(status);
+}
+
+function bookingStatusLabel(status, fallback = 'Confirmed') {
+  if (status === 'SERVICE_STARTED') return 'In Progress';
+  if (status === 'COMPLETION_SUBMITTED') return 'Work Done - Core Review';
+  if (status === 'COMPLETION_VERIFIED') return 'Completed';
+  return fallback;
+}
+
+function executionChecklistFor(status, checklist = []) {
+  if (!isExecutionDone(status) && checklist && checklist.length > 0) return checklist;
+  return [
+    { item: 'Service Commenced / Check-in', done: isExecutionActive(status) },
+    { item: 'On-site Execution Complete', done: isExecutionDone(status) },
+    { item: 'Deliverables & Evidence Uploaded', done: isExecutionDone(status) },
+  ];
+}
+
 export default function Bookings() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,21 +76,16 @@ export default function Bookings() {
             amount: `₹${(b.totalAmount || 0).toLocaleString()}`,
             advancePaid: b.paymentSummary?.paidAmount || 0,
             balanceAmount: b.paymentSummary?.balanceAmount ?? Math.max(0, (b.totalAmount || 0) - (b.paymentSummary?.paidAmount || 0)),
-            status: b.executionStatus === 'SERVICE_STARTED' ? 'In Progress' : (b.executionStatus === 'COMPLETION_SUBMITTED' ? 'Completion Submitted' : (b.executionStatus === 'COMPLETION_VERIFIED' ? 'Completed' : (b.status || 'Confirmed'))),
+            status: bookingStatusLabel(b.executionStatus, b.status || 'Confirmed'),
             executionStatus: b.executionStatus || 'SCHEDULED',
             settlementStatus: b.settlementStatus || 'NOT_ELIGIBLE',
             payment: b.paymentStatus || 'PAYMENT_VERIFIED',
             team: b.assignedTeam || 'Lead Team Scheduled',
-            checklist: (b.checklist && b.checklist.length > 0)
-              ? b.checklist
-              : [
-                  { item: 'Service Commenced / Check-in', done: b.executionStatus === 'SERVICE_STARTED' || b.executionStatus === 'COMPLETION_SUBMITTED' || b.executionStatus === 'COMPLETION_VERIFIED' },
-                  { item: 'On-site Execution Complete', done: b.executionStatus === 'COMPLETION_SUBMITTED' || b.executionStatus === 'COMPLETION_VERIFIED' },
-                  { item: 'Deliverables & Evidence Uploaded', done: b.executionStatus === 'COMPLETION_SUBMITTED' || b.executionStatus === 'COMPLETION_VERIFIED' },
-                ],
+            checklist: executionChecklistFor(b.executionStatus, b.checklist),
           }));
           setBookings(mapped);
-          if (mapped[0]) setOpen(mapped[0].id);
+          const nextActionable = mapped.find((b) => !isExecutionDone(b.executionStatus)) || mapped[0];
+          if (nextActionable) setOpen(nextActionable.id);
         }
       } catch (err) {
         console.warn('[Bookings] Load error:', err.message);
@@ -180,8 +199,9 @@ export default function Bookings() {
       const photos = uploadedMedia.filter((m) => m.resourceType !== 'VIDEO').map((m) => m.url);
       const videos = uploadedMedia.filter((m) => m.resourceType === 'VIDEO').map((m) => m.url);
 
+      let savedBooking = null;
       if (evidenceModalBooking.dbId) {
-        await externalApi.call(`/vendor/bookings/${evidenceModalBooking.dbId}/submit-completion`, {
+        const res = await externalApi.call(`/vendor/bookings/${evidenceModalBooking.dbId}/submit-completion`, {
           method: 'POST',
           body: {
             deliverablesUrl: deliverablesUrl.trim() || photos[0] || videos[0] || '',
@@ -192,18 +212,29 @@ export default function Bookings() {
             checklist: checklistState,
           },
         });
+        savedBooking = res?.booking || null;
       }
 
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === evidenceModalBooking.id
-            ? { ...b, status: 'Completion Submitted', executionStatus: 'COMPLETION_SUBMITTED' }
-            : b
-        )
-      );
+      setBookings((prev) => {
+        const updated = prev.map((b) => {
+          if (b.id !== evidenceModalBooking.id) return b;
+          const executionStatus = savedBooking?.executionStatus || 'COMPLETION_SUBMITTED';
+          const settlementStatus = savedBooking?.settlementStatus || b.settlementStatus;
+          return {
+            ...b,
+            status: bookingStatusLabel(executionStatus, 'Confirmed'),
+            executionStatus,
+            settlementStatus,
+            checklist: executionChecklistFor(executionStatus),
+          };
+        });
+        const nextBooking = updated.find((b) => b.id !== evidenceModalBooking.id && !isExecutionDone(b.executionStatus));
+        setOpen(nextBooking?.id || null);
+        return updated;
+      });
 
       setFeedback(
-        `Completion evidence (${uploadedMedia.length} Cloudinary media asset(s)) successfully submitted for ${evidenceModalBooking.id}. Core Platform will validate and unlock settlement.`
+        `Work marked done for ${evidenceModalBooking.id}. Evidence (${uploadedMedia.length} media asset(s)) was submitted to Core. ${bookings.some((b) => b.id !== evidenceModalBooking.id && !isExecutionDone(b.executionStatus)) ? 'Next booking opened below.' : 'No pending booking is left in this list.'}`
       );
       setEvidenceModalBooking(null);
       setUploadedMedia([]);
@@ -265,7 +296,7 @@ export default function Bookings() {
                     ))}
                   </ul>
                   <div className="flex flex-wrap gap-2 mt-4">
-                    {b.executionStatus !== 'COMPLETION_SUBMITTED' && b.executionStatus !== 'COMPLETION_VERIFIED' && (
+                    {!isExecutionDone(b.executionStatus) && (
                       <button
                         onClick={() => handleStartService(b)}
                         className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-4 py-2.5 transition shadow-sm cursor-pointer"
@@ -273,13 +304,20 @@ export default function Bookings() {
                         Start Service
                       </button>
                     )}
-                    <button
-                      onClick={() => openEvidenceModal(b)}
-                      className="rounded-xl border border-primary/30 bg-primary-soft text-primary text-xs font-bold px-4 py-2.5 hover:bg-primary hover:text-white transition shadow-xs cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Icon name="upload" size={14} />
-                      <span>{b.executionStatus === 'COMPLETION_SUBMITTED' ? 'Update Completion Evidence' : 'Upload Completion Evidence'}</span>
-                    </button>
+                    {isExecutionDone(b.executionStatus) ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold px-4 py-2.5 flex items-center gap-1.5">
+                        <Icon name="check" size={14} />
+                        <span>Evidence submitted</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => openEvidenceModal(b)}
+                        className="rounded-xl border border-primary/30 bg-primary-soft text-primary text-xs font-bold px-4 py-2.5 hover:bg-primary hover:text-white transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Icon name="upload" size={14} />
+                        <span>Upload Completion Evidence</span>
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2.5 text-xs">
@@ -294,13 +332,39 @@ export default function Bookings() {
                   </div>
                   <div className="bg-lavender/60 border border-lavender rounded-xl p-3">
                     <div className="text-muted text-[10px] uppercase font-bold">Settlement Rule</div>
-                    <div className="font-semibold mt-0.5 text-navy">Eligible only after Core Platform validates completion evidence</div>
+                    <div className="font-semibold mt-0.5 text-navy">
+                      {isExecutionDone(b.executionStatus)
+                        ? 'Evidence submitted. Waiting for Core validation to unlock settlement.'
+                        : 'Eligible only after Core Platform validates completion evidence'}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
           </Card>
         ))}
+
+        {loading && bookings.length === 0 && (
+          Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-slate-200/80 animate-pulse" />
+                  <div className="space-y-1.5">
+                    <div className="h-4 w-40 bg-slate-200/80 animate-pulse rounded-full" />
+                    <div className="h-3 w-28 bg-slate-200/50 animate-pulse rounded-full" />
+                  </div>
+                </div>
+                <div className="h-6 w-20 bg-slate-200/60 animate-pulse rounded-full" />
+              </div>
+              <div className="grid sm:grid-cols-3 gap-3 pt-3 border-t border-gray-100">
+                <div className="h-14 bg-slate-100/70 rounded-xl animate-pulse" />
+                <div className="h-14 bg-slate-100/70 rounded-xl animate-pulse" />
+                <div className="h-14 bg-slate-100/70 rounded-xl animate-pulse" />
+              </div>
+            </Card>
+          ))
+        )}
 
         {bookings.length === 0 && !loading && (
           <Card className="text-center py-12 px-6">

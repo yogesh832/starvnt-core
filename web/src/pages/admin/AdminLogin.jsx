@@ -196,13 +196,21 @@ export default function AdminLogin() {
             </form>
 
             <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-[11px] text-muted">
-              <span>Demo: admin@starvnt.com / AdminPass123!</span>
-              <button
-                onClick={() => navigate('/login')}
-                className="text-primary hover:underline font-bold"
-              >
-                Vendor / Client Login →
-              </button>
+              <span>Demo: <b className="text-navy">admin@starvnt.com</b> / <b className="text-primary">Password123</b></span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate('/test-login')}
+                  className="text-primary hover:underline font-bold"
+                >
+                  🧪 1-Click Test Portal →
+                </button>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="text-muted hover:text-navy hover:underline"
+                >
+                  Vendor Login →
+                </button>
+              </div>
             </div>
           </div>
         </main>

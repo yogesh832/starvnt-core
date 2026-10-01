@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, DemoBadge, Empty, categoryIcon, useLoad } from './customerUi.jsx';
+import { BackLink, DemoBadge, Empty, PageSkeleton, categoryIcon, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
 
 const STATUS = {
@@ -16,7 +16,7 @@ export default function VendorsPage() {
   const bookings = useLoad(() => customerApi.bookings(id), [id]);
   const plan = useLoad(() => customerApi.requirements(id), [id]);
 
-  if (bookings.loading || plan.loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (bookings.loading || plan.loading) return <PageSkeleton title="My Vendors" count={3} type="cards" />;
   const error = bookings.error || plan.error;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
 

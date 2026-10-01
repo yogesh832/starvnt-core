@@ -13,6 +13,7 @@ import {
   StepTracker,
   Tabs,
   categoryIcon,
+  DetailSkeleton,
   useLoad,
 } from './customerUi.jsx';
 import UnderstandingCard, { EditForm } from './UnderstandingCard.jsx';
@@ -156,7 +157,7 @@ export default function EventPage() {
   const [tab, setTab] = useState('plan');
   const [editing, setEditing] = useState(false);
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <DetailSkeleton />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">

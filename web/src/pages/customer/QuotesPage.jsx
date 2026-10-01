@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, DemoBadge, Empty, useLoad } from './customerUi.jsx';
+import { BackLink, CardSkeleton, DemoBadge, Empty, PageSkeleton, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
 
 
@@ -231,7 +231,7 @@ export default function QuotesPage() {
     }
   }
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <PageSkeleton title="Quotes & Offers" count={3} type="cards" />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">
@@ -264,7 +264,7 @@ export default function QuotesPage() {
           <p className="text-xs text-muted">These are direct vendor quotes with their price, message, negotiation history, and 30% advance payment.</p>
         </div>
         {vendorOffers.loading && !vendorOffers.data ? (
-          <div className="text-xs text-muted">Loading vendor offers...</div>
+          <CardSkeleton count={2} />
         ) : commercialQuotes.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm p-4 text-xs text-muted">
             No vendor offers yet. When a vendor responds with price and message, the offer appears here.

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, useLoad } from './customerUi.jsx';
+import { BackLink, PageSkeleton, useLoad } from './customerUi.jsx';
 
 /** Event Circle: one thread per context (whole event, each booking, a service). */
 export default function CirclePage() {
@@ -36,7 +36,7 @@ export default function CirclePage() {
     }
   }
 
-  if (loading && !data) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading && !data) return <PageSkeleton title="Circle" count={3} type="list" />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const event = data?.event || { title: 'Event' };
   const contexts = Array.isArray(data?.contexts) && data.contexts.length
@@ -80,7 +80,17 @@ export default function CirclePage() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3 min-h-[240px]">
-        {thread.loading && !thread.data && <div className="text-xs text-muted">Loading…</div>}
+        {thread.loading && !thread.data && (
+          <div className="space-y-3 py-2">
+            <div className="flex gap-2 items-center">
+              <div className="w-8 h-8 rounded-full bg-slate-200/80 animate-pulse" />
+              <div className="h-10 w-48 rounded-2xl bg-slate-100 animate-pulse" />
+            </div>
+            <div className="flex justify-end gap-2 items-center">
+              <div className="h-10 w-56 rounded-2xl bg-primary-soft/40 animate-pulse" />
+            </div>
+          </div>
+        )}
         {thread.error && <div className="text-xs text-red-500">{errorText(thread.error)}</div>}
         {!thread.loading && !thread.error && messages.length === 0 && <div className="text-xs text-muted">No messages yet. Ask anything about this — the STARVNT team and your vendor reply here.</div>}
         {messages.map((m) => {

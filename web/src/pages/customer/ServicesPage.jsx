@@ -12,6 +12,7 @@ import {
   RatingText,
   Tabs,
   categoryIcon,
+  PageSkeleton,
   useLoad,
 } from './customerUi.jsx';
 import { formatDate, formatINR, planStatus } from './format.js';
@@ -26,7 +27,7 @@ const byPrice = (dir) => (a, b) => {
 /** Open plan items, each leading to its options. */
 function CategoryList({ eventId }) {
   const { data, error, loading } = useLoad(() => customerApi.services(eventId), [eventId]);
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <PageSkeleton title="Services" count={4} type="cards" />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const { event, categories } = data;
   return (
@@ -191,7 +192,7 @@ function CategoryOptions({ eventId, category }) {
     return list; // 'recommended' keeps the server order: bookable first, then price
   }, [data, sort]);
 
-  if (loading) return <div className="text-xs text-muted">Loading…</div>;
+  if (loading) return <PageSkeleton title="Vendor Options" count={4} type="cards" />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const { event, label, options, bestValueId, selectedOptionId, requirement } = data;
   const chosen = options.find((o) => o.id === selectedOptionId);
