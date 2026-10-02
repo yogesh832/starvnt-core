@@ -56,6 +56,16 @@ export default function VendorPortal() {
     return () => window.removeEventListener('vendorProfileUpdated', onUpdate);
   }, []);
 
+  // Listen for openVendorAura events dispatched anywhere in the vendor dashboard
+  useEffect(() => {
+    const onOpenAura = (e) => {
+      const text = e.detail?.text || e.detail?.prompt || '';
+      askAura(text);
+    };
+    window.addEventListener('openVendorAura', onOpenAura);
+    return () => window.removeEventListener('openVendorAura', onOpenAura);
+  }, []);
+
   // New vendor (setup incomplete): open Aura+ once per sign-in so it can walk them through setup.
   useEffect(() => {
     if (!setup || setup.percent >= 100) return;
@@ -77,6 +87,7 @@ export default function VendorPortal() {
   const [businessName, setBusinessName] = useState(user?.fullName ? `${user.fullName}'s Brand` : 'My Brand');
   const [category, setCategory] = useState('');
   const [profilePicUrl, setProfilePicUrl] = useState('');
+  const [googleRating, setGoogleRating] = useState(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -86,6 +97,7 @@ export default function VendorPortal() {
           if (res.vendor.businessName) setBusinessName(res.vendor.businessName);
           if (res.vendor.category) setCategory(res.vendor.category);
           setProfilePicUrl(res.vendor.profilePicUrl || '');
+          setGoogleRating(res.googleRating || null);
         }
       } catch (err) {
         if (user?.vendorOrganization?.businessName) {
@@ -308,12 +320,12 @@ export default function VendorPortal() {
             <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className={`rounded-full object-cover shrink-0 border border-gray-200 ${isSidebarMini ? 'lg:w-10 lg:h-10 w-9 h-9' : 'w-9 h-9'}`} />
           ) : (
             <div className={`rounded-full bg-primary text-white grid place-items-center text-xs font-bold shrink-0 ${isSidebarMini ? 'lg:w-10 lg:h-10 w-9 h-9' : 'w-9 h-9'}`}>
-              {user?.fullName?.[0]?.toUpperCase() || 'V'}
+              {(businessName || user?.fullName || 'V')[0].toUpperCase()}
             </div>
           )}
           <div className={`flex-1 min-w-0 ${isSidebarMini ? 'lg:hidden' : 'block'}`}>
-            <div className="text-xs font-bold truncate">{user?.fullName}</div>
-            <div className="text-[10px] text-muted truncate">{user?.email}</div>
+            <div className="text-xs font-bold truncate text-navy">{businessName || user?.fullName}</div>
+            <div className="text-[10px] text-muted truncate">{category ? `Vendor · ${category}` : user?.email}</div>
           </div>
           <button
             onClick={handleLogout}
@@ -348,7 +360,7 @@ export default function VendorPortal() {
             />
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2.5 ml-auto shrink-0 relative" ref={notifRef}>
+          <div className="flex items-center gap-1.5 sm:gap-2.5 ml-auto shrink-0">
             {/* Aura+ assistant */}
             <button
               onClick={() => setAuraOpen((o) => !o)}
@@ -376,81 +388,83 @@ export default function VendorPortal() {
               <Icon name="calendar" size={18} />
             </button>
 
-            {/* Notification Bell with Dynamic Dot & Dropdown */}
-            <button
-              onClick={() => setNotifOpen(!notifOpen)}
-              className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer shrink-0"
-              title="Notifications"
-              aria-label="Notifications"
-            >
-              <Icon name="bell" size={18} />
-              {badgeCounts.unreadNotificationsCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
-              )}
-            </button>
+            {/* Notification Bell with Dynamic Dot & Dedicated Relative Container */}
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={() => setNotifOpen(!notifOpen)}
+                className="w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer shrink-0"
+                title="Notifications"
+                aria-label="Notifications"
+              >
+                <Icon name="bell" size={18} />
+                {badgeCounts.unreadNotificationsCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+                )}
+              </button>
 
-            {/* Notification Dropdown Panel */}
-            {notifOpen && (
-              <div className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 z-50 animate-[pop_.18s_ease-out]">
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-extrabold text-sm text-navy">Notifications</h3>
+              {/* Notification Dropdown Panel */}
+              {notifOpen && (
+                <div className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 z-50 animate-[pop_.18s_ease-out]">
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-sm text-navy">Notifications</h3>
+                      {badgeCounts.unreadNotificationsCount > 0 && (
+                        <span className="text-[10px] font-bold bg-primary-soft text-primary px-2 py-0.5 rounded-full">
+                          {badgeCounts.unreadNotificationsCount} new
+                        </span>
+                      )}
+                    </div>
                     {badgeCounts.unreadNotificationsCount > 0 && (
-                      <span className="text-[10px] font-bold bg-primary-soft text-primary px-2 py-0.5 rounded-full">
-                        {badgeCounts.unreadNotificationsCount} new
-                      </span>
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="text-[11px] font-bold text-primary hover:underline"
+                      >
+                        Mark all read
+                      </button>
                     )}
                   </div>
-                  {badgeCounts.unreadNotificationsCount > 0 && (
-                    <button
-                      onClick={handleMarkAllAsRead}
-                      className="text-[11px] font-bold text-primary hover:underline"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                </div>
 
-                <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto mt-2">
-                  {notifications.map((n) => (
-                    <div
-                      key={n._id}
-                      onClick={() => handleMarkAsRead(n._id, n.link)}
-                      className={`p-3 rounded-2xl transition cursor-pointer flex items-start gap-3 hover:bg-lavender/50 ${
-                        !n.isRead ? 'bg-primary-soft/30' : ''
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-xl bg-lavender/70 text-primary grid place-items-center shrink-0 mt-0.5">
-                        <Icon
-                          name={
-                            n.type === 'ENQUIRY'
-                              ? 'message'
-                              : n.type === 'QUOTE'
-                              ? 'quotes'
-                              : n.type === 'PAYMENT'
-                              ? 'wallet'
-                              : 'bell'
-                          }
-                          size={14}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className={`text-xs font-bold truncate ${!n.isRead ? 'text-primary' : 'text-navy'}`}>
-                            {n.title}
-                          </span>
-                          {!n.isRead && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
+                  <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto mt-2">
+                    {notifications.map((n) => (
+                      <div
+                        key={n._id}
+                        onClick={() => handleMarkAsRead(n._id, n.link)}
+                        className={`p-3 rounded-2xl transition cursor-pointer flex items-start gap-3 hover:bg-lavender/50 ${
+                          !n.isRead ? 'bg-primary-soft/30' : ''
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-lavender/70 text-primary grid place-items-center shrink-0 mt-0.5">
+                          <Icon
+                            name={
+                              n.type === 'ENQUIRY'
+                                ? 'message'
+                                : n.type === 'QUOTE'
+                                ? 'quotes'
+                                : n.type === 'PAYMENT'
+                                ? 'wallet'
+                                : 'bell'
+                            }
+                            size={14}
+                          />
                         </div>
-                        <p className="text-[11px] text-muted line-clamp-2 mt-0.5">{n.message}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className={`text-xs font-bold truncate ${!n.isRead ? 'text-primary' : 'text-navy'}`}>
+                              {n.title}
+                            </span>
+                            {!n.isRead && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
+                          </div>
+                          <p className="text-[11px] text-muted line-clamp-2 mt-0.5">{n.message}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {notifications.length === 0 && (
-                    <div className="py-8 text-center text-xs text-muted">No notifications yet.</div>
-                  )}
+                    ))}
+                    {notifications.length === 0 && (
+                      <div className="py-8 text-center text-xs text-muted">No notifications yet.</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Profile Menu */}
             <div className="relative" ref={profileRef}>
@@ -472,7 +486,15 @@ export default function VendorPortal() {
                   </div>
                 )}
                 <div className="hidden sm:block text-left">
-                  <div className="text-[13px] font-bold leading-tight truncate max-w-[150px]">{businessName || user?.fullName || 'Vendor'}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-bold leading-tight truncate max-w-[150px]">{businessName || user?.fullName || 'Vendor'}</span>
+                    {googleRating?.rating && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200/80 text-amber-800 text-[10px] font-extrabold shrink-0" title={`${googleRating.rating} / 5 (${googleRating.reviewCount || 0} reviews on Google Maps)`}>
+                        <span className="text-amber-500 font-black">★</span>
+                        <span>{googleRating.rating}</span>
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-muted truncate max-w-[150px]">Vendor • {category || 'Profile Incomplete'}</div>
                 </div>
                 <Icon name="chevronDown" size={14} className={`hidden sm:block text-muted transition ${profileOpen ? 'rotate-180' : ''}`} />
@@ -491,7 +513,16 @@ export default function VendorPortal() {
                     <div className="min-w-0">
                       <div className="text-sm font-extrabold text-navy truncate">{businessName || user?.fullName || 'Vendor'}</div>
                       <div className="text-[11px] text-muted truncate">{user?.email}</div>
-                      <div className="text-[10px] font-bold text-primary mt-1">{category || 'Complete your profile'}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-bold text-primary">{category || 'Complete your profile'}</span>
+                        {googleRating?.rating && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
+                            <span className="text-amber-500">★</span>
+                            <span>{googleRating.rating}</span>
+                            <span className="text-muted font-normal">({googleRating.reviewCount || 0})</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 

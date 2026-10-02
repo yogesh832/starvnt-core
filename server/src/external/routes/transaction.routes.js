@@ -2,8 +2,8 @@ import express from 'express';
 import { requireExternalAuth, requireAccountType } from '../middleware/requireExternalAuth.js';
 import { Opportunity } from '../models/Opportunity.js';
 import { Quote } from '../models/Quote.js';
-import { Notification } from '../models/Notification.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
+import { notifyCustomer, notifyVendor } from '../../notifications/notification.service.js';
 import mongoose from 'mongoose';
 import { EventMessage, CustomerEvent, EventRequirement, EventHistory, Reservation } from '../../customer/models/index.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
@@ -239,13 +239,15 @@ router.post('/opportunities/generate', requireExternalAuth, async (req, res, nex
       });
       createdOpportunities.push(opp);
 
-      // Create live notification for candidate vendor
-      await Notification.create({
-        vendor: candidate.vendorId,
+      // Create live notification for candidate vendor through central notification service.
+      await notifyVendor({
+        vendorId: candidate.vendorId,
         title: 'New Enquiry Received',
         message: `${candidate.serviceName} · ${date} · ${serviceLocation?.locality || 'New Town'} · ${guestCount} guests`,
         type: 'ENQUIRY',
+        priority: 'HIGH',
         link: '/vendor/enquiries',
+        idempotencyKey: `vendor.enquiry.${opp._id}`,
         metadata: { opportunityId: opp._id },
       });
     }
@@ -336,12 +338,14 @@ router.post('/customer/demo/mahiman-enquiry', requireExternalAuth, requireAccoun
         action: 'Respond / Quote',
       });
 
-      await Notification.create({
-        vendor: vendor._id,
+      await notifyVendor({
+        vendorId: vendor._id,
         title: 'New Customer Enquiry',
         message: `${service.name || 'DJ & Music'} · ${eventDate} · ${serviceLocation.locality} · ${guestCount} guests`,
         type: 'ENQUIRY',
+        priority: 'HIGH',
         link: '/vendor/enquiries',
+        idempotencyKey: `vendor.enquiry.${opportunity._id}`,
         metadata: { opportunityId: opportunity._id },
       });
     }
@@ -466,7 +470,7 @@ router.post('/customer/vendor-quotes/:id/negotiate', requireExternalAuth, requir
   try {
     const message = String(req.body?.message || '').trim();
     const counterBudget = req.body?.counterBudget ? Number(req.body.counterBudget) : null;
-
+    
     if (!message && !counterBudget) return res.status(400).json({ error: 'MESSAGE_REQUIRED' });
 
     const quote = await Quote.findOne({ _id: req.params.id, customer: req.externalUser._id });
@@ -558,13 +562,15 @@ router.post('/customer/vendor-quotes/:id/negotiate', requireExternalAuth, requir
     thread.unreadVendorCount = (thread.unreadVendorCount || 0) + 1;
     await thread.save();
 
-    // Create vendor notification linking directly to chat thread
-    await Notification.create({
-      vendor: quote.vendor,
+    // Create vendor notification linking directly to chat thread.
+    await notifyVendor({
+      vendorId: quote.vendor,
       title: 'Customer requested quote change',
       message: fullReason,
       type: 'MESSAGE',
+      priority: 'HIGH',
       link: '/vendor/messages',
+      idempotencyKey: `vendor.quote.counter.${quote._id}.${thread._id}.${thread.messages.length}`,
       metadata: {
         quoteId: quote._id,
         threadId: thread._id,
@@ -629,12 +635,14 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
       quote.status = 'APPROVED';
       await quote.save();
 
-      await Notification.create({
-        vendor: quote.vendor?._id || quote.vendor,
-        title: 'Client Approved Your Quote! 🎉',
+      await notifyVendor({
+        vendorId: quote.vendor?._id || quote.vendor,
+        title: 'Client approved your quote',
         message: `${req.externalUser.fullName || 'Client'} accepted your quote for ${quote.serviceName} (${quote.eventDate}) at ₹${(quote.pricingBreakdown?.totalAmount || 0).toLocaleString('en-IN')}. Advance payment reservation opened.`,
         type: 'QUOTE',
+        priority: 'HIGH',
         link: '/vendor/bookings',
+        idempotencyKey: `vendor.quote.approved.${quote._id}`,
         metadata: { quoteId: quote._id },
       });
     } else if (quote.status !== 'APPROVED') {
@@ -1030,13 +1038,15 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
 
     // Sync notification and chat thread message
     try {
-      await Notification.create({
-        customer: quote.customer,
+      await notifyCustomer({
+        customerId: quote.customer,
         title: 'Vendor Revised Offer',
-        message: `${quote.vendor?.businessName || 'Vendor'} sent a revised quotation for ${quote.serviceName}: ₹${pricing.totalAmount.toLocaleString('en-IN')}.`,
-        type: 'QUOTE',
-        link: '/customer/events',
-        metadata: { quoteId: quote._id },
+        body: `${quote.vendor?.businessName || 'Vendor'} sent a revised quotation for ${quote.serviceName}: ₹${pricing.totalAmount.toLocaleString('en-IN')}.`,
+        type: 'quote',
+        priority: 'HIGH',
+        actionUrl: '/customer/events',
+        idempotencyKey: `customer.quote.revised.${quote._id}.${quote.history.length}`,
+        payload: { quoteId: quote._id },
       });
 
       const thread = await VendorMessageThread.findOne({
@@ -1111,12 +1121,14 @@ router.post('/quotes/:id/transition', requireExternalAuth, async (req, res) => {
     });
 
     if (targetStatus === 'APPROVED') {
-      await Notification.create({
-        vendor: quote.vendor,
-        title: 'Client Approved Your Quote! 🎉',
+      await notifyVendor({
+        vendorId: quote.vendor,
+        title: 'Client approved your quote',
         message: `Quote for ${quote.serviceName} (${quote.eventDate}) approved at ₹${(quote.pricingBreakdown?.totalAmount || 0).toLocaleString()}. Core Booking created.`,
         type: 'QUOTE',
+        priority: 'HIGH',
         link: '/vendor/bookings',
+        idempotencyKey: `vendor.quote.transition.approved.${quote._id}`,
         metadata: { quoteId: quote._id },
       });
     }

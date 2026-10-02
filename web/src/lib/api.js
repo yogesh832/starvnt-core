@@ -50,6 +50,7 @@ function createRequestTimeout(method, body) {
 
 export function makeApi(base, refreshPath, options = {}) {
   const storageKey = options.storageKey || "";
+  const loginRedirectPath = options.loginRedirectPath || null;
   let token = null;
   let refreshing = null;
 
@@ -125,12 +126,19 @@ export function makeApi(base, refreshPath, options = {}) {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      
-      // Global Auth enforcement: If 401 after retry, session is dead.
+
+      // Auth enforcement: clear token on 401.
+      // NEVER hard redirect if:
+      // - The request was an auth endpoint (/login, /auth/login, /auth/refresh, etc.)
+      // - The user is already on a login page (/login or /admin/login)
+      // Only redirect if a protected app route returned 401 and loginRedirectPath is configured.
       if (res.status === 401) {
         setToken(null);
-        if (typeof window !== "undefined") {
-          window.location.href = "/login?expired=1";
+        const isAuthEndpoint = /\/auth\/(login|refresh|me|verify|otp)/i.test(path) || /\/login/i.test(path);
+        const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+        const isOnLoginPage = currentPath.includes("/login");
+        if (!isAuthEndpoint && !isOnLoginPage && loginRedirectPath && typeof window !== "undefined") {
+          window.location.href = `${loginRedirectPath}?expired=1`;
         }
       }
 
@@ -147,7 +155,46 @@ export function makeApi(base, refreshPath, options = {}) {
     return res.json().catch(() => ({}));
   }
 
-  return { call, raw, refresh, setToken, getToken: () => token };
+  async function stream(path, { method = "POST", body, headers = {}, signal } = {}, onEvent) {
+    const res = await raw(path, {
+      method,
+      body,
+      headers: { Accept: "text/event-stream", ...headers },
+      signal,
+    });
+
+    if (!res.body) {
+      throw new Error("ReadableStream not supported");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (let line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("data: ")) {
+          const dataStr = trimmed.slice(6);
+          try {
+            const event = JSON.parse(dataStr);
+            if (onEvent) onEvent(event);
+          } catch {
+            // ignore malformed JSON line
+          }
+        }
+      }
+    }
+  }
+
+  return { call, raw, stream, refresh, setToken, getToken: () => token };
 }
 
 export function friendlyApiMessage(code, status) {
@@ -157,10 +204,17 @@ export function friendlyApiMessage(code, status) {
     ACCOUNT_DISABLED_OR_MISSING: "This account is not available. Please contact support.",
     FORBIDDEN: "You do not have permission to perform this action.",
     NO_VENDOR_ORGANIZATION: "Your vendor workspace is not ready yet. Please complete vendor setup.",
+    ACCOUNT_TYPE_MISMATCH: "This account belongs to the other login tab. Please switch Customer/Vendor and try again.",
     CLOUDINARY_NOT_CONFIGURED: "Media storage is not configured. Add the Cloudinary API key on the server and restart it.",
     MEDIA_UPLOAD_FAILED: "Media upload failed. Please check Cloudinary settings or try a smaller file.",
     PRIMARY_CATEGORY_SINGLE_ONLY: "Choose exactly one primary category. Add secondary services separately.",
     RATE_LIMITED: "Too many attempts. Please wait a few minutes and try again.",
+    COUPON_INVALID: "This coupon code is not valid.",
+    COUPON_NOT_STARTED: "This coupon is not active yet.",
+    COUPON_EXPIRED: "This coupon has expired.",
+    COUPON_USAGE_LIMIT_REACHED: "This coupon has already been fully used.",
+    COUPON_MIN_ORDER_NOT_MET: "This order does not meet the coupon minimum amount.",
+    COUPON_NO_DISCOUNT: "This coupon does not reduce this payment.",
   };
   return messages[code] || (status ? `Request failed (${status}). Please try again.` : "Request failed. Please try again.");
 }
@@ -177,9 +231,10 @@ const API_BASE = import.meta.env.VITE_API_URL
 export const externalApi = makeApi(
   `${API_BASE}/api`,
   `${API_BASE}/api/auth/refresh`,
-  { storageKey: "starvnt_external_access_token" },
+  { storageKey: "starvnt_external_access_token", loginRedirectPath: "/login" },
 );
 export const adminApi = makeApi(
   `${API_BASE}/api/admin`,
   `${API_BASE}/api/admin/auth/refresh`,
+  { storageKey: "starvnt_admin_access_token", loginRedirectPath: "/admin/login" },
 );

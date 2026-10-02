@@ -63,7 +63,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
               </Link>
             ) : (
               <Link
-                to="/login"
+                to="/login?as=customer"
                 className="text-xs sm:text-sm font-bold text-ink/70 dark:text-gray-300 hover:text-primary px-2 transition"
               >
                 Sign in

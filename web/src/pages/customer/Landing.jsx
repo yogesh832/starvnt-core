@@ -36,13 +36,13 @@ function LoginPopup({ text, onClose }) {
           )}
         </p>
         <button
-          onClick={() => navigate('/login', { state: { intent: text || undefined } })}
+          onClick={() => navigate('/login?as=customer&next=/customer', { state: { intent: text || undefined } })}
           className="mt-5 w-full rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-bold py-3 transition shadow-md shadow-primary/25"
         >
           Log in
         </button>
         <button
-          onClick={() => navigate('/login', { state: { intent: text || undefined, register: true } })}
+          onClick={() => navigate('/signup?as=customer&next=/customer', { state: { intent: text || undefined, register: true } })}
           className="mt-2 w-full rounded-xl border border-primary/30 text-primary text-sm font-bold py-3 hover:bg-primary-soft transition"
         >
           Create a free account
@@ -67,8 +67,7 @@ export default function Landing() {
   function beginPlan(text) {
     const ask = typeof text === 'string' ? text.trim() : '';
     if (user) {
-      if (user.accountType === 'VENDOR') navigate('/vendor');
-      else navigate(ask ? `/customer/aura?new=1&ask=${encodeURIComponent(ask)}` : '/customer');
+      navigate(ask ? `/customer/aura?new=1&ask=${encodeURIComponent(ask)}` : '/customer');
       return;
     }
     // Kept through sign-up, then opened in Aura+.

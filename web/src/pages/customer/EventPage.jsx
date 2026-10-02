@@ -5,7 +5,6 @@ import { customerApi, errorText } from './customerApi.js';
 import {
   AskBox,
   BackLink,
-  CustomerPageSkeleton,
   Empty,
   EventMeta,
   EventStatusPill,
@@ -14,6 +13,7 @@ import {
   StepTracker,
   Tabs,
   categoryIcon,
+  DetailSkeleton,
   useLoad,
 } from './customerUi.jsx';
 import UnderstandingCard, { EditForm } from './UnderstandingCard.jsx';
@@ -39,7 +39,32 @@ function Cover({ event, onEdit, editable }) {
         </div>
       </div>
       <div className="mt-2 [&_*]:text-white/90"><EventMeta event={event} /></div>
+      <LocationDetails event={event} />
     </section>
+  );
+}
+
+/** The parts of the event location beyond the one-line label — only those given. */
+function LocationDetails({ event }) {
+  const l = event.location || {};
+  const lines = [
+    l.address && ['Address', [l.address, l.pincode].filter(Boolean).join(' – ')],
+    !l.address && l.pincode && ['Pincode', l.pincode],
+    (l.state || l.country) && ['Region', [l.state, l.country].filter(Boolean).join(', ')],
+    l.landmark && ['Landmark', l.landmark],
+    l.notes && ['Location notes', l.notes],
+    event.specialRequirements && ['Special requirements', event.specialRequirements],
+  ].filter(Boolean);
+  if (!lines.length) return null;
+  return (
+    <dl className="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+      {lines.map(([k, v]) => (
+        <div key={k} className="min-w-0">
+          <dt className="text-white/70 inline">{k}: </dt>
+          <dd className="inline text-white/95">{v}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -132,7 +157,7 @@ export default function EventPage() {
   const [tab, setTab] = useState('plan');
   const [editing, setEditing] = useState(false);
 
-  if (loading && !data) return <CustomerPageSkeleton cards={4} />;
+  if (loading && !data) return <DetailSkeleton />;
   if (error) {
     return (
       <div className="max-w-3xl mx-auto">
@@ -228,7 +253,9 @@ export default function EventPage() {
                     <span className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center shrink-0"><Icon name={categoryIcon(b.category)} size={13} /></span>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-navy truncate">{b.vendorName}{b.isDemo ? ' (demo)' : ''}</div>
-                      <div className="text-[10px] text-muted">{b.label} · {formatINR(b.amount)}</div>
+                      <div className="text-[10px] text-muted">
+                        {b.label} · Total {formatINR(b.packageTotal || b.amount)} · Advance paid {formatINR(b.paidAmount || b.amount)}
+                      </div>
                     </div>
                     <span className={`text-[10px] font-bold ${b.status === 'confirmed' ? 'text-emerald-600' : b.status === 'pending' ? 'text-amber-600' : 'text-muted'}`}>
                       {b.status === 'confirmed' ? '✓ Confirmed' : b.status === 'pending' ? 'Under review' : 'Cancelled'}

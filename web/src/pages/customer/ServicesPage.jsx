@@ -6,13 +6,13 @@ import {
   ArtTile,
   AvailabilityPill,
   BackLink,
-  CustomerPageSkeleton,
   DemoBadge,
   Empty,
   PriceText,
   RatingText,
   Tabs,
   categoryIcon,
+  PageSkeleton,
   useLoad,
 } from './customerUi.jsx';
 import { formatDate, formatINR, planStatus } from './format.js';
@@ -27,7 +27,7 @@ const byPrice = (dir) => (a, b) => {
 /** Open plan items, each leading to its options. */
 function CategoryList({ eventId }) {
   const { data, error, loading } = useLoad(() => customerApi.services(eventId), [eventId]);
-  if (loading) return <CustomerPageSkeleton cards={3} />;
+  if (loading) return <PageSkeleton title="Services" count={4} type="cards" />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const { event, categories } = data;
   return (
@@ -60,7 +60,24 @@ function CategoryList({ eventId }) {
   );
 }
 
-function OptionCard({ eventId, eventStatus, option, best, selected, onSelected, checked, onToggle, canCompare }) {
+function OptionCard({ eventId, eventStatus, option, best, selected, onSelected, checked, onToggle, canCompare, requirementId }) {
+  const [messageState, setMessageState] = useState('');
+  const rec = option.recommendation || {};
+  const askVendor = async (question) => {
+    if (!requirementId) return;
+    setMessageState('sending');
+    try {
+      await customerApi.postMessage(eventId, {
+        requirementId,
+        optionId: option.id,
+        body: `${option.vendorName} - ${option.packageName}: ${question}`,
+      });
+      setMessageState('sent');
+      setTimeout(() => setMessageState(''), 2500);
+    } catch {
+      setMessageState('error');
+    }
+  };
   return (
     <div className={`bg-white rounded-2xl border p-3 flex flex-col ${best ? 'border-primary/40 shadow-sm shadow-primary/10' : 'border-gray-100'}`}>
       <div className="relative">
@@ -78,6 +95,32 @@ function OptionCard({ eventId, eventStatus, option, best, selected, onSelected, 
           <PriceText option={option} />
           <AvailabilityPill value={option.availability} />
         </div>
+        {rec.auraScore && (
+          <div className="mt-2 rounded-2xl border border-primary/10 bg-primary-soft/50 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[11px] font-extrabold text-primary">AuraScore {rec.auraScore}/100</div>
+              <div className="text-[10px] font-bold text-navy">{rec.matchLevel}</div>
+            </div>
+            {rec.distance?.distanceText && (
+              <div className="mt-1 text-[10px] text-muted">
+                {rec.distance.distanceText}{rec.distance.durationText ? ` · ${rec.distance.durationText}` : ''} from pinned location
+                {rec.distance.source === 'estimate' ? ' · estimate' : ''}
+              </div>
+            )}
+            {rec.whyBest?.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {rec.whyBest.slice(0, 2).map((i) => (
+                  <li key={i} className="text-[10px] text-ink/80 flex gap-1.5"><Icon name="check" size={10} className="text-emerald-500 mt-0.5 shrink-0" /> {i}</li>
+                ))}
+              </ul>
+            )}
+            {rec.whyNot?.length > 0 && (
+              <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 rounded-xl px-2 py-1.5">
+                Check: {rec.whyNot.slice(0, 2).join(' · ')}
+              </div>
+            )}
+          </div>
+        )}
         {option.includes.length > 0 && (
           <ul className="mt-2 space-y-0.5">
             {option.includes.slice(0, 3).map((i) => (
@@ -85,6 +128,43 @@ function OptionCard({ eventId, eventStatus, option, best, selected, onSelected, 
             ))}
           </ul>
         )}
+        {rec.negotiable?.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {rec.negotiable.slice(0, 3).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => askVendor(`Can we discuss ${n}?`)}
+                className="rounded-full bg-lavender text-primary text-[10px] font-bold px-2 py-1 hover:bg-primary hover:text-white"
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50/70 p-2">
+        <div className="text-[10px] font-bold text-muted uppercase tracking-wide">Ask before choosing</div>
+        <div className="mt-1 grid gap-1">
+          {(rec.suggestedQuestions || ['Can this fit my theme and budget?']).slice(0, 2).map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => askVendor(q)}
+              disabled={!requirementId || messageState === 'sending'}
+              className="text-left text-[11px] font-semibold text-navy bg-white border border-gray-100 rounded-xl px-2.5 py-1.5 hover:border-primary/30 disabled:opacity-50"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+        {messageState === 'sent' && (
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold text-emerald-600">Message added to this service thread.</span>
+            <Link to={`/customer/events/${eventId}/circle?service=${requirementId}`} className="text-[10px] font-bold text-primary">View thread</Link>
+          </div>
+        )}
+        {messageState === 'error' && <div className="mt-1 text-[10px] font-bold text-red-500">Could not send message.</div>}
       </div>
       <div className="mt-3 flex items-start gap-2">
         <SelectOptionButton eventId={eventId} eventStatus={eventStatus} option={option} selected={selected} onChanged={onSelected} compact />
@@ -102,6 +182,8 @@ function CategoryOptions({ eventId, category }) {
   const { data, error, loading, setData } = useLoad(() => customerApi.services(eventId, category), [eventId, category]);
   const [sort, setSort] = useState('recommended');
   const [picked, setPicked] = useState([]);
+  const [requestBusy, setRequestBusy] = useState(false);
+  const [requestError, setRequestError] = useState('');
 
   const sorted = useMemo(() => {
     const list = [...(data?.options || [])];
@@ -110,12 +192,30 @@ function CategoryOptions({ eventId, category }) {
     return list; // 'recommended' keeps the server order: bookable first, then price
   }, [data, sort]);
 
-  if (loading) return <CustomerPageSkeleton cards={6} />;
+  if (loading) return <PageSkeleton title="Vendor Options" count={4} type="cards" />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
-  const { event, label, options, bestValueId, selectedOptionId } = data;
+  const { event, label, options, bestValueId, selectedOptionId, requirement } = data;
   const chosen = options.find((o) => o.id === selectedOptionId);
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const meta = [event.city, event.eventDate && formatDate(event.eventDate)].filter(Boolean).join(' · ');
+
+  async function requestSelectedQuote() {
+    if (!chosen) return;
+    if (chosen.isDemo) {
+      navigate(`/customer/events/${eventId}/quotes`);
+      return;
+    }
+    setRequestBusy(true);
+    setRequestError('');
+    try {
+      await customerApi.requestVendorQuotes(eventId);
+      navigate(`/customer/events/${eventId}/quotes`);
+    } catch (err) {
+      setRequestError(errorText(err, 'Could not send quote request to vendor.'));
+    } finally {
+      setRequestBusy(false);
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-4 pb-20">
@@ -143,7 +243,15 @@ function CategoryOptions({ eventId, category }) {
           {chosen && (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-xs">
               <span className="text-emerald-800">You selected <b>{chosen.vendorName}</b>{chosen.isDemo ? ' (demo listing)' : ''}. Nothing is reserved yet.</span>
-              <Link to={`/customer/events/${eventId}/quotes`} className="ml-auto rounded-xl bg-emerald-600 text-white font-bold px-3 py-1.5">Get a quote →</Link>
+              <button
+                type="button"
+                onClick={requestSelectedQuote}
+                disabled={requestBusy}
+                className="ml-auto rounded-xl bg-emerald-600 text-white font-bold px-3 py-1.5 disabled:opacity-50"
+              >
+                {requestBusy ? 'Sending...' : chosen.isDemo ? 'Continue to quote →' : 'Request vendor quote →'}
+              </button>
+              {requestError && <span className="basis-full text-[11px] font-bold text-red-500">{requestError}</span>}
             </div>
           )}
           {options.some((o) => o.isDemo) && (
@@ -162,6 +270,7 @@ function CategoryOptions({ eventId, category }) {
                 checked={picked.includes(o.id)}
                 canCompare={picked.length < 4}
                 onToggle={() => toggle(o.id)}
+                requirementId={requirement?.id}
               />
             ))}
           </div>

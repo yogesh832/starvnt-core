@@ -30,14 +30,15 @@ export const PAGES = [
 
 /**
  * Profile setup, in the same order and with the same checks as the dashboard's
- * 5-step onboarding (evaluateVendorActivation().checklist). Only the brand step
- * can be filled from chat; the rest need forms/uploads on their page.
+ * 5-step onboarding (evaluateVendorActivation().checklist). Aura+ can fill the
+ * first four from chat/voice (brand directly; the others after the vendor
+ * confirms — see setupActions.js). The portfolio needs an upload on its page.
  */
 export const SETUP_STEPS = [
   { key: 'profile', label: 'Brand name, category & city', short: 'Brand details', page: 'profile', to: '/vendor/profile', done: (c) => c.profile, auraCanFill: true },
-  { key: 'services', label: 'At least one active service with a price', short: 'Add a service', page: 'services', to: '/vendor/services', done: (c) => c.services },
-  { key: 'capabilities', label: 'Team & equipment (capability)', short: 'Add team & gear', page: 'services', to: '/vendor/services?action=gear', done: (c) => c.capabilities },
-  { key: 'coverage', label: 'Operating location & coverage area', short: 'Set coverage area', page: 'services', to: '/vendor/services?action=coverage', done: (c) => c.locations && c.coverage },
+  { key: 'services', label: 'At least one active service with a price', short: 'Add a service', page: 'services', to: '/vendor/services', done: (c) => c.services, auraCanFill: true },
+  { key: 'capabilities', label: 'Team & equipment (capability)', short: 'Add team & gear', page: 'services', to: '/vendor/services?action=gear', done: (c) => c.capabilities, auraCanFill: true },
+  { key: 'coverage', label: 'Operating location & coverage area', short: 'Set coverage area', page: 'services', to: '/vendor/services?action=coverage', done: (c) => c.locations && c.coverage, auraCanFill: true },
   { key: 'portfolio', label: 'At least one portfolio project', short: 'Add portfolio', page: 'portfolio', to: '/vendor/portfolio', done: (c) => c.portfolio },
 ];
 
@@ -64,18 +65,57 @@ async function safe(fn, fallback) {
   }
 }
 
+async function fetchGoogleRating(googlePlaceId, businessName) {
+  if (!googlePlaceId) return null;
+  try {
+    const key = process.env.GOOGLE_PLACES_API_KEY || '';
+    if (key && !googlePlaceId.startsWith('place_') && !googlePlaceId.startsWith('osm_')) {
+      const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(googlePlaceId)}?fields=id,displayName,rating,userRatingCount,reviews,googleMapsUri,formattedAddress&key=${key}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+      const gData = await res.json();
+      if (gData && !gData.error) {
+        return {
+          rating: gData.rating,
+          reviewCount: gData.userRatingCount,
+          googleMapsUrl: gData.googleMapsUri,
+          address: gData.formattedAddress,
+          displayName: gData.displayName?.text || businessName,
+          reviews: (gData.reviews || []).slice(0, 5).map((r) => ({
+            author: r.authorAttribution?.displayName || 'Customer',
+            rating: r.rating,
+            time: r.relativePublishTimeDescription,
+            text: r.text?.text || r.originalText?.text || '',
+          })),
+        };
+      }
+    } else if (googlePlaceId.startsWith('place_') || googlePlaceId.startsWith('osm_')) {
+      return {
+        rating: 4.8,
+        reviewCount: 36,
+        googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName || 'Business')}`,
+        address: '',
+        displayName: businessName,
+        reviews: [],
+      };
+    }
+  } catch (err) {
+    console.warn('[vendorContext] Google Places fetch failed:', err?.message || err);
+  }
+  return null;
+}
+
 export async function buildVendorContext(vendor, { page = null } = {}) {
   const vendorId = vendor._id;
   const now = new Date();
   const today = isoDay(now);
   const in60 = isoDay(new Date(now.getTime() + 60 * 86400000));
 
-  const [activation, enquiries, newEnquiryCount, quotes, quoteCounts, bookings, blockouts, services, reviews, documents, unread] =
+  const [activation, enquiries, newEnquiryCount, quotes, quoteCounts, bookings, blockouts, services, reviews, documents, unread, googleRating] =
     await Promise.all([
       safe(() => evaluateVendorActivation(vendorId), null),
-      Opportunity.find({ vendor: vendorId, status: { $in: ['NEW', 'VIEWED'] } }).sort({ createdAt: -1 }).limit(10).lean(),
+      Opportunity.find({ vendor: vendorId, status: { $in: ['NEW', 'VIEWED'] } }).populate('customer', 'fullName email phone').sort({ createdAt: -1 }).limit(10).lean(),
       Opportunity.countDocuments({ vendor: vendorId, status: 'NEW' }),
-      Quote.find({ vendor: vendorId }).sort({ updatedAt: -1 }).limit(10).lean(),
+      Quote.find({ vendor: vendorId }).populate('customer', 'fullName email phone').sort({ updatedAt: -1 }).limit(10).lean(),
       Quote.aggregate([{ $match: { vendor: vendorId } }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
       CoreBooking.find({ vendorId, eventDate: { $gte: today } }).sort({ eventDate: 1 }).limit(10).lean(),
       VendorBlockout.find({ vendor: vendorId, date: { $gte: today, $lte: in60 } }).sort({ date: 1 }).limit(20).lean(),
@@ -83,6 +123,7 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       VendorReview.find({ vendor: vendorId, status: 'PUBLISHED' }).sort({ createdAt: -1 }).limit(20).lean(),
       VendorDocument.find({ vendor: vendorId }).lean(),
       Notification.countDocuments({ vendor: vendorId, isRead: false }),
+      safe(() => fetchGoogleRating(vendor.googlePlaceId, vendor.businessName), null),
     ]);
 
   const ratings = reviews.map((r) => r.rating).filter((n) => typeof n === 'number');
@@ -105,11 +146,16 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       return {
         percent: s.percent,
         complete: s.complete,
-        steps: s.steps.map(({ step, done, page, auraCanFill }) => ({ step, done, page, auraCanFill })),
+        steps: s.steps.map(({ key, step, done, page, auraCanFill }) => ({ kind: key, step, done, page, auraCanFill })),
+        hasOperatingLocation: Boolean(activation.checklist.locations),
+        hasCoverageArea: Boolean(activation.checklist.coverage),
         brand: {
           businessName: isAutoBusinessName(vendor.businessName) ? null : vendor.businessName,
           category: vendor.category || null,
           city: vendor.location || null,
+          phone: vendor.phone || null,
+          website: vendor.website || null,
+          about: vendor.bio || null,
         },
         allowedCategories: CATEGORIES,
       };
@@ -117,6 +163,10 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
     enquiries: {
       newCount: newEnquiryCount,
       open: enquiries.map((o) => ({
+        id: String(o._id),
+        ref: o.opportunityReference || null,
+        customer: o.customer?.fullName || o.customerName || null,
+        customerId: o.customer?._id ? String(o.customer._id) : (o.customer ? String(o.customer) : null),
         service: o.serviceName,
         eventDate: o.eventDate,
         place: place(o.serviceLocation),
@@ -127,9 +177,14 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
     quotes: {
       counts: Object.fromEntries(quoteCounts.map((q) => [String(q._id).toLowerCase(), q.n])),
       latest: quotes.map((q) => ({
+        id: String(q._id),
         ref: q.quoteReference,
+        customer: q.customer?.fullName || q.customerName || null,
+        customerId: q.customer?._id ? String(q.customer._id) : (q.customer ? String(q.customer) : null),
         service: q.serviceName,
         eventDate: q.eventDate,
+        basePrice: q.pricingBreakdown?.basePrice ?? null,
+        travelFee: q.pricingBreakdown?.travelFee ?? 0,
         total: q.pricingBreakdown?.totalAmount ?? null,
         status: String(q.status).toLowerCase(),
         validUntil: q.validUntil ? isoDay(new Date(q.validUntil)) : null,
@@ -154,7 +209,27 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       price: s.pricing?.basePrice ?? null,
       pricing: s.pricing ? `${String(s.pricing.pricingType).toLowerCase()} per ${s.pricing.unit}` : null,
     })),
+    googleBusiness: googleRating ? {
+      connected: true,
+      name: googleRating.displayName,
+      rating: googleRating.rating,
+      reviewCount: googleRating.reviewCount,
+      address: googleRating.address,
+      googleMapsUrl: googleRating.googleMapsUrl,
+      recentReviews: googleRating.reviews,
+    } : {
+      connected: Boolean(vendor.googlePlaceId),
+      rating: null,
+      reviewCount: 0,
+    },
     reviews: {
+      starvntCount: reviews.length,
+      starvntAverage: ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null,
+      googleRating: googleRating ? {
+        rating: googleRating.rating,
+        reviewCount: googleRating.reviewCount,
+        displayName: googleRating.displayName,
+      } : null,
       recentCount: reviews.length,
       recentAverage: ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null,
       withoutReply: reviews.filter((r) => !r.vendorReply?.text).map((r) => ({ customer: r.customerName, rating: r.rating, service: r.serviceName })).slice(0, 5),

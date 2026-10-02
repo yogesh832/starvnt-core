@@ -16,10 +16,12 @@ import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
 import { VendorDocument } from '../models/VendorDocument.js';
-import { Booking as CustomerBooking, EventMessage, CustomerNotification } from '../../customer/models/index.js';
+import { Booking as CustomerBooking, EventMessage } from '../../customer/models/index.js';
+import { notifyCustomer } from '../../notifications/notification.service.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { generateVendorInsights } from '../services/auraIntelligence.service.js';
 import { verifyGstin } from '../services/gstinVerification.service.js';
+import { verifyPan } from '../services/panVerification.service.js';
 import { v2 as cloudinary } from 'cloudinary';
 import vendorAuraRoutes from './vendorAura.routes.js';
 
@@ -818,7 +820,7 @@ router.put('/notifications/:id/read', async (req, res, next) => {
   try {
     const notification = await Notification.findOneAndUpdate(
       { _id: req.params.id, vendor: req.vendorId },
-      { isRead: true },
+      { isRead: true, readAt: new Date(), status: 'READ' },
       { new: true }
     );
     if (!notification) {
@@ -832,7 +834,7 @@ router.put('/notifications/:id/read', async (req, res, next) => {
 
 router.put('/notifications/read-all', async (req, res, next) => {
   try {
-    await Notification.updateMany({ vendor: req.vendorId, isRead: false }, { isRead: true });
+    await Notification.updateMany({ vendor: req.vendorId, isRead: false }, { isRead: true, readAt: new Date(), status: 'READ' });
     res.json({ ok: true, message: 'All notifications marked as read' });
   } catch (err) {
     next(err);
@@ -1102,7 +1104,7 @@ router.get('/messages/threads/:id', async (req, res, next) => {
           ...(thread.customerRequirement ? [{ 'metadata.customerRequirementId': String(thread.customerRequirement) }] : []),
         ],
       },
-      { isRead: true }
+      { isRead: true, readAt: new Date(), status: 'READ' }
     );
 
     res.json({ ok: true, thread });
@@ -1151,12 +1153,15 @@ router.post('/messages/threads/:id', async (req, res, next) => {
             senderName: req.vendor.businessName || 'Vendor',
             body: text.trim(),
           }),
-          CustomerNotification.create({
-            customer: booking.customer,
-            event: booking.event,
+          notifyCustomer({
+            customerId: booking.customer,
+            eventId: booking.event,
+            bookingId: booking._id,
             type: 'message',
             title: `${req.vendor.businessName || 'Vendor'} replied`,
             body: text.trim().slice(0, 180),
+            actionUrl: `/customer/events/${booking.event}/circle?booking=${booking._id}`,
+            idempotencyKey: `customer.vendor-reply.booking.${thread._id}.${thread.messages.length}`,
           }),
         ]);
       }
@@ -1169,12 +1174,14 @@ router.post('/messages/threads/:id', async (req, res, next) => {
           senderName: req.vendor.businessName || 'Vendor',
           body: text.trim(),
         }),
-        CustomerNotification.create({
-          customer: thread.customer,
-          event: thread.customerEvent,
+        notifyCustomer({
+          customerId: thread.customer,
+          eventId: thread.customerEvent,
           type: 'message',
           title: `${req.vendor.businessName || 'Vendor'} replied`,
           body: text.trim().slice(0, 180),
+          actionUrl: `/customer/events/${thread.customerEvent}/circle?service=${thread.customerRequirement}`,
+          idempotencyKey: `customer.vendor-reply.requirement.${thread._id}.${thread.messages.length}`,
         }),
       ]);
     }
@@ -1245,6 +1252,47 @@ router.get('/documents', async (req, res, next) => {
   }
 });
 
+router.post('/documents/verify-pan', async (req, res, next) => {
+  try {
+    const { pan } = req.body || {};
+    if (!pan || !String(pan).trim()) {
+      return res.status(400).json({ error: 'PAN_REQUIRED' });
+    }
+    const result = await verifyPan(String(pan).trim(), req.vendor.businessName);
+    res.json({ ok: true, result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/documents/verify-gstin', async (req, res, next) => {
+  try {
+    const { gstin } = req.body || {};
+    if (!gstin || !String(gstin).trim()) {
+      return res.status(400).json({ error: 'GSTIN_REQUIRED' });
+    }
+    const result = await verifyGstin(String(gstin).trim(), req.vendor.businessName);
+    res.json({ ok: true, result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+function providerReviewReason(result, label) {
+  const code = String(result?.error || '').toLowerCase();
+  const message = String(result?.message || '').toLowerCase();
+  if (code.includes('insufficient') || code.includes('credit') || message.includes('insufficient') || message.includes('credit')) {
+    return `${label} automatic verification could not run because provider credits are unavailable.`;
+  }
+  if (code.includes('fetch') || message.includes('failed to fetch')) {
+    return `${label} automatic verification could not reach the provider.`;
+  }
+  if (code.includes('not_configured')) {
+    return `${label} automatic verification is not configured.`;
+  }
+  return `${label} check could not auto-verify.`;
+}
+
 router.post('/documents', async (req, res, next) => {
   try {
     const { title, type, documentNumber, fileName, fileUrl, fileSize, notes, expiryDate } = req.body || {};
@@ -1283,7 +1331,37 @@ router.post('/documents', async (req, res, next) => {
         status = 'SUBMITTED';
         const reason = result.ok
           ? `GSTIN found, but name did not confidently match "${req.vendor.businessName}".`
-          : `GSTIN check could not auto-verify: ${result.error || 'unknown error'}.`;
+          : providerReviewReason(result, 'GSTIN');
+        resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
+      }
+    } else if (normalizedType === 'PAN') {
+      verificationSource = 'PAN_API';
+      const result = await verifyPan(normalizedDocumentNumber, req.vendor.businessName);
+      verificationResult = {
+        matched: Boolean(result.matched),
+        confidence: result.confidence || 'NONE',
+        legalName: result.legalName || result.registeredName || '',
+        tradeName: result.tradeName || '',
+        registeredName: result.registeredName || result.legalName || '',
+        pan: normalizedDocumentNumber,
+        panStatus: result.panStatus || '',
+        entityType: result.entityType || '',
+        taxpayerType: result.taxpayerType || '',
+        registrationDate: result.registrationDate || '',
+        address: result.address || '',
+        raw: result.raw || null,
+        checkedAt: result.checkedAt || new Date(),
+        error: result.error || '',
+      };
+
+      if (result.ok && result.matched) {
+        status = 'VERIFIED';
+        resolvedNotes = `Corporate PAN verified (${result.entityType || 'Corporate'}). Legal name: ${result.legalName || result.registeredName || 'not provided'}${result.tradeName ? `; Trade name: ${result.tradeName}` : ''}`;
+      } else {
+        status = 'SUBMITTED';
+        const reason = result.ok
+          ? `Corporate PAN found, but registered name did not confidently match "${req.vendor.businessName}".`
+          : providerReviewReason(result, 'Corporate PAN');
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
       }
     }
@@ -1305,14 +1383,17 @@ router.post('/documents', async (req, res, next) => {
     });
 
     let activation = null;
-    if (status === 'VERIFIED' && normalizedType === 'GST') {
+    if (status === 'VERIFIED' && (normalizedType === 'GST' || normalizedType === 'PAN')) {
+      const isPan = normalizedType === 'PAN';
       req.vendor.verification = {
         ...(req.vendor.verification?.toObject?.() || req.vendor.verification || {}),
         isVerified: true,
         verifiedAt: new Date(),
-        documentType: 'GST',
+        documentType: normalizedType,
         documentRef: doc._id,
-        notes: 'Auto-verified by GSTIN API legal/trade name match.',
+        notes: isPan
+          ? `Auto-verified by Corporation PAN API legal/trade name match (${verificationResult?.legalName || verificationResult?.registeredName || ''}).`
+          : 'Auto-verified by GSTIN API legal/trade name match.',
       };
       await req.vendor.save();
       activation = await evaluateVendorActivation(req.vendorId);

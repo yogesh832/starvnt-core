@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { externalApi } from '../../lib/api.js';
+import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
 
 /**
  * Vendor Aura+: answers from the vendor's own data and links to the page
@@ -212,12 +213,51 @@ function Bubble({ m, onAction }) {
   );
 }
 
+const CHAT_THINKING_STATUS_DELAY_MS = 1200;
+const CHAT_STATUS_ROTATION_MS = 2500;
+const STATUS_MESSAGES = [
+  'Thinking...',
+  'Getting the right information for you...',
+  'Checking the details...',
+  'Putting this together...',
+  'Using what I know to find the best answer...',
+  'Analyzing the information...',
+  'Almost there...',
+];
+
+const DESKTOP_MIN_W = 340;
+const DESKTOP_MIN_H = 360;
+const DESKTOP_MAX_W = 900;
+
+function desktopPanelBounds(width, height) {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+  return {
+    minX: 12,
+    minY: 12,
+    maxX: Math.max(12, vw - width - 12),
+    maxY: Math.max(12, vh - height - 12),
+    maxW: Math.min(DESKTOP_MAX_W, Math.max(DESKTOP_MIN_W, vw - 24)),
+    maxH: Math.max(DESKTOP_MIN_H, vh - 24),
+  };
+}
+
+function clampPanelPosition(pos, width, height) {
+  const bounds = desktopPanelBounds(width, height);
+  return {
+    x: Math.round(Math.min(bounds.maxX, Math.max(bounds.minX, pos.x))),
+    y: Math.round(Math.min(bounds.maxY, Math.max(bounds.minY, pos.y))),
+  };
+}
+
 export default function VendorAura({ open, onClose, page, userId, prompt, setup }) {
   const navigate = useNavigate();
   const [sessionId, setSessionId] = useState(() => readSession(userId));
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [showThinkingStatus, setShowThinkingStatus] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(STATUS_MESSAGES[0]);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [mode, setModeState] = useState(readMode);
@@ -330,31 +370,158 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     if (!message || sending) return;
     setError('');
     setInput('');
-    const optimistic = { role: 'user', content: message, actions: [] };
-    setMessages((m) => [...m, optimistic]);
     setSending(true);
-    try {
-      const res = await externalApi.call('/vendor/aura/chat', {
-        method: 'POST',
-        body: { sessionId, message, page, ...(typeof confirm === 'boolean' ? { confirm } : {}) },
-      });
-      setMessages((m) => [...m, { role: 'model', content: res.reply, actions: res.actions || [] }]);
-      setPending(res.pending || null);
-      // Aura+ saved something for setup → refresh the portal header and the setup checklist.
-      if (res.profileUpdated) window.dispatchEvent(new Event('vendorProfileUpdated'));
-      // Asked by voice → answer by voice too.
-      if (spoken && canSpeak) {
-        setSpeaking(true);
-        speakText(res.reply, () => setSpeaking(false));
+    setShowThinkingStatus(false);
+    setStatusMessage(STATUS_MESSAGES[0]);
+
+    setMessages((m) => [
+      ...m,
+      { role: 'user', content: message, actions: [] },
+      { role: 'model', content: '', actions: [] },
+    ]);
+
+    const VOICE_PROGRESS_PHRASES = [
+      'Okay, let me get that information for you.',
+      'Sure, let me check that for you.',
+      'Got it, I’m looking into that for you.',
+    ];
+
+    let hasReceivedToken = false;
+    let thinkingTimer = null;
+    let rotationInterval = null;
+    let timeoutTimer = null;
+    let voiceProgressTimer = null;
+    let hasSpokenVoiceProgress = false;
+    let statusIdx = 0;
+    const abortController = new AbortController();
+
+    thinkingTimer = setTimeout(() => {
+      if (!hasReceivedToken) {
+        setShowThinkingStatus(true);
+        rotationInterval = setInterval(() => {
+          statusIdx = (statusIdx + 1) % STATUS_MESSAGES.length;
+          setStatusMessage(STATUS_MESSAGES[statusIdx]);
+        }, CHAT_STATUS_ROTATION_MS);
       }
-    } catch (err) {
-      setMessages((m) => m.filter((x) => x !== optimistic));
-      setInput(message);
-      setError(ERRORS[err?.data?.error] || 'Aura+ could not reply. Please try again.');
-    } finally {
+    }, CHAT_THINKING_STATUS_DELAY_MS);
+
+    if (spoken) {
+      voiceProgressTimer = setTimeout(() => {
+        if (!hasReceivedToken && !hasSpokenVoiceProgress) {
+          hasSpokenVoiceProgress = true;
+          const phrase = VOICE_PROGRESS_PHRASES[Math.floor(Math.random() * VOICE_PROGRESS_PHRASES.length)];
+          speakText(phrase);
+        }
+      }, CHAT_THINKING_STATUS_DELAY_MS);
+    }
+
+    timeoutTimer = setTimeout(() => {
+      abortController.abort();
+    }, 25000);
+
+    const cleanupTimers = () => {
+      if (thinkingTimer) clearTimeout(thinkingTimer);
+      if (rotationInterval) clearInterval(rotationInterval);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (voiceProgressTimer) clearTimeout(voiceProgressTimer);
+    };
+
+    let accumulatedText = '';
+    let donePayload = null;
+
+    try {
+      await externalApi.stream(
+        '/vendor/aura/chat',
+        {
+          method: 'POST',
+          body: { sessionId, message, page, ...(typeof confirm === 'boolean' ? { confirm } : {}) },
+          signal: abortController.signal,
+        },
+        (event) => {
+          if (event.type === 'status') {
+            if (event.message) setStatusMessage(event.message);
+          } else if (event.type === 'chunk') {
+            if (!hasReceivedToken) {
+              hasReceivedToken = true;
+              cleanupTimers();
+              setShowThinkingStatus(false);
+            }
+            accumulatedText += event.text || '';
+            setMessages((m) => {
+              const next = [...m];
+              const last = next[next.length - 1];
+              if (last && last.role === 'model') {
+                next[next.length - 1] = { ...last, content: accumulatedText };
+              }
+              return next;
+            });
+          } else if (event.type === 'done') {
+            donePayload = event;
+            if (event.reply) {
+              accumulatedText = event.reply;
+              setMessages((m) => {
+                const next = [...m];
+                const last = next[next.length - 1];
+                if (last && last.role === 'model') {
+                  next[next.length - 1] = {
+                    ...last,
+                    content: event.reply,
+                    actions: event.actions || [],
+                  };
+                }
+                return next;
+              });
+            }
+          } else if (event.type === 'error') {
+            throw new Error(event.error || 'Aura+ could not reply.');
+          }
+        }
+      );
+
+      cleanupTimers();
+      setShowThinkingStatus(false);
       setSending(false);
+
+      if (donePayload) {
+        setPending(donePayload.pending || null);
+        if (donePayload.profileUpdated) window.dispatchEvent(new Event('vendorProfileUpdated'));
+        if (spoken && canSpeak) {
+          setSpeaking(true);
+          speakText(donePayload.reply || accumulatedText, () => setSpeaking(false));
+        }
+      }
+      return accumulatedText;
+    } catch (err) {
+      cleanupTimers();
+      setShowThinkingStatus(false);
+      setSending(false);
+
+      setMessages((m) => {
+        let list = [...m];
+        if (list.length > 0 && list[list.length - 1].role === 'model' && !accumulatedText) {
+          list = list.slice(0, -1);
+        }
+        if (!accumulatedText && list.length > 0 && list[list.length - 1].role === 'user' && list[list.length - 1].content === message) {
+          list = list.slice(0, -1);
+        }
+        return list;
+      });
+
+      if (!accumulatedText) {
+        setInput(message);
+        setError(ERRORS[err?.data?.error] || err?.message || 'Aura+ could not reply. Please try again.');
+      }
+      return null;
     }
   }
+
+  // Voice mode (orb): a continuous spoken conversation; each turn goes through send(),
+  // so setup confirmations work by voice too ("haan" / "no").
+  const agent = useVoiceAgent({ lang: voiceLang, onUtterance: (t) => send(t) });
+  useEffect(() => {
+    if (!open && agent.open) agent.end();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // A prompt handed over from elsewhere (dashboard card) is sent once the panel is ready.
   useEffect(() => {
@@ -385,7 +552,342 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     send(text);
   }
 
+  // ── Draggable panel positioning on desktop (PC) ──────────────────────────
+  // ── Smooth Sliding, Custom Resizing & Draggable panel positioning ─────────
+  const [dockMode, setDockMode] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('vendor_aura_dock_mode');
+      if (['docked', 'floating', 'minimized'].includes(saved)) return saved;
+    } catch {
+      /* ignore */
+    }
+    return 'docked';
+  });
+
+  const [panelWidth, setPanelWidth] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('vendor_aura_width');
+      const num = parseInt(saved, 10);
+      if (num >= DESKTOP_MIN_W && num <= DESKTOP_MAX_W) return num;
+    } catch {
+      /* ignore */
+    }
+    return 420;
+  });
+
+  const [panelHeight, setPanelHeight] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('vendor_aura_height');
+      const num = parseInt(saved, 10);
+      if (num >= DESKTOP_MIN_H && typeof window !== 'undefined') return Math.min(num, Math.max(DESKTOP_MIN_H, window.innerHeight - 24));
+      if (num >= DESKTOP_MIN_H) return num;
+    } catch {
+      /* ignore */
+    }
+    return typeof window !== 'undefined' ? Math.min(720, Math.max(DESKTOP_MIN_H, window.innerHeight - 24)) : 680;
+  });
+
+  const [dragPos, setDragPos] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('vendor_aura_pos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  });
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const dragRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
+  const resizeRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0, initialWidth: 420, initialHeight: 680, mode: 'left' });
+
+  function updateDockMode(newMode) {
+    setDockMode(newMode);
+    try {
+      sessionStorage.setItem('vendor_aura_dock_mode', newMode);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // When an explicit prompt arrives, ensure Aura is visible and not minimized
+  useEffect(() => {
+    if (open && prompt?.text && dockMode === 'minimized') {
+      updateDockMode('docked');
+    }
+  }, [open, prompt, dockMode]);
+
+  function updatePanelWidth(newWidth) {
+    const clamped = Math.max(DESKTOP_MIN_W, Math.min(newWidth, Math.max(DESKTOP_MIN_W, window.innerWidth - 60)));
+    setPanelWidth(clamped);
+    try {
+      sessionStorage.setItem('vendor_aura_width', String(clamped));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function cycleWidth() {
+    if (panelWidth < 450) updatePanelWidth(520);
+    else if (panelWidth < 580) updatePanelWidth(680);
+    else updatePanelWidth(380);
+  }
+
+  function updatePanelHeight(newHeight) {
+    const maxH = Math.max(DESKTOP_MIN_H, window.innerHeight - 24);
+    const clamped = Math.max(DESKTOP_MIN_H, Math.min(newHeight, maxH));
+    setPanelHeight(clamped);
+    try {
+      sessionStorage.setItem('vendor_aura_height', String(clamped));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function cycleHeight() {
+    if (panelHeight < 520) updatePanelHeight(620);
+    else if (panelHeight < 720) updatePanelHeight(Math.max(DESKTOP_MIN_H, window.innerHeight - 24));
+    else updatePanelHeight(430);
+  }
+
+  function handleDragStart(e) {
+    if (window.innerWidth < 1024 || e.button !== 0) return;
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+
+    e.preventDefault();
+    const panel = document.getElementById('vendor-aura-panel');
+    const rect = panel ? panel.getBoundingClientRect() : { left: window.innerWidth - panelWidth - 16, top: 12 };
+
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: rect.left,
+      initialY: rect.top,
+    };
+    setIsDragging(true);
+    if (dockMode !== 'floating') {
+      updateDockMode('floating');
+    }
+
+    function onMouseMove(moveEvent) {
+      const dx = moveEvent.clientX - dragRef.current.startX;
+      const dy = moveEvent.clientY - dragRef.current.startY;
+      setDragPos(clampPanelPosition({ x: dragRef.current.initialX + dx, y: dragRef.current.initialY + dy }, panelWidth, panelHeight));
+    }
+
+    function onMouseUp() {
+      setIsDragging(false);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      setDragPos((curr) => {
+        if (curr) {
+          try {
+            sessionStorage.setItem('vendor_aura_pos', JSON.stringify(curr));
+          } catch {
+            /* ignore */
+          }
+        }
+        return curr;
+      });
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  function handleResizeStart(e, mode = 'left') {
+    if (window.innerWidth < 1024 || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const panel = document.getElementById('vendor-aura-panel');
+    const rect = panel ? panel.getBoundingClientRect() : { left: window.innerWidth - panelWidth - 12, top: 12 };
+
+    resizeRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: rect.left,
+      initialY: rect.top,
+      initialWidth: panelWidth,
+      initialHeight: panelHeight,
+      mode,
+    };
+    setIsResizing(true);
+    if (dockMode !== 'floating' && mode !== 'left') {
+      setDragPos(clampPanelPosition({ x: rect.left, y: rect.top }, panelWidth, panelHeight));
+      updateDockMode('floating');
+    }
+
+    function onResizeMove(moveEvent) {
+      const r = resizeRef.current;
+      const bounds = desktopPanelBounds(panelWidth, panelHeight);
+      const dx = moveEvent.clientX - r.startX;
+      const dy = moveEvent.clientY - r.startY;
+
+      let nextWidth = r.initialWidth;
+      let nextHeight = r.initialHeight;
+      let nextX = r.initialX;
+      let nextY = r.initialY;
+
+      if (r.mode.includes('left')) {
+        nextWidth = Math.round(Math.min(bounds.maxW, Math.max(DESKTOP_MIN_W, r.initialWidth - dx)));
+        nextX = r.initialX + (r.initialWidth - nextWidth);
+      }
+      if (r.mode.includes('right')) {
+        nextWidth = Math.round(Math.min(bounds.maxW, Math.max(DESKTOP_MIN_W, r.initialWidth + dx)));
+      }
+      if (r.mode.includes('bottom')) {
+        nextHeight = Math.round(Math.min(bounds.maxH, Math.max(DESKTOP_MIN_H, r.initialHeight + dy)));
+      }
+      if (r.mode.includes('top')) {
+        nextHeight = Math.round(Math.min(bounds.maxH, Math.max(DESKTOP_MIN_H, r.initialHeight - dy)));
+        nextY = r.initialY + (r.initialHeight - nextHeight);
+      }
+
+      setPanelWidth(nextWidth);
+      setPanelHeight(nextHeight);
+      if (dockMode === 'floating' || r.mode !== 'left') {
+        setDragPos(clampPanelPosition({ x: nextX, y: nextY }, nextWidth, nextHeight));
+      }
+    }
+
+    function onResizeEnd() {
+      setIsResizing(false);
+      window.removeEventListener('mousemove', onResizeMove);
+      window.removeEventListener('mouseup', onResizeEnd);
+      setPanelWidth((w) => {
+        try {
+          sessionStorage.setItem('vendor_aura_width', String(w));
+        } catch {
+          /* ignore */
+        }
+        return w;
+      });
+      setPanelHeight((h) => {
+        try {
+          sessionStorage.setItem('vendor_aura_height', String(h));
+        } catch {
+          /* ignore */
+        }
+        return h;
+      });
+      setDragPos((curr) => {
+        if (curr) {
+          try {
+            sessionStorage.setItem('vendor_aura_pos', JSON.stringify(curr));
+          } catch {
+            /* ignore */
+          }
+        }
+        return curr;
+      });
+    }
+
+    window.addEventListener('mousemove', onResizeMove);
+    window.addEventListener('mouseup', onResizeEnd);
+  }
+
+  function dockToRight(e) {
+    e?.stopPropagation?.();
+    setDragPos(null);
+    updateDockMode('docked');
+    try {
+      sessionStorage.removeItem('vendor_aura_pos');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function switchToFloat(e) {
+    e?.stopPropagation?.();
+    const panel = document.getElementById('vendor-aura-panel');
+    const rect = panel ? panel.getBoundingClientRect() : { left: window.innerWidth - panelWidth - 24, top: 16 };
+    setDragPos(clampPanelPosition({ x: Math.max(16, rect.left - 40), y: Math.max(16, rect.top) }, panelWidth, panelHeight));
+    updateDockMode('floating');
+  }
+
+  function snapTo(place) {
+    if (window.innerWidth < 1024) return;
+    const margin = 12;
+    const wide = Math.min(Math.max(panelWidth, 520), Math.min(DESKTOP_MAX_W, window.innerWidth - 24));
+    const tall = Math.min(Math.max(panelHeight, 500), window.innerHeight - 24);
+    let nextWidth = panelWidth;
+    let nextHeight = panelHeight;
+    let next = { x: margin, y: margin };
+
+    if (place === 'right') {
+      nextWidth = Math.min(Math.max(panelWidth, 420), window.innerWidth - 24);
+      nextHeight = window.innerHeight - 24;
+      next = { x: window.innerWidth - nextWidth - margin, y: margin };
+    } else if (place === 'left') {
+      nextWidth = Math.min(Math.max(panelWidth, 420), window.innerWidth - 24);
+      nextHeight = window.innerHeight - 24;
+      next = { x: margin, y: margin };
+    } else if (place === 'top') {
+      nextWidth = wide;
+      nextHeight = Math.min(Math.max(420, Math.round(window.innerHeight * 0.55)), window.innerHeight - 24);
+      next = { x: Math.round((window.innerWidth - nextWidth) / 2), y: margin };
+    } else if (place === 'bottom') {
+      nextWidth = wide;
+      nextHeight = Math.min(Math.max(420, Math.round(window.innerHeight * 0.55)), window.innerHeight - 24);
+      next = { x: Math.round((window.innerWidth - nextWidth) / 2), y: window.innerHeight - nextHeight - margin };
+    } else if (place === 'center') {
+      nextWidth = wide;
+      nextHeight = tall;
+      next = { x: Math.round((window.innerWidth - nextWidth) / 2), y: Math.round((window.innerHeight - nextHeight) / 2) };
+    }
+
+    setPanelWidth(nextWidth);
+    setPanelHeight(nextHeight);
+    setDragPos(clampPanelPosition(next, nextWidth, nextHeight));
+    updateDockMode('floating');
+    try {
+      sessionStorage.setItem('vendor_aura_width', String(nextWidth));
+      sessionStorage.setItem('vendor_aura_height', String(nextHeight));
+      sessionStorage.setItem('vendor_aura_pos', JSON.stringify(clampPanelPosition(next, nextWidth, nextHeight)));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    function handleWindowResize() {
+      if (window.innerWidth < 1024) return;
+      setDragPos((prev) => {
+        if (!prev) return null;
+        return clampPanelPosition(prev, panelWidth, panelHeight);
+      });
+    }
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, [panelWidth, panelHeight]);
+
   if (!open) return null;
+
+  // Minimized Floating Button
+  if (dockMode === 'minimized') {
+    return (
+      <button
+        type="button"
+        onClick={() => updateDockMode('docked')}
+        className="fixed right-3 bottom-20 lg:bottom-5 lg:right-5 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-2xl shadow-primary/30 border border-white/70 hover:scale-105 active:scale-95 transition-all group"
+        title="Open Aura+"
+        aria-label="Open Aura+"
+      >
+        <Icon name="bolt" size={18} />
+        {pending && (
+          <span
+            className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white animate-pulse"
+            title="Confirmation pending"
+          />
+        )}
+      </button>
+    );
+  }
+
   const chips = [...(setupIncomplete ? [START_SETUP] : []), ...(PAGE_PROMPTS[page] || []), ...QUICK].slice(0, 5);
   const setupCard = setupIncomplete && (
     <SetupCard
@@ -398,28 +900,202 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     />
   );
 
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+  const isDocked = dockMode === 'docked' || !dragPos;
+
+  const panelStyle = isDesktop
+    ? isDocked
+      ? {
+          top: '12px',
+          right: '12px',
+          bottom: '12px',
+          width: `${panelWidth}px`,
+          maxWidth: 'calc(100vw - 24px)',
+          height: 'calc(100vh - 24px)',
+        }
+      : {
+          left: `${dragPos?.x || 20}px`,
+          top: `${dragPos?.y || 20}px`,
+          right: 'auto',
+          bottom: 'auto',
+          width: `${panelWidth}px`,
+          maxWidth: 'calc(100vw - 24px)',
+          height: `${panelHeight}px`,
+          maxHeight: 'calc(100vh - 24px)',
+        }
+    : undefined;
+
   return (
     <>
+      {/* Mobile backdrop only - on desktop background remains 100% interactive */}
       <div className="fixed inset-0 z-40 bg-navy/20 lg:hidden" onClick={onClose} />
+
+      {/* Global transparent drag shield to guarantee smooth mouse events */}
+      {(isDragging || isResizing) && (
+        <div
+          className={`fixed inset-0 z-[99999] select-none ${isResizing ? 'cursor-nwse-resize' : 'cursor-grabbing'}`}
+        />
+      )}
+
       <aside
-        className="fixed z-50 inset-0 lg:inset-auto lg:top-3 lg:right-3 lg:bottom-3 lg:w-[400px] bg-white lg:rounded-3xl shadow-2xl border border-gray-100 flex flex-col animate-[pop_.18s_ease-out]"
+        id="vendor-aura-panel"
+        style={panelStyle}
+        className={`fixed z-50 inset-0 w-screen h-[100dvh] max-h-[100dvh] rounded-none lg:w-auto lg:h-auto lg:max-h-none lg:rounded-3xl lg:inset-auto bg-white shadow-2xl border-0 lg:border lg:border-gray-100 flex flex-col overflow-hidden isolate transition-all duration-200 ease-out ${
+          isDragging
+            ? 'select-none transition-none shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] ring-2 ring-primary/40'
+            : isResizing
+            ? 'select-none transition-none ring-2 ring-primary/30'
+            : isDocked
+            ? 'animate-[slideInRight_.22s_cubic-bezier(0.16,1,0.3,1)]'
+            : 'animate-[pop_.18s_ease-out]'
+        }`}
         role="dialog"
         aria-label="Aura+ assistant"
       >
-        <header className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 shrink-0">
-          <span className="w-9 h-9 rounded-2xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-md shadow-primary/30">
-            <Icon name="bolt" size={17} />
+        {/* Left Edge Resize Handle (Desktop only) */}
+        <div
+          onMouseDown={(e) => handleResizeStart(e, 'left')}
+          className="hidden lg:flex absolute left-0 top-0 bottom-0 w-3.5 -translate-x-1 cursor-ew-resize group z-30 items-center justify-center select-none"
+          title="Drag to resize Aura width"
+        >
+          <div className="w-1 h-12 rounded-full bg-gray-200 group-hover:bg-primary group-hover:w-1.5 transition-all shadow-sm" />
+        </div>
+
+        {/* Bottom Edge Resize Handle (Desktop only) */}
+        <div
+          onMouseDown={(e) => handleResizeStart(e, 'bottom')}
+          className="hidden lg:flex absolute left-8 right-8 bottom-0 h-3.5 translate-y-1 cursor-ns-resize group z-30 items-center justify-center select-none"
+          title="Drag to resize Aura height"
+        >
+          <div className="h-1 w-14 rounded-full bg-gray-200 group-hover:bg-primary group-hover:h-1.5 transition-all shadow-sm" />
+        </div>
+
+        {/* Corner Resize Handles (Desktop only) */}
+        <button
+          type="button"
+          onMouseDown={(e) => handleResizeStart(e, 'bottom-right')}
+          className="hidden lg:block absolute right-1 bottom-1 z-40 w-5 h-5 cursor-nwse-resize rounded-md text-gray-300 hover:text-primary"
+          title="Drag corner to resize Aura"
+          aria-label="Resize Aura"
+        >
+          <span className="absolute right-1 bottom-1 w-3 h-3 border-r-2 border-b-2 border-current rounded-br-sm" />
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => handleResizeStart(e, 'top-left')}
+          className="hidden lg:block absolute left-1 top-1 z-40 w-5 h-5 cursor-nwse-resize rounded-md text-gray-200 hover:text-primary"
+          title="Drag corner to resize Aura"
+          aria-label="Resize Aura"
+        >
+          <span className="absolute left-1 top-1 w-3 h-3 border-l-2 border-t-2 border-current rounded-tl-sm" />
+        </button>
+
+        <header
+          onMouseDown={handleDragStart}
+          className="flex items-center gap-2 px-3.5 py-3 border-b border-gray-100 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing group bg-white/95 backdrop-blur-sm"
+          title="Drag header to move Aura anywhere on your screen"
+        >
+          <span className="hidden lg:flex items-center text-gray-300 group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing shrink-0" title="Drag to move Aura">
+            <Icon name="drag" size={15} />
+          </span>
+          <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-md shadow-primary/30 shrink-0">
+            <Icon name="bolt" size={15} />
           </span>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-extrabold text-navy">Aura+</div>
+            <div className="text-sm font-extrabold text-navy flex items-center gap-1.5">
+              <span>Aura+</span>
+              <span className="hidden lg:inline text-[9px] font-semibold text-primary/80 bg-primary-soft px-1.5 py-0.5 rounded">
+                {isDocked ? 'Docked' : 'Floating'}
+              </span>
+            </div>
             <div className="text-[10px] text-muted truncate">Your business assistant · answers from your data</div>
           </div>
+
+          {/* Width Preset Button */}
+          <button
+            type="button"
+            onClick={cycleWidth}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="hidden lg:inline-flex items-center text-[10px] font-bold text-muted hover:text-navy px-2 py-1 rounded-lg hover:bg-lavender transition cursor-pointer"
+            title={`Current width: ${panelWidth}px. Click to cycle (380px → 520px → 680px)`}
+          >
+            ↔ {panelWidth}px
+          </button>
+
+          <button
+            type="button"
+            onClick={cycleHeight}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="hidden xl:inline-flex items-center text-[10px] font-bold text-muted hover:text-navy px-2 py-1 rounded-lg hover:bg-lavender transition cursor-pointer"
+            title={`Current height: ${Math.round(panelHeight)}px. Click to cycle short, medium, full height.`}
+          >
+            ↕ {Math.round(panelHeight)}px
+          </button>
+
+          <div className="hidden xl:flex items-center gap-0.5 rounded-lg bg-lavender/70 p-0.5" onMouseDown={(e) => e.stopPropagation()} title="Snap Aura to screen edges">
+            {[
+              ['left', 'L'],
+              ['top', 'T'],
+              ['center', 'C'],
+              ['bottom', 'B'],
+              ['right', 'R'],
+            ].map(([place, label]) => (
+              <button
+                key={place}
+                type="button"
+                onClick={() => snapTo(place)}
+                className="w-5 h-5 rounded-md text-[9px] font-extrabold text-muted hover:bg-white hover:text-primary transition"
+                aria-label={`Snap Aura ${place}`}
+                title={`Snap ${place}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Dock / Float Toggle */}
+          {!isDocked ? (
+            <button
+              type="button"
+              onClick={dockToRight}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="hidden lg:grid w-7 h-7 place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
+              title="Dock to right side"
+              aria-label="Dock to right side"
+            >
+              <Icon name="dockRight" size={14} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={switchToFloat}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="hidden lg:grid w-7 h-7 place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
+              title="Float and drag freely"
+              aria-label="Float and drag freely"
+            >
+              <Icon name="float" size={13} />
+            </button>
+          )}
+
+          {/* Minimize Button */}
+          <button
+            type="button"
+            onClick={() => updateDockMode('minimized')}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
+            title="Minimize Aura (keep active in corner)"
+            aria-label="Minimize"
+          >
+            <Icon name="minus" size={14} />
+          </button>
+
           {mode === 'aura' && (
-            <button onClick={newChat} className="text-[11px] font-bold text-primary rounded-lg px-2 py-1 hover:bg-primary-soft" title="Start a new chat">
+            <button onClick={newChat} onMouseDown={(e) => e.stopPropagation()} className="text-[11px] font-bold text-primary rounded-lg px-2 py-1 hover:bg-primary-soft transition cursor-pointer" title="Start a new chat">
               New chat
             </button>
           )}
-          <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-xl hover:bg-lavender text-ink/60" aria-label="Close Aura+">
+          <button onClick={onClose} onMouseDown={(e) => e.stopPropagation()} className="w-8 h-8 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer" aria-label="Close Aura+">
             <Icon name="close" size={16} />
           </button>
         </header>
@@ -500,33 +1176,66 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               </p>
             </div>
           ))}
-          {messages.map((m, i) => (
-            <Bubble key={i} m={m} onAction={goTo} />
-          ))}
+          {messages.map((m, i) => {
+            if (m.role === 'model' && !m.content) return null;
+            return <Bubble key={i} m={m} onAction={goTo} />;
+          })}
           {pending && !sending && (
             <div className="ml-9 rounded-2xl border border-primary/30 bg-primary-soft/40 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-primary">Save this?</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                {pending.kind === 'block_date'
+                  ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Update Calendar Date' : 'Block Calendar Date')
+                  : pending.kind === 'revise_quote'
+                  ? 'Revise Offer'
+                  : pending.kind === 'create_quote'
+                  ? 'Send Quotation'
+                  : 'Save this?'}
+              </div>
               <div className="text-[12px] font-semibold text-navy mt-0.5">{pending.summary}</div>
               <div className="flex gap-2 mt-2.5">
-                <button onClick={() => send('Yes, save it', { confirm: true })} className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-1.5">
-                  ✓ Save
+                <button
+                  onClick={() =>
+                    send(
+                      pending.kind === 'block_date'
+                        ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Confirm Update' : 'Confirm Block')
+                        : pending.kind === 'revise_quote'
+                        ? 'Send Revised Offer'
+                        : pending.kind === 'create_quote'
+                        ? 'Send Quote'
+                        : 'Yes, save it',
+                      { confirm: true }
+                    )
+                  }
+                  className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-1.5 shadow-sm hover:opacity-95 transition-opacity"
+                >
+                  {pending.kind === 'block_date'
+                    ? (pending.isUpdate || pending.summary?.startsWith('Update') ? '✓ Confirm Update' : '✓ Confirm Block')
+                    : pending.kind === 'revise_quote'
+                    ? '✓ Send Revised Offer'
+                    : pending.kind === 'create_quote'
+                    ? '✓ Send Quote'
+                    : '✓ Save'}
                 </button>
-                <button onClick={() => send('Cancel', { confirm: false })} className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-1.5 hover:bg-lavender">
+                <button
+                  onClick={() => send('Cancel', { confirm: false })}
+                  className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-1.5 hover:bg-lavender transition-colors"
+                >
                   Cancel
                 </button>
               </div>
-              <p className="text-[10px] text-muted mt-1.5">Or just say “yes” / “haan” — or tell me what to change.</p>
+              <p className="text-[10px] text-muted mt-1.5">
+                Or reply “yes” / “haan” / “confirm” — or tell me what to change.
+              </p>
             </div>
           )}
-          {sending && (
-            <div className="flex gap-2 items-center text-[11px] text-muted">
-              <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center">
+          {sending && showThinkingStatus && (
+            <div className="flex gap-2 items-center text-[11px] text-muted pl-1">
+              <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0">
                 <Icon name="bolt" size={13} />
               </span>
-              <span className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:.15s]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:.3s]" />
+              <span className="flex items-center gap-1.5 font-medium">
+                <span className="w-2 h-2 rounded-full bg-primary animate-ping shrink-0" />
+                <span>{statusMessage}</span>
               </span>
             </div>
           )}
@@ -609,27 +1318,33 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
             ) : (
               <button
                 type="button"
-                onClick={() => (listening === 'converse' || speaking ? stopVoice() : startVoice('converse'))}
-                disabled={(sending || listening === 'dictate') && !speaking}
-                className={`relative w-8 h-8 rounded-full text-white grid place-items-center shrink-0 transition disabled:opacity-50 ${
-                  listening === 'converse' ? 'bg-red-500' : 'bg-primary hover:bg-primary-dark'
-                }`}
-                title={listening === 'converse' ? 'Done talking' : speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
-                aria-label={listening === 'converse' ? 'Done talking' : speaking ? 'Stop speaking' : 'Voice mode'}
+                onClick={() => (speaking ? stopVoice() : agent.start())}
+                disabled={(sending || listening) && !speaking}
+                className="relative w-8 h-8 rounded-full text-white grid place-items-center shrink-0 transition disabled:opacity-50 bg-primary hover:bg-primary-dark"
+                title={speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={speaking ? 'Stop speaking' : 'Voice mode'}
               >
-                {listening === 'converse' && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
-                <span className="relative">{speaking ? <span className="block w-2.5 h-2.5 rounded-[3px] bg-white" /> : <WaveIcon active={listening === 'converse'} />}</span>
+                <span className="relative">{speaking ? <span className="block w-2.5 h-2.5 rounded-[3px] bg-white" /> : <WaveIcon />}</span>
               </button>
             )}
           </form>
-          <p className="text-[10px] text-muted/80 px-1 flex items-center justify-between gap-2">
-            <span>Aura+ sets up your profile after you confirm; quotes, bookings and payments stay in your hands.</span>
+          <p className="text-[9px] text-muted/70 px-1 flex items-center justify-between gap-2 leading-none min-w-0">
+            <span className="truncate">Aura saves only after you confirm.</span>
             <button onClick={() => setMode('manual')} className="shrink-0 font-bold text-primary hover:underline">
-              Prefer to do it yourself? Ask manually →
+              Manual setup →
             </button>
           </p>
         </div>
         )}
+
+        <VoiceAgentOverlay
+          agent={agent}
+          embedded
+          title="Aura+"
+          subtitle="Your business assistant · voice"
+          lang={voiceLang}
+          onToggleLang={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}
+        />
       </aside>
     </>
   );

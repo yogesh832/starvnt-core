@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, CustomerPageSkeleton, Empty, Tabs, useLoad } from './customerUi.jsx';
+import { BackLink, Empty, PageSkeleton, Tabs, useLoad } from './customerUi.jsx';
 
 const when = (t) => new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 
 /** Milestones reached so far, derived only from recorded history. */
-function milestones(history) {
+export function milestones(history) {
   const has = (re) => history.find((h) => re.test(h.text));
   const booked = history.filter((h) => / booked with /.test(h.text));
   const verified = history.filter((h) => /^Payment of .* verified$/.test(h.text));
@@ -27,7 +27,7 @@ export default function EventHistoryPage() {
   const { data, error, loading } = useLoad(() => customerApi.history(id), [id]);
   const [filter, setFilter] = useState('all');
 
-  if (loading) return <CustomerPageSkeleton cards={4} />;
+  if (loading) return <PageSkeleton title="Event Timeline" count={4} type="list" />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
   const history = data.history;
   const shown = filter === 'all' ? history : history.filter((h) => h.group === filter);

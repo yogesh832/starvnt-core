@@ -32,10 +32,11 @@ export function ExternalAuthProvider({ children }) {
     restoreSession();
   }, []);
 
-  async function login(email, password) {
+  // accountType = the tab chosen (CUSTOMER | VENDOR); one email can use both.
+  async function login(email, password, accountType) {
     const data = await externalApi.call("/auth/login", {
       method: "POST",
-      body: { email, password },
+      body: { email, password, accountType },
     });
     externalApi.setToken(data.accessToken);
     setUser(data.user);
@@ -83,10 +84,10 @@ export function ExternalAuthProvider({ children }) {
     });
   }
 
-  async function setPassword(email, otp, password) {
+  async function setPassword(email, otp, password, accountType) {
     const data = await externalApi.call("/auth/password/set", {
       method: "POST",
-      body: { email, otp, password },
+      body: { email, otp, password, accountType },
     });
     externalApi.setToken(data.accessToken);
     setUser(data.user);
@@ -123,6 +124,16 @@ export function ExternalAuthProvider({ children }) {
     return data.user;
   }
 
+  async function switchSurface(targetType) {
+    const data = await externalApi.call("/auth/switch-surface", {
+      method: "POST",
+      body: { targetSurface: targetType },
+    });
+    externalApi.setToken(data.accessToken);
+    setUser(data.user);
+    return data.user;
+  }
+
   async function logout() {
     await externalApi.call("/auth/logout", { method: "POST" }).catch(() => {});
     externalApi.setToken(null);
@@ -144,6 +155,7 @@ export function ExternalAuthProvider({ children }) {
         loginWithOtp,
         loginWithEmailOtp,
         loginWithWidgetOtp,
+        switchSurface,
         logout,
       }}
     >

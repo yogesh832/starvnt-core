@@ -288,12 +288,38 @@ const customerNotificationSchema = new Schema(
   {
     customer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
     event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null },
+    booking: { type: Schema.Types.ObjectId, ref: 'CustomerBooking', default: null },
     type: { type: String, required: true }, // payment | booking | message | completion | cancellation
+    priority: { type: String, enum: ['CRITICAL', 'HIGH', 'NORMAL', 'LOW'], default: 'NORMAL', index: true },
+    channel: { type: String, default: 'IN_APP', index: true },
+    templateId: { type: String, default: null },
+    recipient: { type: String, default: null },
     title: { type: String, required: true },
     body: { type: String, default: '' },
+    actionUrl: { type: String, default: null },
+    payload: { type: Schema.Types.Mixed, default: {} },
+    idempotencyKey: { type: String, default: null },
+    status: {
+      type: String,
+      enum: ['QUEUED', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'RETRY', 'PERMANENT_FAILURE'],
+      default: 'DELIVERED',
+      index: true,
+    },
+    provider: { type: String, default: 'STARVNT_CORE' },
+    providerMessageId: { type: String, default: null },
+    queuedAt: { type: Date, default: null },
+    sentAt: { type: Date, default: null },
+    deliveredAt: { type: Date, default: Date.now },
     readAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    failureReason: { type: String, default: null },
+    retryCount: { type: Number, default: 0 },
   },
   { timestamps: { createdAt: true, updatedAt: false }, collection: 'customer_notifications' }
+);
+customerNotificationSchema.index(
+  { idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
 
 // Development-only demo packages. Kept apart from Vendor OS collections so

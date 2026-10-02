@@ -110,6 +110,21 @@ export function PaymentsPage() {
                 <td className="px-5 py-3 text-muted">{b.eventDate}</td>
               </tr>
             ))}
+            {loading && bookings.length === 0 && (
+              Array.from({ length: 4 }).map((_, i) => (
+                <tr key={i} className="border-b border-gray-50">
+                  <td className="px-5 py-4"><div className="h-3.5 w-24 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-28 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-32 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-20 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                </tr>
+              ))
+            )}
             {bookings.length === 0 && !loading && (
               <tr>
                 <td colSpan="9" className="py-8 text-center text-xs text-muted">
@@ -384,6 +399,27 @@ export function ReviewsPage() {
               </Card>
             );
           })}
+
+          {loading && reviews.length === 0 && (
+            Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-200/70 animate-pulse" />
+                    <div className="space-y-1.5">
+                      <div className="h-3.5 w-32 bg-slate-200/80 animate-pulse rounded-full" />
+                      <div className="h-2.5 w-20 bg-slate-200/50 animate-pulse rounded-full" />
+                    </div>
+                  </div>
+                  <div className="h-4 w-24 bg-slate-200/60 animate-pulse rounded-full" />
+                </div>
+                <div className="space-y-2 pt-2">
+                  <div className="h-3 w-full bg-slate-100 animate-pulse rounded-full" />
+                  <div className="h-3 w-4/5 bg-slate-100 animate-pulse rounded-full" />
+                </div>
+              </Card>
+            ))
+          )}
 
           {reviews.length === 0 && !loading && (
             <Card className="text-center py-12 px-6">

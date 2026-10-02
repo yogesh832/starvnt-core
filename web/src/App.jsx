@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from './auth/ExternalAuthContext.jsx';
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext.jsx';
 import { LogoWord } from './components/ui.jsx';
 import ExternalLogin from './pages/external/Login.jsx';
+import TestLogin from './pages/external/TestLogin.jsx';
+import TestingHub from './pages/external/TestingHub.jsx';
 import Landing from './pages/customer/Landing.jsx';
 import CustomerPortal from './pages/customer/CustomerPortal.jsx';
 import VendorPortal from './pages/vendor/VendorPortal.jsx';
@@ -12,49 +14,12 @@ import AdminShell from './pages/admin/AdminShell.jsx';
 
 function FullScreenLoader() {
   return (
-    <div className="min-h-screen grid place-items-center bg-lavender">
-      <div className="animate-pulse">
-        <LogoWord sub="Loading..." />
-      </div>
-    </div>
-  );
-}
-
-function GlobalApiLoader() {
-  const [active, setActive] = useState(0);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    let showTimer = null;
-    let hideTimer = null;
-
-    function handleActivity(event) {
-      const nextActive = event.detail?.active || 0;
-      setActive(nextActive);
-
-      if (nextActive > 0) {
-        clearTimeout(hideTimer);
-        showTimer = setTimeout(() => setVisible(true), 450);
-      } else {
-        clearTimeout(showTimer);
-        hideTimer = setTimeout(() => setVisible(false), 250);
-      }
-    }
-
-    window.addEventListener('starvnt:api-activity', handleActivity);
-    return () => {
-      clearTimeout(showTimer);
-      clearTimeout(hideTimer);
-      window.removeEventListener('starvnt:api-activity', handleActivity);
-    };
-  }, []);
-
-  if (!visible || active <= 0) return null;
-
-  return (
-    <div className="fixed inset-x-0 top-0 z-[100] pointer-events-none">
-      <div className="h-1 bg-primary/15 overflow-hidden">
-        <div className="h-full w-1/3 bg-primary animate-[loadingBar_1.2s_ease-in-out_infinite]" />
+    <div className="min-h-screen grid place-items-center bg-[#faf9fe]">
+      <div className="flex flex-col items-center gap-4">
+        <LogoWord sub="Events. Simplified." />
+        <div className="w-32 h-1 bg-primary/15 rounded-full overflow-hidden">
+          <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
+        </div>
       </div>
     </div>
   );
@@ -62,12 +27,32 @@ function GlobalApiLoader() {
 
 /** External surface guard: requires ACTIVE external session of accountType. */
 function RequireExternal({ type, children }) {
-  const { user, ready } = useExternalAuth();
+  const { user, ready, switchSurface } = useExternalAuth();
   const loc = useLocation();
-  if (!ready) return <FullScreenLoader />;
+  const [switching, setSwitching] = useState(false);
+  const [switchFailed, setSwitchFailed] = useState(false);
+
+  useEffect(() => {
+    if (ready && user && type && user.accountType !== type && !switching && !switchFailed) {
+      setSwitching(true);
+      switchSurface(type)
+        .catch((err) => {
+          console.error(`Failed to switch surface to ${type}:`, err);
+          setSwitchFailed(true);
+        })
+        .finally(() => {
+          setSwitching(false);
+        });
+    }
+  }, [ready, user, type, switching, switchFailed, switchSurface]);
+
+  if (!ready || switching) return <FullScreenLoader />;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} replace />;
   if (type && user.accountType !== type) {
-    return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
+    if (switchFailed) {
+      return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
+    }
+    return <FullScreenLoader />;
   }
   return children;
 }
@@ -89,63 +74,73 @@ function RootRedirect() {
 
 export default function App() {
   return (
-    <>
-      <GlobalApiLoader />
-      <Routes>
-        {/* Public landing — guests plan here, partner/admin subdomains redirect appropriately */}
-        <Route
-          path="/"
-          element={
-            window.location.hostname.startsWith('partner.') || window.location.hostname.startsWith('vendor.')
-              ? <Navigate to="/vendor" replace />
-              : window.location.hostname.startsWith('admin.')
-                ? <Navigate to="/admin" replace />
-                : <Landing />
-          }
-        />
-        {/* External domain — one auth UI, two portals */}
-        <Route path="/login" element={<ExternalLogin />} />
-        <Route path="/signup" element={<ExternalLogin />} />
-        <Route path="/register" element={<ExternalLogin />} />
-        <Route
-          path="/customer/*"
-          element={
-            <RequireExternal type="CUSTOMER">
-              <CustomerPortal />
-            </RequireExternal>
-          }
-        />
-        <Route
-          path="/vendor/*"
-          element={
-            <RequireExternal type="VENDOR">
-              <VendorPortal />
-            </RequireExternal>
-          }
-        />
+    <Routes>
+      {/* Public landing — guests plan here, partner/admin subdomains redirect appropriately */}
+      <Route 
+        path="/" 
+        element={
+          window.location.hostname.startsWith('partner.') || window.location.hostname.startsWith('vendor.')
+            ? <Navigate to="/vendor" replace />
+            : window.location.hostname.startsWith('admin.')
+              ? <Navigate to="/admin" replace />
+              : <Landing />
+        } 
+      />
+      {/* External domain — one auth UI, two portals */}
+      <Route path="/login" element={<ExternalLogin />} />
+      <Route path="/signup" element={<ExternalLogin />} />
+      <Route path="/register" element={<ExternalLogin />} />
+      <Route path="/test-login" element={<TestLogin />} />
+      <Route path="/dev-login" element={<Navigate to="/test-login" replace />} />
+      <Route
+        path="/test"
+        element={
+          <AdminAuthProvider>
+            <TestingHub />
+          </AdminAuthProvider>
+        }
+      />
+      <Route path="/qa" element={<Navigate to="/test" replace />} />
+      <Route path="/testing" element={<Navigate to="/test" replace />} />
+      <Route path="/test-all" element={<Navigate to="/test" replace />} />
+      <Route
+        path="/customer/*"
+        element={
+          <RequireExternal type="CUSTOMER">
+            <CustomerPortal />
+          </RequireExternal>
+        }
+      />
+      <Route
+        path="/vendor/*"
+        element={
+          <RequireExternal type="VENDOR">
+            <VendorPortal />
+          </RequireExternal>
+        }
+      />
 
       {/* Internal domain — fully separate admin experience */}
-        <Route
-          path="/admin/login"
-          element={
-            <AdminAuthProvider>
-              <AdminLogin />
-            </AdminAuthProvider>
-          }
-        />
-        <Route
-          path="/admin/*"
-          element={
-            <AdminAuthProvider>
-              <RequireAdmin>
-                <AdminShell />
-              </RequireAdmin>
-            </AdminAuthProvider>
-          }
-        />
+      <Route
+        path="/admin/login"
+        element={
+          <AdminAuthProvider>
+            <AdminLogin />
+          </AdminAuthProvider>
+        }
+      />
+      <Route
+        path="/admin/*"
+        element={
+          <AdminAuthProvider>
+            <RequireAdmin>
+              <AdminShell />
+            </RequireAdmin>
+          </AdminAuthProvider>
+        }
+      />
 
-        <Route path="*" element={<RootRedirect />} />
-      </Routes>
-    </>
+      <Route path="*" element={<RootRedirect />} />
+    </Routes>
   );
 }

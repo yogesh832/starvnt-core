@@ -292,7 +292,7 @@ async function markFailed(payment, reason, actor) {
   const moved = await commerceRepo.movePayment(payment._id, ['pending', 'processing', 'paid'], { status: 'failed', failureReason: reason });
   if (!moved) return null;
   await eventsRepo.appendHistory({ eventId: payment.event, ...actor, action: 'payment_failed', details: { amount: payment.amount } });
-
+  
   await publishOutboxEvent({
     eventType: 'PAYMENT_FAILED',
     aggregateType: 'Payment',
@@ -300,7 +300,7 @@ async function markFailed(payment, reason, actor) {
     payload: { paymentId: payment._id.toString(), reason, eventId: payment.event.toString() },
     idempotencyKey: `payment_failed_${payment._id}`
   });
-
+  
   await circleRepo.notify({
     customerId: payment.customer,
     eventId: payment.event,
@@ -495,7 +495,7 @@ export async function verifyPayment(paymentId, { actorType, actorId }) {
       moved.coupon.usageRecorded = true;
     }
     await eventsRepo.appendHistory({ eventId: payment.event, actorType, actorId, action: 'payment_verified', details: { amount: payment.amount } });
-
+    
     await publishOutboxEvent({
       eventType: 'PAYMENT_CONFIRMED',
       aggregateType: 'Payment',

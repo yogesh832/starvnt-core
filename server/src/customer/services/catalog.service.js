@@ -223,7 +223,7 @@ async function enrichRecommendations(options, event) {
 /** All options for an event's city (real) plus demo listings in development. */
 async function allOptions(event) {
   const [real, demo] = await Promise.all([
-    catalogRepo.listBookableServices({ city: event?.city || null }),
+    catalogRepo.listBookableServices({ city: event?.city || null, coordinates: eventCoords(event) }),
     demoListingsEnabled() ? catalogRepo.listDemoListings() : [],
   ]);
   return [...real.map((r) => fromVendor(r, event || {})), ...demo.map(fromDemo)].filter((o) => o.category);
@@ -295,7 +295,7 @@ export async function optionsForCategory(event, categoryParam) {
 export async function getOption(event, optionId) {
   let option = null;
   if (typeof optionId === 'string' && optionId.startsWith('vs_')) {
-    const row = await catalogRepo.findBookableService(optionId.slice(3), { city: event?.city || null });
+    const row = await catalogRepo.findBookableService(optionId.slice(3), { city: event?.city || null, coordinates: eventCoords(event) });
     if (row) {
       option = fromVendor(row, event || {});
     }

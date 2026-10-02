@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
+import MapLocationPicker from '../../components/MapLocationPicker.jsx';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import UnderstandingCard from './UnderstandingCard.jsx';
+import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
 
 const QUICK_PROMPTS = [
   "My daughter's wedding",
@@ -55,37 +57,176 @@ function Bubble({ from, children }) {
   );
 }
 
-/** Voice input (Web Speech API). Fills the box only; never sends by itself. */
-function useVoice(onText) {
-  const [listening, setListening] = useState(false);
+function AuraLoadingState() {
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2.5">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-[#9b6dff]/20 animate-pulse shrink-0 mt-0.5" />
+        <div className="bg-white border border-gray-100 rounded-3xl rounded-tl-xs p-4 shadow-xs w-full max-w-md">
+          <div className="h-3 w-28 rounded-full bg-gray-200 animate-pulse" />
+          <div className="h-3 w-5/6 rounded-full bg-gray-100 animate-pulse mt-3" />
+          <div className="h-3 w-2/3 rounded-full bg-gray-100 animate-pulse mt-2" />
+        </div>
+      </div>
+      <div className="flex justify-end pr-2">
+        <div className="bg-primary/15 rounded-3xl rounded-br-xs h-12 w-48 sm:w-64 animate-pulse" />
+      </div>
+      <div className="pl-10 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-10 rounded-2xl bg-white border border-gray-100 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AuraErrorState({ message, onRetry }) {
+  return (
+    <div className="pl-0 sm:pl-10">
+      <div className="bg-white border border-red-100 rounded-3xl p-4 shadow-xs max-w-xl">
+        <div className="flex items-start gap-3">
+          <span className="w-9 h-9 rounded-2xl bg-red-50 text-red-500 grid place-items-center shrink-0">
+            <Icon name="help" size={16} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-extrabold text-navy">Aura+ could not load</div>
+            <div className="text-xs text-muted mt-0.5">{message}</div>
+            <button type="button" onClick={onRetry} className="mt-3 rounded-xl bg-primary text-white text-xs font-bold px-4 py-2">
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function todayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+
+const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
+/** Read Aura's reply aloud in the reply's script (Hindi / Bengali / English). */
+function speakText(text, onDone) {
+  if (!canSpeak || !text) return onDone?.();
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = /[ऀ-ॿ]/.test(text) ? 'hi-IN' : /[ঀ-]/.test(text) ? 'bn-IN' : 'en-IN';
+  const voices = window.speechSynthesis.getVoices();
+  const voice = voices.find((v) => v.lang === u.lang) || voices.find((v) => v.lang?.startsWith(u.lang.slice(0, 2)));
+  if (voice) u.voice = voice;
+  u.onend = () => onDone?.();
+  u.onerror = () => onDone?.();
+  window.speechSynthesis.speak(u);
+}
+
+/**
+ * Voice conversation (Web Speech API): the spoken words fill the box live and
+ * are sent when the customer stops talking; the reply is then read aloud.
+ * Only the transcribed text leaves the browser, like a typed message.
+ */
+function useVoice({ onInterim, onFinal, onError }) {
+  // mode: 'dictate' = mic fills the box only (like ChatGPT's mic);
+  //       'converse' = voice chat: send when the customer stops talking, reply aloud.
+  const [listening, setListening] = useState(null); // null | 'dictate' | 'converse'
+  const [speaking, setSpeaking] = useState(false);
   const [lang, setLang] = useState('en-IN');
   const recRef = useRef(null);
   const Speech = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
 
-  function toggle() {
+  /** Stop listening (keeping what was heard) and stop any reply being spoken. */
+  function stop() {
+    recRef.current?.stop();
+    if (canSpeak) window.speechSynthesis.cancel();
+    setSpeaking(false);
+  }
+
+  // Stop listening/speaking when the chat unmounts.
+  useEffect(
+    () => () => {
+      recRef.current?.abort();
+      if (canSpeak) window.speechSynthesis.cancel();
+    },
+    []
+  );
+
+  function start(mode, base = '') {
+    if (listening || speaking) return stop();
     if (!Speech) return;
-    if (listening) {
-      recRef.current?.stop();
-      return;
-    }
     const rec = new Speech();
     rec.lang = lang;
-    rec.interimResults = false;
-    rec.onresult = (e) => onText(Array.from(e.results).map((r) => r[0].transcript).join(' '));
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    const prefix = base.trim() ? `${base.trim()} ` : '';
+    let finalText = '';
+    rec.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i += 1) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      onInterim(`${prefix}${(finalText + interim).trim()}`);
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') onError('Microphone permission denied. Allow the mic in your browser to talk to Aura+.');
+      else if (e.error !== 'aborted' && e.error !== 'no-speech') onError('Could not hear you. Please try again.');
+    };
+    rec.onend = () => {
+      setListening(null);
+      recRef.current = null;
+      if (mode === 'converse' && finalText.trim()) onFinal(`${prefix}${finalText.trim()}`);
+    };
     recRef.current = rec;
-    setListening(true);
+    setListening(mode);
     rec.start();
   }
-  return { supported: Boolean(Speech), listening, lang, setLang, toggle };
+
+  function speak(text) {
+    if (!canSpeak) return;
+    setSpeaking(true);
+    speakText(text, () => setSpeaking(false));
+  }
+
+  return { supported: Boolean(Speech), listening, speaking, lang, setLang, start, stop, speak };
 }
 
-export default function AuraChat({ firstName }) {
+/** ChatGPT-style voice-mode glyph: five bars; they bounce while Aura+ listens or talks. */
+function WaveIcon({ active = false }) {
+  const bars = [6, 12, 16, 12, 6];
+  return (
+    <span className="flex items-center gap-[2px] h-4" aria-hidden="true">
+      {bars.map((h, i) => (
+        <span
+          key={i}
+          className={`w-[2.5px] rounded-full bg-current ${active ? 'animate-pulse' : ''}`}
+          style={{ height: h, animationDelay: active ? `${i * 0.12}s` : undefined }}
+        />
+      ))}
+    </span>
+  );
+}
+
+const CHAT_THINKING_STATUS_DELAY_MS = 1200;
+const CHAT_STATUS_ROTATION_MS = 2500;
+const STATUS_MESSAGES = [
+  'Thinking...',
+  'Getting the right information for you...',
+  'Checking the details...',
+  'Putting this together...',
+  'Using what I know to find the best answer...',
+  'Analyzing the information...',
+  'Almost there...',
+];
+
+export default function AuraChat({ firstName, eventId: embeddedEventId = null, embedded = false, onEventChanged }) {
   const { user } = useExternalAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const scopedEventId = params.get('event');
+  // Embedded (home workspace) chats are scoped by prop and never read or write the URL.
+  const scopedEventId = embedded ? embeddedEventId : params.get('event');
   const key = sessionKey(user?.id, scopedEventId);
 
   const [sessionId, setSessionId] = useState(null);
@@ -94,16 +235,26 @@ export default function AuraChat({ firstName }) {
   const [understanding, setUnderstanding] = useState(null);
   const [nextQ, setNextQ] = useState(null);
   const [input, setInput] = useState('');
+  const [customChoice, setCustomChoice] = useState('');
+  const [pickedDate, setPickedDate] = useState('');
+  const [pickedLocation, setPickedLocation] = useState(null);
+  const [savingStructured, setSavingStructured] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showThinkingStatus, setShowThinkingStatus] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(STATUS_MESSAGES[0]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const askedRef = useRef(false);
 
-  const voice = useVoice((t) => {
-    setInput((prev) => (prev ? `${prev} ${t}` : t));
-    inputRef.current?.focus();
+  // Asked by voice → sent automatically and answered by voice too (see send()).
+  const sendRef = useRef(null);
+  const voice = useVoice({
+    onInterim: (t) => setInput(t),
+    onFinal: (t) => sendRef.current?.(t, {}, { spoken: true }),
+    onError: (msg) => setError(msg),
   });
 
   const applyState = useCallback((s) => {
@@ -115,12 +266,16 @@ export default function AuraChat({ firstName }) {
   // Load (or start) the session for this event scope; history comes from the server.
   useEffect(() => {
     let cancelled = false;
-    let sid = readSession(key);
-    if (params.get('new') === '1' || !sid) {
+    const urlSession = !embedded ? params.get('session') : null;
+    let sid = urlSession || readSession(key);
+    const fresh = !embedded && params.get('new') === '1';
+    if (fresh || !sid) {
       sid = newSessionId();
       writeSession(key, sid);
+    } else if (urlSession) {
+      writeSession(key, urlSession);
     }
-    if (params.get('new') === '1') {
+    if (fresh) {
       const next = new URLSearchParams(params);
       next.delete('new');
       setParams(next, { replace: true });
@@ -141,38 +296,167 @@ export default function AuraChat({ firstName }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, loadAttempt]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, understanding, sending]);
 
   const send = useCallback(
-    async (text, extra = {}) => {
+    async (text, extra = {}, { spoken = false } = {}) => {
       const msg = (text ?? '').trim();
       if (!msg || !sessionId || sending) return;
       setInput('');
       setError('');
       setSending(true);
-      setMessages((prev) => [...prev, { role: 'user', content: msg }]);
+      setShowThinkingStatus(false);
+      setStatusMessage(STATUS_MESSAGES[0]);
+
+      // Optimistically insert user message and placeholder model message
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: msg },
+        { role: 'model', content: '' }
+      ]);
+
+const VOICE_PROGRESS_PHRASES = [
+  'Okay, let me get that information for you.',
+  'Sure, let me check that for you.',
+  'Got it, I’m looking into that for you.',
+];
+
+      let hasReceivedToken = false;
+      let thinkingTimer = null;
+      let rotationInterval = null;
+      let timeoutTimer = null;
+      let voiceProgressTimer = null;
+      let hasSpokenVoiceProgress = false;
+      let statusIdx = 0;
+      const abortController = new AbortController();
+
+      // Show "Thinking..." status only if request takes longer than 1200ms
+      thinkingTimer = setTimeout(() => {
+        if (!hasReceivedToken) {
+          setShowThinkingStatus(true);
+          rotationInterval = setInterval(() => {
+            statusIdx = (statusIdx + 1) % STATUS_MESSAGES.length;
+            setStatusMessage(STATUS_MESSAGES[statusIdx]);
+          }, CHAT_STATUS_ROTATION_MS);
+        }
+      }, CHAT_THINKING_STATUS_DELAY_MS);
+
+      if (spoken) {
+        voiceProgressTimer = setTimeout(() => {
+          if (!hasReceivedToken && !hasSpokenVoiceProgress) {
+            hasSpokenVoiceProgress = true;
+            const phrase = VOICE_PROGRESS_PHRASES[Math.floor(Math.random() * VOICE_PROGRESS_PHRASES.length)];
+            speakText(phrase);
+          }
+        }, CHAT_THINKING_STATUS_DELAY_MS);
+      }
+
+      // 25s safety timeout
+      timeoutTimer = setTimeout(() => {
+        abortController.abort();
+      }, 25000);
+
+      const cleanupTimers = () => {
+        if (thinkingTimer) clearTimeout(thinkingTimer);
+        if (rotationInterval) clearInterval(rotationInterval);
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (voiceProgressTimer) clearTimeout(voiceProgressTimer);
+      };
+
+      let accumulatedText = '';
+      let donePayload = null;
+
       try {
-        const res = await customerApi.auraChat({ sessionId, message: msg, eventId: scopedEventId || undefined, ...extra });
-        setMessages((prev) => [...prev, { role: 'model', content: res.reply }]);
-        applyState(res);
-      } catch (err) {
-        setMessages((prev) => prev.slice(0, -1));
-        setInput(msg);
-        setError(errorText(err, "Aura+ couldn't reply. Please try again."));
-      } finally {
+        await customerApi.auraChatStream(
+          { sessionId, message: msg, eventId: scopedEventId || undefined, ...extra },
+          (event) => {
+            if (event.type === 'status') {
+              if (event.message) setStatusMessage(event.message);
+            } else if (event.type === 'chunk') {
+              if (!hasReceivedToken) {
+                hasReceivedToken = true;
+                cleanupTimers();
+                setShowThinkingStatus(false);
+              }
+              accumulatedText += event.text || '';
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last && last.role === 'model') {
+                  next[next.length - 1] = { ...last, content: accumulatedText };
+                }
+                return next;
+              });
+            } else if (event.type === 'done') {
+              donePayload = event;
+              if (event.reply) {
+                accumulatedText = event.reply;
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const last = next[next.length - 1];
+                  if (last && last.role === 'model') {
+                    next[next.length - 1] = { ...last, content: event.reply };
+                  }
+                  return next;
+                });
+              }
+            } else if (event.type === 'error') {
+              throw new Error(event.error || "Aura+ couldn't reply.");
+            }
+          },
+          abortController.signal
+        );
+
+        cleanupTimers();
+        setShowThinkingStatus(false);
         setSending(false);
+
+        if (donePayload) {
+          if (spoken) voice.speak(donePayload.reply || accumulatedText);
+          applyState(donePayload);
+          if (donePayload.createdEventId) writeSession(sessionKey(user?.id, donePayload.createdEventId), sessionId);
+          onEventChanged?.(donePayload);
+        }
+        return accumulatedText;
+      } catch (err) {
+        cleanupTimers();
+        setShowThinkingStatus(false);
+        setSending(false);
+
+        // Remove empty placeholder or revert optimistic user message on failure
+        setMessages((prev) => {
+          let list = [...prev];
+          if (list.length > 0 && list[list.length - 1].role === 'model' && !accumulatedText) {
+            list = list.slice(0, -1);
+          }
+          if (!accumulatedText && list.length > 0 && list[list.length - 1].role === 'user' && list[list.length - 1].content === msg) {
+            list = list.slice(0, -1);
+          }
+          return list;
+        });
+
+        if (!accumulatedText) {
+          setInput(msg);
+          setError(errorText(err, "Aura+ couldn't reply. Please try again."));
+        }
+        return null;
       }
     },
-    [sessionId, sending, scopedEventId, applyState]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sessionId, sending, scopedEventId, applyState, onEventChanged, user?.id]
   );
+  sendRef.current = send;
+
+  // Voice mode (orb): a continuous spoken conversation; each turn goes through send().
+  const agent = useVoiceAgent({ lang: voice.lang, onUtterance: (t) => sendRef.current?.(t) });
 
   // ?ask= auto-sends once, then leaves the URL clean.
   useEffect(() => {
-    const ask = params.get('ask');
+    const ask = embedded ? null : params.get('ask');
     if (!ask || loading || !sessionId || askedRef.current) return;
     askedRef.current = true;
     const next = new URLSearchParams(params);
@@ -183,19 +467,74 @@ export default function AuraChat({ firstName }) {
   }, [params, loading, sessionId, send, setParams]);
 
   function onChip(opt) {
+    setCustomChoice('');
     if (opt.prefill) {
       setInput(opt.prefill);
       setTimeout(() => inputRef.current?.focus(), 0);
     } else if (opt.skipTopic) send(opt.label, { skipTopic: opt.skipTopic });
     else if (opt.budgetRange) send(opt.label, { budgetRange: opt.budgetRange });
+    else if (opt.serviceLocation) send(opt.label, { serviceLocation: opt.serviceLocation });
     else send(opt.message || opt.label);
+  }
+
+  function sendCustomChoice() {
+    const text = customChoice.trim();
+    if (!text) return;
+    setCustomChoice('');
+    send(text);
+  }
+
+  function sendPickedDate() {
+    if (!pickedDate) return;
+    send(pickedDate);
+    setPickedDate('');
+  }
+
+  async function savePickedLocation() {
+    if (!activeEvent?.id || !pickedLocation) return;
+    const loc = pickedLocation;
+    const city = loc.city || activeEvent.city || '';
+    const locality = loc.locality || loc.address?.split(',')?.[0] || '';
+    const payload = {
+      ...(city ? { city } : {}),
+      location: {
+        ...(city ? { city } : {}),
+        ...(locality ? { locality } : {}),
+        ...(loc.state ? { state: loc.state } : {}),
+        ...(loc.postalCode ? { pincode: loc.postalCode } : {}),
+        ...(loc.address ? { address: loc.address } : {}),
+        coordinates: { lat: loc.lat, lng: loc.lng },
+      },
+    };
+    setSavingStructured(true);
+    setError('');
+    try {
+      await customerApi.patchEvent(activeEvent.id, payload);
+      const refreshed = await customerApi.auraSession(sessionId, activeEvent.id);
+      applyState(refreshed);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: `Pinned location: ${loc.address || `${loc.lat}, ${loc.lng}`}` },
+        { role: 'model', content: 'Saved the exact map location. I will use this for matching nearby options.' },
+      ]);
+      setPickedLocation(null);
+      onEventChanged?.(refreshed);
+    } catch (err) {
+      setError(errorText(err, "Couldn't save this location. Please try again."));
+    } finally {
+      setSavingStructured(false);
+    }
   }
 
   function newChat() {
     const sid = newSessionId();
     writeSession(sessionKey(user?.id, null), sid);
     askedRef.current = false;
-    if (scopedEventId) navigate('/customer/aura');
+    if (embedded) {
+      writeSession(key, sid);
+      setSessionId(sid);
+      setMessages([]);
+    } else if (scopedEventId) navigate('/customer/aura');
     else {
       setSessionId(sid);
       setMessages([]);
@@ -216,6 +555,11 @@ export default function AuraChat({ firstName }) {
     if (activeEvent && activeEvent.status !== 'draft') return EVENT_PROMPTS.map((p) => ({ label: p, message: p }));
     return [];
   })();
+  const latestAuraMessage = [...messages].reverse().find((m) => m.role === 'model')?.content || '';
+  const showChipQuestion = nextQ?.question && !latestAuraMessage.includes(nextQ.question);
+  const showDatePicker = nextQ?.topic === 'event.date';
+  const showLocationPicker = ['event.city', 'event.area'].includes(nextQ?.topic);
+  const showAnswerPanel = chips.length > 0 || showDatePicker || showLocationPicker;
 
   return (
     <div className="flex flex-col h-full">
@@ -238,41 +582,128 @@ export default function AuraChat({ firstName }) {
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto">
         <Bubble from="model">Hi{firstName ? ` ${firstName}` : ''}! 👋 What are you planning? Tell me in your own words. I'll figure out the rest.</Bubble>
 
-        {loading && <div className="text-[11px] text-muted pl-10">Loading your conversation…</div>}
-        {messages.map((m, i) => (
-          <Bubble key={i} from={m.role}>{m.content}</Bubble>
-        ))}
+        {loading && <AuraLoadingState />}
+        {messages.map((m, i) => {
+          if (m.role === 'model' && !m.content) return null;
+          return <Bubble key={i} from={m.role}>{m.content}</Bubble>;
+        })}
 
-        {understanding && activeEvent && (
+        {understanding?.showUnderstandingCard && activeEvent && (
           <div className="pl-10">
-            <UnderstandingCard understanding={understanding} event={activeEvent} onChanged={onCardChanged} />
+            <UnderstandingCard understanding={understanding} event={activeEvent} onChanged={onCardChanged} onAsk={(t) => send(t)} />
           </div>
         )}
 
-        {sending && (
-          <div className="pl-10 text-[11px] text-muted inline-flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Aura+ is thinking…
+        {sending && showThinkingStatus && (
+          <div className="pl-10 text-[11px] font-medium text-muted inline-flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary animate-ping shrink-0" />
+            <span>{statusMessage}</span>
           </div>
         )}
-        {error && <div className="pl-10 text-[11px] text-red-500">{error}</div>}
+        {error && !loading && messages.length === 0 ? (
+          <AuraErrorState message={error} onRetry={() => setLoadAttempt((n) => n + 1)} />
+        ) : error ? (
+          <div className="pl-10 text-[11px] text-red-500">{error}</div>
+        ) : null}
 
-        {chips.length > 0 && (
+        {showAnswerPanel && (
           <div className="pl-10 space-y-2">
-            {/* In a draft, the question is already in Aura's reply. */}
-            {nextQ?.question && activeEvent && activeEvent.status !== 'draft' && (
+            {showChipQuestion && (
               <div className="text-[10px] font-bold text-muted uppercase tracking-wide">{nextQ.question}</div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
-              {chips.map((c) => (
+            {chips.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
+                {chips.map((c) => (
+                  <button
+                    key={c.label}
+                    onClick={() => onChip(c)}
+                    className="text-left text-xs font-semibold bg-white border border-primary/25 text-primary hover:bg-primary hover:text-white rounded-2xl px-4 py-2.5 transition shadow-xs"
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {showDatePicker && (
+              <div className="max-w-xl bg-white border border-gray-100 rounded-2xl p-3 shadow-xs space-y-2">
+                <label className="text-[10px] font-bold text-muted uppercase tracking-wide">
+                  Select date
+                  <input
+                    type="date"
+                    min={todayDate()}
+                    value={pickedDate}
+                    onChange={(e) => setPickedDate(e.target.value)}
+                    disabled={sending || loading}
+                    className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-navy outline-none focus:border-primary"
+                  />
+                  {/* //this is test */}
+                </label>
                 <button
-                  key={c.label}
-                  onClick={() => onChip(c)}
-                  className="text-left text-xs font-semibold bg-white border border-primary/25 text-primary hover:bg-primary hover:text-white rounded-2xl px-4 py-2.5 transition shadow-xs"
+                  type="button"
+                  onClick={sendPickedDate}
+                  disabled={sending || loading || !pickedDate}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary-dark transition disabled:opacity-50"
                 >
-                  {c.label}
+                  <Icon name="calendar" size={13} />
+                  Use this date
                 </button>
-              ))}
-            </div>
+              </div>
+            )}
+            {showLocationPicker && (
+              <div className="max-w-xl bg-white border border-gray-100 rounded-2xl p-3 shadow-xs space-y-2">
+                <div>
+                  <div className="text-[10px] font-bold text-muted uppercase tracking-wide">Pin exact event area</div>
+                  <p className="text-[11px] text-muted mt-0.5">Search the area or drop the pin so Aura can match nearby vendors more accurately.</p>
+                </div>
+                <MapLocationPicker
+                  height="260px"
+                  value={activeEvent?.location?.coordinates || pickedLocation || undefined}
+                  onChange={setPickedLocation}
+                  guidance="Drag or click pointer to pin the exact event area"
+                />
+                {pickedLocation && (
+                  <div className="rounded-xl bg-lavender/50 px-3 py-2 text-[11px] text-navy">
+                    <div className="font-bold">Selected location</div>
+                    <div className="text-muted">{pickedLocation.address || `${pickedLocation.lat}, ${pickedLocation.lng}`}</div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={savePickedLocation}
+                  disabled={sending || loading || savingStructured || !pickedLocation}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary-dark transition disabled:opacity-50"
+                >
+                  <Icon name="mapPin" size={13} />
+                  {savingStructured ? 'Saving...' : 'Save pinned location'}
+                </button>
+              </div>
+            )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                sendCustomChoice();
+              }}
+              className="max-w-xl bg-white border border-gray-100 rounded-2xl p-2.5 shadow-xs"
+            >
+              <textarea
+                value={customChoice}
+                onChange={(e) => setCustomChoice(e.target.value)}
+                disabled={sending || loading}
+                rows={2}
+                placeholder="Something else? Type your own answer here..."
+                className="w-full resize-y min-h-16 max-h-48 outline-none bg-transparent text-xs sm:text-sm text-navy placeholder:text-muted/60 px-2 py-1"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={sending || loading || !customChoice.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary-dark transition disabled:opacity-50"
+                >
+                  <Icon name="send" size={13} />
+                  Send answer
+                </button>
+              </div>
+            </form>
           </div>
         )}
         <div ref={bottomRef} />
@@ -283,50 +714,95 @@ export default function AuraChat({ firstName }) {
           e.preventDefault();
           send(input);
         }}
+        // abcd
         className="p-3 sm:p-4 max-w-3xl w-full mx-auto"
       >
-        <div className="flex items-center gap-2 bg-white rounded-2xl shadow-lg shadow-primary/5 px-4 py-2.5 border border-gray-100">
+        {/* ChatGPT-style composer: + · text · language · mic (dictate) · voice mode / send */}
+        <div className="flex items-center gap-1.5 bg-white rounded-full shadow-lg shadow-primary/5 pl-2 pr-1.5 py-1.5 border border-gray-200/80 focus-within:border-primary/40 transition">
+          <button
+            type="button"
+            onClick={newChat}
+            className="w-9 h-9 grid place-items-center rounded-full text-ink/70 hover:bg-lavender shrink-0 transition"
+            title="New chat"
+            aria-label="New chat"
+          >
+            <Icon name="plus" size={18} />
+          </button>
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={sending || loading}
-            placeholder="Type a message or describe your event…"
-            className="flex-1 outline-none text-xs sm:text-sm placeholder:text-muted/60 bg-transparent"
+            placeholder={
+              voice.listening === 'converse' ? 'Listening… speak now' : voice.listening === 'dictate' ? 'Listening… tap the mic to stop' : 'Ask Aura+ anything'
+            }
+            className="flex-1 min-w-0 outline-none text-sm placeholder:text-muted/70 bg-transparent px-1"
           />
           {voice.supported && (
             <>
               <button
                 type="button"
                 onClick={() => voice.setLang(voice.lang === 'en-IN' ? 'hi-IN' : 'en-IN')}
-                className="text-[10px] font-bold text-muted hover:text-primary px-1"
-                title="Voice language"
+                className="hidden sm:inline-flex items-center gap-1 h-9 rounded-full px-3 text-xs font-semibold text-ink/70 hover:bg-lavender shrink-0 transition"
+                title="Voice language — English / Hindi"
               >
-                {voice.lang === 'en-IN' ? 'EN' : 'हि'}
+                <span className="w-4 h-4 rounded-full border border-current grid place-items-center text-[8px] font-bold">{voice.lang === 'en-IN' ? 'A' : 'अ'}</span>
+                {voice.lang === 'en-IN' ? 'English' : 'हिंदी'}
               </button>
               <button
                 type="button"
-                onClick={voice.toggle}
-                className={`p-1 transition ${voice.listening ? 'text-red-500 animate-pulse' : 'text-muted hover:text-primary'}`}
-                title="Voice input"
-                aria-label="Voice input"
+                onClick={() => (voice.listening === 'dictate' ? voice.stop() : voice.start('dictate', input))}
+                disabled={sending || loading || voice.listening === 'converse' || voice.speaking}
+                className={`relative w-9 h-9 rounded-full grid place-items-center shrink-0 transition disabled:opacity-40 ${
+                  voice.listening === 'dictate' ? 'bg-red-50 text-red-500' : 'text-ink/70 hover:bg-lavender'
+                }`}
+                title={voice.listening === 'dictate' ? 'Stop dictation' : 'Dictate (fills the box)'}
+                aria-label={voice.listening === 'dictate' ? 'Stop dictation' : 'Dictate'}
               >
-                <Icon name="mic" size={16} />
+                {voice.listening === 'dictate' && <span className="absolute inset-1 rounded-full bg-red-400/30 animate-ping" />}
+                <Icon name="mic" size={17} className="relative" />
               </button>
             </>
           )}
-          <button
-            type="submit"
-            disabled={sending || loading || !input.trim()}
-            className="w-9 h-9 grid place-items-center rounded-full bg-primary text-white hover:bg-primary-dark transition shadow-sm cursor-pointer disabled:opacity-50"
-            title="Send"
-            aria-label="Send message"
-          >
-            <Icon name="send" size={14} className="-translate-y-px translate-x-px" />
-          </button>
+          {/* abcd */}
+          {(input.trim() && !voice.listening) || !voice.supported ? (
+            <button
+              type="submit"
+              disabled={sending || loading || !input.trim()}
+              className="w-9 h-9 grid place-items-center rounded-full bg-primary text-white hover:bg-primary-dark transition shadow-sm shrink-0 disabled:opacity-50"
+              title="Send"
+              aria-label="Send message"
+            >
+              <Icon name="send" size={14} className="-translate-y-px translate-x-px" />
+            </button>
+          ) : (
+            voice.supported && (
+              <button
+                type="button"
+                onClick={() => (voice.speaking ? voice.stop() : agent.start())}
+                disabled={(sending || loading || voice.listening) && !voice.speaking}
+                className="relative w-9 h-9 grid place-items-center rounded-full text-white shadow-sm shrink-0 transition disabled:opacity-50 bg-primary hover:bg-primary-dark"
+                title={voice.speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={voice.speaking ? 'Stop speaking' : 'Voice mode'}
+              >
+                <span className="relative">
+                  {voice.speaking ? <span className="block w-3 h-3 rounded-[3px] bg-white" /> : <WaveIcon />}
+                </span>
+              </button>
+            )
+          )}
         </div>
         <p className="text-[10px] text-muted text-center mt-1.5">You decide — Aura+ never books or pays without you.</p>
       </form>
+
+      <VoiceAgentOverlay
+        agent={agent}
+        title={activeEvent?.title || 'Aura+'}
+        subtitle="Your event assistant · voice"
+        lang={voice.lang}
+        onToggleLang={() => voice.setLang(voice.lang === 'en-IN' ? 'hi-IN' : 'en-IN')}
+      />
     </div>
   );
 }
+// abcd

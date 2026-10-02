@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, CustomerPageSkeleton, useLoad } from './customerUi.jsx';
-import { CardListSkeleton } from '../../components/LoadingSkeleton.jsx';
+import { BackLink, PageSkeleton, useLoad } from './customerUi.jsx';
 
 /** Event Circle: one thread per context (whole event, each booking, a service). */
 export default function CirclePage() {
@@ -37,11 +36,16 @@ export default function CirclePage() {
     }
   }
 
-  if (loading && !data) return <CustomerPageSkeleton cards={3} />;
+  if (loading && !data) return <PageSkeleton title="Circle" count={3} type="list" />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
-  const { event, contexts } = data;
+  const event = data?.event || { title: 'Event' };
+  const contexts = Array.isArray(data?.contexts) && data.contexts.length
+    ? data.contexts
+    : [{ key: 'event', label: 'Whole event', path: [event.title || 'Event'], messageCount: 0 }];
   const activeKey = bookingId ? `booking:${bookingId}` : requirementId ? `requirement:${requirementId}` : 'event';
   const active = contexts.find((c) => c.key === activeKey) || contexts[0];
+  const activePath = Array.isArray(active?.path) && active.path.length ? active.path : [event.title || 'Event'];
+  const messages = Array.isArray(thread.data?.messages) ? thread.data.messages : [];
 
   const choose = (c) => {
     const next = new URLSearchParams();
@@ -65,21 +69,43 @@ export default function CirclePage() {
           </button>
         ))}
       </div>
-      <div className="text-[11px] text-muted">{active.path.join(' → ')}</div>
+      <div className="text-[11px] text-muted">{activePath.join(' → ')}</div>
+      <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-3">
+        <div className="text-[10px] uppercase tracking-wide font-extrabold text-primary">Current thread</div>
+        <div className="text-sm font-extrabold text-navy mt-0.5">{active.label || activePath.at(-1) || 'Whole event'}</div>
+        <div className="text-[11px] text-muted mt-0.5">{activePath.join(' → ')}</div>
+        <div className="text-[10px] text-muted mt-1">
+          Messages here stay attached to this exact {bookingId ? 'booking' : requirementId ? 'service and vendor context' : 'event'}.
+        </div>
+      </div>
 
       <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3 min-h-[240px]">
-        {thread.loading && !thread.data && <CardListSkeleton count={2} compact />}
-        {thread.error && <div className="text-xs text-red-500">{errorText(thread.error)}</div>}
-        {thread.data?.messages.length === 0 && <div className="text-xs text-muted">No messages yet. Ask anything about this — the STARVNT team and your vendor reply here.</div>}
-        {thread.data?.messages.map((m) => (
-          <div key={m.id} className={`flex ${m.senderType === 'customer' ? 'justify-end' : ''}`}>
-            <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-xs ${m.senderType === 'customer' ? 'bg-primary text-white' : 'bg-lavender text-navy'}`}>
-              {m.senderType !== 'customer' && <div className="text-[10px] font-bold mb-0.5">{m.senderName}</div>}
-              <div className="whitespace-pre-wrap">{m.body}</div>
-              <div className={`text-[9px] mt-1 ${m.senderType === 'customer' ? 'text-white/70' : 'text-muted'}`}>{new Date(m.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+        {thread.loading && !thread.data && (
+          <div className="space-y-3 py-2">
+            <div className="flex gap-2 items-center">
+              <div className="w-8 h-8 rounded-full bg-slate-200/80 animate-pulse" />
+              <div className="h-10 w-48 rounded-2xl bg-slate-100 animate-pulse" />
+            </div>
+            <div className="flex justify-end gap-2 items-center">
+              <div className="h-10 w-56 rounded-2xl bg-primary-soft/40 animate-pulse" />
             </div>
           </div>
-        ))}
+        )}
+        {thread.error && <div className="text-xs text-red-500">{errorText(thread.error)}</div>}
+        {!thread.loading && !thread.error && messages.length === 0 && <div className="text-xs text-muted">No messages yet. Ask anything about this — the STARVNT team and your vendor reply here.</div>}
+        {messages.map((m) => {
+          const mine = m.senderType === 'customer';
+          const senderLabel = mine ? 'You' : m.senderName || (m.senderType === 'vendor' ? 'Vendor' : 'STARVNT');
+          return (
+          <div key={m.id} className={`flex ${mine ? 'justify-end' : ''}`}>
+            <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-xs ${mine ? 'bg-primary text-white' : 'bg-lavender text-navy'}`}>
+              <div className={`text-[10px] font-bold mb-0.5 ${mine ? 'text-white/80' : 'text-primary'}`}>{senderLabel}</div>
+              <div className="whitespace-pre-wrap">{m.body}</div>
+              <div className={`text-[9px] mt-1 ${mine ? 'text-white/70' : 'text-muted'}`}>{new Date(m.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+            </div>
+          </div>
+          );
+        })}
         <div ref={bottom} />
       </div>
 

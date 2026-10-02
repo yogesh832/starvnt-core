@@ -41,10 +41,16 @@ const externalUserSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['ACTIVE', 'DISABLED'],
+      enum: ['ACTIVE', 'DISABLED', 'SUSPENDED'],
       default: 'ACTIVE',
       index: true,
     },
+    isFlagged: { type: Boolean, default: false, index: true },
+    flagReason: { type: String, default: '' },
+    flaggedAt: { type: Date, default: null },
+    isRestricted: { type: Boolean, default: false, index: true },
+    restrictedUntil: { type: Date, default: null },
+    restrictionReason: { type: String, default: '' },
     // Historical role list. Sign-in uses accountType as the primary product
     // surface; do not use these roles to switch Customer/Vendor at login.
     // Older documents have no `roles` — see userRoles().
@@ -76,6 +82,12 @@ externalUserSchema.methods.toSafeJSON = function toSafeJSON() {
     accountType: activeAccountType(this),
     roles: userRoles(this),
     status: this.status,
+    isFlagged: this.isFlagged,
+    flagReason: this.flagReason,
+    flaggedAt: this.flaggedAt,
+    isRestricted: this.isRestricted,
+    restrictedUntil: this.restrictedUntil,
+    restrictionReason: this.restrictionReason,
     vendorOrganization: this.vendorOrganization,
     createdAt: this.createdAt,
   };

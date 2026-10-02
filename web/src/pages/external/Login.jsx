@@ -15,8 +15,8 @@ const MSG91_WIDGET_TOKEN =
   import.meta.env.VITE_MSG91_WIDGET_TOKEN || "567508TgmtIu2qfrl6a9e4925P1";
 
 /**
- * Universal EXTERNAL Authentication:
- * Supports Customers & Vendors with 3 independent authentication methods:
+ * Main branch EXTERNAL Authentication:
+ * Exposes the vendor auth surface with 3 independent authentication methods:
  * 1. Google OAuth / One-Tap Login
  * 2. Mobile Phone + OTP (MSG91 widget)
  * 3. Email & Password
@@ -44,8 +44,14 @@ export default function ExternalLogin() {
     window.location.pathname === "/register" ||
     params.get("mode") === "register";
 
+  const resolveInitialAccountType = () => "VENDOR";
+
   const [mode, setMode] = useState(isRegisterPath ? "register" : "login");
-  const [accountType, setAccountType] = useState("VENDOR");
+  const [accountType, setAccountType] = useState(resolveInitialAccountType);
+
+  useEffect(() => {
+    setAccountType("VENDOR");
+  }, [params, nextPath]);
   // Auth Method: 'GOOGLE' | 'PHONE' | 'EMAIL'
   const [authMethod, setAuthMethod] = useState("EMAIL");
 
@@ -96,9 +102,16 @@ export default function ExternalLogin() {
 
   useEffect(() => {
     if (user) {
+      const explicitAs = (params.get("as") || params.get("role") || params.get("type") || "").toUpperCase();
+      const targetFromNext = nextPath.startsWith("/customer") ? "CUSTOMER" : nextPath.startsWith("/vendor") ? "VENDOR" : null;
+      const desiredTarget = explicitAs || targetFromNext;
+      // If user came specifically wanting a different accountType than what is currently active, don't auto-redirect them away immediately
+      if (desiredTarget && user.accountType !== desiredTarget) {
+        return;
+      }
       redirectAfterAuth(user);
     }
-  }, [user, nextPath]);
+  }, [user, nextPath, params]);
 
   // OTP Countdown Timer
   useEffect(() => {
@@ -190,9 +203,9 @@ export default function ExternalLogin() {
 
       const u =
         mode === "login" && passwordSetupRequired
-          ? await setPassword(form.email, form.otp, form.password)
+          ? await setPassword(form.email, form.otp, form.password, accountType)
           : mode === "login"
-          ? await login(form.email, form.password)
+          ? await login(form.email, form.password, accountType)
           : await register({
               fullName: form.fullName,
               email: form.email,
@@ -210,7 +223,9 @@ export default function ExternalLogin() {
     } catch (err) {
       const map = {
         INVALID_CREDENTIALS: "Incorrect email or password.",
-        EMAIL_IN_USE: "That email is already registered — try signing in.",
+        ACCOUNT_TYPE_MISMATCH:
+          err.data?.message || "This account is not available on Vendor login. Please use the correct STARVNT app surface.",
+        EMAIL_IN_USE: "That email is already registered. Sign in here only if it belongs to a vendor account.",
         WEAK_PASSWORD: "Password needs 8+ chars with a letter and a number.",
         BUSINESS_NAME_REQUIRED: "Please add your brand / business name.",
         RATE_LIMITED: "Too many attempts — wait a few minutes and retry.",
@@ -295,7 +310,11 @@ export default function ExternalLogin() {
       });
       redirectAfterAuth(u);
     } catch (err) {
-      setError(err.data?.error || err.message || "Google sign-in failed.");
+      setError(
+        err.data?.error === "ACCOUNT_TYPE_MISMATCH"
+          ? err.data?.message || "This account is not available on Vendor login. Please use the correct STARVNT app surface."
+          : err.message || err.data?.error || "Google sign-in failed.",
+      );
     } finally {
       setBusy(false);
     }
@@ -371,7 +390,9 @@ export default function ExternalLogin() {
             redirectAfterAuth(u);
           } catch (err) {
             setError(
-              err.data?.error || err.message || "OTP verification failed.",
+              err.data?.error === "ACCOUNT_TYPE_MISMATCH"
+                ? err.data?.message || "This account is not available on Vendor login. Please use the correct STARVNT app surface."
+                : err.message || err.data?.error || "OTP verification failed.",
             );
           } finally {
             setBusy(false);
@@ -435,6 +456,8 @@ export default function ExternalLogin() {
         INVALID_OTP: "Invalid OTP code. Please check and retry.",
         OTP_EXPIRED_OR_NOT_FOUND: "OTP expired. Please request a new one.",
         TOO_MANY_ATTEMPTS: "Too many failed attempts. Request a new OTP.",
+        ACCOUNT_TYPE_MISMATCH:
+          err.data?.message || "This account is not available on Vendor login. Please use the correct STARVNT app surface.",
       };
       setError(
         map[err.data?.error] || err.message || "OTP verification failed.",
@@ -593,47 +616,46 @@ export default function ExternalLogin() {
           {/* Right: Auth Form Panel */}
           <main className="p-6 sm:p-10 flex flex-col justify-center bg-white">
             <div className="w-full">
-              {/* Persona Switcher: Customer vs Vendor */}
+              {/* Main branch auth surface is intentionally vendor-only.
+                  Customer auth remains available in the merged backend/customer app, but is not exposed here. */}
               <div className="flex items-center justify-between pb-4 border-b border-gray-100 gap-4">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-extrabold text-navy tracking-tight">
                     {mode === "login"
-                      ? "Sign in to STARVNT"
-                      : "Create an Account"}
+                      ? "Vendor Sign in"
+                      : "Create Vendor Account"}
                   </h2>
                   <p className="text-xs text-muted mt-0.5">
-                    {accountType === "VENDOR"
-                      ? "Operating as Verified Vendor / Brand"
-                      : "Plan and manage your events"}
+                    Operating as Verified Vendor / Brand
                   </p>
                 </div>
 
-                {/* Persona Pill Switcher */}
-                <div className="flex bg-gray-100/90 p-1 rounded-2xl text-xs font-bold shrink-0 border border-gray-200/50">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAccountType('CUSTOMER');
-                      setError('');
-                    }}
-                    className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
-                      accountType === 'CUSTOMER' ? 'bg-navy text-white shadow-sm' : 'text-muted hover:text-navy'
-                    }`}
+                <div className="px-3 sm:px-4 py-2 rounded-2xl bg-navy text-white text-xs font-extrabold shadow-sm border border-navy/10 shrink-0">
+                  Vendor OS
+                </div>
+              </div>
+
+              {/* Quick Test Login Banner */}
+              <div className="mt-3 p-2.5 rounded-2xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-indigo-950 font-medium">
+                  <span className="text-base">🧪</span>
+                  <span className="text-[11px] leading-tight">
+                    <strong>Testing?</strong> Password: <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-indigo-700">Password123</code>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Link
+                    to="/test"
+                    className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] whitespace-nowrap shadow-xs transition"
                   >
-                    Customer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAccountType('VENDOR');
-                      setError('');
-                    }}
-                    className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
-                      accountType === 'VENDOR' ? 'bg-navy text-white shadow-sm' : 'text-muted hover:text-navy'
-                    }`}
+                    ⚡ Test Hub (/test) →
+                  </Link>
+                  <Link
+                    to="/test-login"
+                    className="px-2.5 py-1 rounded-xl bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 font-bold text-[11px] whitespace-nowrap shadow-xs transition"
                   >
-                    Vendor
-                  </button>
+                    Cards
+                  </Link>
                 </div>
               </div>
 
@@ -950,6 +972,44 @@ export default function ExternalLogin() {
                             ? "Continue Sign In"
                             : "Create Account"}
                       </button>
+
+                      {mode === "login" && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-[11px] mb-2">
+                            <span className="font-bold text-muted">🧪 Quick-Fill Demo Account:</span>
+                            <Link to="/test-login" className="text-primary hover:underline font-bold">
+                              1-Click Portal (10) →
+                            </Link>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: "📸 Photography", email: "vendor@starvnt.com", type: "VENDOR" },
+                              { label: "🍽️ Catering", email: "catering@starvnt.com", type: "VENDOR" },
+                              { label: "🌸 Decor", email: "decor@starvnt.com", type: "VENDOR" },
+                              { label: "🏰 Venue", email: "venue@starvnt.com", type: "VENDOR" },
+                              { label: "🎵 Sound", email: "dj@starvnt.com", type: "VENDOR" },
+                              { label: "💄 Makeup", email: "makeup@starvnt.com", type: "VENDOR" },
+                            ].map((item) => (
+                              <button
+                                key={item.email}
+                                type="button"
+                                onClick={() => {
+                                  setAccountType(item.type);
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    email: item.email,
+                                    password: "Password123",
+                                  }));
+                                  setError("");
+                                }}
+                                className="px-2 py-1 text-[11px] rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-primary text-navy font-medium transition cursor-pointer border border-gray-200/60"
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </form>
                   )}
                 </div>

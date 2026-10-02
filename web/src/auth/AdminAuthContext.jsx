@@ -9,10 +9,26 @@ export function AdminAuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    adminApi
-      .refresh()
-      .then((data) => data && setAdmin(data.admin))
-      .finally(() => setReady(true));
+    async function init() {
+      try {
+        if (adminApi.getToken()) {
+          const res = await adminApi.call('/auth/me');
+          if (res?.admin) {
+            setAdmin(res.admin);
+            return;
+          }
+        }
+        const data = await adminApi.refresh();
+        if (data?.admin) {
+          setAdmin(data.admin);
+        }
+      } catch {
+        setAdmin(null);
+      } finally {
+        setReady(true);
+      }
+    }
+    init();
   }, []);
 
   async function login(email, password) {

@@ -6,8 +6,8 @@ import * as eventsRepo from '../repositories/events.repo.js';
 import * as auraRepo from '../repositories/aura.repo.js';
 import * as catalog from './catalog.service.js';
 import { VendorMessageThread } from '../../external/models/VendorMessageThread.js';
-import { Notification } from '../../external/models/Notification.js';
 import { Opportunity } from '../../external/models/Opportunity.js';
+import { notifyVendor } from '../../notifications/notification.service.js';
 import { getOwnedEventOr404 } from './events.service.js';
 import { serializeEvent } from './understanding.js';
 import { categoryLabel } from './planCatalog.js';
@@ -75,12 +75,13 @@ async function syncCustomerBookingMessageToVendor({ event, bookingId, customerId
     { upsert: true, new: true }
   ).lean();
 
-  await Notification.create({
-    vendor: option.vendorId,
+  await notifyVendor({
+    vendorId: option.vendorId,
     title: 'New customer message',
     message: `${senderName}: ${text.slice(0, 160)}`,
     type: 'MESSAGE',
     link: '/vendor/messages',
+    idempotencyKey: `vendor.message.booking.${thread?._id || booking._id}.${String(text).slice(0, 64)}`,
     metadata: {
       threadId: thread?._id ? String(thread._id) : null,
       customerBookingId: String(booking._id),
@@ -173,12 +174,13 @@ async function syncCustomerRequirementMessageToVendor({ event, requirementId, op
     { upsert: true, new: true }
   ).lean();
 
-  await Notification.create({
-    vendor: option.vendorId,
+  await notifyVendor({
+    vendorId: option.vendorId,
     title: 'New service message',
     message: `${senderName} · ${categoryLabel(requirement.category)}: ${text.slice(0, 140)}`,
     type: 'MESSAGE',
     link: '/vendor/messages',
+    idempotencyKey: `vendor.message.requirement.${thread?._id || requirement._id}.${customerMessageId || String(text).slice(0, 64)}`,
     metadata: {
       threadId: thread?._id ? String(thread._id) : null,
       customerEventId: String(event._id),
@@ -293,43 +295,100 @@ export async function postMessage(customerId, eventId, body = {}) {
 const IMPORTANT = ['payment', 'booking', 'completion', 'cancellation'];
 
 export async function updates(customerId) {
-  const [notifications, events, sessions, unread] = await Promise.all([
+  const [notifications, events, sessions, unread, threads] = await Promise.all([
     circleRepo.listNotifications(customerId),
     eventsRepo.listEventsForCustomer(customerId),
     auraRepo.listSessionsForCustomer(customerId),
     circleRepo.countUnread(customerId),
+    VendorMessageThread.find({ customer: customerId })
+      .populate('vendor', 'businessName category')
+      .sort({ lastMessageAt: -1, updatedAt: -1 })
+      .limit(30)
+      .lean()
+      .catch(() => []),
   ]);
   const titles = new Map(events.map((e) => [String(e._id), e.title]));
   const messages = await circleRepo.listAllMessages(events.map((e) => e._id));
   return {
     unread,
-    notifications: notifications.map((n) => ({
-      id: String(n._id),
-      type: n.type,
-      important: IMPORTANT.includes(n.type),
-      title: n.title,
-      body: n.body,
-      eventId: n.event ? String(n.event) : null,
-      eventTitle: n.event ? titles.get(String(n.event)) || null : null,
-      read: Boolean(n.readAt),
-      createdAt: n.createdAt,
-    })),
+    notifications: notifications.map((n) => {
+      let defaultTo = n.actionUrl || null;
+      if (!defaultTo && n.event) {
+        const evId = String(n.event);
+        const t = String(n.type || '').toLowerCase();
+        if (['booking', 'payment', 'completion'].includes(t)) defaultTo = `/customer/events/${evId}/bookings`;
+        else if (t === 'quote') defaultTo = `/customer/events/${evId}/quotes`;
+        else if (t === 'message') defaultTo = `/customer/events/${evId}/circle`;
+        else if (t === 'event_day') defaultTo = `/customer/events/${evId}/event-day`;
+        else defaultTo = `/customer/events/${evId}`;
+      }
+      return {
+        id: String(n._id),
+        type: n.type || 'system',
+        important: IMPORTANT.includes(n.type),
+        title: n.title,
+        body: n.body,
+        to: defaultTo,
+        priority: n.priority || 'NORMAL',
+        status: n.status || (n.readAt ? 'READ' : 'DELIVERED'),
+        eventId: n.event ? String(n.event) : null,
+        eventTitle: n.event ? titles.get(String(n.event)) || null : null,
+        read: Boolean(n.readAt),
+        createdAt: n.createdAt,
+      };
+    }),
+    threads: (threads || []).map((t) => {
+      const evId = t.customerEvent ? String(t.customerEvent) : null;
+      const serviceId = t.customerRequirement ? String(t.customerRequirement) : null;
+      const bookingId = t.customerBooking ? String(t.customerBooking) : null;
+      const toUrl = evId
+        ? `/customer/events/${evId}/circle${bookingId ? `?booking=${bookingId}` : serviceId ? `?service=${serviceId}` : ''}`
+        : '/customer/events';
+      return {
+        id: String(t._id),
+        vendorName: t.vendor?.businessName || t.clientName || 'Vendor Partner',
+        vendorCategory: t.vendor?.category || t.eventType || 'Service',
+        eventName: t.eventName || (evId ? titles.get(evId) : null) || 'Event',
+        lastMessageText: t.lastMessageText || '',
+        lastMessageAt: t.lastMessageAt || t.updatedAt,
+        unreadCount: t.unreadClientCount || 0,
+        eventId: evId,
+        to: toUrl,
+      };
+    }),
     vendorMessages: messages
       .filter((m) => m.senderType === 'vendor' || m.senderType === 'team' || m.senderType === 'customer')
       .slice(0, 30)
-      .map((m) => ({ ...serializeMessage(m), eventId: String(m.event), eventTitle: titles.get(String(m.event)) || null })),
+      .map((m) => {
+        const evId = m.event ? String(m.event) : null;
+        return {
+          ...serializeMessage(m),
+          eventId: evId,
+          eventTitle: evId ? titles.get(evId) || null : null,
+          to: evId
+            ? `/customer/events/${evId}/circle${m.booking ? `?booking=${m.booking}` : m.requirement ? `?service=${m.requirement}` : ''}`
+            : '/customer/events',
+        };
+      }),
     auraConversations: sessions.map((s) => ({
       sessionId: s._id,
       eventId: s.event ? String(s.event) : null,
-      eventTitle: s.event ? titles.get(String(s.event)) || null : null,
+      eventTitle: s.event ? titles.get(String(s.event)) || 'Event Planning' : 'General Planning',
       updatedAt: s.updatedAt,
     })),
   };
 }
 
 export async function readAll(customerId) {
-  const r = await circleRepo.markAllRead(customerId);
-  return { marked: r.modifiedCount };
+  const [r] = await Promise.all([
+    circleRepo.markAllRead(customerId),
+    VendorMessageThread.updateMany(
+      { customer: customerId },
+      { $set: { unreadClientCount: 0, 'messages.$[m].isRead': true } },
+      { arrayFilters: [{ 'm.sender': 'VENDOR' }] }
+    ).catch(() => null),
+  ]);
+  return { marked: r?.modifiedCount || 0 };
 }
 
 export const unreadCount = (customerId) => circleRepo.countUnread(customerId);

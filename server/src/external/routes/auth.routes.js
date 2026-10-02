@@ -56,6 +56,70 @@ function clearRefreshCookie(res) {
   res.clearCookie(config.refreshCookieName, options);
 }
 
+// ── Demo Accounts for Testing & Quick Login ────────────────────────────────
+router.get("/demo-accounts", async (req, res, next) => {
+  try {
+    const [vendors, customers] = await Promise.all([
+      ExternalUser.find({ accountType: "VENDOR", status: "ACTIVE" })
+        .populate("vendorOrganization")
+        .lean(),
+      ExternalUser.find({ accountType: "CUSTOMER", status: "ACTIVE" }).lean(),
+    ]);
+
+    const formattedVendors = vendors.map((u) => {
+      const org = u.vendorOrganization || {};
+      return {
+        id: u._id,
+        fullName: u.fullName,
+        email: u.email,
+        phone: u.phone,
+        businessName: org.businessName || u.fullName,
+        category: org.category || "Vendor",
+        location: org.location || "",
+        rating: org.rating || { average: 4.9, count: 50 },
+        profilePicUrl: org.profilePicUrl || u.avatarUrl || "",
+        googlePlaceId: org.googlePlaceId || null,
+        bio: org.bio || "",
+        type: "VENDOR",
+      };
+    });
+
+    const formattedCustomers = customers.map((c) => ({
+      id: c._id,
+      fullName: c.fullName,
+      email: c.email,
+      phone: c.phone,
+      type: "CUSTOMER",
+    }));
+
+    return res.json({
+      ok: true,
+      defaultPassword: "Password123",
+      vendors: formattedVendors,
+      customers: formattedCustomers,
+      admin: {
+        email: "admin@starvnt.com",
+        fullName: "Chief Systems Architect",
+        role: "SUPER_ADMIN",
+        type: "ADMIN",
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Reseed Real Vendors Trigger (Testing & QA Playground) ───────────────────
+router.post("/reseed", async (req, res, next) => {
+  try {
+    const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
+    await seedRealVendors();
+    res.json({ ok: true, message: "Real vendors re-seeded successfully!" });
+  } catch (err) {
+    next(err);
+  }
+});
+
 function normalizePrimaryCategory(category) {
   if (category === undefined || category === null || category === "") return { value: "" };
   if (Array.isArray(category)) return { error: "PRIMARY_CATEGORY_SINGLE_ONLY" };
@@ -348,7 +412,10 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
-      signInAs = resolveExistingAccountType(user);
+      const requestedSurface = accountType === "VENDOR" ? "VENDOR" : accountType === "CUSTOMER" ? "CUSTOMER" : null;
+      signInAs = requestedSurface || resolveExistingAccountType(user);
+      grantRole(user, signInAs);
+      user.accountType = signInAs;
       await prepareAccountType(user, signInAs, {
         businessName,
         brandName,
@@ -876,8 +943,8 @@ router.post("/refresh", async (req, res, next) => {
         .json({ ok: false, error: "ACCOUNT_DISABLED_OR_MISSING" });
     }
 
-    // Rotate: revoke old session and re-resolve from the DB primary surface.
-    // This also heals old sessions minted with the wrong Customer/Vendor tab.
+    // Rotate: revoke old session and preserve active surface.
+    // If the session had a specific accountType, respect it so user stays on their active portal.
     session.revokedAt = new Date();
     await session.save();
     const fresh = await createSession(user, req, resolveExistingAccountType(user));
@@ -890,6 +957,27 @@ router.post("/refresh", async (req, res, next) => {
       ...issueTokens(user, fresh.session),
       user: user.toSafeJSON(),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Switch Surface (Customer <-> Vendor for same identity) ───────────────────
+router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
+  try {
+    const { targetSurface } = req.body || {};
+    if (!["CUSTOMER", "VENDOR"].includes(targetSurface)) {
+      return res.status(400).json({ error: "INVALID_SURFACE" });
+    }
+    const user = req.externalUser;
+    grantRole(user, targetSurface);
+    await prepareAccountType(user, targetSurface);
+    user.accountType = targetSurface;
+    await user.save();
+
+    const { session, refreshToken } = await createSession(user, req, targetSurface);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+    return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
     next(err);
   }

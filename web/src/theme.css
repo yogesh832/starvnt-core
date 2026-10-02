@@ -145,10 +145,99 @@ html.dark select:focus {
 
 /* Modal overlay */
 html.dark .bg-navy\/60 { background-color: rgba(0, 0, 0, 0.7) !important; }
+html.dark .vendor-modal-backdrop { background-color: rgba(0, 0, 0, 0.72); }
+html.dark .vendor-modal-panel {
+  background: #1a1d2e;
+  border-color: #2a2d40;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.6);
+}
 
 /* Scrollbar */
 html.dark ::-webkit-scrollbar { background: #151825; }
 html.dark ::-webkit-scrollbar-thumb { background: #333650; border-radius: 4px; }
+
+.admin-sidebar-nav {
+  scrollbar-width: none;
+}
+
+.admin-sidebar-nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.vendor-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+  background: rgba(20, 26, 60, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.vendor-modal-panel {
+  width: 100%;
+  max-height: min(92dvh, 920px);
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  border-radius: 1.5rem;
+  box-shadow: 0 24px 70px rgba(14, 19, 48, 0.24);
+  animation: pop .18s ease-out;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vendor-modal-panel-flex {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vendor-modal-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vendor-modal-actions {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .vendor-modal-backdrop {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+  }
+
+  .vendor-modal-panel {
+    width: 100vw;
+    max-width: none !important;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0 !important;
+    padding: 1rem !important;
+  }
+
+  .vendor-modal-panel-flex {
+    height: 100dvh;
+  }
+
+  .vendor-modal-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 0 -1rem -1rem;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    background: inherit;
+    border-top: 1px solid rgba(229, 231, 235, 0.9);
+  }
+}
 
 /* Table hover */
 html.dark .hover\:bg-lavender\/30:hover { background-color: rgba(30, 33, 51, 0.3) !important; }

@@ -9,6 +9,8 @@ const vendorAuraSessionSchema = new Schema(
     _id: { type: String },
     vendor: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', required: true, index: true },
     user: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true },
+    // A setup action Aura+ proposed and is waiting for the vendor to confirm (see setupActions.js).
+    pending: { type: Schema.Types.Mixed, default: null },
   },
   { timestamps: true, collection: 'vendor_aura_sessions' }
 );

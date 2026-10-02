@@ -55,6 +55,44 @@ npm test
 Sign in at `http://localhost:5173/admin/login` with `SUPER_ADMIN_EMAIL` /
 `SUPER_ADMIN_PASSWORD`, then create regular admins from **Users & Access**.
 
+## Service & platform map
+
+Keep real credentials only in local `.env` files. Commit only `.env.example`
+templates. The root `.gitignore` is configured to ignore real env files and keep
+the examples visible for onboarding.
+
+| Area | Platform / provider | Used for | Main env keys | Notes |
+|---|---|---|---|---|
+| Database | MongoDB Atlas or local MongoDB | Core app data, external customer/vendor identity, admin identity | `DATABASE_URL`, `MONGO_URI_EXTERNAL`, `MONGO_URI_ADMIN` | STARVNT uses separate databases for domain isolation. |
+| Server runtime | Node.js + Express | Unified API server on `:4000` | `PORT`, `CLIENT_ORIGINS`, `COOKIE_SECURE` | Frontend calls through `/api` in dev. |
+| Frontend runtime | Vite + React + Tailwind | Customer, Vendor, Admin dashboards | `VITE_API_URL` | Runs on `:5173` in dev. |
+| External auth | JWT + HttpOnly refresh cookie | Customer/vendor login sessions | `JWT_EXTERNAL_SECRET`, `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL_DAYS` | Customer/vendor account type is resolved by backend, not trusted from UI. |
+| Admin auth | JWT + admin sessions | STARVNT Core admin console | `JWT_ADMIN_SECRET`, `ADMIN_ACCESS_TOKEN_TTL`, `ADMIN_REFRESH_TOKEN_TTL_DAYS` | Must use a different secret from external auth. |
+| Password hashing | bcrypt | Password storage | `BCRYPT_ROUNDS` | Default local value is `12`. |
+| OTP SMS | MSG91 | Phone OTP | `MSG91_AUTHKEY`, `MSG91_OTP_TEMPLATE_ID`, optional widget keys in web env | Sender ID/template must be approved in MSG91 for STARVNT branding. |
+| Email OTP | SMTP, optional Resend | Email OTP and transactional mail | `EMAIL_SERVER_*`, `EMAIL_FROM`, optional `RESEND_API_KEY`, `RESEND_SENDER_EMAIL` | Keep Resend disabled locally if SMTP fallback is preferred. |
+| Google OAuth | Google Cloud OAuth | Continue with Google | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `VITE_GOOGLE_CLIENT_ID` | Rotate secrets before production if shared anywhere. |
+| Google location APIs | Google Maps / Places / Distance Matrix | Vendor hubs, customer event location, distance, Google business rating lookup | `GOOGLE_PLACES_API_KEY`, `GOOGLE_MAPS_API_KEY`, `GOOGLE_DISTANCE_MATRIX_API_KEY` | Use browser-restricted keys for frontend map use; server keys should be server-restricted. |
+| Media storage | Cloudinary | Portfolio uploads, evidence uploads, CDN URLs | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | UI should say STARVNT Media, not Cloudinary branding. |
+| Payments | Razorpay test/live | Orders, 30% advance, payment verification | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Test keys must start with `rzp_test_`; webhook needed for production-grade automatic verification. |
+| GSTIN verification | gstinapi.in | GST number lookup and business verification | `GSTIN_API_KEY`, `GSTIN_API_BASE_URL` | Test GSTIN: `00AAAAA0000A1ZT`. |
+| PAN lookup / verification | gstinapi.in PAN-to-GSTIN now; dedicated PAN provider later | Corporate PAN support | `PAN_API_KEY`, `PAN_API_BASE_URL`, optional `PAN_MOCK_ENABLED` | `gstinapi.in` can find GSTINs under a PAN; full PAN KYC/name status needs a dedicated provider such as Protean/NSDL, Signzy, Karza, Surepass, Eko, or Hyperverge. |
+| Aura+ AI | Gemini, optional OpenAI/voice providers | Customer Aura and Vendor Aura assistants | `GEMINI_API_KEY`, optional `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` | Keep AI keys server-side unless a provider explicitly requires a browser key. |
+| Internal ops | STARVNT internal API key | Manual ops actions, payment verification simulation, admin/internal flows | `INTERNAL_API_KEY` | Never expose to frontend. |
+| Production keep-alive | Render or hosting cron | Keep production backend warm | `KEEP_ALIVE_URL`, `KEEP_ALIVE_INTERVAL_MS` | Only relevant in production deployments that sleep. |
+
+### Env files
+
+| File | Purpose | Commit? |
+|---|---|---|
+| `server/.env` | Real backend secrets for local/dev machine | No |
+| `server/.env.example` | Safe backend template with placeholders | Yes |
+| `web/.env` | Real frontend public config for local/dev machine | No |
+| `web/.env.example` | Safe frontend template with placeholders | Yes |
+
+After editing any `.env`, restart the server/web dev process. Vite reads
+`VITE_*` values at startup/build time.
+
 ## Customer App + Aura+
 
 Code: `server/src/customer/` (routes → controllers → services → repositories → MongoDB)
