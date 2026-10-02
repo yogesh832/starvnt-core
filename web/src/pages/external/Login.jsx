@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useExternalAuth } from "../../auth/ExternalAuthContext.jsx";
 import { useTheme } from "../../lib/ThemeContext.jsx";
 import PublicNavbar from "../../components/PublicNavbar.jsx";
@@ -635,30 +635,6 @@ export default function ExternalLogin() {
                 </div>
               </div>
 
-              {/* Quick Test Login Banner */}
-              <div className="mt-3 p-2.5 rounded-2xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 text-indigo-950 font-medium">
-                  <span className="text-base">🧪</span>
-                  <span className="text-[11px] leading-tight">
-                    <strong>Testing?</strong> Password: <code className="bg-white px-1.5 py-0.5 rounded font-mono font-bold text-indigo-700">Password123</code>
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Link
-                    to="/test"
-                    className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] whitespace-nowrap shadow-xs transition"
-                  >
-                    ⚡ Test Hub (/test) →
-                  </Link>
-                  <Link
-                    to="/test-login"
-                    className="px-2.5 py-1 rounded-xl bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 font-bold text-[11px] whitespace-nowrap shadow-xs transition"
-                  >
-                    Cards
-                  </Link>
-                </div>
-              </div>
-
               {/* 3 Authentication Option Tabs */}
               <div className="mt-4 grid grid-cols-3 gap-1.5 p-1 bg-lavender/80 rounded-2xl border border-gray-200/50">
                 <button
@@ -973,43 +949,6 @@ export default function ExternalLogin() {
                             : "Create Account"}
                       </button>
 
-                      {mode === "login" && (
-                        <div className="mt-4 pt-3 border-t border-gray-100">
-                          <div className="flex items-center justify-between text-[11px] mb-2">
-                            <span className="font-bold text-muted">🧪 Quick-Fill Demo Account:</span>
-                            <Link to="/test-login" className="text-primary hover:underline font-bold">
-                              1-Click Portal (10) →
-                            </Link>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {[
-                              { label: "📸 Photography", email: "vendor@starvnt.com", type: "VENDOR" },
-                              { label: "🍽️ Catering", email: "catering@starvnt.com", type: "VENDOR" },
-                              { label: "🌸 Decor", email: "decor@starvnt.com", type: "VENDOR" },
-                              { label: "🏰 Venue", email: "venue@starvnt.com", type: "VENDOR" },
-                              { label: "🎵 Sound", email: "dj@starvnt.com", type: "VENDOR" },
-                              { label: "💄 Makeup", email: "makeup@starvnt.com", type: "VENDOR" },
-                            ].map((item) => (
-                              <button
-                                key={item.email}
-                                type="button"
-                                onClick={() => {
-                                  setAccountType(item.type);
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    email: item.email,
-                                    password: "Password123",
-                                  }));
-                                  setError("");
-                                }}
-                                className="px-2 py-1 text-[11px] rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-primary text-navy font-medium transition cursor-pointer border border-gray-200/60"
-                              >
-                                {item.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </form>
                   )}
                 </div>
