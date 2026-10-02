@@ -18,6 +18,13 @@ const serviceCoverageSchema = new Schema(
     localities: [{ type: String, trim: true }], // e.g. ['New Town', 'Salt Lake', 'Rajarhat']
     city: { type: String, trim: true, default: '' },
     state: { type: String, trim: true, default: '' },
+    baseAddress: { type: String, trim: true, default: '' },
+    baseLocality: { type: String, trim: true, default: '' },
+    basePostalCode: { type: String, trim: true, default: '' },
+    baseCoordinates: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+    },
     radiusKm: { type: Number, default: 40 },
     confidence: {
       type: String,

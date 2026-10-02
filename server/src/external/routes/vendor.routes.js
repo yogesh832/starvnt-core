@@ -528,11 +528,29 @@ router.get('/coverage', async (req, res, next) => {
 
 router.post('/coverage', async (req, res, next) => {
   try {
-    const { vendorServiceId, coverageType, localities, city, state, radiusKm, outstationAllowed } = req.body || {};
+    const {
+      vendorServiceId,
+      coverageType,
+      localities,
+      city,
+      state,
+      radiusKm,
+      outstationAllowed,
+      baseAddress,
+      baseLocality,
+      basePostalCode,
+      baseCoordinates,
+    } = req.body || {};
     const service = await VendorService.findOne({ _id: vendorServiceId, vendor: req.vendorId });
     if (!service) {
       return res.status(404).json({ error: 'SERVICE_NOT_FOUND' });
     }
+    const cleanCoordinates =
+      baseCoordinates &&
+      Number.isFinite(Number(baseCoordinates.lat)) &&
+      Number.isFinite(Number(baseCoordinates.lng))
+        ? { lat: Number(baseCoordinates.lat), lng: Number(baseCoordinates.lng) }
+        : undefined;
 
     let coverage = await ServiceCoverage.findOne({ vendor: req.vendorId, vendorService: service._id });
     if (coverage) {
@@ -540,6 +558,10 @@ router.post('/coverage', async (req, res, next) => {
       if (localities !== undefined) coverage.localities = localities;
       if (city !== undefined) coverage.city = city.trim();
       if (state !== undefined) coverage.state = state.trim();
+      if (baseAddress !== undefined) coverage.baseAddress = String(baseAddress || '').trim();
+      if (baseLocality !== undefined) coverage.baseLocality = String(baseLocality || '').trim();
+      if (basePostalCode !== undefined) coverage.basePostalCode = String(basePostalCode || '').trim();
+      if (cleanCoordinates) coverage.baseCoordinates = cleanCoordinates;
       if (radiusKm !== undefined) coverage.radiusKm = Number(radiusKm);
       if (outstationAllowed !== undefined) coverage.outstationAllowed = Boolean(outstationAllowed);
       await coverage.save();
@@ -551,6 +573,10 @@ router.post('/coverage', async (req, res, next) => {
         localities: localities || [],
         city: city ? city.trim() : '',
         state: state ? state.trim() : '',
+        baseAddress: baseAddress ? String(baseAddress).trim() : '',
+        baseLocality: baseLocality ? String(baseLocality).trim() : '',
+        basePostalCode: basePostalCode ? String(basePostalCode).trim() : '',
+        baseCoordinates: cleanCoordinates || undefined,
         radiusKm: radiusKm !== undefined ? Number(radiusKm) : 40,
         confidence: 'SELF_DECLARED',
         outstationAllowed: Boolean(outstationAllowed),

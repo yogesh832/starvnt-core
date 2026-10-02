@@ -194,6 +194,15 @@ export function ServicesPage() {
   const [selectedServiceForCov, setSelectedServiceForCov] = useState(null);
   const [covCity, setCovCity] = useState("");
   const [covState, setCovState] = useState("");
+  const [covBaseLocation, setCovBaseLocation] = useState({
+    lat: null,
+    lng: null,
+    address: "",
+    locality: "",
+    city: "",
+    state: "",
+    postalCode: "",
+  });
   const [covRadiusKm, setCovRadiusKm] = useState(40);
   const [covLocalities, setCovLocalities] = useState("");
   const [covOutstation, setCovOutstation] = useState(false);
@@ -426,12 +435,30 @@ export function ServicesPage() {
     if (existingCov) {
       setCovCity(existingCov.city || "Mumbai");
       setCovState(existingCov.state || "Maharashtra");
+      setCovBaseLocation({
+        lat: existingCov.baseCoordinates?.lat || 19.076,
+        lng: existingCov.baseCoordinates?.lng || 72.8777,
+        address: existingCov.baseAddress || "",
+        locality: existingCov.baseLocality || "",
+        city: existingCov.city || "",
+        state: existingCov.state || "",
+        postalCode: existingCov.basePostalCode || "",
+      });
       setCovRadiusKm(existingCov.radiusKm || 40);
       setCovLocalities(existingCov.localities?.join(", ") || "");
       setCovOutstation(Boolean(existingCov.outstationAllowed));
     } else {
-      setCovCity("Mumbai");
-      setCovState("Maharashtra");
+      setCovCity("");
+      setCovState("");
+      setCovBaseLocation({
+        lat: null,
+        lng: null,
+        address: "",
+        locality: "",
+        city: "",
+        state: "",
+        postalCode: "",
+      });
       setCovRadiusKm(40);
       setCovLocalities("");
       setCovOutstation(false);
@@ -466,6 +493,10 @@ export function ServicesPage() {
     if (!selectedServiceForCov) return;
     try {
       setSavingCoverage(true);
+      if (!Number(covBaseLocation.lat) || !Number(covBaseLocation.lng)) {
+        alert("Please search or pin the operational base on the map before saving coverage.");
+        return;
+      }
       const locArray = covLocalities
         .split(",")
         .map((s) => s.trim())
@@ -479,6 +510,13 @@ export function ServicesPage() {
           coverageType: "RADIUS",
           city: covCity.trim(),
           state: covState.trim(),
+          baseAddress: covBaseLocation.address || "",
+          baseLocality: covBaseLocation.locality || "",
+          basePostalCode: covBaseLocation.postalCode || "",
+          baseCoordinates: {
+            lat: Number(covBaseLocation.lat) || null,
+            lng: Number(covBaseLocation.lng) || null,
+          },
           radiusKm: Number(covRadiusKm) || 40,
           localities: locArray,
           outstationAllowed: Boolean(covOutstation),
@@ -718,9 +756,23 @@ export function ServicesPage() {
                             </span>
                             <span className="font-bold text-navy">
                               {primaryCov.radiusKm || 40} km radius from{" "}
-                              {primaryCov.city || "Operational Base"}
+                              {primaryCov.baseLocality ||
+                                primaryCov.city ||
+                                "Pinned Operational Base"}
                             </span>
                           </div>
+                          {(primaryCov.baseAddress ||
+                            primaryCov.baseCoordinates?.lat) && (
+                            <div>
+                              <span className="font-semibold text-muted">
+                                Pinned Base:{" "}
+                              </span>
+                              <span>
+                                {primaryCov.baseAddress ||
+                                  `${Number(primaryCov.baseCoordinates?.lat || 0).toFixed(4)}, ${Number(primaryCov.baseCoordinates?.lng || 0).toFixed(4)}`}
+                              </span>
+                            </div>
+                          )}
                           {primaryCov.localities?.length > 0 && (
                             <div>
                               <span className="font-semibold text-muted">
@@ -1057,7 +1109,7 @@ export function ServicesPage() {
           onClick={handleCloseCoverageModal}
         >
           <div
-            className="vendor-modal-panel vendor-modal-panel-flex max-w-lg"
+            className="vendor-modal-panel vendor-modal-panel-flex max-w-3xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 pb-3 border-b border-gray-100">
@@ -1090,32 +1142,59 @@ export function ServicesPage() {
                   <span>1. Operational Base & Operating Radius</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-muted font-semibold mb-1">
-                      Operational Base City
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Mumbai, Delhi, Bengaluru"
-                      value={covCity}
-                      onChange={(e) => setCovCity(e.target.value)}
-                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                    />
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <label className="block text-muted font-semibold mb-1">
+                        Pin Operational Base
+                      </label>
+                      <p className="text-[10px] text-muted leading-relaxed">
+                        Search the hub, use GPS, or drop the pin. STARVNT uses
+                        this point for distance, local matching, and transit.
+                      </p>
+                    </div>
+                    {covCity && (
+                      <span className="shrink-0 rounded-full bg-white border border-primary/15 px-2.5 py-1 text-[10px] font-extrabold text-primary">
+                        {covCity}
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-muted font-semibold mb-1">
-                      State / Province
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Maharashtra"
-                      value={covState}
-                      onChange={(e) => setCovState(e.target.value)}
-                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 font-semibold text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                    />
+
+                  <MapLocationPicker
+                    value={covBaseLocation}
+                    height="260px"
+                    guidance="Search or drop the pin on the exact service base / hub"
+                    onChange={(geo) => {
+                      const next = {
+                        lat: geo.lat,
+                        lng: geo.lng,
+                        address: geo.address || geo.displayName || "",
+                        locality: geo.locality || "",
+                        city: geo.city || covCity,
+                        state: geo.state || covState,
+                        postalCode: geo.postalCode || "",
+                      };
+                      setCovBaseLocation(next);
+                      if (next.city) setCovCity(next.city);
+                      if (next.state) setCovState(next.state);
+                    }}
+                  />
+
+                  <div className="rounded-2xl border border-gray-100 bg-white p-3">
+                    <div className="text-[10px] font-extrabold uppercase tracking-wide text-muted">
+                      Selected service base
+                    </div>
+                    <div className="mt-1 text-xs font-bold text-navy leading-relaxed">
+                      {covBaseLocation.address ||
+                        [covBaseLocation.locality, covCity, covState]
+                          .filter(Boolean)
+                          .join(", ") ||
+                        "Move the pin or search an area"}
+                    </div>
+                    <div className="mt-1 text-[10px] font-semibold text-muted">
+                      GPS: {Number(covBaseLocation.lat || 0).toFixed(4)}° N,{" "}
+                      {Number(covBaseLocation.lng || 0).toFixed(4)}° E
+                    </div>
                   </div>
                 </div>
 

@@ -81,7 +81,11 @@ export async function matchVendorsForRequirement({
       // Check radius
       if (cov.coverageType === 'RADIUS' && cov.radiusKm) {
         const dist = estimateDistanceKm(
-          { locality: cov.localities?.[0] || cov.city, city: cov.city },
+          {
+            locality: cov.baseLocality || cov.localities?.[0] || cov.city,
+            city: cov.city,
+            coordinates: cov.baseCoordinates?.lat && cov.baseCoordinates?.lng ? cov.baseCoordinates : undefined,
+          },
           serviceLocation
         );
         if (dist <= cov.radiusKm) {
