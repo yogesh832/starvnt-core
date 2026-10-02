@@ -84,6 +84,7 @@ export default function VendorPortal() {
   const [isSidebarMini, setIsSidebarMini] = useState(false);
   const notifRef = useRef(null);
   const profileRef = useRef(null);
+  const sectionReadInFlightRef = useRef(new Set());
   const [businessName, setBusinessName] = useState(user?.fullName ? `${user.fullName}'s Brand` : 'My Brand');
   const [category, setCategory] = useState('');
   const [profilePicUrl, setProfilePicUrl] = useState('');
@@ -119,9 +120,28 @@ export default function VendorPortal() {
     messagesCount: 0,
     unreadNotificationsCount: 0,
   });
-  // abcd
   const [dismissedBadges, setDismissedBadges] = useState({});
   const [notifications, setNotifications] = useState([]);
+  const badgeStorageKey = `starvnt.vendor.dismissedBadges.${
+    user?.vendorOrganization?._id || user?._id || 'guest'
+  }`;
+
+  function saveDismissedBadges(next) {
+    try {
+      window.localStorage.setItem(badgeStorageKey, JSON.stringify(next));
+    } catch {
+      // Badges are cosmetic; ignore storage failures.
+    }
+  }
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(badgeStorageKey);
+      setDismissedBadges(saved ? JSON.parse(saved) || {} : {});
+    } catch {
+      setDismissedBadges({});
+    }
+  }, [badgeStorageKey]);
 
   // Fetch real dynamic badge counts and notifications from backend
   async function fetchLiveBadges() {
@@ -164,8 +184,51 @@ export default function VendorPortal() {
   useEffect(() => {
     if (['enquiries', 'quotes', 'bookings', 'messages'].includes(currentPage)) {
       dismissBadge(currentPage);
+      markSectionNotificationsRead(currentPage);
     }
-  }, [currentPage, badgeCounts]);
+  }, [currentPage, badgeCounts, notifications]);
+
+  function notificationBelongsToPage(notification, page) {
+    const type = String(notification?.type || '').toUpperCase();
+    const link = String(notification?.link || '');
+    if (page === 'enquiries') return type === 'ENQUIRY' || link.startsWith('/vendor/enquiries');
+    if (page === 'quotes') return link.startsWith('/vendor/quotes');
+    if (page === 'bookings') {
+      return ['BOOKING', 'PAYMENT'].includes(type) || link.startsWith('/vendor/bookings');
+    }
+    if (page === 'messages') return type === 'MESSAGE' || link.startsWith('/vendor/messages');
+    return false;
+  }
+
+  async function markSectionNotificationsRead(page) {
+    if (sectionReadInFlightRef.current.has(page)) return;
+    const unread = notifications.filter((n) => !n.isRead && notificationBelongsToPage(n, page));
+    if (!unread.length) return;
+
+    sectionReadInFlightRef.current.add(page);
+    try {
+      await Promise.allSettled(
+        unread.map((n) => externalApi.call(`/vendor/notifications/${n._id}/read`, { method: 'PUT' }))
+      );
+      setNotifications((prev) =>
+        prev.map((n) => (unread.some((item) => item._id === n._id) ? { ...n, isRead: true } : n))
+      );
+      setBadgeCounts((prev) => {
+        const decrement = unread.length;
+        const next = {
+          ...prev,
+          unreadNotificationsCount: Math.max(0, prev.unreadNotificationsCount - decrement),
+        };
+        if (page === 'enquiries') next.enquiriesCount = 0;
+        if (page === 'quotes') next.quotesCount = 0;
+        if (page === 'bookings') next.bookingsCount = 0;
+        if (page === 'messages') next.messagesCount = 0;
+        return next;
+      });
+    } finally {
+      sectionReadInFlightRef.current.delete(page);
+    }
+  }
 
   // Close header dropdowns on click outside
   useEffect(() => {
@@ -230,7 +293,11 @@ export default function VendorPortal() {
   }
 
   function dismissBadge(page) {
-    setDismissedBadges((prev) => ({ ...prev, [page]: rawBadgeCount(page) }));
+    setDismissedBadges((prev) => {
+      const next = { ...prev, [page]: rawBadgeCount(page) };
+      saveDismissedBadges(next);
+      return next;
+    });
   }
 
   function navBadge(page, count) {
@@ -587,7 +654,11 @@ export default function VendorPortal() {
                 <Messages
                   onMessagesRead={() => {
                     setBadgeCounts((prev) => ({ ...prev, messagesCount: 0 }));
-                    setDismissedBadges((prev) => ({ ...prev, messages: 0 }));
+                    setDismissedBadges((prev) => {
+                      const next = { ...prev, messages: 0 };
+                      saveDismissedBadges(next);
+                      return next;
+                    });
                   }}
                 />
               }

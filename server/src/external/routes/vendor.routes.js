@@ -11,8 +11,6 @@ import { VendorBlockout } from '../models/VendorBlockout.js';
 import { VendorBookingSlot } from '../models/VendorBookingSlot.js';
 import { Notification } from '../models/Notification.js';
 import { Opportunity } from '../models/Opportunity.js';
-import { Quote } from '../models/Quote.js';
-import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
 import { VendorDocument } from '../models/VendorDocument.js';
@@ -844,9 +842,21 @@ router.put('/notifications/read-all', async (req, res, next) => {
 router.get('/badge-counts', async (req, res, next) => {
   try {
     const [enquiriesCount, quotesCount, bookingsCount, messagesCount, unreadNotificationsCount] = await Promise.all([
-      Opportunity.countDocuments({ vendor: req.vendorId, status: 'NEW' }),
-      Quote.countDocuments({ vendor: req.vendorId, status: { $in: ['DRAFT', 'SUBMITTED'] } }),
-      CoreBooking.countDocuments({ vendorId: req.vendorId, bookingStatus: 'CONFIRMED' }),
+      Notification.countDocuments({ vendor: req.vendorId, isRead: false, type: 'ENQUIRY' }),
+      Notification.countDocuments({
+        vendor: req.vendorId,
+        isRead: false,
+        type: 'QUOTE',
+        link: { $regex: /^\/vendor\/quotes(?:$|[/?#])/ },
+      }),
+      Notification.countDocuments({
+        vendor: req.vendorId,
+        isRead: false,
+        $or: [
+          { type: { $in: ['BOOKING', 'PAYMENT'] } },
+          { link: { $regex: /^\/vendor\/bookings(?:$|[/?#])/ } },
+        ],
+      }),
       VendorMessageThread.countDocuments({
         vendor: req.vendorId,
         status: { $ne: 'BLOCKED' },
