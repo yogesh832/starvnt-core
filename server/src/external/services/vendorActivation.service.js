@@ -4,6 +4,8 @@ import { VendorCapability } from '../models/VendorCapability.js';
 import { OperatingLocation } from '../models/OperatingLocation.js';
 import { ServiceCoverage } from '../models/ServiceCoverage.js';
 import { PortfolioItem } from '../models/PortfolioItem.js';
+import { VendorFinancialProfile } from '../models/VendorFinancialProfile.js';
+import { VendorDocument } from '../models/VendorDocument.js';
 
 /**
  * Vendor Activation State Machine & Readiness Evaluator.
@@ -23,6 +25,21 @@ export async function evaluateVendorActivation(vendorId) {
   }
 
   const missingRequirements = [];
+
+  // Check if financial profile or verified documents exist to auto-pass verification
+  const finProfile = await VendorFinancialProfile.findOne({ vendor: vendorId });
+  const hasVerifiedDoc = await VendorDocument.exists({ vendor: vendorId, status: 'VERIFIED' });
+  const isFinancialVerified =
+    finProfile?.pan?.verificationStatus === 'VERIFIED' || Boolean(hasVerifiedDoc);
+
+  if (isFinancialVerified && !vendor.verification?.isVerified) {
+    vendor.verification = {
+      ...(vendor.verification?.toObject?.() || vendor.verification || {}),
+      isVerified: true,
+      verifiedAt: vendor.verification?.verifiedAt || new Date(),
+      notes: 'Auto-verified via PAN / Financial Identity Verification',
+    };
+  }
 
   // 1. Profile completeness check (Brand & City)
   let hasProfile = false;

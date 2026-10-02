@@ -22,6 +22,7 @@ import { verifyGstin } from '../services/gstinVerification.service.js';
 import { verifyPan } from '../services/panVerification.service.js';
 import { v2 as cloudinary } from 'cloudinary';
 import vendorAuraRoutes from './vendorAura.routes.js';
+import financialRoutes from './financial.routes.js';
 
 const router = Router();
 
@@ -55,8 +56,9 @@ async function resolveVendorContext(req, res, next) {
 
 router.use(resolveVendorContext);
 
-// ── Aura+ assistant ────────────────────────────────────────────────────────
+// ── Aura+ assistant & Financial Onboarding ──────────────────────────────────
 router.use('/aura', vendorAuraRoutes);
+router.use('/financial', financialRoutes);
 
 // ── Profile & Activation ───────────────────────────────────────────────────
 router.get('/profile', async (req, res) => {

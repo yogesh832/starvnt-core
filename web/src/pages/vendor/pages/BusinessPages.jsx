@@ -2332,6 +2332,552 @@ export function AvailabilityPage() {
   );
 }
 
+/* ── STARVNT Financial & Verification Onboarding Manager ───────────────────── */
+export function VendorFinancialOnboardingCard() {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [feedback, setFeedback] = useState("");
+  const [feedbackType, setFeedbackType] = useState("info");
+
+  // PAN state
+  const [panInput, setPanInput] = useState("");
+  const [savingPan, setSavingPan] = useState(false);
+  const [discoveringGstin, setDiscoveringGstin] = useState(false);
+  const [discoveryResult, setDiscoveryResult] = useState(null);
+
+  // GST state
+  const [gstRegistered, setGstRegistered] = useState(false);
+  const [gstinInput, setGstinInput] = useState("");
+  const [savingGst, setSavingGst] = useState(false);
+
+  // Bank state
+  const [bankForm, setBankForm] = useState({
+    accountHolderName: "",
+    accountNumber: "",
+    ifsc: "",
+    bankName: "",
+    accountType: "SAVINGS",
+  });
+  const [savingBank, setSavingBank] = useState(false);
+  const [verifyingBank, setVerifyingBank] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [showLogs, setShowLogs] = useState(false);
+
+  const loadFinancialData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await externalApi.call("/vendor/financial");
+      if (res.ok && res.profile) {
+        setProfile(res.profile);
+        if (res.profile.pan?.panNumber) {
+          setPanInput(res.profile.pan.panNumber);
+        }
+        if (res.profile.gst) {
+          setGstRegistered(Boolean(res.profile.gst.isRegistered));
+          setGstinInput(res.profile.gst.gstin !== "N/A" ? res.profile.gst.gstin || "" : "");
+        }
+        if (res.profile.bankAccount) {
+          setBankForm({
+            accountHolderName: res.profile.bankAccount.accountHolderName || "",
+            accountNumber: res.profile.bankAccount.accountNumber || "",
+            ifsc: res.profile.bankAccount.ifsc || "",
+            bankName: res.profile.bankAccount.bankName || "",
+            accountType: res.profile.bankAccount.accountType || "SAVINGS",
+          });
+        }
+      }
+
+      const logRes = await externalApi.call("/vendor/financial/bank/verifications");
+      if (logRes.ok && Array.isArray(logRes.verifications)) {
+        setLogs(logRes.verifications);
+      }
+    } catch (err) {
+      console.warn("[VendorFinancialOnboardingCard] load error:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFinancialData();
+  }, [loadFinancialData]);
+
+  async function handleSavePan(e) {
+    if (e) e.preventDefault();
+    if (!panInput.trim()) return;
+    try {
+      setSavingPan(true);
+      setFeedback("");
+      const res = await externalApi.call("/vendor/financial/pan", {
+        method: "POST",
+        body: { panNumber: panInput.trim() },
+      });
+      if (res.ok) {
+        setFeedbackType("success");
+        setFeedback(res.pan?.verificationStatus === "VERIFIED" ? "✓ PAN Number verified successfully!" : "PAN saved.");
+        await loadFinancialData();
+      } else {
+        setFeedbackType("error");
+        setFeedback(res.message || res.error || "Failed to save PAN.");
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(err.message);
+    } finally {
+      setSavingPan(false);
+    }
+  }
+
+  async function handleDiscoverGstins() {
+    if (!panInput.trim()) return;
+    try {
+      setDiscoveringGstin(true);
+      setDiscoveryResult(null);
+      const res = await externalApi.call("/vendor/financial/discover-gstin", {
+        method: "POST",
+        body: { pan: panInput.trim() },
+      });
+      setDiscoveryResult(res);
+    } catch (err) {
+      setDiscoveryResult({ ok: false, message: err.message });
+    } finally {
+      setDiscoveringGstin(false);
+    }
+  }
+
+  async function handleSaveGst(e) {
+    if (e) e.preventDefault();
+    try {
+      setSavingGst(true);
+      setFeedback("");
+      const payload = {
+        isRegistered: gstRegistered,
+        gstin: gstRegistered ? gstinInput.trim() : "N/A",
+      };
+      const res = await externalApi.call("/vendor/financial/gst", {
+        method: "POST",
+        body: payload,
+      });
+      if (res.ok) {
+        setFeedbackType("success");
+        setFeedback(
+          gstRegistered
+            ? "✓ GSTIN verified and saved successfully!"
+            : "✓ GST status updated to NOT REGISTERED (N/A). Onboarding continues via PAN!"
+        );
+        await loadFinancialData();
+      } else {
+        setFeedbackType("error");
+        setFeedback(res.message || res.error || "Failed to save GST status.");
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(err.message);
+    } finally {
+      setSavingGst(false);
+    }
+  }
+
+  async function handleSaveBank(e) {
+    if (e) e.preventDefault();
+    try {
+      setSavingBank(true);
+      setFeedback("");
+      const res = await externalApi.call("/vendor/financial/bank", {
+        method: "POST",
+        body: bankForm,
+      });
+      if (res.ok) {
+        setFeedbackType("success");
+        setFeedback("Bank account details saved. Proceed to ₹0.02 Penny Drop verification.");
+        await loadFinancialData();
+      } else {
+        setFeedbackType("error");
+        setFeedback(res.message || res.error || "Failed to save bank details.");
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(err.message);
+    } finally {
+      setSavingBank(false);
+    }
+  }
+
+  async function handleVerifyBank() {
+    try {
+      setVerifyingBank(true);
+      setFeedback("");
+      const res = await externalApi.call("/vendor/financial/bank/verify", {
+        method: "POST",
+        body: { ...bankForm, forceRetry: true },
+      });
+      if (res.ok && res.status === "VERIFIED") {
+        setFeedbackType("success");
+        setFeedback("✓ Bank Account Verified via ₹0.02 Penny Drop transaction!");
+        await loadFinancialData();
+      } else {
+        setFeedbackType("error");
+        setFeedback(res.failureReason || res.message || "Bank account verification failed. Please check Account Number and IFSC.");
+        await loadFinancialData();
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(`Bank verification failed: ${err.message}`);
+    } finally {
+      setVerifyingBank(false);
+    }
+  }
+
+  if (loading && !profile) {
+    return (
+      <Card className="p-6">
+        <SkeletonLine className="h-6 w-1/3 mb-4" />
+        <SkeletonLine className="h-4 w-2/3 mb-2" />
+        <SkeletonLine className="h-20 w-full" />
+      </Card>
+    );
+  }
+
+  const panVerified = profile?.pan?.verificationStatus === "VERIFIED";
+  const gstStatus = profile?.gst?.verificationStatus;
+  const isGstNotReq = profile?.gst?.isRegistered === false;
+  const bankStatus = profile?.bankAccount?.verificationStatus;
+  const isBankVerified = bankStatus === "VERIFIED";
+  const isSettlementEligible = Boolean(profile?.isSettlementEligible);
+
+  return (
+    <Card className="p-5 sm:p-6 space-y-6 border border-gray-100 dark:border-gray-800 dark:bg-dark-card shadow-xs">
+      {/* Header & Overall Status */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
+              Tax Identity & Bank Verification
+            </h2>
+            {isSettlementEligible ? (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+                ✓ Settlement Eligible
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
+                Action Required
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted dark:text-gray-400 mt-1">
+            Single source of truth for PAN, GST, and Bank Account verification. GST registration is optional.
+          </p>
+        </div>
+      </div>
+
+      {feedback && (
+        <div
+          className={`p-3 rounded-xl text-xs font-bold flex items-start gap-2 ${
+            feedbackType === "success"
+              ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
+              : "bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800"
+          }`}
+        >
+          <Icon name={feedbackType === "success" ? "check" : "info"} size={16} className="shrink-0 mt-0.5" />
+          <span>{feedback}</span>
+        </div>
+      )}
+
+      {/* Module 1: PAN NUMBER (Required for all) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-extrabold text-navy dark:text-gray-200 flex items-center gap-1.5">
+            <span>1. PAN Number</span>
+            <span className="text-rose-500 font-bold text-[11px]">*Required</span>
+          </label>
+          {panVerified && (
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <Icon name="check" size={12} /> Verified ({profile?.pan?.legalName || "Matched"})
+            </span>
+          )}
+        </div>
+        <form onSubmit={handleSavePan} className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="text"
+            maxLength={10}
+            value={panInput}
+            onChange={(e) => setPanInput(e.target.value.toUpperCase())}
+            placeholder="e.g. ABCDE1234F"
+            className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
+          />
+          <button
+            type="submit"
+            disabled={savingPan || !panInput.trim()}
+            className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
+          >
+            {savingPan ? "Saving & Verifying..." : "Verify PAN"}
+          </button>
+          <button
+            type="button"
+            onClick={handleDiscoverGstins}
+            disabled={discoveringGstin || !panInput.trim()}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
+          >
+            {discoveringGstin ? "Searching..." : "Search GSTINs under PAN"}
+          </button>
+        </form>
+
+        {discoveryResult && (
+          <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 text-xs space-y-2">
+            <div className="font-bold text-navy dark:text-gray-200">{discoveryResult.message}</div>
+            {discoveryResult.gstins && discoveryResult.gstins.length > 0 && (
+              <ul className="space-y-1 pl-2 border-l-2 border-primary">
+                {discoveryResult.gstins.map((g, idx) => (
+                  <li key={idx} className="flex items-center justify-between text-[11px]">
+                    <span className="font-mono font-bold text-primary">{g.gstin}</span>
+                    <span className="text-muted dark:text-gray-400">{g.state} — {g.legalName}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGstRegistered(true);
+                        setGstinInput(g.gstin);
+                      }}
+                      className="text-[10px] font-bold text-primary hover:underline"
+                    >
+                      Use this GSTIN
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Module 2: GST REGISTRATION STATUS (Mandatory Yes/No) */}
+      <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-extrabold text-navy dark:text-gray-200">
+            2. GST Registration Status <span className="text-rose-500 font-bold text-[11px]">*Mandatory</span>
+          </label>
+          {isGstNotReq && (
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
+              GST Not Applicable (Onboarding Active)
+            </span>
+          )}
+          {gstStatus === "VERIFIED" && !isGstNotReq && (
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+              ✓ GSTIN Verified ({profile?.gst?.gstin})
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-6">
+          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
+            <input
+              type="radio"
+              name="gstRegistered"
+              checked={gstRegistered === true}
+              onChange={() => setGstRegistered(true)}
+              className="accent-primary"
+            />
+            <span>YES (I have GST registration)</span>
+          </label>
+          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
+            <input
+              type="radio"
+              name="gstRegistered"
+              checked={gstRegistered === false}
+              onChange={() => {
+                setGstRegistered(false);
+                setGstinInput("");
+              }}
+              className="accent-primary"
+            />
+            <span>NO (GST not registered)</span>
+          </label>
+        </div>
+
+        {gstRegistered ? (
+          <form onSubmit={handleSaveGst} className="flex flex-col sm:flex-row gap-2 mt-2">
+            <input
+              type="text"
+              maxLength={15}
+              value={gstinInput}
+              onChange={(e) => setGstinInput(e.target.value.toUpperCase())}
+              placeholder="e.g. 19ABCDE1234F1Z5"
+              className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
+            />
+            <button
+              type="submit"
+              disabled={savingGst || !gstinInput.trim()}
+              className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
+            >
+              {savingGst ? "Verifying..." : "Verify & Save GSTIN"}
+            </button>
+          </form>
+        ) : (
+          <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-300 flex items-center justify-between">
+            <span>GST registration is not required. You can complete onboarding and add bank details using your PAN.</span>
+            <button
+              type="button"
+              onClick={handleSaveGst}
+              disabled={savingGst}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-[11px] hover:bg-emerald-700 shrink-0 ml-2 cursor-pointer"
+            >
+              Confirm GST = NO
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Module 3: BANK DETAILS & ₹0.02 PENNY DROP VERIFICATION (GST Independent) */}
+      <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-extrabold text-navy dark:text-gray-200">
+              3. Bank Details & ₹0.02 Penny-Drop Verification
+            </h3>
+            <p className="text-[11px] text-muted dark:text-gray-400">
+              Bank details are independent from GST status. ₹0.02 verification is strictly for bank identity control.
+            </p>
+          </div>
+          {isBankVerified ? (
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center gap-1">
+              <Icon name="check" size={12} /> Bank Account Verified
+            </span>
+          ) : bankStatus === "FAILED" ? (
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400">
+              Verification Failed
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
+              Not Verified
+            </span>
+          )}
+        </div>
+
+        <form onSubmit={handleSaveBank} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+              Account Holder Name *
+            </label>
+            <input
+              type="text"
+              value={bankForm.accountHolderName}
+              onChange={(e) => setBankForm({ ...bankForm, accountHolderName: e.target.value })}
+              placeholder="Full name as in bank record"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+              Account Number *
+            </label>
+            <input
+              type="text"
+              value={bankForm.accountNumber}
+              onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+              placeholder="e.g. 123456789012"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+              IFSC Code *
+            </label>
+            <input
+              type="text"
+              maxLength={11}
+              value={bankForm.ifsc}
+              onChange={(e) => setBankForm({ ...bankForm, ifsc: e.target.value.toUpperCase() })}
+              placeholder="e.g. HDFC0001234"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+              Bank Name *
+            </label>
+            <input
+              type="text"
+              value={bankForm.bankName}
+              onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
+              placeholder="e.g. HDFC Bank / ICICI Bank"
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+              Account Type *
+            </label>
+            <select
+              value={bankForm.accountType}
+              onChange={(e) => setBankForm({ ...bankForm, accountType: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none"
+            >
+              <option value="SAVINGS">Savings Account</option>
+              <option value="CURRENT">Current Account</option>
+              <option value="CC_OD">Cash Credit / Overdraft</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+
+          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={savingBank}
+              className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
+            >
+              {savingBank ? "Saving Details..." : "Save Bank Details"}
+            </button>
+            <button
+              type="button"
+              onClick={handleVerifyBank}
+              disabled={verifyingBank || !bankForm.accountNumber || !bankForm.ifsc}
+              className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Icon name="check" size={14} />
+              <span>{verifyingBank ? "Executing ₹0.02 Penny Drop..." : "Verify with ₹0.02 Penny Drop"}</span>
+            </button>
+          </div>
+        </form>
+
+        {logs.length > 0 && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setShowLogs(!showLogs)}
+              className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Icon name={showLogs ? "chevronUp" : "chevronDown"} size={12} />
+              <span>{showLogs ? "Hide" : "View"} Verification Audit Log ({logs.length})</span>
+            </button>
+
+            {showLogs && (
+              <div className="mt-2 space-y-2 p-3 bg-gray-50 dark:bg-gray-800/70 rounded-xl text-[11px] border border-gray-200 dark:border-gray-700">
+                {logs.map((log) => (
+                  <div key={log.verificationId} className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 last:border-0 pb-1.5 last:pb-0">
+                    <div>
+                      <span className="font-mono font-bold text-navy dark:text-gray-200">{log.verificationId}</span>
+                      <span className="text-muted dark:text-gray-400 ml-2">Amount: ₹{log.amount}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded font-bold ${log.verificationStatus === "VERIFIED" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+                        {log.verificationStatus}
+                      </span>
+                      <span className="text-muted text-[10px]">{new Date(log.requestedAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 /* ── Working Documents Manager (KYC & Verification) ───────────────────────── */
 export function DocumentsManager({ isTab = false }) {
   const [documents, setDocuments] = useState([]);
@@ -2493,11 +3039,14 @@ export function DocumentsManager({ isTab = false }) {
   }
 
   const content = (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+    <div className="space-y-6">
+      {/* Decoupled Financial & Verification Onboarding Module */}
+      <VendorFinancialOnboardingCard />
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-dark-card p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
         <div>
-          <h2 className="font-extrabold text-base text-navy">
-            KYC & Business Documents
+          <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
+            KYC & Business Document Records
           </h2>
           <p className="text-xs text-muted mt-0.5">
             GSTIN and Corporation PAN are verified automatically via API.
