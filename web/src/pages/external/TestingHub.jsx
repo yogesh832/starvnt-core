@@ -13,10 +13,10 @@ const TEST_ACCOUNTS = [
   {
     role: "VENDOR",
     category: "Photography",
-    businessName: "Premium Moments Studio",
+    businessName: "Himalayan Moments & Wedding Studio",
     ownerName: "Arun Roy",
     email: "vendor@starvnt.com",
-    city: "Kolkata",
+    city: "Kapkote",
     rating: "4.9 ⭐",
     badge: "bg-purple-100 text-purple-800 border-purple-200",
     icon: "camera",
@@ -24,10 +24,10 @@ const TEST_ACCOUNTS = [
   {
     role: "VENDOR",
     category: "Catering",
-    businessName: "Royal Feast & Banquets",
+    businessName: "Royal Kumaoni Feast & Traditional Catering",
     ownerName: "Chef Sanjeev Verma",
     email: "catering@starvnt.com",
-    city: "Delhi",
+    city: "Kapkote",
     rating: "4.8 ⭐",
     badge: "bg-amber-100 text-amber-800 border-amber-200",
     icon: "wallet",
@@ -35,10 +35,10 @@ const TEST_ACCOUNTS = [
   {
     role: "VENDOR",
     category: "Decoration",
-    businessName: "Flora & Grandeur Decor",
+    businessName: "Pahadi Varmala & Grandeur Event Decor",
     ownerName: "Priya Sharma",
     email: "decor@starvnt.com",
-    city: "Delhi",
+    city: "Kapkote",
     rating: "4.9 ⭐",
     badge: "bg-rose-100 text-rose-800 border-rose-200",
     icon: "star",
@@ -46,10 +46,10 @@ const TEST_ACCOUNTS = [
   {
     role: "VENDOR",
     category: "Venue",
-    businessName: "The Grand Heritage Palace",
+    businessName: "Himalayan Heritage Pine Lawns & Resort",
     ownerName: "Raghav Singhania",
     email: "venue@starvnt.com",
-    city: "Kolkata",
+    city: "Kapkote",
     rating: "5.0 ⭐",
     badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
     icon: "mapPin",
@@ -57,10 +57,10 @@ const TEST_ACCOUNTS = [
   {
     role: "VENDOR",
     category: "Sound & DJ",
-    businessName: "Pulse Audio & Stage FX",
+    businessName: "Kumaon Beats & Sound FX",
     ownerName: "Kabir Malhotra",
     email: "dj@starvnt.com",
-    city: "Mumbai",
+    city: "Kapkote",
     rating: "4.8 ⭐",
     badge: "bg-blue-100 text-blue-800 border-blue-200",
     icon: "trend",
@@ -68,10 +68,10 @@ const TEST_ACCOUNTS = [
   {
     role: "VENDOR",
     category: "Makeup",
-    businessName: "Glamour Glow Bridal Artistry",
+    businessName: "Pahadi Bridal Glow & Artistry Studio",
     ownerName: "Natasha Mehra",
     email: "makeup@starvnt.com",
-    city: "Delhi",
+    city: "Kapkote",
     rating: "4.9 ⭐",
     badge: "bg-pink-100 text-pink-800 border-pink-200",
     icon: "star",
@@ -79,10 +79,10 @@ const TEST_ACCOUNTS = [
   {
     role: "VENDOR",
     category: "Live Band",
-    businessName: "Sufi & Strings Live Ensemble",
+    businessName: "Kumaon Folk Fusion & Live Band",
     ownerName: "Aftab Hussain",
     email: "liveband@starvnt.com",
-    city: "Delhi",
+    city: "Kapkote",
     rating: "4.9 ⭐",
     badge: "bg-indigo-100 text-indigo-800 border-indigo-200",
     icon: "mic",
@@ -90,10 +90,10 @@ const TEST_ACCOUNTS = [
   {
     role: "VENDOR",
     category: "Event Planning",
-    businessName: "Elite Vows Event Planning",
+    businessName: "Himalayan Vows Event Planning",
     ownerName: "Tanya & Rohan Mehta",
     email: "planner@starvnt.com",
-    city: "Mumbai",
+    city: "Kapkote",
     rating: "5.0 ⭐",
     badge: "bg-teal-100 text-teal-800 border-teal-200",
     icon: "calendar",
@@ -104,7 +104,7 @@ const TEST_ACCOUNTS = [
     businessName: "Ananya Roy",
     ownerName: "Wedding Host",
     email: "customer@starvnt.com",
-    city: "Delhi / Kolkata",
+    city: "Kapkote / Bageshwar",
     rating: "Active Host",
     badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
     icon: "customers",
@@ -133,6 +133,7 @@ const PRESET_ENDPOINTS = [
   { label: "Vendor Enquiries", method: "GET", path: "/api/vendor/enquiries", domain: "EXTERNAL" },
   { label: "Vendor Notifications", method: "GET", path: "/api/vendor/notifications", domain: "EXTERNAL" },
   { label: "Google Place Search (Kolkata)", method: "GET", path: "/api/vendor/google-places/search?q=kolkata", domain: "EXTERNAL" },
+  { label: "Google Place Search (Kapkote)", method: "GET", path: "/api/vendor/google-places/search?q=kapkote%20bageshwar", domain: "EXTERNAL" },
   { label: "Customer Events", method: "GET", path: "/api/customer/events", domain: "EXTERNAL" },
   { label: "Customer Catalog (Services)", method: "GET", path: "/api/customer/catalog", domain: "EXTERNAL" },
   { label: "Customer Updates & Threads", method: "GET", path: "/api/customer/circle/updates", domain: "EXTERNAL" },
@@ -593,6 +594,31 @@ export default function TestingHub() {
             >
               {testingBusy ? "Running…" : "Send Request →"}
             </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+            <span className="font-bold">Kapkote catalog test:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setTestMethod("GET");
+                setTestPath("/api/customer/events/PASTE_EVENT_ID/services?category=venue");
+              }}
+              className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-100 dark:border-indigo-900 hover:bg-indigo-100 transition"
+            >
+              Venue options URL
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTestMethod("GET");
+                setTestPath("/api/customer/events/PASTE_EVENT_ID/services?category=sound");
+              }}
+              className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-100 dark:border-indigo-900 hover:bg-indigo-100 transition"
+            >
+              Sound options URL
+            </button>
+            <span>First run Customer Events, copy an event id, then replace PASTE_EVENT_ID.</span>
           </div>
 
           {/* Response Payload Viewer */}

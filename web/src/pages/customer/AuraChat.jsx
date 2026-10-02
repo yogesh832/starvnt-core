@@ -209,6 +209,18 @@ function WaveIcon({ active = false }) {
   );
 }
 
+const CHAT_THINKING_STATUS_DELAY_MS = 1200;
+const CHAT_STATUS_ROTATION_MS = 2500;
+const STATUS_MESSAGES = [
+  'Thinking...',
+  'Getting the right information for you...',
+  'Checking the details...',
+  'Putting this together...',
+  'Using what I know to find the best answer...',
+  'Analyzing the information...',
+  'Almost there...',
+];
+
 export default function AuraChat({ firstName, eventId: embeddedEventId = null, embedded = false, onEventChanged }) {
   const { user } = useExternalAuth();
   const navigate = useNavigate();
@@ -228,6 +240,8 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const [pickedLocation, setPickedLocation] = useState(null);
   const [savingStructured, setSavingStructured] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showThinkingStatus, setShowThinkingStatus] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(STATUS_MESSAGES[0]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -295,23 +309,141 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
       setInput('');
       setError('');
       setSending(true);
-      setMessages((prev) => [...prev, { role: 'user', content: msg }]);
+      setShowThinkingStatus(false);
+      setStatusMessage(STATUS_MESSAGES[0]);
+
+      // Optimistically insert user message and placeholder model message
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: msg },
+        { role: 'model', content: '' }
+      ]);
+
+const VOICE_PROGRESS_PHRASES = [
+  'Okay, let me get that information for you.',
+  'Sure, let me check that for you.',
+  'Got it, I’m looking into that for you.',
+];
+
+      let hasReceivedToken = false;
+      let thinkingTimer = null;
+      let rotationInterval = null;
+      let timeoutTimer = null;
+      let voiceProgressTimer = null;
+      let hasSpokenVoiceProgress = false;
+      let statusIdx = 0;
+      const abortController = new AbortController();
+
+      // Show "Thinking..." status only if request takes longer than 1200ms
+      thinkingTimer = setTimeout(() => {
+        if (!hasReceivedToken) {
+          setShowThinkingStatus(true);
+          rotationInterval = setInterval(() => {
+            statusIdx = (statusIdx + 1) % STATUS_MESSAGES.length;
+            setStatusMessage(STATUS_MESSAGES[statusIdx]);
+          }, CHAT_STATUS_ROTATION_MS);
+        }
+      }, CHAT_THINKING_STATUS_DELAY_MS);
+
+      if (spoken) {
+        voiceProgressTimer = setTimeout(() => {
+          if (!hasReceivedToken && !hasSpokenVoiceProgress) {
+            hasSpokenVoiceProgress = true;
+            const phrase = VOICE_PROGRESS_PHRASES[Math.floor(Math.random() * VOICE_PROGRESS_PHRASES.length)];
+            speakText(phrase);
+          }
+        }, CHAT_THINKING_STATUS_DELAY_MS);
+      }
+
+      // 25s safety timeout
+      timeoutTimer = setTimeout(() => {
+        abortController.abort();
+      }, 25000);
+
+      const cleanupTimers = () => {
+        if (thinkingTimer) clearTimeout(thinkingTimer);
+        if (rotationInterval) clearInterval(rotationInterval);
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (voiceProgressTimer) clearTimeout(voiceProgressTimer);
+      };
+
+      let accumulatedText = '';
+      let donePayload = null;
+
       try {
-        const res = await customerApi.auraChat({ sessionId, message: msg, eventId: scopedEventId || undefined, ...extra });
-        setMessages((prev) => [...prev, { role: 'model', content: res.reply }]);
-        if (spoken) voice.speak(res.reply);
-        applyState(res);
-        // A chat that just created an event keeps its history when opened from that event later.
-        if (res.createdEventId) writeSession(sessionKey(user?.id, res.createdEventId), sessionId);
-        onEventChanged?.(res);
-        return res.reply; // the voice agent speaks this
-      } catch (err) {
-        setMessages((prev) => prev.slice(0, -1));
-        setInput(msg);
-        setError(errorText(err, "Aura+ couldn't reply. Please try again."));
-        return null;
-      } finally {
+        await customerApi.auraChatStream(
+          { sessionId, message: msg, eventId: scopedEventId || undefined, ...extra },
+          (event) => {
+            if (event.type === 'status') {
+              if (event.message) setStatusMessage(event.message);
+            } else if (event.type === 'chunk') {
+              if (!hasReceivedToken) {
+                hasReceivedToken = true;
+                cleanupTimers();
+                setShowThinkingStatus(false);
+              }
+              accumulatedText += event.text || '';
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last && last.role === 'model') {
+                  next[next.length - 1] = { ...last, content: accumulatedText };
+                }
+                return next;
+              });
+            } else if (event.type === 'done') {
+              donePayload = event;
+              if (event.reply) {
+                accumulatedText = event.reply;
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const last = next[next.length - 1];
+                  if (last && last.role === 'model') {
+                    next[next.length - 1] = { ...last, content: event.reply };
+                  }
+                  return next;
+                });
+              }
+            } else if (event.type === 'error') {
+              throw new Error(event.error || "Aura+ couldn't reply.");
+            }
+          },
+          abortController.signal
+        );
+
+        cleanupTimers();
+        setShowThinkingStatus(false);
         setSending(false);
+
+        if (donePayload) {
+          if (spoken) voice.speak(donePayload.reply || accumulatedText);
+          applyState(donePayload);
+          if (donePayload.createdEventId) writeSession(sessionKey(user?.id, donePayload.createdEventId), sessionId);
+          onEventChanged?.(donePayload);
+        }
+        return accumulatedText;
+      } catch (err) {
+        cleanupTimers();
+        setShowThinkingStatus(false);
+        setSending(false);
+
+        // Remove empty placeholder or revert optimistic user message on failure
+        setMessages((prev) => {
+          let list = [...prev];
+          if (list.length > 0 && list[list.length - 1].role === 'model' && !accumulatedText) {
+            list = list.slice(0, -1);
+          }
+          if (!accumulatedText && list.length > 0 && list[list.length - 1].role === 'user' && list[list.length - 1].content === msg) {
+            list = list.slice(0, -1);
+          }
+          return list;
+        });
+
+        if (!accumulatedText) {
+          setInput(msg);
+          setError(errorText(err, "Aura+ couldn't reply. Please try again."));
+        }
+        return null;
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -451,9 +583,10 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         <Bubble from="model">Hi{firstName ? ` ${firstName}` : ''}! 👋 What are you planning? Tell me in your own words. I'll figure out the rest.</Bubble>
 
         {loading && <AuraLoadingState />}
-        {messages.map((m, i) => (
-          <Bubble key={i} from={m.role}>{m.content}</Bubble>
-        ))}
+        {messages.map((m, i) => {
+          if (m.role === 'model' && !m.content) return null;
+          return <Bubble key={i} from={m.role}>{m.content}</Bubble>;
+        })}
 
         {understanding?.showUnderstandingCard && activeEvent && (
           <div className="pl-10">
@@ -461,9 +594,10 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
           </div>
         )}
 
-        {sending && (
-          <div className="pl-10 text-[11px] text-muted inline-flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Aura+ is thinking…
+        {sending && showThinkingStatus && (
+          <div className="pl-10 text-[11px] font-medium text-muted inline-flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary animate-ping shrink-0" />
+            <span>{statusMessage}</span>
           </div>
         )}
         {error && !loading && messages.length === 0 ? (

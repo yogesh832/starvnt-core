@@ -38,7 +38,8 @@ test('session ids must be 8-80 safe characters', () => {
 test('system prompt carries the rules and CURRENT DATA', () => {
   const prompt = buildVendorSystemPrompt({ today: '2026-09-28', enquiries: { newCount: 3 } });
   assert.match(prompt, /Answer only from CURRENT DATA/);
-  assert.match(prompt, /never send, approve or edit quotes/);
+  assert.match(prompt, /block dates on the vendor's calendar/);
+  assert.match(prompt, /create a new quote for an enquiry\/customer or revise an existing quote/);
   assert.match(prompt, /CURRENT DATA:\n\{"today":"2026-09-28","enquiries":\{"newCount":3\}\}/);
 });
 
@@ -120,7 +121,7 @@ test('setup actions use only numbers the vendor said, and need a confirmation', 
   assert.equal(loc.action.location.address, 'Salt Lake');
   assert.equal(loc.action.location.type, 'STUDIO');
 
-  for (const yes of ['yes', 'haan', 'haan save karo', 'yes please', 'ok', 'हाँ', 'ঠিক আছে']) assert.equal(readConfirmation(yes), true, yes);
+  for (const yes of ['yes', 'haan', 'haan save karo', 'yes please', 'ok', 'हाँ', 'ঠিক আছে', 'confirm update', 'confirm block']) assert.equal(readConfirmation(yes), true, yes);
   for (const no of ['no', 'nahi', 'cancel', 'नहीं']) assert.equal(readConfirmation(no), false, no);
   for (const other of ['make it 30000', 'haan but price 30000 karo', 'what is coverage?']) assert.equal(readConfirmation(other), null, other);
 });
@@ -155,3 +156,168 @@ test('bio falls back to the vendor’s own line only when Aura asked about their
   // Category from the vendor's words when they have none yet.
   assert.equal(guardProfile({}, 'hum cinematic wedding films banate hain', { categoryMissing: true }).category, 'Cinematic Production');
 });
+
+// ── Operational actions: block_date, revise_quote, create_quote ───────────
+
+test('parseDate, dateIn, and reasonFrom correctly extract dates and reasons', async () => {
+  const { parseDate, dateIn, reasonFrom } = await import('../src/external/aura/setupActions.js');
+
+  assert.equal(parseDate('2026-10-09'), '2026-10-09');
+  assert.equal(parseDate('09-10-2026'), '2026-10-09');
+  assert.equal(parseDate('5 October 2026'), '2026-10-05');
+  assert.equal(parseDate('October 5'), '2026-10-05');
+
+  assert.equal(dateIn('Please block 09-10-2026 for maintenance'), '2026-10-09');
+  assert.equal(dateIn('paanch tarikh ko block kardo'), '2026-10-05');
+
+  assert.equal(reasonFrom('Meri paanch tarikh Ki booking done ho chuki hai manually toh block kardo'), 'Manual Booking');
+  assert.equal(reasonFrom('Reason: Vacation for family trip'), 'Vacation for family trip');
+  assert.equal(reasonFrom('maintenance ke liye band rahega'), 'Maintenance');
+  assert.equal(reasonFrom('Isaka reason edit karo reason birthday party hai.'), 'Birthday Party');
+  assert.equal(reasonFrom('reason: birthday party'), 'Birthday Party');
+  assert.equal(reasonFrom('change reason to Vacation please'), 'Vacation');
+  assert.equal(reasonFrom('reason badal kar Personal work rakh do'), 'Personal work');
+  assert.equal(reasonFrom('Meri booking done ho chuki hai manually\nIsaka reason edit karo reason birthday party hai.'), 'Birthday Party');
+  assert.equal(reasonFrom('block kar do paanch October'), null);
+});
+
+test('block_date action validates date and asks for reason if missing', async () => {
+  const { validateAction, describeAction } = await import('../src/external/aura/setupActions.js');
+
+  // Reason missing → prompts for reason/notes
+  const missingReason = validateAction(
+    { kind: 'block_date', blockout: { date: '2026-10-05' } },
+    { said: 'block 5 October' }
+  );
+  assert.match(missingReason.error, /reason \/ notes/);
+
+  // Both date and reason present
+  const valid = validateAction(
+    { kind: 'block_date', blockout: { date: '2026-10-09', reason: 'Vacation' } },
+    { said: '09-10-2026 block kardo vacation ke liye' }
+  );
+  assert.equal(valid.action.kind, 'block_date');
+  assert.equal(valid.action.blockout.date, '2026-10-09');
+  assert.equal(valid.action.blockout.reason, 'Vacation');
+  assert.equal(describeAction(valid.action), 'Block calendar date 2026-10-09 — Reason: Vacation');
+
+  // Editing existing blocked date overrides old reason with newly stated reason
+  const context = {
+    blockedDates: [{ date: '2026-10-05', allDay: true, reason: 'Manual Booking' }],
+  };
+  const updated = validateAction(
+    { kind: 'block_date', blockout: { date: '2026-10-05', reason: 'Manual Booking' } },
+    { said: 'Meri booking done ho chuki hai manually\nIsaka reason edit karo reason birthday party hai.', context }
+  );
+  assert.equal(updated.action.kind, 'block_date');
+  assert.equal(updated.action.blockout.date, '2026-10-05');
+  assert.equal(updated.action.blockout.reason, 'Birthday Party');
+  assert.equal(updated.action.isUpdate, true);
+  assert.equal(describeAction(updated.action), 'Update calendar date 2026-10-05 — Reason: Birthday Party');
+});
+
+test('revise_quote action validates amounts and matches existing quote', async () => {
+  const { validateAction, describeAction } = await import('../src/external/aura/setupActions.js');
+  const context = {
+    quotes: {
+      latest: [
+        {
+          id: 'q1',
+          ref: 'QT-073390-210',
+          customer: 'khy',
+          service: 'Cinematic Wedding Film & Teaser',
+          basePrice: 47000,
+          travelFee: 2000,
+          total: 49000,
+          status: 'submitted',
+        },
+      ],
+    },
+  };
+
+  // Missing price
+  const missingPrice = validateAction(
+    { kind: 'revise_quote', quote: { customerName: 'khy' } },
+    { said: 'revise quote for khy', context }
+  );
+  assert.match(missingPrice.error, /revised amount/);
+
+  // Valid price given
+  const valid = validateAction(
+    { kind: 'revise_quote', quote: { quoteRef: 'QT-073390-210', customerName: 'khy', basePrice: 50000, travelFee: 2000, totalAmount: 52000, notes: 'Discount applied' } },
+    { said: 'khy revise offer 50000 base and 2000 travel', context }
+  );
+  assert.equal(valid.action.kind, 'revise_quote');
+  assert.equal(valid.action.quote.quoteRef, 'QT-073390-210');
+  assert.equal(valid.action.quote.customerName, 'khy');
+  assert.equal(valid.action.quote.totalAmount, 52000);
+  assert.equal(describeAction(valid.action), 'Revise quote QT-073390-210 for khy — Total ₹52,000, Base: ₹50,000, Travel: ₹2,000 (Notes: Discount applied)');
+});
+
+test('create_quote action validates customer, service, date, and amounts', async () => {
+  const { validateAction, describeAction } = await import('../src/external/aura/setupActions.js');
+  const services = [{ _id: 's1', name: 'DJ & Sound', status: 'ACTIVE' }];
+  const context = {
+    enquiries: {
+      open: [
+        {
+          id: 'opp1',
+          customer: 'khy',
+          service: 'DJ & Sound',
+          eventDate: '2026-11-26',
+        },
+      ],
+    },
+  };
+
+  // Valid create_quote
+  const valid = validateAction(
+    {
+      kind: 'create_quote',
+      quote: {
+        customerName: 'khy',
+        serviceName: 'DJ & Sound',
+        eventDate: '2026-11-26',
+        basePrice: 47000,
+        travelFee: 2000,
+        totalAmount: 49000,
+      },
+    },
+    { said: 'khy ke liye quotation add karni hai 47000 base aur 2000 travel', services, context }
+  );
+  assert.equal(valid.action.kind, 'create_quote');
+  assert.equal(valid.action.quote.customerName, 'khy');
+  assert.equal(valid.action.quote.eventDate, '2026-11-26');
+  assert.equal(valid.action.quote.totalAmount, 49000);
+  assert.equal(describeAction(valid.action), 'Create quote for khy (DJ & Sound on 2026-11-26) — Total ₹49,000, Base: ₹47,000, Travel: ₹2,000');
+});
+
+test('isMessageRelevantToPending distinguishes between confirmations/adjustments and unrelated questions', async () => {
+  const { isMessageRelevantToPending } = await import('../src/external/aura/setupActions.js');
+
+  const pendingBlock = {
+    kind: 'block_date',
+    blockout: { date: '2026-10-05', reason: 'Manual Booking' },
+  };
+
+  // Confirmations / cancellations
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'yes'), true);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'haan'), true);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'cancel'), true);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'confirm block'), true);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'confirm update'), true);
+
+  // Relevant adjustments / questions
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'Isaka reason edit karo reason birthday party hai.'), true);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'date 6 October kardo'), true);
+  assert.equal(isMessageRelevantToPending(pendingBlock, '5 October block mat karo 7 October karo'), true);
+
+  // UNRELATED questions - must return false so stale state is dropped!
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'meri rating kya hai'), false);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'Current data ke anusaar aapke paas abhi koi ratings ya reviews nahi hain.'), false);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'reviews dikhao'), false);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'enquiries kitni hain'), false);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'aaj kya karna hai'), false);
+  assert.equal(isMessageRelevantToPending(pendingBlock, 'payments status kya hai'), false);
+});
+

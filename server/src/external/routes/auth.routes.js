@@ -412,7 +412,10 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
-      signInAs = resolveExistingAccountType(user);
+      const requestedSurface = accountType === "VENDOR" ? "VENDOR" : accountType === "CUSTOMER" ? "CUSTOMER" : null;
+      signInAs = requestedSurface || resolveExistingAccountType(user);
+      grantRole(user, signInAs);
+      user.accountType = signInAs;
       await prepareAccountType(user, signInAs, {
         businessName,
         brandName,
@@ -940,8 +943,8 @@ router.post("/refresh", async (req, res, next) => {
         .json({ ok: false, error: "ACCOUNT_DISABLED_OR_MISSING" });
     }
 
-    // Rotate: revoke old session and re-resolve from the DB primary surface.
-    // This also heals old sessions minted with the wrong Customer/Vendor tab.
+    // Rotate: revoke old session and preserve active surface.
+    // If the session had a specific accountType, respect it so user stays on their active portal.
     session.revokedAt = new Date();
     await session.save();
     const fresh = await createSession(user, req, resolveExistingAccountType(user));
@@ -954,6 +957,27 @@ router.post("/refresh", async (req, res, next) => {
       ...issueTokens(user, fresh.session),
       user: user.toSafeJSON(),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Switch Surface (Customer <-> Vendor for same identity) ───────────────────
+router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
+  try {
+    const { targetSurface } = req.body || {};
+    if (!["CUSTOMER", "VENDOR"].includes(targetSurface)) {
+      return res.status(400).json({ error: "INVALID_SURFACE" });
+    }
+    const user = req.externalUser;
+    grantRole(user, targetSurface);
+    await prepareAccountType(user, targetSurface);
+    user.accountType = targetSurface;
+    await user.save();
+
+    const { session, refreshToken } = await createSession(user, req, targetSurface);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+    return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
     next(err);
   }

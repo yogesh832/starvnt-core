@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from './auth/ExternalAuthContext.jsx';
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext.jsx';
@@ -26,12 +27,32 @@ function FullScreenLoader() {
 
 /** External surface guard: requires ACTIVE external session of accountType. */
 function RequireExternal({ type, children }) {
-  const { user, ready } = useExternalAuth();
+  const { user, ready, switchSurface } = useExternalAuth();
   const loc = useLocation();
-  if (!ready) return <FullScreenLoader />;
+  const [switching, setSwitching] = useState(false);
+  const [switchFailed, setSwitchFailed] = useState(false);
+
+  useEffect(() => {
+    if (ready && user && type && user.accountType !== type && !switching && !switchFailed) {
+      setSwitching(true);
+      switchSurface(type)
+        .catch((err) => {
+          console.error(`Failed to switch surface to ${type}:`, err);
+          setSwitchFailed(true);
+        })
+        .finally(() => {
+          setSwitching(false);
+        });
+    }
+  }, [ready, user, type, switching, switchFailed, switchSurface]);
+
+  if (!ready || switching) return <FullScreenLoader />;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} replace />;
   if (type && user.accountType !== type) {
-    return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
+    if (switchFailed) {
+      return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
+    }
+    return <FullScreenLoader />;
   }
   return children;
 }

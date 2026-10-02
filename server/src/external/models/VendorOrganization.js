@@ -26,10 +26,17 @@ const vendorOrganizationSchema = new Schema(
         'ELIGIBLE',
         'ACTIVE',
         'REJECTED',
+        'SUSPENDED',
       ],
       default: 'PENDING',
       index: true,
     },
+    isFlagged: { type: Boolean, default: false, index: true },
+    flagReason: { type: String, default: '' },
+    flaggedAt: { type: Date, default: null },
+    isRestricted: { type: Boolean, default: false, index: true },
+    restrictedUntil: { type: Date, default: null },
+    restrictionReason: { type: String, default: '' },
     activationState: {
       type: String,
       enum: [

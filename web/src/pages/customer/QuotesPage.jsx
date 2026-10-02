@@ -32,7 +32,7 @@ function QuoteCard({ quote, eventId }) {
   return (
     <div className={`bg-white rounded-2xl shadow-sm p-4 ${faded ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-extrabold text-navy">Test estimate · {new Date(quote.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
+        <div className="text-sm font-extrabold text-navy">Quote estimate · {new Date(quote.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
         <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${cls}`}>{label}</span>
       </div>
       <ul className="mt-3 divide-y divide-gray-50">
@@ -47,21 +47,21 @@ function QuoteCard({ quote, eventId }) {
         ))}
       </ul>
       <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
-        <span className="text-xs text-muted">Demo total</span>
+        <span className="text-xs text-muted">Quote total</span>
         <span className="text-base font-extrabold text-navy">{formatINR(quote.total)}</span>
       </div>
       {quote.status === 'draft' && (
         <p className="text-[11px] text-muted mt-2">
-          Test validity until {new Date(quote.validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. This is for sandbox flow testing, not a vendor-sent commercial offer.
+          Valid until {new Date(quote.validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. Demo-marked listings are catalog estimates; vendor offers appear separately above.
         </p>
       )}
       {quote.status === 'draft' && (
         <div className="mt-3">
           {error && <div className="text-xs text-red-500 mb-2">{error}</div>}
           <button onClick={accept} disabled={busy} className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 disabled:opacity-60">
-            {busy ? 'Reserving…' : 'Test reserve'}
+            {busy ? 'Reserving…' : 'Reserve from quote'}
           </button>
-          <span className="text-[10px] text-muted ml-2">Creates a demo hold so payment and booking can be tested.</span>
+          <span className="text-[10px] text-muted ml-2">Creates a hold so you can continue to payment and booking.</span>
         </div>
       )}
       {quote.status === 'accepted' && (
@@ -299,12 +299,12 @@ export default function QuotesPage() {
       <div className="bg-white rounded-2xl shadow-sm p-4 border border-dashed border-amber-200 bg-amber-50/20">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-bold text-navy">Sandbox test estimate</div>
+            <div className="text-sm font-bold text-navy">Selected catalog quote</div>
             <p className="text-[11px] text-muted mt-0.5">
-              This section is only for testing STARVNT demo listings. Real customer negotiation should happen from vendor offers above.
+              Use this to create a quote from the options you selected. Direct vendor-entered offers still appear above.
             </p>
           </div>
-          <span className="shrink-0 rounded-full bg-amber-100 text-amber-700 text-[10px] font-extrabold px-2 py-0.5">TEST</span>
+          <span className="shrink-0 rounded-full bg-amber-100 text-amber-700 text-[10px] font-extrabold px-2 py-0.5">CATALOG</span>
         </div>
         {selections.length === 0 ? (
           <p className="text-xs text-muted mt-2">
@@ -323,21 +323,21 @@ export default function QuotesPage() {
                 </li>
               ))}
             </ul>
-            <div className="text-[11px] text-muted mt-1">These prices come from selected demo/catalog options. They are not vendor-entered negotiation offers.</div>
+            <div className="text-[11px] text-muted mt-1">These prices come from selected catalog options. Vendor-entered negotiation offers appear above.</div>
             {actionError && <div className="text-xs text-red-500 mt-2">{actionError}</div>}
             <button
               onClick={getQuote}
               disabled={busy || event.status === 'draft'}
               className="mt-3 rounded-xl bg-amber-600 text-white text-xs font-bold px-4 py-2.5 disabled:opacity-50"
             >
-              {busy ? 'Preparing…' : `Create test quote (${formatINR(selectionTotal)})`}
+              {busy ? 'Preparing…' : `Create quote (${formatINR(selectionTotal)})`}
             </button>
           </>
         )}
       </div>
 
       {quotes.length === 0 ? (
-        <Empty title="No test estimates yet">Use this only to test demo reservation and payment flow.</Empty>
+        <Empty title="No catalog quotes yet">Select an option and create a quote to continue toward reservation and payment.</Empty>
       ) : (
         quotes.map((q) => <QuoteCard key={q.id} quote={q} eventId={id} />)
       )}

@@ -1373,8 +1373,8 @@ export default function PortfolioPage() {
 
       {/* CREATE NEW PROJECT MODAL WITH MULTI-PHOTO & VIDEO SUPPORT */}
       {showProjectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-navy/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-5 sm:p-6 space-y-4 my-auto max-h-[92vh] overflow-y-auto animate-[pop_.18s_ease-out]">
+        <div className="vendor-modal-backdrop">
+          <div className="vendor-modal-panel max-w-2xl p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h3 className="font-extrabold text-lg text-navy flex items-center gap-2">
@@ -1732,7 +1732,7 @@ export default function PortfolioPage() {
                 />
               </div>
 
-              <div className="pt-2 flex gap-3">
+              <div className="vendor-modal-actions pt-2 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setShowProjectModal(false)}
@@ -1755,8 +1755,8 @@ export default function PortfolioPage() {
 
       {/* STANDALONE ADD MEDIA VIA URL MODAL */}
       {showStandaloneUrlModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-navy/70 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-5 space-y-4 animate-[pop_.18s_ease-out]">
+        <div className="vendor-modal-backdrop">
+          <div className="vendor-modal-panel max-w-md p-4 sm:p-5 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <h3 className="font-extrabold text-base text-navy">Add Video or Media via URL</h3>
               <button
@@ -1804,7 +1804,7 @@ export default function PortfolioPage() {
                   <option value="IMAGE">Photo</option>
                 </select>
               </div>
-              <div className="pt-2 flex gap-2">
+              <div className="vendor-modal-actions pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowStandaloneUrlModal(false)}
@@ -1827,8 +1827,8 @@ export default function PortfolioPage() {
 
       {/* PROJECT SHOWCASE DETAIL MODAL */}
       {selectedProjectShowcase && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-navy/75 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full p-5 sm:p-7 space-y-5 my-auto max-h-[92vh] overflow-y-auto animate-[pop_.18s_ease-out]">
+        <div className="vendor-modal-backdrop">
+          <div className="vendor-modal-panel max-w-4xl p-4 sm:p-7 space-y-5">
             <div className="flex items-start justify-between pb-3 border-b border-gray-100">
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">

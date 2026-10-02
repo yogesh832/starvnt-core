@@ -1,26 +1,72 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Page, Card} from './shared.jsx';
-import { StatusChip } from '../../../components/ui.jsx';
-import Icon from '../../../components/Icon.jsx';
-import { externalApi } from '../../../lib/api.js';
-import MapLocationPicker, { pinIcon } from '../../../components/MapLocationPicker.jsx';
-import { useTheme } from '../../../lib/ThemeContext.jsx';
-import L from 'leaflet';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Page, Card } from "./shared.jsx";
+import { StatusChip } from "../../../components/ui.jsx";
+import Icon from "../../../components/Icon.jsx";
+import { externalApi } from "../../../lib/api.js";
+import MapLocationPicker, {
+  pinIcon,
+} from "../../../components/MapLocationPicker.jsx";
+import { useTheme } from "../../../lib/ThemeContext.jsx";
+import L from "leaflet";
 
-function SkeletonLine({ className = '' }) {
-  return <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />;
+function SkeletonLine({ className = "" }) {
+  return (
+    <div className={`animate-pulse rounded-full bg-gray-200/80 ${className}`} />
+  );
 }
 
 function activationStepList(activation) {
   const checklist = activation?.checklist || {};
   return [
-    { key: 'profile', label: 'Business profile', detail: 'Brand name, one primary category, and base city', done: Boolean(checklist.profile), href: '/vendor/profile?tab=profile', action: 'Complete profile' },
-    { key: 'services', label: 'Active service with price', detail: 'At least one ACTIVE service package with a base price', done: Boolean(checklist.services), href: '/vendor/services', action: 'Add service' },
-    { key: 'capabilities', label: 'Gear and capability', detail: 'Crew size, formats, styles, and equipment for the service', done: Boolean(checklist.capabilities), href: '/vendor/services?action=gear', action: 'Add gear' },
-    { key: 'coverage', label: 'Coverage and travel', detail: 'Operating hub plus service coverage radius/localities', done: Boolean(checklist.locations && checklist.coverage), href: '/vendor/services?action=coverage', action: 'Set coverage' },
-    { key: 'portfolio', label: 'Portfolio project', detail: 'At least one published photo/video showcase', done: Boolean(checklist.portfolio), href: '/vendor/portfolio', action: 'Add portfolio' },
-    { key: 'verified', label: 'KYC verification', detail: 'Documents uploaded and verified by STARVNT', done: Boolean(checklist.verified), href: '/vendor/profile?tab=documents', action: 'Upload documents' },
+    {
+      key: "profile",
+      label: "Business profile",
+      detail: "Brand name, one primary category, and base city",
+      done: Boolean(checklist.profile),
+      href: "/vendor/profile?tab=profile",
+      action: "Complete profile",
+    },
+    {
+      key: "services",
+      label: "Active service with price",
+      detail: "At least one ACTIVE service package with a base price",
+      done: Boolean(checklist.services),
+      href: "/vendor/services",
+      action: "Add service",
+    },
+    {
+      key: "capabilities",
+      label: "Gear and capability",
+      detail: "Crew size, formats, styles, and equipment for the service",
+      done: Boolean(checklist.capabilities),
+      href: "/vendor/services?action=gear",
+      action: "Add gear",
+    },
+    {
+      key: "coverage",
+      label: "Coverage and travel",
+      detail: "Operating hub plus service coverage radius/localities",
+      done: Boolean(checklist.locations && checklist.coverage),
+      href: "/vendor/services?action=coverage",
+      action: "Set coverage",
+    },
+    {
+      key: "portfolio",
+      label: "Portfolio project",
+      detail: "At least one published photo/video showcase",
+      done: Boolean(checklist.portfolio),
+      href: "/vendor/portfolio",
+      action: "Add portfolio",
+    },
+    {
+      key: "verified",
+      label: "KYC verification",
+      detail: "Documents uploaded and verified by STARVNT",
+      done: Boolean(checklist.verified),
+      href: "/vendor/profile?tab=documents",
+      action: "Upload documents",
+    },
   ];
 }
 
@@ -31,41 +77,63 @@ function VendorActivationCard({ activation, compact = false }) {
   const complete = steps.every((step) => step.done);
 
   return (
-    <div className={`rounded-2xl border ${complete ? 'border-emerald-200 bg-emerald-50/80' : 'border-amber-200 bg-amber-50/70'} p-4 sm:p-5 shadow-xs`}>
+    <div
+      className={`rounded-2xl border ${complete ? "border-emerald-200 bg-emerald-50/80" : "border-amber-200 bg-amber-50/70"} p-4 sm:p-5 shadow-xs`}
+    >
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="min-w-0">
-          <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${complete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
-            <Icon name={complete ? 'check' : 'lock'} size={12} />
-            {complete ? 'Client matching active' : 'Client matching locked'}
+          <div
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${complete ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}
+          >
+            <Icon name={complete ? "check" : "lock"} size={12} />
+            {complete ? "Client matching active" : "Client matching locked"}
           </div>
           <h2 className="mt-2 text-base font-extrabold text-navy">
-            {complete ? 'Your vendor profile is live for customers' : 'Finish these steps to appear in customer search'}
+            {complete
+              ? "Your vendor profile is live for customers"
+              : "Finish these steps to appear in customer search"}
           </h2>
           <p className="mt-1 text-xs text-muted leading-relaxed">
-            There is no manual vendor toggle. STARVNT turns commercial matching on automatically after service, coverage, portfolio, and verification are complete.
+            There is no manual vendor toggle. STARVNT turns commercial matching
+            on automatically after service, coverage, portfolio, and
+            verification are complete.
           </p>
         </div>
         <div className="shrink-0 text-left sm:text-right">
-          <div className="text-2xl font-extrabold text-navy">{activation.completionPercentage ?? 0}%</div>
+          <div className="text-2xl font-extrabold text-navy">
+            {activation.completionPercentage ?? 0}%
+          </div>
           <div className="text-[11px] font-bold text-muted">readiness</div>
         </div>
       </div>
 
-      <div className={`mt-4 grid ${compact ? 'grid-cols-1' : 'sm:grid-cols-2 xl:grid-cols-3'} gap-2.5`}>
+      <div
+        className={`mt-4 grid ${compact ? "grid-cols-1" : "sm:grid-cols-2 xl:grid-cols-3"} gap-2.5`}
+      >
         {steps.map((step) => (
           <a
             key={step.key}
             href={step.href}
-            className={`rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-sm ${step.done ? 'border-emerald-200 bg-white text-emerald-900' : 'border-amber-200 bg-white text-navy'}`}
+            className={`rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-sm ${step.done ? "border-emerald-200 bg-white text-emerald-900" : "border-amber-200 bg-white text-navy"}`}
           >
             <div className="flex items-start gap-2">
-              <span className={`mt-0.5 h-5 w-5 rounded-full grid place-items-center shrink-0 ${step.done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                <Icon name={step.done ? 'check' : 'chevronRight'} size={11} />
+              <span
+                className={`mt-0.5 h-5 w-5 rounded-full grid place-items-center shrink-0 ${step.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+              >
+                <Icon name={step.done ? "check" : "chevronRight"} size={11} />
               </span>
               <span className="min-w-0">
-                <span className="block text-xs font-extrabold">{step.label}</span>
-                <span className="block text-[11px] text-muted leading-snug mt-0.5">{step.done ? 'Done' : step.detail}</span>
-                {!step.done && <span className="block text-[11px] font-bold text-primary mt-1">{step.action}</span>}
+                <span className="block text-xs font-extrabold">
+                  {step.label}
+                </span>
+                <span className="block text-[11px] text-muted leading-snug mt-0.5">
+                  {step.done ? "Done" : step.detail}
+                </span>
+                {!step.done && (
+                  <span className="block text-[11px] font-bold text-primary mt-1">
+                    {step.action}
+                  </span>
+                )}
               </span>
             </div>
           </a>
@@ -75,10 +143,15 @@ function VendorActivationCard({ activation, compact = false }) {
       {!complete && next && (
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-white border border-amber-100 p-3">
           <div className="text-xs">
-            <div className="font-extrabold text-navy">Next step: {next.label}</div>
+            <div className="font-extrabold text-navy">
+              Next step: {next.label}
+            </div>
             <div className="text-muted mt-0.5">{next.detail}</div>
           </div>
-          <a href={next.href} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark">
+          <a
+            href={next.href}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark"
+          >
             {next.action}
             <Icon name="chevronRight" size={12} />
           </a>
@@ -96,29 +169,33 @@ export function ServicesPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [deletingServiceId, setDeletingServiceId] = useState(null);
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('Photography');
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("Photography");
   const [basePrice, setBasePrice] = useState(48000);
   const [leadTimeDays, setLeadTimeDays] = useState(7);
 
   // Capability & Gear configuration state
   const [showGearModal, setShowGearModal] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
-  const [gearFormat, setGearFormat] = useState('Full day');
+  const [gearFormat, setGearFormat] = useState("Full day");
   const [gearTeamSize, setGearTeamSize] = useState(2);
   const [gearSimultaneousLimit, setGearSimultaneousLimit] = useState(1);
-  const [gearStyles, setGearStyles] = useState('Candid, Cinematic, Traditional, Drone 4K');
-  const [gearEquipment, setGearEquipment] = useState('Sony FX3, 24-70mm f/2.8, DJI Mini 3 Drone, Godox Strobes');
+  const [gearStyles, setGearStyles] = useState(
+    "Candid, Cinematic, Traditional, Drone 4K",
+  );
+  const [gearEquipment, setGearEquipment] = useState(
+    "Sony FX3, 24-70mm f/2.8, DJI Mini 3 Drone, Godox Strobes",
+  );
   const [savingGear, setSavingGear] = useState(false);
-  const [gearFeedback, setGearFeedback] = useState('');
+  const [gearFeedback, setGearFeedback] = useState("");
 
   // Coverage & Transit configuration state
   const [showCoverageModal, setShowCoverageModal] = useState(false);
   const [selectedServiceForCov, setSelectedServiceForCov] = useState(null);
-  const [covCity, setCovCity] = useState('');
-  const [covState, setCovState] = useState('');
+  const [covCity, setCovCity] = useState("");
+  const [covState, setCovState] = useState("");
   const [covRadiusKm, setCovRadiusKm] = useState(40);
-  const [covLocalities, setCovLocalities] = useState('');
+  const [covLocalities, setCovLocalities] = useState("");
   const [covOutstation, setCovOutstation] = useState(false);
   const [tpFreeRadiusKm, setTpFreeRadiusKm] = useState(15);
   const [tpPerKmRate, setTpPerKmRate] = useState(40);
@@ -127,14 +204,16 @@ export function ServicesPage() {
   const [tpTollParkingIncluded, setTpTollParkingIncluded] = useState(false);
   const [tpAccommodationBeyondKm, setTpAccommodationBeyondKm] = useState(120);
   const [savingCoverage, setSavingCoverage] = useState(false);
-  const [coverageFeedback, setCoverageFeedback] = useState('');
+  const [coverageFeedback, setCoverageFeedback] = useState("");
 
   const loadServices = useCallback(async () => {
     try {
       setLoading(true);
       const [res, actRes] = await Promise.all([
-        externalApi.call('/vendor/services'),
-        externalApi.call('/vendor/activation-status').catch(() => ({ ok: false })),
+        externalApi.call("/vendor/services"),
+        externalApi
+          .call("/vendor/activation-status")
+          .catch(() => ({ ok: false })),
       ]);
       if (res.ok && res.services) {
         setServices(res.services);
@@ -143,7 +222,7 @@ export function ServicesPage() {
         setActivation(actRes.status);
       }
     } catch (err) {
-      console.warn('[ServicesPage] Error loading services:', err.message);
+      console.warn("[ServicesPage] Error loading services:", err.message);
     } finally {
       setLoading(false);
     }
@@ -158,10 +237,10 @@ export function ServicesPage() {
   const handleCloseGearModal = useCallback(() => {
     setShowGearModal(false);
     setSelectedService(null);
-    handledActionRef.current = 'closed_gear';
+    handledActionRef.current = "closed_gear";
     const next = new URLSearchParams(window.location.search);
-    if (next.has('action')) {
-      next.delete('action');
+    if (next.has("action")) {
+      next.delete("action");
       setSearchParams(next, { replace: true });
     }
   }, [setSearchParams]);
@@ -169,30 +248,33 @@ export function ServicesPage() {
   const handleCloseCoverageModal = useCallback(() => {
     setShowCoverageModal(false);
     setSelectedServiceForCov(null);
-    handledActionRef.current = 'closed_coverage';
+    handledActionRef.current = "closed_coverage";
     const next = new URLSearchParams(window.location.search);
-    if (next.has('action')) {
-      next.delete('action');
+    if (next.has("action")) {
+      next.delete("action");
       setSearchParams(next, { replace: true });
     }
   }, [setSearchParams]);
 
   // Handle auto-launch of Gear/Coverage Modal only when action is explicitly present
-  const actionParam = searchParams.get('action');
+  const actionParam = searchParams.get("action");
   useEffect(() => {
     if (!actionParam) {
       handledActionRef.current = null;
       return;
     }
-    if (handledActionRef.current === actionParam || handledActionRef.current === `closed_${actionParam}`) {
+    if (
+      handledActionRef.current === actionParam ||
+      handledActionRef.current === `closed_${actionParam}`
+    ) {
       return;
     }
 
-    if (actionParam === 'gear' && services.length > 0) {
-      handledActionRef.current = 'gear';
+    if (actionParam === "gear" && services.length > 0) {
+      handledActionRef.current = "gear";
       handleOpenGearModal(services[0]);
-    } else if (actionParam === 'coverage' && services.length > 0) {
-      handledActionRef.current = 'coverage';
+    } else if (actionParam === "coverage" && services.length > 0) {
+      handledActionRef.current = "coverage";
       handleOpenCoverageModal(services[0]);
     }
   }, [actionParam, services]);
@@ -200,31 +282,47 @@ export function ServicesPage() {
   // Support closing modals with Escape key
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         if (showCoverageModal) handleCloseCoverageModal();
         if (showGearModal) handleCloseGearModal();
         if (showAddModal) setShowAddModal(false);
       }
     }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showCoverageModal, showGearModal, showAddModal, handleCloseCoverageModal, handleCloseGearModal]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    showCoverageModal,
+    showGearModal,
+    showAddModal,
+    handleCloseCoverageModal,
+    handleCloseGearModal,
+  ]);
 
   function handleOpenGearModal(service) {
     setSelectedService(service);
     const existingCap = service.capabilities?.[0];
     if (existingCap) {
-      setGearFormat(existingCap.format || 'Full day');
+      setGearFormat(existingCap.format || "Full day");
       setGearTeamSize(existingCap.teamSize || 2);
       setGearSimultaneousLimit(existingCap.simultaneousEventLimit || 1);
-      setGearStyles(existingCap.styles?.length ? existingCap.styles.join(', ') : 'Candid, Cinematic, Traditional');
-      setGearEquipment(existingCap.equipment?.length ? existingCap.equipment.join(', ') : 'Sony FX3, 24-70mm f/2.8, DJI Mini 3 Drone');
+      setGearStyles(
+        existingCap.styles?.length
+          ? existingCap.styles.join(", ")
+          : "Candid, Cinematic, Traditional",
+      );
+      setGearEquipment(
+        existingCap.equipment?.length
+          ? existingCap.equipment.join(", ")
+          : "Sony FX3, 24-70mm f/2.8, DJI Mini 3 Drone",
+      );
     } else {
-      setGearFormat('Full day');
+      setGearFormat("Full day");
       setGearTeamSize(2);
       setGearSimultaneousLimit(1);
-      setGearStyles('Candid, Cinematic, Traditional, Drone 4K');
-      setGearEquipment('Sony FX3, 24-70mm f/2.8, DJI Mini 3 Drone, Godox Strobes');
+      setGearStyles("Candid, Cinematic, Traditional, Drone 4K");
+      setGearEquipment(
+        "Sony FX3, 24-70mm f/2.8, DJI Mini 3 Drone, Godox Strobes",
+      );
     }
     setShowGearModal(true);
   }
@@ -233,22 +331,22 @@ export function ServicesPage() {
     e.preventDefault();
     if (!name.trim()) return;
     try {
-      await externalApi.call('/vendor/services', {
-        method: 'POST',
+      await externalApi.call("/vendor/services", {
+        method: "POST",
         body: {
           name,
           category,
           pricing: {
             basePrice: Number(basePrice),
-            pricingType: 'FIXED',
-            unit: 'event',
+            pricingType: "FIXED",
+            unit: "event",
           },
           leadTimeDays: Number(leadTimeDays),
-          status: 'ACTIVE',
+          status: "ACTIVE",
         },
       });
       setShowAddModal(false);
-      setName('');
+      setName("");
       await loadServices();
     } catch (err) {
       alert(`Could not create service: ${err.message}`);
@@ -259,7 +357,7 @@ export function ServicesPage() {
     const serviceId = service?._id;
     if (!serviceId || deletingServiceId) return;
 
-    const label = service?.name ? `"${service.name}"` : 'this service';
+    const label = service?.name ? `"${service.name}"` : "this service";
     const confirmed = window.confirm(
       `Delete ${label}? This will also remove its gear/capability and coverage setup.`,
     );
@@ -268,7 +366,7 @@ export function ServicesPage() {
     try {
       setDeletingServiceId(serviceId);
       await externalApi.call(`/vendor/services/${serviceId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
       await loadServices();
     } catch (err) {
@@ -284,16 +382,16 @@ export function ServicesPage() {
     try {
       setSavingGear(true);
       const stylesArray = gearStyles
-        .split(',')
+        .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
       const equipArray = gearEquipment
-        .split(',')
+        .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
 
-      const res = await externalApi.call('/vendor/capabilities', {
-        method: 'POST',
+      const res = await externalApi.call("/vendor/capabilities", {
+        method: "POST",
         body: {
           vendorServiceId: selectedService._id,
           styles: stylesArray,
@@ -306,11 +404,13 @@ export function ServicesPage() {
 
       if (res.ok) {
         setShowGearModal(false);
-        if (searchParams.get('action')) {
+        if (searchParams.get("action")) {
           setSearchParams({});
         }
-        setGearFeedback('Equipment, crew capacity and capabilities saved to database. Step 3 is verified!');
-        setTimeout(() => setGearFeedback(''), 5000);
+        setGearFeedback(
+          "Equipment, crew capacity and capabilities saved to database. Step 3 is verified!",
+        );
+        setTimeout(() => setGearFeedback(""), 5000);
         await loadServices();
       }
     } catch (err) {
@@ -324,32 +424,38 @@ export function ServicesPage() {
     setSelectedServiceForCov(service);
     const existingCov = service.coverage?.[0];
     if (existingCov) {
-      setCovCity(existingCov.city || 'Mumbai');
-      setCovState(existingCov.state || 'Maharashtra');
+      setCovCity(existingCov.city || "Mumbai");
+      setCovState(existingCov.state || "Maharashtra");
       setCovRadiusKm(existingCov.radiusKm || 40);
-      setCovLocalities(existingCov.localities?.join(', ') || '');
+      setCovLocalities(existingCov.localities?.join(", ") || "");
       setCovOutstation(Boolean(existingCov.outstationAllowed));
     } else {
-      setCovCity('Mumbai');
-      setCovState('Maharashtra');
+      setCovCity("Mumbai");
+      setCovState("Maharashtra");
       setCovRadiusKm(40);
-      setCovLocalities('');
+      setCovLocalities("");
       setCovOutstation(false);
     }
 
     // Pre-load travel policy from DB
     try {
-      const tpRes = await externalApi.call('/vendor/travel-policy');
+      const tpRes = await externalApi.call("/vendor/travel-policy");
       if (tpRes.ok && tpRes.travelPolicy) {
         setTpFreeRadiusKm(tpRes.travelPolicy.freeRadiusKm ?? 15);
         setTpPerKmRate(tpRes.travelPolicy.perKmRate ?? 40);
         setTpEquipmentTransitFee(tpRes.travelPolicy.equipmentTransitFee ?? 0);
-        setTpOutstationAllowance(tpRes.travelPolicy.outstationDailyAllowance ?? 1500);
-        setTpTollParkingIncluded(Boolean(tpRes.travelPolicy.tollAndParkingIncluded));
-        setTpAccommodationBeyondKm(tpRes.travelPolicy.accommodationRequiredBeyondKm ?? 120);
+        setTpOutstationAllowance(
+          tpRes.travelPolicy.outstationDailyAllowance ?? 1500,
+        );
+        setTpTollParkingIncluded(
+          Boolean(tpRes.travelPolicy.tollAndParkingIncluded),
+        );
+        setTpAccommodationBeyondKm(
+          tpRes.travelPolicy.accommodationRequiredBeyondKm ?? 120,
+        );
       }
     } catch (err) {
-      console.warn('[ServicesPage] Could not load travel policy:', err.message);
+      console.warn("[ServicesPage] Could not load travel policy:", err.message);
     }
 
     setShowCoverageModal(true);
@@ -361,16 +467,16 @@ export function ServicesPage() {
     try {
       setSavingCoverage(true);
       const locArray = covLocalities
-        .split(',')
+        .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
 
       // 1. Save Service Coverage Area
-      await externalApi.call('/vendor/coverage', {
-        method: 'POST',
+      await externalApi.call("/vendor/coverage", {
+        method: "POST",
         body: {
           vendorServiceId: selectedServiceForCov._id,
-          coverageType: 'RADIUS',
+          coverageType: "RADIUS",
           city: covCity.trim(),
           state: covState.trim(),
           radiusKm: Number(covRadiusKm) || 40,
@@ -380,8 +486,8 @@ export function ServicesPage() {
       });
 
       // 2. Save Travel & Transit Logistics Policy
-      await externalApi.call('/vendor/travel-policy', {
-        method: 'PUT',
+      await externalApi.call("/vendor/travel-policy", {
+        method: "PUT",
         body: {
           freeRadiusKm: Number(tpFreeRadiusKm) || 15,
           perKmRate: Number(tpPerKmRate) || 40,
@@ -393,11 +499,13 @@ export function ServicesPage() {
       });
 
       setShowCoverageModal(false);
-      if (searchParams.get('action')) {
+      if (searchParams.get("action")) {
         setSearchParams({});
       }
-      setCoverageFeedback('Operating radius, coverage area and transit policy saved to database. Step 4 is verified!');
-      setTimeout(() => setCoverageFeedback(''), 5000);
+      setCoverageFeedback(
+        "Operating radius, coverage area and transit policy saved to database. Step 4 is verified!",
+      );
+      setTimeout(() => setCoverageFeedback(""), 5000);
       await loadServices();
     } catch (err) {
       alert(`Could not save coverage: ${err.message}`);
@@ -436,40 +544,47 @@ export function ServicesPage() {
       )}
 
       <div className="grid sm:grid-cols-2 gap-4">
-        {loading && services.length === 0 && Array.from({ length: 4 }).map((_, idx) => (
-          <Card key={`service-loading-${idx}`} className="space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-2 flex-1">
-                <SkeletonLine className="h-4 w-40 max-w-full" />
-                <SkeletonLine className="h-3 w-52 max-w-full" />
+        {loading &&
+          services.length === 0 &&
+          Array.from({ length: 4 }).map((_, idx) => (
+            <Card key={`service-loading-${idx}`} className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-2 flex-1">
+                  <SkeletonLine className="h-4 w-40 max-w-full" />
+                  <SkeletonLine className="h-3 w-52 max-w-full" />
+                </div>
+                <SkeletonLine className="h-6 w-16 rounded-lg" />
               </div>
-              <SkeletonLine className="h-6 w-16 rounded-lg" />
-            </div>
-            <SkeletonLine className="h-20 w-full rounded-xl" />
-            <SkeletonLine className="h-20 w-full rounded-xl" />
-            <div className="flex justify-between pt-2 border-t border-gray-100">
-              <SkeletonLine className="h-3 w-20" />
-              <SkeletonLine className="h-3 w-36" />
-            </div>
-          </Card>
-        ))}
+              <SkeletonLine className="h-20 w-full rounded-xl" />
+              <SkeletonLine className="h-20 w-full rounded-xl" />
+              <div className="flex justify-between pt-2 border-t border-gray-100">
+                <SkeletonLine className="h-3 w-20" />
+                <SkeletonLine className="h-3 w-36" />
+              </div>
+            </Card>
+          ))}
         {services.map((s) => {
           const hasCap = s.capabilities && s.capabilities.length > 0;
           const primaryCap = hasCap ? s.capabilities[0] : null;
           const capText = hasCap
-            ? s.capabilities.map((c) => `${c.styles?.join(', ')} · ${c.format}`).join('; ')
+            ? s.capabilities
+                .map((c) => `${c.styles?.join(", ")} · ${c.format}`)
+                .join("; ")
             : null;
 
           return (
             <Card key={s._id || s.name}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="font-bold text-[15px] text-navy">{s.name}</div>
+                  <div className="font-bold text-[15px] text-navy">
+                    {s.name}
+                  </div>
                   <div className="text-xs text-muted mt-0.5">
-                    ₹{(s.pricing?.basePrice || 0).toLocaleString()} base · {s.category || 'Photography'}
+                    ₹{(s.pricing?.basePrice || 0).toLocaleString()} base ·{" "}
+                    {s.category || "Photography"}
                   </div>
                 </div>
-                <StatusChip status={s.status || 'Active'} />
+                <StatusChip status={s.status || "Active"} />
               </div>
 
               <div className="mt-3 space-y-2.5 text-xs">
@@ -477,15 +592,27 @@ export function ServicesPage() {
                 <div
                   className={`rounded-xl p-3 border transition ${
                     hasCap
-                      ? 'bg-emerald-50/50 border-emerald-200/80 text-emerald-950'
-                      : 'bg-amber-50/60 border-amber-200/80 text-amber-950'
+                      ? "bg-emerald-50/50 border-emerald-200/80 text-emerald-950"
+                      : "bg-amber-50/60 border-amber-200/80 text-amber-950"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <span className="font-bold flex items-center gap-1.5 text-xs">
-                      <Icon name={hasCap ? 'check' : 'settings'} size={13} className={hasCap ? 'text-emerald-600' : 'text-amber-600'} />
-                      <span className={hasCap ? 'text-emerald-900' : 'text-amber-900'}>
-                        {hasCap ? 'Gear & Crew Declared' : 'Step 3: Gear & Capability Needed'}
+                      <Icon
+                        name={hasCap ? "check" : "settings"}
+                        size={13}
+                        className={
+                          hasCap ? "text-emerald-600" : "text-amber-600"
+                        }
+                      />
+                      <span
+                        className={
+                          hasCap ? "text-emerald-900" : "text-amber-900"
+                        }
+                      >
+                        {hasCap
+                          ? "Gear & Crew Declared"
+                          : "Step 3: Gear & Capability Needed"}
                       </span>
                     </span>
                     <button
@@ -493,34 +620,47 @@ export function ServicesPage() {
                       onClick={() => handleOpenGearModal(s)}
                       className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition ${
                         hasCap
-                          ? 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-                          : 'bg-primary hover:bg-primary-dark text-white shadow-xs'
+                          ? "bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                          : "bg-primary hover:bg-primary-dark text-white shadow-xs"
                       }`}
                     >
-                      {hasCap ? 'Edit Gear' : 'Configure Gear'}
+                      {hasCap ? "Edit Gear" : "Configure Gear"}
                     </button>
                   </div>
 
                   {hasCap ? (
                     <div className="space-y-1 text-[11px]">
                       <div>
-                        <span className="font-semibold text-muted">Format & Styles: </span>
+                        <span className="font-semibold text-muted">
+                          Format & Styles:{" "}
+                        </span>
                         <span>{capText}</span>
                       </div>
                       <div>
-                        <span className="font-semibold text-muted">Crew Capacity: </span>
-                        <span>{primaryCap?.teamSize || 2} crew members · Max {primaryCap?.simultaneousEventLimit || 1} concurrent event(s)</span>
+                        <span className="font-semibold text-muted">
+                          Crew Capacity:{" "}
+                        </span>
+                        <span>
+                          {primaryCap?.teamSize || 2} crew members · Max{" "}
+                          {primaryCap?.simultaneousEventLimit || 1} concurrent
+                          event(s)
+                        </span>
                       </div>
                       {primaryCap?.equipment?.length > 0 && (
                         <div>
-                          <span className="font-semibold text-muted">Equipment: </span>
-                          <span className="font-mono text-[10px]">{primaryCap.equipment.join(', ')}</span>
+                          <span className="font-semibold text-muted">
+                            Equipment:{" "}
+                          </span>
+                          <span className="font-mono text-[10px]">
+                            {primaryCap.equipment.join(", ")}
+                          </span>
                         </div>
                       )}
                     </div>
                   ) : (
                     <p className="text-[11px] text-amber-900/90 leading-relaxed">
-                      Declare equipment, crew capacity, and event formats to verify Step 3 of your onboarding checklist.
+                      Declare equipment, crew capacity, and event formats to
+                      verify Step 3 of your onboarding checklist.
                     </p>
                   )}
                 </div>
@@ -534,19 +674,27 @@ export function ServicesPage() {
                     <div
                       className={`rounded-xl p-3 border transition ${
                         hasCov
-                          ? 'bg-emerald-50/50 border-emerald-200/80 text-emerald-950'
-                          : 'bg-amber-50/60 border-amber-200/80 text-amber-950'
+                          ? "bg-emerald-50/50 border-emerald-200/80 text-emerald-950"
+                          : "bg-amber-50/60 border-amber-200/80 text-amber-950"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <span className="font-bold flex items-center gap-1.5 text-xs">
                           <Icon
-                            name={hasCov ? 'check' : 'mapPin'}
+                            name={hasCov ? "check" : "mapPin"}
                             size={13}
-                            className={hasCov ? 'text-emerald-600' : 'text-amber-600'}
+                            className={
+                              hasCov ? "text-emerald-600" : "text-amber-600"
+                            }
                           />
-                          <span className={hasCov ? 'text-emerald-900' : 'text-amber-900'}>
-                            {hasCov ? 'Coverage & Transit Declared' : 'Step 4: Coverage & Transit Required'}
+                          <span
+                            className={
+                              hasCov ? "text-emerald-900" : "text-amber-900"
+                            }
+                          >
+                            {hasCov
+                              ? "Coverage & Transit Declared"
+                              : "Step 4: Coverage & Transit Required"}
                           </span>
                         </span>
                         <button
@@ -554,43 +702,51 @@ export function ServicesPage() {
                           onClick={() => handleOpenCoverageModal(s)}
                           className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer ${
                             hasCov
-                              ? 'bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-                              : 'bg-primary hover:bg-primary-dark text-white shadow-xs'
+                              ? "bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                              : "bg-primary hover:bg-primary-dark text-white shadow-xs"
                           }`}
                         >
-                          {hasCov ? 'Edit Transit' : 'Set Radius & Transit'}
+                          {hasCov ? "Edit Transit" : "Set Radius & Transit"}
                         </button>
                       </div>
 
                       {hasCov ? (
                         <div className="space-y-1 text-[11px]">
                           <div>
-                            <span className="font-semibold text-muted">Operating Base & Radius: </span>
+                            <span className="font-semibold text-muted">
+                              Operating Base & Radius:{" "}
+                            </span>
                             <span className="font-bold text-navy">
-                              {primaryCov.radiusKm || 40} km radius from {primaryCov.city || 'Operational Base'}
+                              {primaryCov.radiusKm || 40} km radius from{" "}
+                              {primaryCov.city || "Operational Base"}
                             </span>
                           </div>
                           {primaryCov.localities?.length > 0 && (
                             <div>
-                              <span className="font-semibold text-muted">Key Localities: </span>
-                              <span>{primaryCov.localities.join(', ')}</span>
+                              <span className="font-semibold text-muted">
+                                Key Localities:{" "}
+                              </span>
+                              <span>{primaryCov.localities.join(", ")}</span>
                             </div>
                           )}
                           <div className="pt-0.5">
                             <span
                               className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                                 primaryCov.outstationAllowed
-                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                  : 'bg-lavender text-ink/70'
+                                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                  : "bg-lavender text-ink/70"
                               }`}
                             >
-                              {primaryCov.outstationAllowed ? 'Outstation Events Permitted' : 'Base Metropolitan Area Only'}
+                              {primaryCov.outstationAllowed
+                                ? "Outstation Events Permitted"
+                                : "Base Metropolitan Area Only"}
                             </span>
                           </div>
                         </div>
                       ) : (
                         <p className="text-[11px] text-amber-900/90 leading-relaxed">
-                          Set operating radius (km), operational base, and travel policy to verify Step 4 of your checklist.
+                          Set operating radius (km), operational base, and
+                          travel policy to verify Step 4 of your checklist.
                         </p>
                       )}
                     </div>
@@ -609,7 +765,7 @@ export function ServicesPage() {
                     className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="settings" size={12} />
-                    <span>{hasCap ? 'Edit Gear' : 'Gear (Step 3)'}</span>
+                    <span>{hasCap ? "Edit Gear" : "Gear (Step 3)"}</span>
                   </button>
                   <span className="text-gray-300 hidden sm:inline">|</span>
                   <button
@@ -618,7 +774,9 @@ export function ServicesPage() {
                     className="font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="mapPin" size={12} />
-                    <span>{s.coverage?.length ? 'Edit Transit' : 'Transit (Step 4)'}</span>
+                    <span>
+                      {s.coverage?.length ? "Edit Transit" : "Transit (Step 4)"}
+                    </span>
                   </button>
                   <span className="text-gray-300 hidden sm:inline">|</span>
                   <button
@@ -628,7 +786,9 @@ export function ServicesPage() {
                     className="font-bold text-red-600 hover:text-red-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   >
                     <Icon name="trash" size={12} />
-                    <span>{deletingServiceId === s._id ? 'Deleting...' : 'Delete'}</span>
+                    <span>
+                      {deletingServiceId === s._id ? "Deleting..." : "Delete"}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -640,9 +800,12 @@ export function ServicesPage() {
             <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 grid place-items-center mx-auto mb-3">
               <Icon name="services" size={22} />
             </div>
-            <h3 className="text-sm font-extrabold text-navy">No active services yet</h3>
+            <h3 className="text-sm font-extrabold text-navy">
+              No active services yet
+            </h3>
             <p className="max-w-lg mx-auto mt-1 leading-relaxed">
-              This is why the vendor is not visible in customer options. Add one service, choose its price, then add gear and coverage.
+              This is why the vendor is not visible in customer options. Add one
+              service, choose its price, then add gear and coverage.
             </p>
             <button
               type="button"
@@ -658,10 +821,12 @@ export function ServicesPage() {
 
       {/* Add Service Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-[pop_.18s_ease-out]">
+        <div className="vendor-modal-backdrop">
+          <div className="vendor-modal-panel max-w-sm p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <h3 className="font-extrabold text-base text-navy">Add New Service</h3>
+              <h3 className="font-extrabold text-base text-navy">
+                Add New Service
+              </h3>
               <button
                 onClick={() => setShowAddModal(false)}
                 className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
@@ -672,7 +837,9 @@ export function ServicesPage() {
             </div>
             <form onSubmit={handleAddService} className="space-y-3 text-xs">
               <div>
-                <label className="block text-muted font-semibold mb-1">Service Name</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Service Name
+                </label>
                 <input
                   type="text"
                   required
@@ -683,7 +850,9 @@ export function ServicesPage() {
                 />
               </div>
               <div>
-                <label className="block text-muted font-semibold mb-1">Category</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Category
+                </label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
@@ -694,13 +863,17 @@ export function ServicesPage() {
                   <option value="Decor">Decor & Styling</option>
                   <option value="Catering">Catering</option>
                   <option value="Makeup">Makeup & Styling</option>
-                  <option value="Entertainment">DJ & Music / Entertainment</option>
+                  <option value="Entertainment">
+                    DJ & Music / Entertainment
+                  </option>
                   <option value="Venue">Venue</option>
                   <option value="Planning">Event Planning</option>
                 </select>
               </div>
               <div>
-                <label className="block text-muted font-semibold mb-1">Base Price (₹)</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Base Price (₹)
+                </label>
                 <input
                   type="number"
                   required
@@ -710,7 +883,9 @@ export function ServicesPage() {
                 />
               </div>
               <div>
-                <label className="block text-muted font-semibold mb-1">Lead Time (Days)</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Lead Time (Days)
+                </label>
                 <input
                   type="number"
                   value={leadTimeDays}
@@ -718,7 +893,7 @@ export function ServicesPage() {
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
-              <div className="pt-2 flex gap-2">
+              <div className="vendor-modal-actions pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
@@ -741,17 +916,21 @@ export function ServicesPage() {
       {/* Configure Capability & Gear Modal */}
       {showGearModal && selectedService && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs"
+          className="vendor-modal-backdrop"
           onClick={handleCloseGearModal}
         >
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 animate-[pop_.18s_ease-out]"
+            className="vendor-modal-panel max-w-lg p-4 sm:p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <div>
-                <h3 className="font-extrabold text-base text-navy">Configure Capability & Gear</h3>
-                <p className="text-xs text-muted mt-0.5">Service: {selectedService.name}</p>
+                <h3 className="font-extrabold text-base text-navy">
+                  Configure Capability & Gear
+                </h3>
+                <p className="text-xs text-muted mt-0.5">
+                  Service: {selectedService.name}
+                </p>
               </div>
               <button
                 type="button"
@@ -766,7 +945,9 @@ export function ServicesPage() {
             <form onSubmit={handleSaveGear} className="space-y-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Execution Format</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Execution Format
+                  </label>
                   <select
                     value={gearFormat}
                     onChange={(e) => setGearFormat(e.target.value)}
@@ -780,7 +961,9 @@ export function ServicesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Crew / Team Size</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Crew / Team Size
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -794,7 +977,9 @@ export function ServicesPage() {
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Simultaneous Event Limit</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Simultaneous Event Limit
+                </label>
                 <input
                   type="number"
                   min="1"
@@ -805,12 +990,15 @@ export function ServicesPage() {
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
                 <span className="text-[10px] text-muted mt-0.5 block">
-                  How many concurrent bookings can your organization execute on the same date.
+                  How many concurrent bookings can your organization execute on
+                  the same date.
                 </span>
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Styles & Creative Formats</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Styles & Creative Formats
+                </label>
                 <input
                   type="text"
                   required
@@ -819,11 +1007,15 @@ export function ServicesPage() {
                   onChange={(e) => setGearStyles(e.target.value)}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
-                <span className="text-[10px] text-muted mt-0.5 block">Comma separated list of styles.</span>
+                <span className="text-[10px] text-muted mt-0.5 block">
+                  Comma separated list of styles.
+                </span>
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Equipment & Gear Inventory</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Equipment & Gear Inventory
+                </label>
                 <textarea
                   rows={3}
                   required
@@ -832,10 +1024,12 @@ export function ServicesPage() {
                   onChange={(e) => setGearEquipment(e.target.value)}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
-                <span className="text-[10px] text-muted mt-0.5 block">Comma separated list of professional gear.</span>
+                <span className="text-[10px] text-muted mt-0.5 block">
+                  Comma separated list of professional gear.
+                </span>
               </div>
 
-              <div className="pt-2 flex gap-2">
+              <div className="vendor-modal-actions pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={handleCloseGearModal}
@@ -848,7 +1042,7 @@ export function ServicesPage() {
                   disabled={savingGear}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition disabled:opacity-60 cursor-pointer"
                 >
-                  {savingGear ? 'Saving Gear…' : 'Save Capability & Gear'}
+                  {savingGear ? "Saving Gear…" : "Save Capability & Gear"}
                 </button>
               </div>
             </form>
@@ -859,17 +1053,21 @@ export function ServicesPage() {
       {/* Configure Coverage & Transit Modal */}
       {showCoverageModal && selectedServiceForCov && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs"
+          className="vendor-modal-backdrop"
           onClick={handleCloseCoverageModal}
         >
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col animate-[pop_.18s_ease-out] overflow-hidden"
+            className="vendor-modal-panel vendor-modal-panel-flex max-w-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-5 pb-3 border-b border-gray-100">
               <div>
-                <h3 className="font-extrabold text-base text-navy">Coverage & Transit Policy</h3>
-                <p className="text-xs text-muted mt-0.5">Service: {selectedServiceForCov.name}</p>
+                <h3 className="font-extrabold text-base text-navy">
+                  Coverage & Transit Policy
+                </h3>
+                <p className="text-xs text-muted mt-0.5">
+                  Service: {selectedServiceForCov.name}
+                </p>
               </div>
               <button
                 type="button"
@@ -881,7 +1079,10 @@ export function ServicesPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveCoverage} className="p-5 overflow-y-auto space-y-4 text-xs">
+            <form
+              onSubmit={handleSaveCoverage}
+              className="vendor-modal-scroll p-4 sm:p-5 space-y-4 text-xs"
+            >
               {/* Section 1: Operational Base & Operating Radius */}
               <div className="space-y-3 bg-lavender/30 p-3.5 rounded-2xl border border-gray-100">
                 <div className="font-bold text-navy text-xs flex items-center gap-1.5">
@@ -891,7 +1092,9 @@ export function ServicesPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-muted font-semibold mb-1">Operational Base City</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      Operational Base City
+                    </label>
                     <input
                       type="text"
                       required
@@ -902,7 +1105,9 @@ export function ServicesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-muted font-semibold mb-1">State / Province</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      State / Province
+                    </label>
                     <input
                       type="text"
                       required
@@ -916,8 +1121,12 @@ export function ServicesPage() {
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-muted font-semibold">Operating Radius (km)</label>
-                    <span className="font-extrabold text-primary text-xs">{covRadiusKm} km</span>
+                    <label className="text-muted font-semibold">
+                      Operating Radius (km)
+                    </label>
+                    <span className="font-extrabold text-primary text-xs">
+                      {covRadiusKm} km
+                    </span>
                   </div>
                   <input
                     type="number"
@@ -930,7 +1139,9 @@ export function ServicesPage() {
                   />
                   {/* Preset quick buttons */}
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="text-[10px] text-muted font-medium mr-1">Presets:</span>
+                    <span className="text-[10px] text-muted font-medium mr-1">
+                      Presets:
+                    </span>
                     {[20, 40, 60, 100, 150, 250].map((km) => (
                       <button
                         key={km}
@@ -938,8 +1149,8 @@ export function ServicesPage() {
                         onClick={() => setCovRadiusKm(km)}
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition cursor-pointer ${
                           Number(covRadiusKm) === km
-                            ? 'bg-primary text-white border-primary'
-                            : 'bg-white text-ink/70 border-gray-200 hover:border-gray-300'
+                            ? "bg-primary text-white border-primary"
+                            : "bg-white text-ink/70 border-gray-200 hover:border-gray-300"
                         }`}
                       >
                         {km} km
@@ -949,7 +1160,9 @@ export function ServicesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Key Localities / Hubs Covered</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Key Localities / Hubs Covered
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. Bandra, Andheri, South Mumbai, Thane, Navi Mumbai"
@@ -957,7 +1170,9 @@ export function ServicesPage() {
                     onChange={(e) => setCovLocalities(e.target.value)}
                     className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
                   />
-                  <span className="text-[10px] text-muted mt-0.5 block">Comma-separated prominent zones or suburbs.</span>
+                  <span className="text-[10px] text-muted mt-0.5 block">
+                    Comma-separated prominent zones or suburbs.
+                  </span>
                 </div>
 
                 <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
@@ -968,8 +1183,13 @@ export function ServicesPage() {
                     className="mt-0.5 w-4 h-4 rounded text-primary border-gray-300 focus:ring-primary/20"
                   />
                   <div>
-                    <span className="font-bold text-navy text-xs block">Allow Outstation Bookings</span>
-                    <span className="text-[10px] text-muted block">Permit bookings beyond operating base radius (eligible for outstation transit allowances).</span>
+                    <span className="font-bold text-navy text-xs block">
+                      Allow Outstation Bookings
+                    </span>
+                    <span className="text-[10px] text-muted block">
+                      Permit bookings beyond operating base radius (eligible for
+                      outstation transit allowances).
+                    </span>
                   </div>
                 </label>
               </div>
@@ -983,7 +1203,9 @@ export function ServicesPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-muted font-semibold mb-1">Free Transit Radius (km)</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      Free Transit Radius (km)
+                    </label>
                     <input
                       type="number"
                       min="0"
@@ -992,10 +1214,14 @@ export function ServicesPage() {
                       onChange={(e) => setTpFreeRadiusKm(e.target.value)}
                       className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    <span className="text-[10px] text-muted mt-0.5 block">Zero extra transit charge within this zone.</span>
+                    <span className="text-[10px] text-muted mt-0.5 block">
+                      Zero extra transit charge within this zone.
+                    </span>
                   </div>
                   <div>
-                    <label className="block text-muted font-semibold mb-1">Per-Km Transit Rate (₹/km)</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      Per-Km Transit Rate (₹/km)
+                    </label>
                     <input
                       type="number"
                       min="0"
@@ -1004,13 +1230,17 @@ export function ServicesPage() {
                       onChange={(e) => setTpPerKmRate(e.target.value)}
                       className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    <span className="text-[10px] text-muted mt-0.5 block">Billed per km beyond free radius.</span>
+                    <span className="text-[10px] text-muted mt-0.5 block">
+                      Billed per km beyond free radius.
+                    </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-muted font-semibold mb-1">Equipment Transit Fee (₹)</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      Equipment Transit Fee (₹)
+                    </label>
                     <input
                       type="number"
                       min="0"
@@ -1019,10 +1249,14 @@ export function ServicesPage() {
                       placeholder="e.g. 0 or 2500"
                       className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    <span className="text-[10px] text-muted mt-0.5 block">Heavy gear / production van surcharge.</span>
+                    <span className="text-[10px] text-muted mt-0.5 block">
+                      Heavy gear / production van surcharge.
+                    </span>
                   </div>
                   <div>
-                    <label className="block text-muted font-semibold mb-1">Outstation Crew Allowance (₹/day)</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      Outstation Crew Allowance (₹/day)
+                    </label>
                     <input
                       type="number"
                       min="0"
@@ -1031,12 +1265,16 @@ export function ServicesPage() {
                       placeholder="e.g. 1500"
                       className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    <span className="text-[10px] text-muted mt-0.5 block">Daily per-diem for crew meals/lodging.</span>
+                    <span className="text-[10px] text-muted mt-0.5 block">
+                      Daily per-diem for crew meals/lodging.
+                    </span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Overnight Accommodation Beyond (km)</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Overnight Accommodation Beyond (km)
+                  </label>
                   <input
                     type="number"
                     min="0"
@@ -1045,7 +1283,9 @@ export function ServicesPage() {
                     placeholder="e.g. 120"
                     className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                   />
-                  <span className="text-[10px] text-muted mt-0.5 block">Client provides room/hotel if venue exceeds this distance.</span>
+                  <span className="text-[10px] text-muted mt-0.5 block">
+                    Client provides room/hotel if venue exceeds this distance.
+                  </span>
                 </div>
 
                 <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none">
@@ -1056,13 +1296,18 @@ export function ServicesPage() {
                     className="mt-0.5 w-4 h-4 rounded text-primary border-gray-300 focus:ring-primary/20"
                   />
                   <div>
-                    <span className="font-bold text-navy text-xs block">Tolls & Parking Included</span>
-                    <span className="text-[10px] text-muted block">Toll taxes and venue parking fees are included in quote instead of billed at actuals.</span>
+                    <span className="font-bold text-navy text-xs block">
+                      Tolls & Parking Included
+                    </span>
+                    <span className="text-[10px] text-muted block">
+                      Toll taxes and venue parking fees are included in quote
+                      instead of billed at actuals.
+                    </span>
                   </div>
                 </label>
               </div>
 
-              <div className="pt-2 flex gap-2">
+              <div className="vendor-modal-actions pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={handleCloseCoverageModal}
@@ -1075,14 +1320,15 @@ export function ServicesPage() {
                   disabled={savingCoverage}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition disabled:opacity-60 cursor-pointer"
                 >
-                  {savingCoverage ? 'Saving Coverage…' : 'Save Coverage & Travel Policy'}
+                  {savingCoverage
+                    ? "Saving Coverage…"
+                    : "Save Coverage & Travel Policy"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
     </Page>
   );
 }
@@ -1096,29 +1342,29 @@ export function AvailabilityPage() {
   const [showAddResourceModal, setShowAddResourceModal] = useState(false);
 
   // Blockout form
-  const [blockDate, setBlockDate] = useState('');
-  const [blockReason, setBlockReason] = useState('');
+  const [blockDate, setBlockDate] = useState("");
+  const [blockReason, setBlockReason] = useState("");
 
   // Resource form
-  const [resType, setResType] = useState('TEAM_MEMBER');
-  const [resName, setResName] = useState('');
-  const [resIdentifier, setResIdentifier] = useState('');
+  const [resType, setResType] = useState("TEAM_MEMBER");
+  const [resName, setResName] = useState("");
+  const [resIdentifier, setResIdentifier] = useState("");
   const [resCapacity, setResCapacity] = useState(1);
-  const [resNotes, setResNotes] = useState('');
+  const [resNotes, setResNotes] = useState("");
   const [savingResource, setSavingResource] = useState(false);
 
   // Dynamic Weekly working hours state from database
   const [workingHours, setWorkingHours] = useState({
-    Monday: { isOpen: true, hours: '9 AM – 7 PM' },
-    Tuesday: { isOpen: true, hours: '9 AM – 7 PM' },
-    Wednesday: { isOpen: true, hours: '9 AM – 7 PM' },
-    Thursday: { isOpen: true, hours: '9 AM – 7 PM' },
-    Friday: { isOpen: true, hours: '9 AM – 9 PM' },
-    Saturday: { isOpen: true, hours: 'Full day' },
-    Sunday: { isOpen: false, hours: 'Off' },
+    Monday: { isOpen: true, hours: "9 AM – 7 PM" },
+    Tuesday: { isOpen: true, hours: "9 AM – 7 PM" },
+    Wednesday: { isOpen: true, hours: "9 AM – 7 PM" },
+    Thursday: { isOpen: true, hours: "9 AM – 7 PM" },
+    Friday: { isOpen: true, hours: "9 AM – 9 PM" },
+    Saturday: { isOpen: true, hours: "Full day" },
+    Sunday: { isOpen: false, hours: "Off" },
   });
   const [savingHours, setSavingHours] = useState(false);
-  const [hoursFeedback, setHoursFeedback] = useState('');
+  const [hoursFeedback, setHoursFeedback] = useState("");
 
   // Travel & Transit Policy state
   const [travelPolicy, setTravelPolicy] = useState({
@@ -1130,34 +1376,50 @@ export function AvailabilityPage() {
     accommodationRequiredBeyondKm: 120,
   });
   const [savingTravelPolicy, setSavingTravelPolicy] = useState(false);
-  const [travelPolicyFeedback, setTravelPolicyFeedback] = useState('');
+  const [travelPolicyFeedback, setTravelPolicyFeedback] = useState("");
 
-  const daysList = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const daysList = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+  ];
 
   const loadAvailability = useCallback(async () => {
     try {
       setLoadingAvailability(true);
       const [blRes, resRes, hrsRes, tpRes] = await Promise.all([
-        externalApi.call('/vendor/availability/blockouts'),
-        externalApi.call('/vendor/resources'),
-        externalApi.call('/vendor/availability/hours'),
-        externalApi.call('/vendor/travel-policy'),
+        externalApi.call("/vendor/availability/blockouts"),
+        externalApi.call("/vendor/resources"),
+        externalApi.call("/vendor/availability/hours"),
+        externalApi.call("/vendor/travel-policy"),
       ]);
       if (blRes.ok && blRes.blockouts) setBlockouts(blRes.blockouts);
       if (resRes.ok && resRes.resources) setResources(resRes.resources);
-      if (hrsRes.ok && hrsRes.workingHours) setWorkingHours(hrsRes.workingHours);
+      if (hrsRes.ok && hrsRes.workingHours)
+        setWorkingHours(hrsRes.workingHours);
       if (tpRes.ok && tpRes.travelPolicy) {
         setTravelPolicy({
           freeRadiusKm: tpRes.travelPolicy.freeRadiusKm ?? 15,
           perKmRate: tpRes.travelPolicy.perKmRate ?? 40,
           equipmentTransitFee: tpRes.travelPolicy.equipmentTransitFee ?? 0,
-          tollAndParkingIncluded: Boolean(tpRes.travelPolicy.tollAndParkingIncluded),
-          outstationDailyAllowance: tpRes.travelPolicy.outstationDailyAllowance ?? 1500,
-          accommodationRequiredBeyondKm: tpRes.travelPolicy.accommodationRequiredBeyondKm ?? 120,
+          tollAndParkingIncluded: Boolean(
+            tpRes.travelPolicy.tollAndParkingIncluded,
+          ),
+          outstationDailyAllowance:
+            tpRes.travelPolicy.outstationDailyAllowance ?? 1500,
+          accommodationRequiredBeyondKm:
+            tpRes.travelPolicy.accommodationRequiredBeyondKm ?? 120,
         });
       }
     } catch (err) {
-      console.warn('[AvailabilityPage] Error loading availability:', err.message);
+      console.warn(
+        "[AvailabilityPage] Error loading availability:",
+        err.message,
+      );
     } finally {
       setLoadingAvailability(false);
     }
@@ -1171,15 +1433,17 @@ export function AvailabilityPage() {
     if (e) e.preventDefault();
     try {
       setSavingTravelPolicy(true);
-      const res = await externalApi.call('/vendor/travel-policy', {
-        method: 'PUT',
+      const res = await externalApi.call("/vendor/travel-policy", {
+        method: "PUT",
         body: {
           freeRadiusKm: Number(travelPolicy.freeRadiusKm) || 15,
           perKmRate: Number(travelPolicy.perKmRate) || 40,
           equipmentTransitFee: Number(travelPolicy.equipmentTransitFee) || 0,
-          outstationDailyAllowance: Number(travelPolicy.outstationDailyAllowance) || 1500,
+          outstationDailyAllowance:
+            Number(travelPolicy.outstationDailyAllowance) || 1500,
           tollAndParkingIncluded: Boolean(travelPolicy.tollAndParkingIncluded),
-          accommodationRequiredBeyondKm: Number(travelPolicy.accommodationRequiredBeyondKm) || 120,
+          accommodationRequiredBeyondKm:
+            Number(travelPolicy.accommodationRequiredBeyondKm) || 120,
         },
       });
       if (res.ok && res.travelPolicy) {
@@ -1187,12 +1451,16 @@ export function AvailabilityPage() {
           freeRadiusKm: res.travelPolicy.freeRadiusKm ?? 15,
           perKmRate: res.travelPolicy.perKmRate ?? 40,
           equipmentTransitFee: res.travelPolicy.equipmentTransitFee ?? 0,
-          tollAndParkingIncluded: Boolean(res.travelPolicy.tollAndParkingIncluded),
-          outstationDailyAllowance: res.travelPolicy.outstationDailyAllowance ?? 1500,
-          accommodationRequiredBeyondKm: res.travelPolicy.accommodationRequiredBeyondKm ?? 120,
+          tollAndParkingIncluded: Boolean(
+            res.travelPolicy.tollAndParkingIncluded,
+          ),
+          outstationDailyAllowance:
+            res.travelPolicy.outstationDailyAllowance ?? 1500,
+          accommodationRequiredBeyondKm:
+            res.travelPolicy.accommodationRequiredBeyondKm ?? 120,
         });
-        setTravelPolicyFeedback('Travel & transit policy saved to database');
-        setTimeout(() => setTravelPolicyFeedback(''), 4000);
+        setTravelPolicyFeedback("Travel & transit policy saved to database");
+        setTimeout(() => setTravelPolicyFeedback(""), 4000);
       }
     } catch (err) {
       alert(`Could not save travel policy: ${err.message}`);
@@ -1205,17 +1473,17 @@ export function AvailabilityPage() {
   const persistWorkingHours = useCallback(async (hoursObj) => {
     try {
       setSavingHours(true);
-      const res = await externalApi.call('/vendor/availability/hours', {
-        method: 'PUT',
+      const res = await externalApi.call("/vendor/availability/hours", {
+        method: "PUT",
         body: { workingHours: hoursObj },
       });
       if (res.ok && res.workingHours) {
         setWorkingHours(res.workingHours);
-        setHoursFeedback('Saved to database');
-        setTimeout(() => setHoursFeedback(''), 3000);
+        setHoursFeedback("Saved to database");
+        setTimeout(() => setHoursFeedback(""), 3000);
       }
     } catch (err) {
-      console.warn('[AvailabilityPage] Could not persist hours:', err.message);
+      console.warn("[AvailabilityPage] Could not persist hours:", err.message);
       setHoursFeedback(`Error: ${err.message}`);
     } finally {
       setSavingHours(false);
@@ -1223,9 +1491,13 @@ export function AvailabilityPage() {
   }, []);
 
   async function handleToggleDay(day) {
-    const current = workingHours[day] || { isOpen: false, hours: 'Off' };
+    const current = workingHours[day] || { isOpen: false, hours: "Off" };
     const nextOpen = !current.isOpen;
-    const nextHours = nextOpen ? (current.hours === 'Off' ? '9 AM – 7 PM' : current.hours) : 'Off';
+    const nextHours = nextOpen
+      ? current.hours === "Off"
+        ? "9 AM – 7 PM"
+        : current.hours
+      : "Off";
     const updated = {
       ...workingHours,
       [day]: {
@@ -1260,13 +1532,17 @@ export function AvailabilityPage() {
     e.preventDefault();
     if (!blockDate) return;
     try {
-      await externalApi.call('/vendor/availability/blockouts', {
-        method: 'POST',
-        body: { date: blockDate, reason: blockReason || 'Unavailable', allDay: true },
+      await externalApi.call("/vendor/availability/blockouts", {
+        method: "POST",
+        body: {
+          date: blockDate,
+          reason: blockReason || "Unavailable",
+          allDay: true,
+        },
       });
       setShowBlockModal(false);
-      setBlockDate('');
-      setBlockReason('');
+      setBlockDate("");
+      setBlockReason("");
       await loadAvailability();
     } catch (err) {
       alert(`Could not block date: ${err.message}`);
@@ -1275,7 +1551,9 @@ export function AvailabilityPage() {
 
   async function handleDeleteBlockout(id) {
     try {
-      await externalApi.call(`/vendor/availability/blockouts/${id}`, { method: 'DELETE' });
+      await externalApi.call(`/vendor/availability/blockouts/${id}`, {
+        method: "DELETE",
+      });
       await loadAvailability();
     } catch (err) {
       alert(`Could not remove blockout: ${err.message}`);
@@ -1287,8 +1565,8 @@ export function AvailabilityPage() {
     if (!resName.trim()) return;
     try {
       setSavingResource(true);
-      await externalApi.call('/vendor/resources', {
-        method: 'POST',
+      await externalApi.call("/vendor/resources", {
+        method: "POST",
         body: {
           type: resType,
           name: resName.trim(),
@@ -1298,9 +1576,9 @@ export function AvailabilityPage() {
         },
       });
       setShowAddResourceModal(false);
-      setResName('');
-      setResIdentifier('');
-      setResNotes('');
+      setResName("");
+      setResIdentifier("");
+      setResNotes("");
       setResCapacity(1);
       await loadAvailability();
     } catch (err) {
@@ -1311,9 +1589,14 @@ export function AvailabilityPage() {
   }
 
   async function handleDeleteResource(id) {
-    if (!window.confirm('Are you sure you want to delete this operational resource?')) return;
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this operational resource?",
+      )
+    )
+      return;
     try {
-      await externalApi.call(`/vendor/resources/${id}`, { method: 'DELETE' });
+      await externalApi.call(`/vendor/resources/${id}`, { method: "DELETE" });
       await loadAvailability();
     } catch (err) {
       alert(`Could not delete resource: ${err.message}`);
@@ -1321,7 +1604,10 @@ export function AvailabilityPage() {
   }
 
   return (
-    <Page title="Availability & Operations" sub="Availability = date + time + location + team + equipment.">
+    <Page
+      title="Availability & Operations"
+      sub="Availability = date + time + location + team + equipment."
+    >
       {loadingAvailability && (
         <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-xs space-y-2">
           <SkeletonLine className="h-4 w-56" />
@@ -1368,28 +1654,36 @@ export function AvailabilityPage() {
 
           <ul className="divide-y divide-gray-50">
             {daysList.map((day) => {
-              const item = workingHours[day] || { isOpen: true, hours: '9 AM – 7 PM' };
+              const item = workingHours[day] || {
+                isOpen: true,
+                hours: "9 AM – 7 PM",
+              };
               const isOpen = Boolean(item.isOpen);
 
               return (
-                <li key={day} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <li
+                  key={day}
+                  className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                >
                   <div className="flex items-center gap-3 w-36">
                     <button
                       type="button"
                       onClick={() => handleToggleDay(day)}
                       className={`w-9 h-5 rounded-full relative transition cursor-pointer shrink-0 ${
-                        isOpen ? 'bg-primary' : 'bg-gray-200'
+                        isOpen ? "bg-primary" : "bg-gray-200"
                       }`}
-                      title={`Click to turn ${day} ${isOpen ? 'Off' : 'On'} (saves to database)`}
+                      title={`Click to turn ${day} ${isOpen ? "Off" : "On"} (saves to database)`}
                       aria-label={`Toggle ${day}`}
                     >
                       <span
                         className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-xs transition ${
-                          isOpen ? 'left-4.5' : 'left-0.5'
+                          isOpen ? "left-4.5" : "left-0.5"
                         }`}
                       />
                     </button>
-                    <span className={`font-semibold text-xs ${isOpen ? 'text-navy' : 'text-muted'}`}>
+                    <span
+                      className={`font-semibold text-xs ${isOpen ? "text-navy" : "text-muted"}`}
+                    >
                       {day}
                     </span>
                   </div>
@@ -1398,15 +1692,15 @@ export function AvailabilityPage() {
                     <input
                       type="text"
                       disabled={!isOpen}
-                      value={item.hours || (isOpen ? '9 AM – 7 PM' : 'Off')}
+                      value={item.hours || (isOpen ? "9 AM – 7 PM" : "Off")}
                       onChange={(e) => handleHoursChange(day, e.target.value)}
                       onBlur={handleHoursBlur}
                       className={`w-full text-xs font-medium px-2.5 py-1.5 rounded-lg border transition outline-none ${
                         isOpen
-                          ? 'bg-lavender/40 border-gray-200 text-navy focus:border-primary/40 focus:ring-1 focus:ring-primary/20'
-                          : 'bg-gray-100/70 border-transparent text-muted'
+                          ? "bg-lavender/40 border-gray-200 text-navy focus:border-primary/40 focus:ring-1 focus:ring-primary/20"
+                          : "bg-gray-100/70 border-transparent text-muted"
                       }`}
-                      placeholder={isOpen ? 'e.g. 9 AM – 7 PM' : 'Off'}
+                      placeholder={isOpen ? "e.g. 9 AM – 7 PM" : "Off"}
                     />
                   </div>
                 </li>
@@ -1438,9 +1732,11 @@ export function AvailabilityPage() {
                     <Icon name="calendar" size={14} />
                   </div>
                   <div className="min-w-0">
-                    <div className="font-mono font-bold text-xs text-red-700">{bl.date}</div>
+                    <div className="font-mono font-bold text-xs text-red-700">
+                      {bl.date}
+                    </div>
                     <div className="text-[11px] text-red-600/90 font-medium truncate">
-                      {bl.reason || 'Unavailable / Blocked'}
+                      {bl.reason || "Unavailable / Blocked"}
                     </div>
                   </div>
                 </div>
@@ -1463,13 +1759,15 @@ export function AvailabilityPage() {
 
             {blockouts.length === 0 && (
               <div className="text-center py-8 text-xs text-muted border border-dashed border-gray-200 rounded-2xl bg-lavender/10">
-                No dates currently blocked. All working days are open for customer matching.
+                No dates currently blocked. All working days are open for
+                customer matching.
               </div>
             )}
           </div>
 
           <p className="text-xs text-muted mt-4 leading-relaxed">
-            Blocked dates are excluded from eligibility before matching runs — customers never see unavailable slots.
+            Blocked dates are excluded from eligibility before matching runs —
+            customers never see unavailable slots.
           </p>
         </Card>
       </div>
@@ -1487,7 +1785,9 @@ export function AvailabilityPage() {
         }
       >
         <p className="text-xs text-muted mb-4 leading-relaxed">
-          Operational resources (teams, camera kits, post-production labs, vehicles) define your multi-event capability and equipment availability.
+          Operational resources (teams, camera kits, post-production labs,
+          vehicles) define your multi-event capability and equipment
+          availability.
         </p>
 
         {resources.length > 0 ? (
@@ -1495,15 +1795,17 @@ export function AvailabilityPage() {
             {resources.map((r) => {
               const typeBadge =
                 {
-                  TEAM_MEMBER: 'CREW / TEAM',
-                  STAFF: 'CREW / TEAM',
-                  TEAM: 'CREW / TEAM',
-                  EQUIPMENT: 'EQUIPMENT',
-                  SPACE: 'STUDIO / LAB',
-                  FACILITY: 'STUDIO / LAB',
-                  VEHICLE: 'VEHICLE',
-                  INVENTORY: 'INVENTORY',
-                }[r.type] || r.type || 'RESOURCE';
+                  TEAM_MEMBER: "CREW / TEAM",
+                  STAFF: "CREW / TEAM",
+                  TEAM: "CREW / TEAM",
+                  EQUIPMENT: "EQUIPMENT",
+                  SPACE: "STUDIO / LAB",
+                  FACILITY: "STUDIO / LAB",
+                  VEHICLE: "VEHICLE",
+                  INVENTORY: "INVENTORY",
+                }[r.type] ||
+                r.type ||
+                "RESOURCE";
 
               return (
                 <div
@@ -1515,33 +1817,37 @@ export function AvailabilityPage() {
                       <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-lavender text-ink/80 border border-gray-200/60">
                         {typeBadge}
                       </span>
-                      <div className="font-bold text-sm text-navy mt-1 truncate">{r.name}</div>
+                      <div className="font-bold text-sm text-navy mt-1 truncate">
+                        {r.name}
+                      </div>
                     </div>
-                  <button
-                    onClick={() => handleDeleteResource(r._id)}
-                    className="w-7 h-7 rounded-lg hover:bg-rose-50 text-muted hover:text-rose-600 grid place-items-center transition cursor-pointer shrink-0"
-                    title="Delete Resource"
-                    aria-label="Delete Resource"
-                  >
-                    <Icon name="trash" size={13} />
-                  </button>
-                </div>
-
-                {r.identifier && (
-                  <div className="text-xs text-ink/80 font-medium bg-lavender/50 rounded-lg px-2.5 py-1.5">
-                    {r.identifier}
+                    <button
+                      onClick={() => handleDeleteResource(r._id)}
+                      className="w-7 h-7 rounded-lg hover:bg-rose-50 text-muted hover:text-rose-600 grid place-items-center transition cursor-pointer shrink-0"
+                      title="Delete Resource"
+                      aria-label="Delete Resource"
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
                   </div>
-                )}
 
-                {r.notes && (
-                  <div className="text-[11px] text-muted line-clamp-2">
-                    {r.notes}
-                  </div>
-                )}
+                  {r.identifier && (
+                    <div className="text-xs text-ink/80 font-medium bg-lavender/50 rounded-lg px-2.5 py-1.5">
+                      {r.identifier}
+                    </div>
+                  )}
+
+                  {r.notes && (
+                    <div className="text-[11px] text-muted line-clamp-2">
+                      {r.notes}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between text-[11px] text-muted pt-1 border-t border-gray-50">
                     <span>Capacity: {r.capacityUnits || 1} unit(s)</span>
-                    <span className="font-semibold text-emerald-600">Active</span>
+                    <span className="font-semibold text-emerald-600">
+                      Active
+                    </span>
                   </div>
                 </div>
               );
@@ -1552,9 +1858,12 @@ export function AvailabilityPage() {
             <div className="w-10 h-10 mx-auto rounded-full bg-white shadow-xs border border-gray-200 grid place-items-center text-primary mb-2.5">
               <Icon name="operations" size={18} />
             </div>
-            <div className="font-bold text-sm text-navy">No Operational Resources Declared</div>
+            <div className="font-bold text-sm text-navy">
+              No Operational Resources Declared
+            </div>
             <p className="text-xs text-muted max-w-md mx-auto mt-1 mb-4 leading-relaxed">
-              Declare your photography teams, camera kits, and editing suites so the OS can track your concurrent event capacity.
+              Declare your photography teams, camera kits, and editing suites so
+              the OS can track your concurrent event capacity.
             </p>
             <button
               onClick={() => setShowAddResourceModal(true)}
@@ -1604,68 +1913,115 @@ export function AvailabilityPage() {
         )}
 
         <p className="text-xs text-muted mb-4 leading-relaxed">
-          Configure default transit pricing and travel rules. The matching and quoting engines apply these rules automatically when events require travel.
+          Configure default transit pricing and travel rules. The matching and
+          quoting engines apply these rules automatically when events require
+          travel.
         </p>
 
-        <form onSubmit={handleSaveTravelPolicy} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs">
+        <form
+          onSubmit={handleSaveTravelPolicy}
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs"
+        >
           <div>
-            <label className="block text-muted font-semibold mb-1">Free Transit Radius (km)</label>
+            <label className="block text-muted font-semibold mb-1">
+              Free Transit Radius (km)
+            </label>
             <input
               type="number"
               min="0"
               value={travelPolicy.freeRadiusKm}
-              onChange={(e) => setTravelPolicy({ ...travelPolicy, freeRadiusKm: e.target.value })}
+              onChange={(e) =>
+                setTravelPolicy({
+                  ...travelPolicy,
+                  freeRadiusKm: e.target.value,
+                })
+              }
               className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <span className="text-[10px] text-muted mt-0.5 block">No transit surcharge within this radius.</span>
+            <span className="text-[10px] text-muted mt-0.5 block">
+              No transit surcharge within this radius.
+            </span>
           </div>
 
           <div>
-            <label className="block text-muted font-semibold mb-1">Transit Rate (₹/km)</label>
+            <label className="block text-muted font-semibold mb-1">
+              Transit Rate (₹/km)
+            </label>
             <input
               type="number"
               min="0"
               value={travelPolicy.perKmRate}
-              onChange={(e) => setTravelPolicy({ ...travelPolicy, perKmRate: e.target.value })}
+              onChange={(e) =>
+                setTravelPolicy({ ...travelPolicy, perKmRate: e.target.value })
+              }
               className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <span className="text-[10px] text-muted mt-0.5 block">Billed per km beyond free radius.</span>
+            <span className="text-[10px] text-muted mt-0.5 block">
+              Billed per km beyond free radius.
+            </span>
           </div>
 
           <div>
-            <label className="block text-muted font-semibold mb-1">Equipment Transit Fee (₹)</label>
+            <label className="block text-muted font-semibold mb-1">
+              Equipment Transit Fee (₹)
+            </label>
             <input
               type="number"
               min="0"
               value={travelPolicy.equipmentTransitFee}
-              onChange={(e) => setTravelPolicy({ ...travelPolicy, equipmentTransitFee: e.target.value })}
+              onChange={(e) =>
+                setTravelPolicy({
+                  ...travelPolicy,
+                  equipmentTransitFee: e.target.value,
+                })
+              }
               className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <span className="text-[10px] text-muted mt-0.5 block">Production vehicle / heavy gear fee.</span>
+            <span className="text-[10px] text-muted mt-0.5 block">
+              Production vehicle / heavy gear fee.
+            </span>
           </div>
 
           <div>
-            <label className="block text-muted font-semibold mb-1">Outstation Daily Allowance (₹/day)</label>
+            <label className="block text-muted font-semibold mb-1">
+              Outstation Daily Allowance (₹/day)
+            </label>
             <input
               type="number"
               min="0"
               value={travelPolicy.outstationDailyAllowance}
-              onChange={(e) => setTravelPolicy({ ...travelPolicy, outstationDailyAllowance: e.target.value })}
+              onChange={(e) =>
+                setTravelPolicy({
+                  ...travelPolicy,
+                  outstationDailyAllowance: e.target.value,
+                })
+              }
               className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <span className="text-[10px] text-muted mt-0.5 block">Per-crew per-diem allowance for meals/stay.</span>
+            <span className="text-[10px] text-muted mt-0.5 block">
+              Per-crew per-diem allowance for meals/stay.
+            </span>
           </div>
 
           <div>
-            <label className="block text-muted font-semibold mb-1">Accommodation Beyond (km)</label>
+            <label className="block text-muted font-semibold mb-1">
+              Accommodation Beyond (km)
+            </label>
             <input
               type="number"
               min="0"
               value={travelPolicy.accommodationRequiredBeyondKm}
-              onChange={(e) => setTravelPolicy({ ...travelPolicy, accommodationRequiredBeyondKm: e.target.value })}
+              onChange={(e) =>
+                setTravelPolicy({
+                  ...travelPolicy,
+                  accommodationRequiredBeyondKm: e.target.value,
+                })
+              }
               className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <span className="text-[10px] text-muted mt-0.5 block">Client provides stay beyond this distance.</span>
+            <span className="text-[10px] text-muted mt-0.5 block">
+              Client provides stay beyond this distance.
+            </span>
           </div>
 
           <div className="flex items-center pt-2 sm:pt-6">
@@ -1673,12 +2029,21 @@ export function AvailabilityPage() {
               <input
                 type="checkbox"
                 checked={travelPolicy.tollAndParkingIncluded}
-                onChange={(e) => setTravelPolicy({ ...travelPolicy, tollAndParkingIncluded: e.target.checked })}
+                onChange={(e) =>
+                  setTravelPolicy({
+                    ...travelPolicy,
+                    tollAndParkingIncluded: e.target.checked,
+                  })
+                }
                 className="mt-0.5 w-4 h-4 rounded text-primary border-gray-300 focus:ring-primary/20"
               />
               <div>
-                <span className="font-bold text-navy text-xs block">Tolls & Parking Included</span>
-                <span className="text-[10px] text-muted block">Included in base price</span>
+                <span className="font-bold text-navy text-xs block">
+                  Tolls & Parking Included
+                </span>
+                <span className="text-[10px] text-muted block">
+                  Included in base price
+                </span>
               </div>
             </label>
           </div>
@@ -1698,10 +2063,12 @@ export function AvailabilityPage() {
 
       {/* Block Date Modal */}
       {showBlockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-[pop_.18s_ease-out]">
+        <div className="vendor-modal-backdrop">
+          <div className="vendor-modal-panel max-w-sm p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <h3 className="font-extrabold text-base text-navy">Block Calendar Date</h3>
+              <h3 className="font-extrabold text-base text-navy">
+                Block Calendar Date
+              </h3>
               <button
                 onClick={() => setShowBlockModal(false)}
                 className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
@@ -1712,7 +2079,9 @@ export function AvailabilityPage() {
             </div>
             <form onSubmit={handleAddBlockout} className="space-y-3 text-xs">
               <div>
-                <label className="block text-muted font-semibold mb-1">Date</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Date
+                </label>
                 <input
                   type="date"
                   required
@@ -1722,7 +2091,9 @@ export function AvailabilityPage() {
                 />
               </div>
               <div>
-                <label className="block text-muted font-semibold mb-1">Reason / Notes</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Reason / Notes
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. Leave, Personal Vacation, Equipment Maintenance"
@@ -1731,7 +2102,7 @@ export function AvailabilityPage() {
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
-              <div className="pt-2 flex gap-2">
+              <div className="vendor-modal-actions pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowBlockModal(false)}
@@ -1753,10 +2124,12 @@ export function AvailabilityPage() {
 
       {/* Add Operational Resource Modal */}
       {showAddResourceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-[pop_.18s_ease-out]">
+        <div className="vendor-modal-backdrop">
+          <div className="vendor-modal-panel max-w-md p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <h3 className="font-extrabold text-base text-navy">Add Operational Resource</h3>
+              <h3 className="font-extrabold text-base text-navy">
+                Add Operational Resource
+              </h3>
               <button
                 onClick={() => setShowAddResourceModal(false)}
                 className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
@@ -1768,7 +2141,9 @@ export function AvailabilityPage() {
             <form onSubmit={handleAddResource} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Resource Type</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Resource Type
+                  </label>
                   <select
                     value={resType}
                     onChange={(e) => setResType(e.target.value)}
@@ -1782,7 +2157,9 @@ export function AvailabilityPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Capacity Units</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Capacity Units
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -1794,7 +2171,9 @@ export function AvailabilityPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-muted font-semibold mb-1">Resource Name</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Resource Name
+                </label>
                 <input
                   type="text"
                   required
@@ -1805,7 +2184,9 @@ export function AvailabilityPage() {
                 />
               </div>
               <div>
-                <label className="block text-muted font-semibold mb-1">Details & Gear Specification</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Details & Gear Specification
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. 2 photographers · 6 cameras · Drone"
@@ -1815,7 +2196,9 @@ export function AvailabilityPage() {
                 />
               </div>
               <div>
-                <label className="block text-muted font-semibold mb-1">Operational Notes (optional)</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Operational Notes (optional)
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. 48h highlight SLA, assigned to prime weddings"
@@ -1824,7 +2207,7 @@ export function AvailabilityPage() {
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
-              <div className="pt-2 flex gap-2">
+              <div className="vendor-modal-actions pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAddResourceModal(false)}
@@ -1837,7 +2220,7 @@ export function AvailabilityPage() {
                   disabled={savingResource}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition disabled:opacity-60"
                 >
-                  {savingResource ? 'Adding…' : 'Add Resource to DB'}
+                  {savingResource ? "Adding…" : "Add Resource to DB"}
                 </button>
               </div>
             </form>
@@ -1859,24 +2242,66 @@ export function DocumentsManager({ isTab = false }) {
   const [apiCheckResult, setApiCheckResult] = useState(null);
 
   const [docForm, setDocForm] = useState({
-    title: 'GST Registration Certificate',
-    type: 'GST',
-    documentNumber: '',
-    fileName: 'GST_Certificate.pdf',
-    fileSize: '1.2 MB',
-    expiryDate: '',
-    notes: '',
+    title: "GST Registration Certificate",
+    type: "GST",
+    documentNumber: "",
+    fileName: "GST_Certificate.pdf",
+    fileSize: "1.2 MB",
+    expiryDate: "",
+    notes: "",
   });
+
+  function getVerificationIssue(result) {
+    const code = String(result?.error || "").toLowerCase();
+    const message = String(result?.message || "").toLowerCase();
+    if (!code && !message) return null;
+
+    if (
+      code.includes("insufficient") ||
+      code.includes("credit") ||
+      message.includes("insufficient") ||
+      message.includes("credit")
+    ) {
+      return {
+        title: "Manual admin review required",
+        detail:
+          "The verification provider could not complete this check because API credits are unavailable. Your document is still submitted to STARVNT Core for manual review.",
+      };
+    }
+
+    if (code.includes("fetch") || message.includes("failed to fetch")) {
+      return {
+        title: "Manual admin review required",
+        detail:
+          "The verification provider is temporarily unreachable. Your document can still be submitted and reviewed by STARVNT Core.",
+      };
+    }
+
+    if (code.includes("not_configured")) {
+      return {
+        title: "Manual admin review required",
+        detail:
+          "Automatic verification is not configured yet. STARVNT Core will review this document manually.",
+      };
+    }
+
+    return {
+      title: "Manual admin review required",
+      detail:
+        result?.message ||
+        "Automatic verification could not confirm this document. STARVNT Core will review it manually.",
+    };
+  }
 
   const loadDocuments = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await externalApi.call('/vendor/documents');
+      const res = await externalApi.call("/vendor/documents");
       if (res.ok && Array.isArray(res.documents)) {
         setDocuments(res.documents);
       }
     } catch (err) {
-      console.warn('[DocumentsManager] Load error:', err.message);
+      console.warn("[DocumentsManager] Load error:", err.message);
     } finally {
       setLoading(false);
     }
@@ -1891,17 +2316,24 @@ export function DocumentsManager({ isTab = false }) {
     try {
       setCheckingApi(true);
       setApiCheckResult(null);
-      const isPan = docForm.type === 'PAN';
-      const endpoint = isPan ? '/vendor/documents/verify-pan' : '/vendor/documents/verify-gstin';
-      const payload = isPan ? { pan: docForm.documentNumber.trim() } : { gstin: docForm.documentNumber.trim() };
+      const isPan = docForm.type === "PAN";
+      const endpoint = isPan
+        ? "/vendor/documents/verify-pan"
+        : "/vendor/documents/verify-gstin";
+      const payload = isPan
+        ? { pan: docForm.documentNumber.trim() }
+        : { gstin: docForm.documentNumber.trim() };
       const res = await externalApi.call(endpoint, {
-        method: 'POST',
+        method: "POST",
         body: payload,
       });
       if (res.ok && res.result) {
         setApiCheckResult(res.result);
       } else {
-        setApiCheckResult({ ok: false, error: res.error || 'Verification check failed' });
+        setApiCheckResult({
+          ok: false,
+          error: res.error || "Verification check failed",
+        });
       }
     } catch (err) {
       setApiCheckResult({ ok: false, error: err.message });
@@ -1916,8 +2348,8 @@ export function DocumentsManager({ isTab = false }) {
 
     try {
       setUploading(true);
-      const res = await externalApi.call('/vendor/documents', {
-        method: 'POST',
+      const res = await externalApi.call("/vendor/documents", {
+        method: "POST",
         body: docForm,
       });
 
@@ -1925,13 +2357,13 @@ export function DocumentsManager({ isTab = false }) {
         setShowUploadModal(false);
         setApiCheckResult(null);
         setDocForm({
-          title: 'GST Registration Certificate',
-          type: 'GST',
-          documentNumber: '',
-          fileName: 'GST_Certificate.pdf',
-          fileSize: '1.2 MB',
-          expiryDate: '',
-          notes: '',
+          title: "GST Registration Certificate",
+          type: "GST",
+          documentNumber: "",
+          fileName: "GST_Certificate.pdf",
+          fileSize: "1.2 MB",
+          expiryDate: "",
+          notes: "",
         });
         await loadDocuments();
       }
@@ -1943,10 +2375,13 @@ export function DocumentsManager({ isTab = false }) {
   }
 
   async function handleDelete(docId) {
-    if (!window.confirm('Are you sure you want to remove this document record?')) return;
+    if (
+      !window.confirm("Are you sure you want to remove this document record?")
+    )
+      return;
     try {
       const res = await externalApi.call(`/vendor/documents/${docId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
       if (res.ok) {
         await loadDocuments();
@@ -1960,9 +2395,13 @@ export function DocumentsManager({ isTab = false }) {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
         <div>
-          <h2 className="font-extrabold text-base text-navy">KYC & Business Documents</h2>
+          <h2 className="font-extrabold text-base text-navy">
+            KYC & Business Documents
+          </h2>
           <p className="text-xs text-muted mt-0.5">
-            GSTIN and Corporation PAN are verified automatically via API. Matching registered names are verified instantly; mismatches go to admin review.
+            GSTIN and Corporation PAN are verified automatically via API.
+            Matching registered names are verified instantly; mismatches go to
+            admin review.
           </p>
         </div>
         <button
@@ -1978,47 +2417,81 @@ export function DocumentsManager({ isTab = false }) {
         <Card className="!p-0 overflow-hidden">
           <ul className="divide-y divide-gray-100">
             {documents.map((doc) => (
-              <li key={doc._id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-lavender/30 transition">
+              <li
+                key={doc._id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-lavender/30 transition"
+              >
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${
-                    doc.type === 'GST' ? 'bg-purple-50 text-purple-600' :
-                    doc.type === 'PAN' ? 'bg-sky-50 text-sky-600' :
-                    doc.type === 'BANK_PROOF' ? 'bg-emerald-50 text-emerald-600' :
-                    'bg-primary-soft text-primary'
-                  }`}>
+                  <div
+                    className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${
+                      doc.type === "GST"
+                        ? "bg-purple-50 text-purple-600"
+                        : doc.type === "PAN"
+                          ? "bg-sky-50 text-sky-600"
+                          : doc.type === "BANK_PROOF"
+                            ? "bg-emerald-50 text-emerald-600"
+                            : "bg-primary-soft text-primary"
+                    }`}
+                  >
                     <Icon name="documents" size={18} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-sm text-navy">{doc.title}</span>
+                      <span className="font-bold text-sm text-navy">
+                        {doc.title}
+                      </span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-lavender text-muted uppercase">
                         {doc.type}
                       </span>
                     </div>
                     <div className="text-xs text-muted mt-0.5 flex items-center gap-2 flex-wrap">
                       {doc.documentNumber && (
-                        <span>ID: <strong className="text-navy">{doc.documentNumber}</strong></span>
+                        <span>
+                          ID:{" "}
+                          <strong className="text-navy">
+                            {doc.documentNumber}
+                          </strong>
+                        </span>
                       )}
                       <span>·</span>
-                      <span>{doc.fileName || 'document.pdf'} ({doc.fileSize || '1.2 MB'})</span>
+                      <span>
+                        {doc.fileName || "document.pdf"} (
+                        {doc.fileSize || "1.2 MB"})
+                      </span>
                       <span>·</span>
-                      <span>Added {new Date(doc.createdAt).toLocaleDateString()}</span>
+                      <span>
+                        Added {new Date(doc.createdAt).toLocaleDateString()}
+                      </span>
                     </div>
                     {doc.notes && (
-                      <p className="text-[11px] text-muted italic mt-1">{doc.notes}</p>
+                      <p className="text-[11px] text-muted italic mt-1">
+                        {doc.notes}
+                      </p>
                     )}
-                    {(doc.verificationSource === 'GSTIN_API' || doc.verificationSource === 'PAN_API') && (
-                      <div className={`mt-2 rounded-xl border p-3 text-[11px] ${
-                        doc.status === 'VERIFIED'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                          : 'border-amber-200 bg-amber-50 text-amber-950'
-                      }`}>
+                    {(doc.verificationSource === "GSTIN_API" ||
+                      doc.verificationSource === "PAN_API") && (
+                      <div
+                        className={`mt-2 rounded-xl border p-3 text-[11px] ${
+                          doc.status === "VERIFIED"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                            : "border-amber-200 bg-amber-50 text-amber-950"
+                        }`}
+                      >
                         <div className="flex items-center gap-1.5 font-extrabold flex-wrap">
-                          <Icon name={doc.status === 'VERIFIED' ? 'shieldCheck' : 'help'} size={13} />
+                          <Icon
+                            name={
+                              doc.status === "VERIFIED" ? "shieldCheck" : "help"
+                            }
+                            size={13}
+                          />
                           <span>
-                            {doc.status === 'VERIFIED'
-                              ? (doc.verificationSource === 'PAN_API' ? 'Corporate PAN Auto-Verified' : 'GSTIN Auto-Verified')
-                              : (doc.verificationSource === 'PAN_API' ? 'Corporate PAN Needs Admin Review' : 'GSTIN Needs Admin Review')}
+                            {doc.status === "VERIFIED"
+                              ? doc.verificationSource === "PAN_API"
+                                ? "Corporate PAN Auto-Verified"
+                                : "GSTIN Auto-Verified"
+                              : doc.verificationSource === "PAN_API"
+                                ? "Corporate PAN Needs Admin Review"
+                                : "GSTIN Needs Admin Review"}
                           </span>
                           {doc.verificationResult?.confidence && (
                             <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] uppercase">
@@ -2032,18 +2505,55 @@ export function DocumentsManager({ isTab = false }) {
                           )}
                         </div>
                         <div className="mt-1 grid sm:grid-cols-2 gap-x-3 gap-y-1">
-                          <span>Legal / Registered: <strong>{doc.verificationResult?.legalName || doc.verificationResult?.registeredName || 'Not provided'}</strong></span>
-                          <span>Trade / Brand: <strong>{doc.verificationResult?.tradeName || 'Not provided'}</strong></span>
+                          <span>
+                            Legal / Registered:{" "}
+                            <strong>
+                              {doc.verificationResult?.legalName ||
+                                doc.verificationResult?.registeredName ||
+                                "Not provided"}
+                            </strong>
+                          </span>
+                          <span>
+                            Trade / Brand:{" "}
+                            <strong>
+                              {doc.verificationResult?.tradeName ||
+                                "Not provided"}
+                            </strong>
+                          </span>
                           {doc.verificationResult?.gstinStatus ? (
-                            <span>GST Status: <strong>{doc.verificationResult.gstinStatus}</strong></span>
+                            <span>
+                              GST Status:{" "}
+                              <strong>
+                                {doc.verificationResult.gstinStatus}
+                              </strong>
+                            </span>
                           ) : null}
                           {doc.verificationResult?.panStatus ? (
-                            <span>PAN Status: <strong>{doc.verificationResult.panStatus}</strong></span>
+                            <span>
+                              PAN Status:{" "}
+                              <strong>
+                                {doc.verificationResult.panStatus}
+                              </strong>
+                            </span>
                           ) : null}
-                          <span>Type: <strong>{doc.verificationResult?.taxpayerType || doc.verificationResult?.entityType || 'Unknown'}</strong></span>
+                          <span>
+                            Type:{" "}
+                            <strong>
+                              {doc.verificationResult?.taxpayerType ||
+                                doc.verificationResult?.entityType ||
+                                "Unknown"}
+                            </strong>
+                          </span>
                         </div>
                         {doc.verificationResult?.error && (
-                          <div className="mt-1 text-rose-600 font-bold">Provider: {doc.verificationResult.error}</div>
+                          <div className="mt-2 rounded-xl border border-amber-200 bg-white/70 p-2 text-amber-900">
+                            <div className="font-extrabold">
+                              {getVerificationIssue(doc.verificationResult)?.title}
+                            </div>
+                            <div className="mt-0.5 leading-snug">
+                              {getVerificationIssue(doc.verificationResult)?.detail}
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
@@ -2051,14 +2561,20 @@ export function DocumentsManager({ isTab = false }) {
                 </div>
 
                 <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                    doc.status === 'VERIFIED' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                    doc.status === 'REJECTED' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
-                    'bg-amber-50 text-amber-800 border border-amber-200'
-                  }`}>
-                    {doc.status === 'VERIFIED' ? '✓ Verified by Core' :
-                     doc.status === 'REJECTED' ? 'Action Required' :
-                     '● Submitted · Verification Pending'}
+                  <span
+                    className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                      doc.status === "VERIFIED"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : doc.status === "REJECTED"
+                          ? "bg-rose-50 text-rose-700 border border-rose-200"
+                          : "bg-amber-50 text-amber-800 border border-amber-200"
+                    }`}
+                  >
+                    {doc.status === "VERIFIED"
+                      ? "✓ Verified by Core"
+                      : doc.status === "REJECTED"
+                        ? "Action Required"
+                        : "● Submitted · Verification Pending"}
                   </span>
                   <button
                     onClick={() => setSelectedDocForPreview(doc)}
@@ -2084,9 +2600,11 @@ export function DocumentsManager({ isTab = false }) {
             <Icon name="documents" size={22} />
           </div>
           <div>
-            <h3 className="font-extrabold text-sm text-navy">No Verification Documents Uploaded Yet</h3>
+            <h3 className="font-extrabold text-sm text-navy">
+              No Verification Documents Uploaded Yet
+            </h3>
             <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
-              Upload your GST Registration, PAN Card, Bank Proof, or Business Incorporation Certificate to complete partner verification.
+              Upload your GST Registration Certificate or Corporate PAN Card to complete partner verification.
             </p>
           </div>
           <button
@@ -2107,12 +2625,23 @@ export function DocumentsManager({ isTab = false }) {
 
       {/* Upload Document Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs" onClick={() => setShowUploadModal(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-[pop_.18s_ease-out]" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="vendor-modal-backdrop"
+          onClick={() => setShowUploadModal(false)}
+        >
+          <div
+            className="vendor-modal-panel max-w-md p-4 sm:p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
-                <h3 className="font-extrabold text-base text-navy">Upload KYC / Business Document</h3>
-                <p className="text-xs text-muted mt-0.5">Enter GSTIN or Corporate PAN to auto-verify business name via API.</p>
+                <h3 className="font-extrabold text-base text-navy">
+                  Upload KYC / Business Document
+                </h3>
+                <p className="text-xs text-muted mt-0.5">
+                  Enter GSTIN or Corporate PAN to auto-verify business name via
+                  API.
+                </p>
               </div>
               <button
                 type="button"
@@ -2128,19 +2657,16 @@ export function DocumentsManager({ isTab = false }) {
 
             <form onSubmit={handleUpload} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-muted font-semibold mb-1">Document Category / Type</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Document Category / Type
+                </label>
                 <select
                   value={docForm.type}
                   onChange={(e) => {
                     const t = e.target.value;
                     const defaultTitles = {
-                      GST: 'GST Registration Certificate',
-                      PAN: 'Corporate / Firm PAN Card',
-                      BANK_PROOF: 'Bank Statement / Cancelled Cheque',
-                      BUSINESS_REG: 'Business Registration / Incorporation',
-                      INSURANCE: 'Commercial Liability Insurance',
-                      ID_PROOF: 'Government ID Proof',
-                      OTHER: 'Trade License / Other Proof',
+                      GST: "GST Registration Certificate",
+                      PAN: "Corporate / Firm PAN Card",
                     };
                     setDocForm({
                       ...docForm,
@@ -2152,24 +2678,27 @@ export function DocumentsManager({ isTab = false }) {
                   }}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 >
-                  <option value="GST">GST Registration Certificate (API Checked)</option>
-                  <option value="PAN">Corporate / Firm PAN Card (API Checked)</option>
-                  <option value="BANK_PROOF">Bank Statement / Cancelled Cheque</option>
-                  <option value="BUSINESS_REG">Business Registration / Incorporation</option>
-                  <option value="INSURANCE">Commercial Liability Insurance</option>
-                  <option value="ID_PROOF">Government Identity Proof</option>
-                  <option value="OTHER">Trade License / Other Proof</option>
+                  <option value="GST">
+                    GST Registration Certificate (API Checked)
+                  </option>
+                  <option value="PAN">
+                    Corporate / Firm PAN Card (API Checked)
+                  </option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Document Title</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Document Title
+                </label>
                 <input
                   type="text"
                   required
                   value={docForm.title}
-                  onChange={(e) => setDocForm({ ...docForm, title: e.target.value })}
-                  placeholder="e.g. Corporate PAN Card"
+                  onChange={(e) =>
+                    setDocForm({ ...docForm, title: e.target.value })
+                  }
+                  placeholder={docForm.type === "PAN" ? "e.g. Corporate PAN Card" : "GST Registration Certificate"}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
@@ -2177,18 +2706,23 @@ export function DocumentsManager({ isTab = false }) {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-muted font-semibold">
-                    {docForm.type === 'PAN' ? 'Corporation PAN Number' : docForm.type === 'GST' ? 'GSTIN Number' : 'Registration / Identifier Number'}
+                    {docForm.type === "PAN"
+                      ? "PAN Number"
+                      : "GSTIN Number"}
                   </label>
-                  {(docForm.type === 'PAN' || docForm.type === 'GST') && docForm.documentNumber.trim().length >= 10 && (
-                    <button
-                      type="button"
-                      disabled={checkingApi}
-                      onClick={handleQuickCheck}
-                      className="text-[10px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-50"
-                    >
-                      {checkingApi ? 'Verifying with API…' : '⚡ Check with API'}
-                    </button>
-                  )}
+                  {(docForm.type === "PAN" || docForm.type === "GST") &&
+                    docForm.documentNumber.trim().length >= 10 && (
+                      <button
+                        type="button"
+                        disabled={checkingApi}
+                        onClick={handleQuickCheck}
+                        className="text-[10px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-50"
+                      >
+                        {checkingApi
+                          ? "Verifying with API…"
+                          : "⚡ Check with API"}
+                      </button>
+                    )}
                 </div>
                 <input
                   type="text"
@@ -2197,47 +2731,78 @@ export function DocumentsManager({ isTab = false }) {
                     setDocForm({ ...docForm, documentNumber: e.target.value });
                     setApiCheckResult(null);
                   }}
-                  placeholder={docForm.type === 'PAN' ? 'e.g. AABCC1234D (10-char Corporate PAN)' : 'e.g. 27AABCU9603R1ZM or PAN number'}
+                  placeholder={
+                    docForm.type === "PAN"
+                      ? "e.g. AABCC1234D or PAN number"
+                      : "e.g. 27AABCU9603R1ZM or PAN number"
+                  }
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20 font-mono"
                 />
-                {docForm.type === 'GST' && (
+                {docForm.type === "GST" && (
                   <span className="text-[10px] text-muted mt-1 block">
-                    If GST legal/trade name matches your business profile, STARVNT verifies KYC automatically. If not, it goes to admin review.
+                    If GST legal/trade name matches your business profile,
+                    STARVNT verifies KYC automatically. If not, it goes to admin
+                    review.
                   </span>
                 )}
-                {docForm.type === 'PAN' && (
+                {docForm.type === "PAN" && (
                   <span className="text-[10px] text-muted mt-1 block">
-                    Enter corporate PAN (4th letter 'C' for Company, 'F' for Firm/LLP). STARVNT verifies corporate entity name via official API.
+                    If PAN legal/trade name matches your business profile,
+                    STARVNT verifies KYC automatically. If not, it goes to admin
+                    review.
                   </span>
                 )}
 
                 {apiCheckResult && (
-                  <div className={`mt-2 p-2.5 rounded-xl border text-[11px] ${
-                    apiCheckResult.matched
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                      : apiCheckResult.ok
-                      ? 'bg-amber-50 border-amber-200 text-amber-900'
-                      : 'bg-rose-50 border-rose-200 text-rose-900'
-                  }`}>
+                  <div
+                    className={`mt-2 p-2.5 rounded-xl border text-[11px] ${
+                      apiCheckResult.matched
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                          : "bg-amber-50 border-amber-200 text-amber-900"
+                    }`}
+                  >
                     <div className="font-bold flex items-center gap-1">
-                      <span>{apiCheckResult.matched ? '✓ Ready to Auto-Verify' : apiCheckResult.ok ? '⚠ Name Review Required' : '✕ Verification Failed'}</span>
-                      {apiCheckResult.entityType && <span className="text-[10px] text-muted font-normal">({apiCheckResult.entityType})</span>}
+                      <span>
+                        {apiCheckResult.matched
+                          ? "✓ Ready to Auto-Verify"
+                          : apiCheckResult.ok
+                            ? "⚠ Name Review Required"
+                            : getVerificationIssue(apiCheckResult)?.title || "⚠ Manual Review Required"}
+                      </span>
+                      {apiCheckResult.entityType && (
+                        <span className="text-[10px] text-muted font-normal">
+                          ({apiCheckResult.entityType})
+                        </span>
+                      )}
                     </div>
-                    {apiCheckResult.legalName || apiCheckResult.registeredName ? (
-                      <div className="mt-0.5">Found Name: <strong>{apiCheckResult.legalName || apiCheckResult.registeredName}</strong></div>
+                    {apiCheckResult.legalName ||
+                    apiCheckResult.registeredName ? (
+                      <div className="mt-0.5">
+                        Found Name:{" "}
+                        <strong>
+                          {apiCheckResult.legalName ||
+                            apiCheckResult.registeredName}
+                        </strong>
+                      </div>
                     ) : null}
                     {apiCheckResult.tradeName ? (
-                      <div>Trade: <strong>{apiCheckResult.tradeName}</strong></div>
+                      <div>
+                        Trade: <strong>{apiCheckResult.tradeName}</strong>
+                      </div>
                     ) : null}
                     {apiCheckResult.error && (
-                      <div className="text-rose-600 mt-0.5 font-medium">{apiCheckResult.message || apiCheckResult.error}</div>
+                      <div className="mt-1 font-medium leading-snug">
+                        {getVerificationIssue(apiCheckResult)?.detail}
+                      </div>
                     )}
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Attach File (PDF, PNG, JPG)</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Attach File (PDF, PNG, JPG)
+                </label>
                 <div className="border border-dashed border-gray-300 rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-lavender/30 transition">
                   <input
                     type="file"
@@ -2254,24 +2819,34 @@ export function DocumentsManager({ isTab = false }) {
                       }
                     }}
                   />
-                  <label htmlFor="docFileInput" className="cursor-pointer block">
+                  <label
+                    htmlFor="docFileInput"
+                    className="cursor-pointer block"
+                  >
                     <div className="w-8 h-8 rounded-xl bg-primary-soft text-primary grid place-items-center mx-auto mb-1.5">
                       <Icon name="plus" size={16} />
                     </div>
-                    <span className="font-bold text-primary text-xs hover:underline block">Choose document file</span>
+                    <span className="font-bold text-primary text-xs hover:underline block">
+                      Choose document file
+                    </span>
                     <span className="text-[10px] text-muted mt-0.5 block">
-                      Selected: <strong>{docForm.fileName}</strong> ({docForm.fileSize})
+                      Selected: <strong>{docForm.fileName}</strong> (
+                      {docForm.fileSize})
                     </span>
                   </label>
                 </div>
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Additional Notes / Validity (Optional)</label>
+                <label className="block text-muted font-semibold mb-1">
+                  Additional Notes / Validity (Optional)
+                </label>
                 <input
                   type="text"
                   value={docForm.notes}
-                  onChange={(e) => setDocForm({ ...docForm, notes: e.target.value })}
+                  onChange={(e) =>
+                    setDocForm({ ...docForm, notes: e.target.value })
+                  }
                   placeholder="e.g. Primary verified business bank account"
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
                 />
@@ -2293,7 +2868,7 @@ export function DocumentsManager({ isTab = false }) {
                   disabled={uploading}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition disabled:opacity-60 cursor-pointer"
                 >
-                  {uploading ? 'Uploading…' : 'Submit for Verification'}
+                  {uploading ? "Uploading…" : "Submit for Verification"}
                 </button>
               </div>
             </form>
@@ -2303,10 +2878,18 @@ export function DocumentsManager({ isTab = false }) {
 
       {/* Document Details Modal */}
       {selectedDocForPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs" onClick={() => setSelectedDocForPreview(null)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-[pop_.18s_ease-out]" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="vendor-modal-backdrop"
+          onClick={() => setSelectedDocForPreview(null)}
+        >
+          <div
+            className="vendor-modal-panel max-w-sm p-4 sm:p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="font-extrabold text-base text-navy">{selectedDocForPreview.title}</h3>
+              <h3 className="font-extrabold text-base text-navy">
+                {selectedDocForPreview.title}
+              </h3>
               <button
                 type="button"
                 onClick={() => setSelectedDocForPreview(null)}
@@ -2319,46 +2902,72 @@ export function DocumentsManager({ isTab = false }) {
             <div className="space-y-2.5 text-xs">
               <div className="flex justify-between py-1 border-b border-gray-50">
                 <span className="text-muted font-medium">Category:</span>
-                <span className="font-bold text-navy">{selectedDocForPreview.type}</span>
+                <span className="font-bold text-navy">
+                  {selectedDocForPreview.type}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-gray-50">
                 <span className="text-muted font-medium">Document ID:</span>
-                <span className="font-mono font-bold text-navy">{selectedDocForPreview.documentNumber || 'N/A'}</span>
+                <span className="font-mono font-bold text-navy">
+                  {selectedDocForPreview.documentNumber || "N/A"}
+                </span>
               </div>
               {selectedDocForPreview.verificationSource && (
                 <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">Verification Engine:</span>
-                  <span className="font-bold text-navy">{selectedDocForPreview.verificationSource}</span>
+                  <span className="text-muted font-medium">
+                    Verification Engine:
+                  </span>
+                  <span className="font-bold text-navy">
+                    {selectedDocForPreview.verificationSource}
+                  </span>
                 </div>
               )}
               {selectedDocForPreview.verificationResult?.legalName && (
                 <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">Verified Legal Name:</span>
-                  <span className="font-bold text-navy text-right max-w-[180px] truncate">{selectedDocForPreview.verificationResult.legalName}</span>
+                  <span className="text-muted font-medium">
+                    Verified Legal Name:
+                  </span>
+                  <span className="font-bold text-navy text-right max-w-[180px] truncate">
+                    {selectedDocForPreview.verificationResult.legalName}
+                  </span>
                 </div>
               )}
               {selectedDocForPreview.verificationResult?.entityType && (
                 <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">Entity Classification:</span>
-                  <span className="font-semibold text-navy">{selectedDocForPreview.verificationResult.entityType}</span>
+                  <span className="text-muted font-medium">
+                    Entity Classification:
+                  </span>
+                  <span className="font-semibold text-navy">
+                    {selectedDocForPreview.verificationResult.entityType}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between py-1 border-b border-gray-50">
                 <span className="text-muted font-medium">Attached File:</span>
-                <span className="font-semibold text-navy">{selectedDocForPreview.fileName}</span>
+                <span className="font-semibold text-navy">
+                  {selectedDocForPreview.fileName}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-gray-50">
                 <span className="text-muted font-medium">Status:</span>
-                <span className="font-bold text-amber-700">{selectedDocForPreview.status}</span>
+                <span className="font-bold text-amber-700">
+                  {selectedDocForPreview.status}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-gray-50">
                 <span className="text-muted font-medium">Submitted On:</span>
-                <span className="text-navy">{new Date(selectedDocForPreview.createdAt).toLocaleDateString()}</span>
+                <span className="text-navy">
+                  {new Date(
+                    selectedDocForPreview.createdAt,
+                  ).toLocaleDateString()}
+                </span>
               </div>
               {selectedDocForPreview.notes && (
                 <div className="pt-1">
                   <span className="text-muted font-medium block">Notes:</span>
-                  <p className="text-navy mt-0.5 italic">{selectedDocForPreview.notes}</p>
+                  <p className="text-navy mt-0.5 italic">
+                    {selectedDocForPreview.notes}
+                  </p>
                 </div>
               )}
             </div>
@@ -2416,50 +3025,76 @@ export function SettingsManager({ isTab = false }) {
         <ul className="divide-y divide-gray-50 text-xs">
           <li className="flex items-center justify-between py-3">
             <div>
-              <div className="font-bold text-navy">New Enquiry & Lead Alerts</div>
-              <div className="text-muted text-[11px]">Instant notifications when incoming customer event requests match your profile</div>
+              <div className="font-bold text-navy">
+                New Enquiry & Lead Alerts
+              </div>
+              <div className="text-muted text-[11px]">
+                Instant notifications when incoming customer event requests
+                match your profile
+              </div>
             </div>
             <button
-              onClick={() => toggle('enquiryAlerts')}
-              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.enquiryAlerts ? 'bg-primary' : 'bg-gray-200'}`}
+              onClick={() => toggle("enquiryAlerts")}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.enquiryAlerts ? "bg-primary" : "bg-gray-200"}`}
             >
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.enquiryAlerts ? 'left-6' : 'left-1'}`} />
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.enquiryAlerts ? "left-6" : "left-1"}`}
+              />
             </button>
           </li>
           <li className="flex items-center justify-between py-3">
             <div>
               <div className="font-bold text-navy">Quote Status Changes</div>
-              <div className="text-muted text-[11px]">Get alerted when a client views, approves, or requests adjustments to quotes</div>
+              <div className="text-muted text-[11px]">
+                Get alerted when a client views, approves, or requests
+                adjustments to quotes
+              </div>
             </div>
             <button
-              onClick={() => toggle('quoteUpdates')}
-              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.quoteUpdates ? 'bg-primary' : 'bg-gray-200'}`}
+              onClick={() => toggle("quoteUpdates")}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.quoteUpdates ? "bg-primary" : "bg-gray-200"}`}
             >
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.quoteUpdates ? 'left-6' : 'left-1'}`} />
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.quoteUpdates ? "left-6" : "left-1"}`}
+              />
             </button>
           </li>
           <li className="flex items-center justify-between py-3">
             <div>
-              <div className="font-bold text-navy">Core Escrow & Payment Alerts</div>
-              <div className="text-muted text-[11px]">Immediate notification when client payment is verified by Core Platform</div>
+              <div className="font-bold text-navy">
+                Core Escrow & Payment Alerts
+              </div>
+              <div className="text-muted text-[11px]">
+                Immediate notification when client payment is verified by Core
+                Platform
+              </div>
             </div>
             <button
-              onClick={() => toggle('paymentAlerts')}
-              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.paymentAlerts ? 'bg-primary' : 'bg-gray-200'}`}
+              onClick={() => toggle("paymentAlerts")}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.paymentAlerts ? "bg-primary" : "bg-gray-200"}`}
             >
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.paymentAlerts ? 'left-6' : 'left-1'}`} />
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.paymentAlerts ? "left-6" : "left-1"}`}
+              />
             </button>
           </li>
           <li className="flex items-center justify-between py-3">
             <div>
-              <div className="font-bold text-navy">Weekly Business Performance Digest</div>
-              <div className="text-muted text-[11px]">Summary of opportunities, quote conversion rates, and revenue analytics</div>
+              <div className="font-bold text-navy">
+                Weekly Business Performance Digest
+              </div>
+              <div className="text-muted text-[11px]">
+                Summary of opportunities, quote conversion rates, and revenue
+                analytics
+              </div>
             </div>
             <button
-              onClick={() => toggle('weeklyDigest')}
-              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.weeklyDigest ? 'bg-primary' : 'bg-gray-200'}`}
+              onClick={() => toggle("weeklyDigest")}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.weeklyDigest ? "bg-primary" : "bg-gray-200"}`}
             >
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.weeklyDigest ? 'left-6' : 'left-1'}`} />
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.weeklyDigest ? "left-6" : "left-1"}`}
+              />
             </button>
           </li>
         </ul>
@@ -2469,26 +3104,40 @@ export function SettingsManager({ isTab = false }) {
         <ul className="divide-y divide-gray-50 text-xs">
           <li className="flex items-center justify-between py-3">
             <div>
-              <div className="font-bold text-navy">Display Verified Transit Estimates</div>
-              <div className="text-muted text-[11px]">Show calculated travel costs based on your operational base radius</div>
+              <div className="font-bold text-navy">
+                Display Verified Transit Estimates
+              </div>
+              <div className="text-muted text-[11px]">
+                Show calculated travel costs based on your operational base
+                radius
+              </div>
             </div>
             <button
-              onClick={() => toggle('showTransitEstimates')}
-              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.showTransitEstimates ? 'bg-primary' : 'bg-gray-200'}`}
+              onClick={() => toggle("showTransitEstimates")}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.showTransitEstimates ? "bg-primary" : "bg-gray-200"}`}
             >
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.showTransitEstimates ? 'left-6' : 'left-1'}`} />
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.showTransitEstimates ? "left-6" : "left-1"}`}
+              />
             </button>
           </li>
           <li className="flex items-center justify-between py-3">
             <div>
-              <div className="font-bold text-navy">Public Storefront Showcase</div>
-              <div className="text-muted text-[11px]">Allow customers to browse published portfolio showcases on STARVNT</div>
+              <div className="font-bold text-navy">
+                Public Storefront Showcase
+              </div>
+              <div className="text-muted text-[11px]">
+                Allow customers to browse published portfolio showcases on
+                STARVNT
+              </div>
             </div>
             <button
-              onClick={() => toggle('publicPortfolioVisible')}
-              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.publicPortfolioVisible ? 'bg-primary' : 'bg-gray-200'}`}
+              onClick={() => toggle("publicPortfolioVisible")}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${settings.publicPortfolioVisible ? "bg-primary" : "bg-gray-200"}`}
             >
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.publicPortfolioVisible ? 'left-6' : 'left-1'}`} />
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.publicPortfolioVisible ? "left-6" : "left-1"}`}
+              />
             </button>
           </li>
         </ul>
@@ -2499,13 +3148,17 @@ export function SettingsManager({ isTab = false }) {
           <li className="flex items-center justify-between py-3">
             <div>
               <div className="font-bold text-navy">Dark Mode</div>
-              <div className="text-muted text-[11px]">Toggle the application theme for the entire site</div>
+              <div className="text-muted text-[11px]">
+                Toggle the application theme for the entire site
+              </div>
             </div>
             <button
               onClick={toggleTheme}
-              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${dark ? 'bg-primary' : 'bg-gray-200'}`}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${dark ? "bg-primary" : "bg-gray-200"}`}
             >
-              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${dark ? 'left-6' : 'left-1'}`} />
+              <span
+                className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${dark ? "left-6" : "left-1"}`}
+              />
             </button>
           </li>
         </ul>
@@ -2524,22 +3177,29 @@ export function SettingsManager({ isTab = false }) {
   }
 
   return (
-    <Page title="Settings & Preferences" sub="Configure operational alerts and business preferences.">
+    <Page
+      title="Settings & Preferences"
+      sub="Configure operational alerts and business preferences."
+    >
       {content}
     </Page>
   );
 }
 
 /* ── Google Business Profile & Maps Rating Section with Search & Map ─── */
-function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) {
+function GoogleBusinessSection({
+  googlePlaceId,
+  initialRating,
+  onSavePlaceId,
+}) {
   const [isSearching, setIsSearching] = useState(!googlePlaceId);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentPlace, setCurrentPlace] = useState(initialRating || null);
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState('');
+  const [feedback, setFeedback] = useState("");
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -2568,15 +3228,17 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
         zoom: hasPin ? 15 : 12,
         zoomControl: false,
       });
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-      L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+      L.tileLayer("https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
         maxZoom: 20,
-        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-        attribution: '&copy; Google Maps',
+        subdomains: ["mt0", "mt1", "mt2", "mt3"],
+        attribution: "&copy; Google Maps",
       }).addTo(map);
 
       if (hasPin) {
-        markerInstance.current = L.marker([lat, lng], { icon: pinIcon }).addTo(map);
+        markerInstance.current = L.marker([lat, lng], { icon: pinIcon }).addTo(
+          map,
+        );
       }
       mapInstance.current = map;
     } else {
@@ -2585,7 +3247,9 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
         if (markerInstance.current) {
           markerInstance.current.setLatLng([lat, lng]);
         } else {
-          markerInstance.current = L.marker([lat, lng], { icon: pinIcon }).addTo(mapInstance.current);
+          markerInstance.current = L.marker([lat, lng], {
+            icon: pinIcon,
+          }).addTo(mapInstance.current);
         }
       }
     }
@@ -2609,13 +3273,15 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await externalApi.call(`/vendor/google-places/search?query=${encodeURIComponent(val.trim())}`);
+        const res = await externalApi.call(
+          `/vendor/google-places/search?query=${encodeURIComponent(val.trim())}`,
+        );
         if (res.ok && Array.isArray(res.places)) {
           setResults(res.places);
           setShowDropdown(true);
         }
       } catch (err) {
-        console.warn('[GoogleBusiness] Place search error:', err.message);
+        console.warn("[GoogleBusiness] Place search error:", err.message);
       } finally {
         setSearching(false);
       }
@@ -2630,8 +3296,10 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
     setSaving(true);
     try {
       await onSavePlaceId(place.id);
-      setFeedback(`Connected to "${place.name}"! Google Maps rating and reviews synced.`);
-      setTimeout(() => setFeedback(''), 4500);
+      setFeedback(
+        `Connected to "${place.name}"! Google Maps rating and reviews synced.`,
+      );
+      setTimeout(() => setFeedback(""), 4500);
     } catch (err) {
       alert(`Could not connect place: ${err.message}`);
     } finally {
@@ -2640,15 +3308,20 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
   }
 
   async function handleDisconnect() {
-    if (!window.confirm('Disconnect this Google Business profile from your account? Your Google rating will be removed from your public profiles.')) return;
+    if (
+      !window.confirm(
+        "Disconnect this Google Business profile from your account? Your Google rating will be removed from your public profiles.",
+      )
+    )
+      return;
     setSaving(true);
     try {
       await onSavePlaceId(null);
       setCurrentPlace(null);
       setIsSearching(true);
-      setSearchQuery('');
-      setFeedback('Google Business listing disconnected.');
-      setTimeout(() => setFeedback(''), 4000);
+      setSearchQuery("");
+      setFeedback("Google Business listing disconnected.");
+      setTimeout(() => setFeedback(""), 4000);
     } catch (err) {
       alert(`Error disconnecting: ${err.message}`);
     } finally {
@@ -2671,12 +3344,12 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
             <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-amber-50/50 rounded-2xl border border-amber-200/70">
               <div className="flex items-center gap-3.5">
                 <div className="w-14 h-14 rounded-2xl bg-white text-amber-500 font-extrabold text-2xl grid place-items-center shadow-xs border border-amber-200/60 shrink-0">
-                  {currentPlace.rating || '—'}
+                  {currentPlace.rating || "—"}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-extrabold text-navy">
-                      {currentPlace.name || 'Google Business Listing'}
+                      {currentPlace.name || "Google Business Listing"}
                     </span>
                     <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
                       ✓ Connected
@@ -2684,8 +3357,8 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <div className="text-amber-500 text-sm">
-                      {'★'.repeat(Math.round(currentPlace.rating || 0))}
-                      {'☆'.repeat(5 - Math.round(currentPlace.rating || 0))}
+                      {"★".repeat(Math.round(currentPlace.rating || 0))}
+                      {"☆".repeat(5 - Math.round(currentPlace.rating || 0))}
                     </div>
                     <span className="text-xs text-muted font-bold">
                       · {currentPlace.reviewCount || 0} reviews on Google Maps
@@ -2731,14 +3404,17 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
 
             {/* Interactive Map Preview */}
             <div className="overflow-hidden rounded-2xl border border-gray-200">
-              <div ref={mapRef} style={{ width: '100%', height: '240px' }} />
+              <div ref={mapRef} style={{ width: "100%", height: "240px" }} />
             </div>
           </div>
         ) : (
           /* Search Bar & Map Search Mode */
           <div className="space-y-3">
             <p className="text-xs text-muted leading-relaxed">
-              Search your business name or studio address on Google Maps below. Selecting your listing will automatically import your verified Google star rating, review count, and public map link to your STARVNT profile.
+              Search your business name or studio address on Google Maps below.
+              Selecting your listing will automatically import your verified
+              Google star rating, review count, and public map link to your
+              STARVNT profile.
             </p>
 
             {/* Search Bar Input */}
@@ -2752,12 +3428,16 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
                   placeholder='Search your business or venue name (e.g. "CineMandap Studios Mumbai" or street address)...'
                   className="w-full text-xs font-bold text-navy outline-none placeholder:font-normal placeholder:text-muted/60"
                 />
-                {searching && <span className="text-[10px] text-primary font-bold animate-pulse">Searching Google...</span>}
+                {searching && (
+                  <span className="text-[10px] text-primary font-bold animate-pulse">
+                    Searching Google...
+                  </span>
+                )}
                 {searchQuery && !searching && (
                   <button
                     type="button"
                     onClick={() => {
-                      setSearchQuery('');
+                      setSearchQuery("");
                       setResults([]);
                       setShowDropdown(false);
                     }}
@@ -2779,7 +3459,11 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
                     >
                       <div className="flex items-start gap-2.5">
                         <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 grid place-items-center shrink-0 mt-0.5">
-                          <Icon name="star" size={14} className="fill-amber-500 text-amber-500" />
+                          <Icon
+                            name="star"
+                            size={14}
+                            className="fill-amber-500 text-amber-500"
+                          />
                         </div>
                         <div>
                           <div className="text-xs font-extrabold text-navy group-hover:text-primary transition">
@@ -2790,8 +3474,12 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
                           </div>
                           {place.rating > 0 && (
                             <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-amber-500 text-[10px] font-bold">★ {place.rating}</span>
-                              <span className="text-muted text-[10px]">({place.reviewCount} Google reviews)</span>
+                              <span className="text-amber-500 text-[10px] font-bold">
+                                ★ {place.rating}
+                              </span>
+                              <span className="text-muted text-[10px]">
+                                ({place.reviewCount} Google reviews)
+                              </span>
                             </div>
                           )}
                         </div>
@@ -2807,7 +3495,7 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
 
             {/* Interactive Map */}
             <div className="overflow-hidden rounded-2xl border border-gray-200">
-              <div ref={mapRef} style={{ width: '100%', height: '240px' }} />
+              <div ref={mapRef} style={{ width: "100%", height: "240px" }} />
             </div>
 
             {currentPlace?.rating && (
@@ -2829,28 +3517,28 @@ function GoogleBusinessSection({ googlePlaceId, initialRating, onSavePlaceId }) 
 }
 
 /* ── Unified Profile Hub with Sub-Sidebar (Business Profile, Locations, Documents, Settings) ── */
-export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
+export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || defaultTab || 'profile';
+  const activeTab = searchParams.get("tab") || defaultTab || "profile";
   const { dark, toggle: toggleTheme } = useTheme();
 
   function handleTabChange(tabKey) {
     const next = new URLSearchParams(searchParams);
-    next.set('tab', tabKey);
+    next.set("tab", tabKey);
     setSearchParams(next, { replace: true });
   }
 
   const [profile, setProfile] = useState({
     businessName: business,
-    category: '',
-    location: '',
-    phone: user?.phone || '',
-    website: '',
-    bio: '',
-    googlePlaceId: '',
+    category: "",
+    location: "",
+    phone: user?.phone || "",
+    website: "",
+    bio: "",
+    googlePlaceId: "",
   });
 
-  const [profilePicUrl, setProfilePicUrl] = useState('');
+  const [profilePicUrl, setProfilePicUrl] = useState("");
   const [uploadingPic, setUploadingPic] = useState(false);
   const picInputRef = useRef(null);
 
@@ -2865,35 +3553,35 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const [showMapModal, setShowMapModal] = useState(false);
   const [editingLocationId, setEditingLocationId] = useState(null);
   const [locationForm, setLocationForm] = useState({
-    label: 'Main Studio',
-    type: 'STUDIO',
-    address: '',
-    locality: '',
-    city: '',
-    state: 'Maharashtra',
-    postalCode: '',
+    label: "Main Studio",
+    type: "STUDIO",
+    address: "",
+    locality: "",
+    city: "",
+    state: "Maharashtra",
+    postalCode: "",
     coordinates: { lat: 19.076, lng: 72.8777 },
     isPrimary: true,
   });
   const [savingLocation, setSavingLocation] = useState(false);
-  const [locationFeedback, setLocationFeedback] = useState('');
+  const [locationFeedback, setLocationFeedback] = useState("");
 
   const loadProfile = useCallback(async () => {
     try {
       setLoadingProfile(true);
       const [profRes, actRes] = await Promise.all([
-        externalApi.call('/vendor/profile'),
-        externalApi.call('/vendor/activation-status'),
+        externalApi.call("/vendor/profile"),
+        externalApi.call("/vendor/activation-status"),
       ]);
       if (profRes.ok && profRes.vendor) {
         setProfile({
-          businessName: profRes.vendor.businessName || business || '',
-          category: profRes.vendor.category || '',
-          location: profRes.vendor.location || '',
-          phone: profRes.vendor.phone || user?.phone || '',
-          website: profRes.vendor.website || '',
-          bio: profRes.vendor.bio || '',
-          googlePlaceId: profRes.vendor.googlePlaceId || '',
+          businessName: profRes.vendor.businessName || business || "",
+          category: profRes.vendor.category || "",
+          location: profRes.vendor.location || "",
+          phone: profRes.vendor.phone || user?.phone || "",
+          website: profRes.vendor.website || "",
+          bio: profRes.vendor.bio || "",
+          googlePlaceId: profRes.vendor.googlePlaceId || "",
         });
         if (profRes.vendor.profilePicUrl) {
           setProfilePicUrl(profRes.vendor.profilePicUrl);
@@ -2904,19 +3592,19 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
         setActivation(actRes.status);
       }
     } catch (err) {
-      console.warn('[ProfilePage] Error loading profile:', err.message);
+      console.warn("[ProfilePage] Error loading profile:", err.message);
     } finally {
       setLoadingProfile(false);
     }
   }, [business, user]);
 
   async function handleUpdateGooglePlaceId(placeId) {
-    const res = await externalApi.call('/vendor/profile', {
-      method: 'PUT',
-      body: { googlePlaceId: placeId || '' },
+    const res = await externalApi.call("/vendor/profile", {
+      method: "PUT",
+      body: { googlePlaceId: placeId || "" },
     });
     if (res.ok) {
-      setProfile((prev) => ({ ...prev, googlePlaceId: placeId || '' }));
+      setProfile((prev) => ({ ...prev, googlePlaceId: placeId || "" }));
       await loadProfile();
     }
   }
@@ -2924,12 +3612,12 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   const loadLocations = useCallback(async () => {
     try {
       setLoadingLocations(true);
-      const res = await externalApi.call('/vendor/locations');
+      const res = await externalApi.call("/vendor/locations");
       if (res.ok && res.locations) {
         setLocations(res.locations);
       }
     } catch (err) {
-      console.warn('[ProfilePage] Error loading locations:', err.message);
+      console.warn("[ProfilePage] Error loading locations:", err.message);
     } finally {
       setLoadingLocations(false);
     }
@@ -2943,8 +3631,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   async function handleSaveProfile(e) {
     e.preventDefault();
     try {
-      const res = await externalApi.call('/vendor/profile', {
-        method: 'PUT',
+      const res = await externalApi.call("/vendor/profile", {
+        method: "PUT",
         body: profile,
       });
       if (res.ok && res.activation) {
@@ -2957,16 +3645,15 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     }
   }
 
-
   async function handleProfilePicUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (JPG, PNG, WebP)');
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file (JPG, PNG, WebP)");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be under 5 MB');
+      alert("Image must be under 5 MB");
       return;
     }
     try {
@@ -2974,13 +3661,13 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
       const reader = new FileReader();
       reader.onload = async () => {
         try {
-          const res = await externalApi.call('/vendor/profile/picture', {
-            method: 'PUT',
+          const res = await externalApi.call("/vendor/profile/picture", {
+            method: "PUT",
             body: { image: reader.result },
           });
           if (res.ok && res.profilePicUrl) {
             setProfilePicUrl(res.profilePicUrl);
-            window.dispatchEvent(new Event('vendorProfileUpdated'));
+            window.dispatchEvent(new Event("vendorProfileUpdated"));
           }
         } catch (err) {
           alert(`Could not upload profile picture: ${err.message}`);
@@ -3002,54 +3689,60 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
     const fallbackLng = locations[0]?.coordinates?.lng || 72.8777;
 
     setLocationForm({
-      label: hasExisting ? `Branch ${locations.length + 1}` : 'Main Studio',
-      type: 'STUDIO',
-      address: '',
-      locality: '',
-      city: profile.location || 'Mumbai',
-      state: 'Maharashtra',
-      postalCode: '',
+      label: hasExisting ? `Branch ${locations.length + 1}` : "Main Studio",
+      type: "STUDIO",
+      address: "",
+      locality: "",
+      city: profile.location || "Mumbai",
+      state: "Maharashtra",
+      postalCode: "",
       coordinates: { lat: fallbackLat, lng: fallbackLng },
       isPrimary: !hasExisting,
     });
-    setLocationFeedback('');
+    setLocationFeedback("");
     setShowMapModal(true);
   }
 
   function handleOpenEditLocation(loc) {
     setEditingLocationId(loc._id);
     setLocationForm({
-      label: loc.label || 'Studio',
-      type: loc.type || 'STUDIO',
-      address: loc.address || '',
-      locality: loc.locality || '',
-      city: loc.city || '',
-      state: loc.state || '',
-      postalCode: loc.postalCode || '',
+      label: loc.label || "Studio",
+      type: loc.type || "STUDIO",
+      address: loc.address || "",
+      locality: loc.locality || "",
+      city: loc.city || "",
+      state: loc.state || "",
+      postalCode: loc.postalCode || "",
       coordinates: loc.coordinates || { lat: 19.076, lng: 72.8777 },
       isPrimary: Boolean(loc.isPrimary),
     });
-    setLocationFeedback('');
+    setLocationFeedback("");
     setShowMapModal(true);
   }
 
   async function handleSaveLocation(e) {
     e.preventDefault();
-    const city = (locationForm.city && locationForm.city.trim()) || (profile.location ? profile.location.split(',')[0].trim() : '');
+    const city =
+      (locationForm.city && locationForm.city.trim()) ||
+      (profile.location ? profile.location.split(",")[0].trim() : "");
     if (!city) {
-      alert('Please enter a city for this location.');
+      alert("Please enter a city for this location.");
       return;
     }
 
-    const locality = (locationForm.locality && locationForm.locality.trim()) || '';
-    const resolvedAddress = (locationForm.address && locationForm.address.trim()) || [locality, city].filter(Boolean).join(', ') || city;
+    const locality =
+      (locationForm.locality && locationForm.locality.trim()) || "";
+    const resolvedAddress =
+      (locationForm.address && locationForm.address.trim()) ||
+      [locality, city].filter(Boolean).join(", ") ||
+      city;
 
     try {
       setSavingLocation(true);
       const url = editingLocationId
         ? `/vendor/locations/${editingLocationId}`
-        : '/vendor/locations';
-      const method = editingLocationId ? 'PUT' : 'POST';
+        : "/vendor/locations";
+      const method = editingLocationId ? "PUT" : "POST";
 
       const res = await externalApi.call(url, {
         method,
@@ -3065,8 +3758,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
         setShowMapModal(false);
         await loadLocations();
         await loadProfile();
-        setLocationFeedback('Location saved and synced to database.');
-        setTimeout(() => setLocationFeedback(''), 4000);
+        setLocationFeedback("Location saved and synced to database.");
+        setTimeout(() => setLocationFeedback(""), 4000);
       }
     } catch (err) {
       alert(`Could not save location: ${err.message}`);
@@ -3078,7 +3771,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   async function handleSetPrimary(locId) {
     try {
       const res = await externalApi.call(`/vendor/locations/${locId}/primary`, {
-        method: 'PATCH',
+        method: "PATCH",
       });
       if (res.ok) {
         await loadLocations();
@@ -3090,10 +3783,15 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   }
 
   async function handleDeleteLocation(locId) {
-    if (!window.confirm('Are you sure you want to delete this operating location?')) return;
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this operating location?",
+      )
+    )
+      return;
     try {
       const res = await externalApi.call(`/vendor/locations/${locId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
       if (res.ok) {
         await loadLocations();
@@ -3105,67 +3803,128 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
   }
 
   const SUB_TABS = [
-    { id: 'profile', label: 'Business Profile', icon: 'profile', desc: 'Brand details & category' },
-    { id: 'locations', label: 'Operating Locations', icon: 'mapPin', desc: 'Studio base & GPS hubs' },
-    { id: 'documents', label: 'Documents & KYC', icon: 'documents', desc: 'GST, PAN & verification' },
-    { id: 'settings', label: 'Account & Settings', icon: 'settings', desc: 'Alerts & preferences' },
+    {
+      id: "profile",
+      label: "Business Profile",
+      icon: "profile",
+      desc: googleRating?.rating ? `★ ${googleRating.rating} on Google Maps` : "Brand details & category",
+      badge: googleRating?.rating ? `★ ${googleRating.rating}` : null,
+    },
+    {
+      id: "locations",
+      label: "Operating Locations",
+      icon: "mapPin",
+      desc: "Studio base & GPS hubs",
+    },
+    {
+      id: "documents",
+      label: "Documents & KYC",
+      icon: "documents",
+      desc: "GST, PAN & verification",
+    },
+    {
+      id: "settings",
+      label: "Account & Settings",
+      icon: "settings",
+      desc: "Alerts & preferences",
+    },
   ];
 
   return (
     <Page
-      title="Vendor Profile & Business Hub"
+      title={
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span>Vendor Profile & Business Hub</span>
+          {googleRating?.rating && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold shadow-xs">
+              <span className="text-amber-500 font-extrabold text-sm">★</span>
+              <span>{googleRating.rating}</span>
+              <span className="text-muted font-normal text-[11px]">
+                ({googleRating.reviewCount || 0} reviews on Google Maps)
+              </span>
+            </span>
+          )}
+        </div>
+      }
       sub={
         loadingProfile && !activation
-          ? 'Loading your vendor details, readiness, locations, and account settings.'
-          : `${profile.businessName || 'Your Brand'} — ${profile.category || 'Setup Pending'} · Central administration for brand profile, operational locations, KYC documents, and account settings.`
+          ? "Loading your vendor details, readiness, locations, and account settings."
+          : `${profile.businessName || "Your Brand"} — ${profile.category || "Setup Pending"}${googleRating?.rating ? ` · ★ ${googleRating.rating} Google Maps (${googleRating.reviewCount || 0} reviews)` : ''} · Central administration for brand profile, operational locations, KYC documents, and account settings.`
       }
     >
-    <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
-      {/* Profile Sub-Sidebar Navigation */}
+      <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
+        {/* Profile Sub-Sidebar Navigation */}
         <div className="bg-white rounded-2xl p-2 border border-gray-100 shadow-xs lg:sticky lg:top-20 shrink-0">
           {/* Header row: label + readiness badge on mobile */}
           <div className="flex items-center justify-between px-2 py-1.5">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">Profile Sections</span>
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">
+              Profile Sections
+            </span>
             {loadingProfile && !activation ? (
               <SkeletonLine className="lg:hidden h-5 w-16" />
-            ) : activation && (
-              <span className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.is100Percent ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                {activation.completionPercentage ?? 0}% {activation.is100Percent ? '✓ Active' : 'Setup'}
-              </span>
+            ) : (
+              activation && (
+                <span
+                  className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.is100Percent ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                >
+                  {activation.completionPercentage ?? 0}%{" "}
+                  {activation.is100Percent ? "✓ Active" : "Setup"}
+                </span>
+              )
             )}
           </div>
 
           {/* Tabs: 2-col grid on mobile, vertical list on desktop */}
           <div className="grid grid-cols-2 lg:grid-cols-1 gap-1">
-          {SUB_TABS.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`w-full flex items-center gap-2 px-2.5 py-2 lg:px-3 lg:py-2.5 rounded-xl text-left transition cursor-pointer ${
-                  isActive
-                    ? 'bg-primary-soft text-primary font-bold shadow-xs'
-                    : 'text-ink/70 hover:bg-lavender hover:text-navy font-medium'
-                }`}
-              >
-                <div className={`w-7 h-7 rounded-lg grid place-items-center shrink-0 ${
-                  isActive ? 'bg-primary text-white' : 'bg-gray-100 text-muted'
-                }`}>
-                  <Icon name={tab.icon === 'mapPin' ? 'availability' : tab.icon} size={15} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold leading-tight truncate">{tab.label}</div>
-                  <div className="text-[10px] text-muted leading-tight mt-0.5 hidden lg:block truncate">{tab.desc}</div>
-                </div>
-              </button>
-            );
-          })}
+            {SUB_TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 lg:px-3 lg:py-2.5 rounded-xl text-left transition cursor-pointer ${
+                    isActive
+                      ? "bg-primary-soft text-primary font-bold shadow-xs"
+                      : "text-ink/70 hover:bg-lavender hover:text-navy font-medium"
+                  }`}
+                >
+                  <div
+                    className={`w-7 h-7 rounded-lg grid place-items-center shrink-0 ${
+                      isActive
+                        ? "bg-primary text-white"
+                        : "bg-gray-100 text-muted"
+                    }`}
+                  >
+                    <Icon
+                      name={tab.icon === "mapPin" ? "availability" : tab.icon}
+                      size={15}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-bold leading-tight truncate">
+                        {tab.label}
+                      </span>
+                      {tab.badge && (
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 shrink-0">
+                          {tab.badge}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-muted leading-tight mt-0.5 hidden lg:block truncate">
+                      {tab.desc}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           {/* Desktop-only readiness bar */}
           <div className="pt-3 mt-2 border-t border-gray-100 px-2 pb-1 hidden lg:block">
-            <div className="text-[11px] font-semibold text-muted">Profile Readiness</div>
+            <div className="text-[11px] font-semibold text-muted">
+              Profile Readiness
+            </div>
             {loadingProfile && !activation ? (
               <div className="space-y-2 mt-2">
                 <div className="flex items-center justify-between">
@@ -3178,16 +3937,24 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
               <>
                 <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
                   <span>{activation?.completionPercentage ?? 0}% Complete</span>
-                  <span className={activation?.is100Percent ? 'text-emerald-600' : 'text-amber-600'}>
-                    {activation?.is100Percent ? '✓ Active' : '● Setup Required'}
+                  <span
+                    className={
+                      activation?.is100Percent
+                        ? "text-emerald-600"
+                        : "text-amber-600"
+                    }
+                  >
+                    {activation?.is100Percent ? "✓ Active" : "● Setup Required"}
                   </span>
                 </div>
                 <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      activation?.is100Percent ? 'bg-emerald-500' : 'bg-primary'
+                      activation?.is100Percent ? "bg-emerald-500" : "bg-primary"
                     }`}
-                    style={{ width: `${activation?.completionPercentage ?? 0}%` }}
+                    style={{
+                      width: `${activation?.completionPercentage ?? 0}%`,
+                    }}
                   />
                 </div>
               </>
@@ -3195,28 +3962,33 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           </div>
         </div>
 
-
         {/* Tab Content Area */}
         <div className="min-w-0 space-y-5">
           <VendorActivationCard activation={activation} />
 
           {/* TAB 1: Business Profile */}
-          {activeTab === 'profile' && (
+          {activeTab === "profile" && (
             <div className="space-y-5">
               {/* Display & Theme Toggle */}
               <Card title="Display Settings">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="text-sm font-bold text-navy">Dark Mode</h3>
-                    <p className="text-xs text-muted mt-0.5">Toggle the application theme for the entire site</p>
+                    <p className="text-xs text-muted mt-0.5">
+                      Toggle the application theme for the entire site
+                    </p>
                   </div>
                   <button
                     type="button"
                     onClick={toggleTheme}
-                    className={`w-11 h-6 rounded-full relative transition cursor-pointer shrink-0 ${dark ? 'bg-primary' : 'bg-gray-200'}`}
-                    aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+                    className={`w-11 h-6 rounded-full relative transition cursor-pointer shrink-0 ${dark ? "bg-primary" : "bg-gray-200"}`}
+                    aria-label={
+                      dark ? "Switch to light mode" : "Switch to dark mode"
+                    }
                   >
-                    <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${dark ? 'left-6' : 'left-1'}`} />
+                    <span
+                      className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${dark ? "left-6" : "left-1"}`}
+                    />
                   </button>
                 </div>
               </Card>
@@ -3234,7 +4006,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                       />
                     ) : (
                       <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-3xl font-extrabold shadow-md border-4 border-white dark:border-[#1a1d2e]">
-                        {(profile.businessName || 'B')[0].toUpperCase()}
+                        {(profile.businessName || "B")[0].toUpperCase()}
                       </div>
                     )}
                     <button
@@ -3257,11 +4029,23 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   {/* Info + actions */}
                   <div className="flex-1 min-w-0 text-center sm:text-left w-full">
                     <h3 className="font-extrabold text-base text-navy truncate">
-                      {profile.businessName || 'Your Brand'}
+                      {profile.businessName || "Your Brand"}
                     </h3>
-                    <p className="text-sm text-muted mt-0.5 truncate">
-                      {profile.category || 'Setup Pending'} &middot; {profile.location || 'City not set'}
-                    </p>
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-0.5">
+                      <span className="text-sm text-muted truncate">
+                        {profile.category || "Setup Pending"} &middot;{" "}
+                        {profile.location || "City not set"}
+                      </span>
+                      {googleRating?.rating && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold shrink-0">
+                          <span className="text-amber-500 font-extrabold">★</span>
+                          <span>{googleRating.rating}</span>
+                          <span className="text-muted font-normal text-[11px]">
+                            ({googleRating.reviewCount || 0} reviews on Google Maps)
+                          </span>
+                        </span>
+                      )}
+                    </div>
                     <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-3">
                       <button
                         type="button"
@@ -3269,21 +4053,31 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                         disabled={uploadingPic}
                         className="text-xs font-bold bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary-dark transition shadow-sm cursor-pointer disabled:opacity-60"
                       >
-                        {uploadingPic ? 'Uploading...' : profilePicUrl ? 'Change Photo' : 'Upload Photo'}
+                        {uploadingPic
+                          ? "Uploading..."
+                          : profilePicUrl
+                            ? "Change Photo"
+                            : "Upload Photo"}
                       </button>
                       {profilePicUrl && (
                         <button
                           type="button"
                           onClick={async () => {
-                            if (!window.confirm('Remove profile picture?')) return;
+                            if (!window.confirm("Remove profile picture?"))
+                              return;
                             try {
-                              const res = await externalApi.call('/vendor/profile/picture', {
-                                method: 'PUT',
-                                body: { image: '' },
-                              });
+                              const res = await externalApi.call(
+                                "/vendor/profile/picture",
+                                {
+                                  method: "PUT",
+                                  body: { image: "" },
+                                },
+                              );
                               if (res.ok) {
-                                setProfilePicUrl('');
-                                window.dispatchEvent(new Event('vendorProfileUpdated'));
+                                setProfilePicUrl("");
+                                window.dispatchEvent(
+                                  new Event("vendorProfileUpdated"),
+                                );
                               }
                             } catch (err) {
                               alert(`Could not remove picture: ${err.message}`);
@@ -3302,79 +4096,121 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                 </div>
               </Card>
 
-
-
-              <Card title="Business Profile Details">
+              <Card
+                title="Business Profile Details"
+                extra={
+                  googleRating?.rating ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+                      <span className="text-amber-500 text-sm">★</span>
+                      <span>{googleRating.rating}</span>
+                      <span className="text-muted font-normal text-[11px]">
+                        · {googleRating.reviewCount || 0} Google Maps reviews
+                      </span>
+                    </div>
+                  ) : null
+                }
+              >
                 <form onSubmit={handleSaveProfile} className="space-y-4">
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">Brand / Business Name</label>
+                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                        Brand / Business Name
+                      </label>
                       <input
                         placeholder="e.g. CineMandap Studios"
                         value={profile.businessName}
-                        onChange={(e) => setProfile({ ...profile, businessName: e.target.value })}
+                        onChange={(e) =>
+                          setProfile({
+                            ...profile,
+                            businessName: e.target.value,
+                          })
+                        }
                         required
                         className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">Primary Category</label>
+                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                        Primary Category
+                      </label>
                       <select
                         value={profile.category}
-                        onChange={(e) => setProfile({ ...profile, category: e.target.value })}
+                        onChange={(e) =>
+                          setProfile({ ...profile, category: e.target.value })
+                        }
                         required
                         className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
                       >
                         <option value="">Select Primary Category...</option>
-                        <option value="Cinematic Production">Cinematic Production</option>
+                        <option value="Cinematic Production">
+                          Cinematic Production
+                        </option>
                         <option value="Photography">Photography</option>
                         <option value="Videography">Videography</option>
                         <option value="Decor & Styling">Decor & Styling</option>
                         <option value="Catering">Catering</option>
-                        <option value="Makeup & Styling">Makeup & Styling</option>
+                        <option value="Makeup & Styling">
+                          Makeup & Styling
+                        </option>
                         <option value="DJ & Music">DJ & Music</option>
                         <option value="Venue">Venue</option>
                         <option value="Event Planning">Event Planning</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">Primary City / Hub</label>
+                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                        Primary City / Hub
+                      </label>
                       <input
                         placeholder="e.g. Mumbai, Kolkata, Delhi NCR, Bengaluru..."
                         value={profile.location}
-                        onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                        onChange={(e) =>
+                          setProfile({ ...profile, location: e.target.value })
+                        }
                         required
                         className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">Contact Phone</label>
+                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                        Contact Phone
+                      </label>
                       <input
                         placeholder="+91 98765 43210"
                         value={profile.phone}
-                        onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                        onChange={(e) =>
+                          setProfile({ ...profile, phone: e.target.value })
+                        }
                         className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">Website (Optional)</label>
+                    <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                      Website (Optional)
+                    </label>
                     <input
                       placeholder="https://yourbrand.com"
                       value={profile.website}
-                      onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+                      onChange={(e) =>
+                        setProfile({ ...profile, website: e.target.value })
+                      }
                       className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">About / Bio</label>
+                    <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                      About / Bio
+                    </label>
                     <textarea
                       rows={3}
                       placeholder="Briefly describe your signature style, experience and services..."
                       value={profile.bio}
-                      onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                      onChange={(e) =>
+                        setProfile({ ...profile, bio: e.target.value })
+                      }
                       className="mt-1 w-full rounded-xl border border-gray-200 p-3 text-sm text-navy focus:outline-none focus:ring-2 focus:ring-primary/30"
                     />
                   </div>
@@ -3386,7 +4222,11 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                     >
                       Save Profile Details
                     </button>
-                    {saved && <span className="text-xs font-bold text-emerald-600 animate-fadeIn">✓ Profile saved to database!</span>}
+                    {saved && (
+                      <span className="text-xs font-bold text-emerald-600 animate-fadeIn">
+                        ✓ Profile saved to database!
+                      </span>
+                    )}
                   </div>
                 </form>
               </Card>
@@ -3401,7 +4241,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           )}
 
           {/* TAB 2: Operating Locations */}
-          {activeTab === 'locations' && (
+          {activeTab === "locations" && (
             <div className="space-y-5">
               <Card
                 title="Operating Locations & Hubs"
@@ -3416,7 +4256,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                 }
               >
                 <p className="text-xs text-muted mb-4 leading-relaxed">
-                  Your operating locations define your service boundaries, travel logistics, and how you are matched with clients.
+                  Your operating locations define your service boundaries,
+                  travel logistics, and how you are matched with clients.
                 </p>
 
                 {locationFeedback && (
@@ -3431,21 +4272,29 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                       <div
                         key={loc._id}
                         className={`p-3 sm:p-4 rounded-2xl border transition-all ${
-                          loc.isPrimary ? 'border-primary/40 bg-primary-soft/20 shadow-xs' : 'border-gray-100 bg-white hover:border-gray-200'
+                          loc.isPrimary
+                            ? "border-primary/40 bg-primary-soft/20 shadow-xs"
+                            : "border-gray-100 bg-white hover:border-gray-200"
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                           <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <div className={`w-9 h-9 rounded-xl grid place-items-center text-sm font-bold shrink-0 mt-0.5 ${
-                              loc.isPrimary ? 'bg-primary text-white shadow-xs' : 'bg-gray-100 text-muted'
-                            }`}>
+                            <div
+                              className={`w-9 h-9 rounded-xl grid place-items-center text-sm font-bold shrink-0 mt-0.5 ${
+                                loc.isPrimary
+                                  ? "bg-primary text-white shadow-xs"
+                                  : "bg-gray-100 text-muted"
+                              }`}
+                            >
                               <Icon name="availability" size={16} />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-extrabold text-sm text-navy">{loc.label}</span>
+                                <span className="font-extrabold text-sm text-navy">
+                                  {loc.label}
+                                </span>
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-lavender text-muted uppercase">
-                                  {loc.type || 'STUDIO'}
+                                  {loc.type || "STUDIO"}
                                 </span>
                                 {loc.isPrimary && (
                                   <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-primary text-white shadow-xs">
@@ -3454,11 +4303,14 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                                 )}
                               </div>
                               <p className="text-xs text-ink/80 mt-1 break-words">
-                                {loc.address}, {loc.locality ? `${loc.locality}, ` : ''}{loc.city}, {loc.state} {loc.postalCode}
+                                {loc.address},{" "}
+                                {loc.locality ? `${loc.locality}, ` : ""}
+                                {loc.city}, {loc.state} {loc.postalCode}
                               </p>
                               {loc.coordinates?.lat && loc.coordinates?.lng && (
                                 <div className="text-[11px] font-mono text-muted mt-0.5">
-                                  GPS: {Number(loc.coordinates.lat).toFixed(4)}° N, {Number(loc.coordinates.lng).toFixed(4)}° E
+                                  GPS: {Number(loc.coordinates.lat).toFixed(4)}°
+                                  N, {Number(loc.coordinates.lng).toFixed(4)}° E
                                 </div>
                               )}
                             </div>
@@ -3492,7 +4344,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   </div>
                 ) : !loadingLocations ? (
                   <div className="text-center py-8 text-xs text-muted border border-dashed border-gray-200 rounded-2xl">
-                    No operating locations configured. Click "+ Add Location" to pin your studio base on the interactive map.
+                    No operating locations configured. Click "+ Add Location" to
+                    pin your studio base on the interactive map.
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-gray-100 p-4 space-y-3 bg-white">
@@ -3509,27 +4362,33 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
           )}
 
           {/* TAB 3: Documents & KYC Verification */}
-          {activeTab === 'documents' && (
-            <DocumentsManager isTab />
-          )}
+          {activeTab === "documents" && <DocumentsManager isTab />}
 
           {/* TAB 4: Account Settings */}
-          {activeTab === 'settings' && (
-            <SettingsManager isTab />
-          )}
+          {activeTab === "settings" && <SettingsManager isTab />}
         </div>
       </div>
 
       {/* Add / Edit Location Map Modal */}
       {showMapModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs" onClick={() => setShowMapModal(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col animate-[pop_.18s_ease-out] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="vendor-modal-backdrop"
+          onClick={() => setShowMapModal(false)}
+        >
+          <div
+            className="vendor-modal-panel vendor-modal-panel-flex max-w-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between p-5 pb-3 border-b border-gray-100">
               <div>
                 <h3 className="font-extrabold text-base text-navy">
-                  {editingLocationId ? 'Edit Operating Origin' : 'Add Operating Origin & Geocode'}
+                  {editingLocationId
+                    ? "Edit Operating Origin"
+                    : "Add Operating Origin & Geocode"}
                 </h3>
-                <p className="text-xs text-muted mt-0.5">Pin location on map for automated distance & matching</p>
+                <p className="text-xs text-muted mt-0.5">
+                  Pin location on map for automated distance & matching
+                </p>
               </div>
               <button
                 type="button"
@@ -3540,7 +4399,10 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
               </button>
             </div>
 
-            <form onSubmit={handleSaveLocation} className="p-5 overflow-y-auto space-y-4 text-xs">
+            <form
+              onSubmit={handleSaveLocation}
+              className="vendor-modal-scroll p-4 sm:p-5 space-y-4 text-xs"
+            >
               <MapLocationPicker
                 value={locationForm.coordinates}
                 onChange={(geo) => {
@@ -3558,21 +4420,32 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Origin Label</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Origin Label
+                  </label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Main Studio, Central Kitchen"
                     value={locationForm.label}
-                    onChange={(e) => setLocationForm({ ...locationForm, label: e.target.value })}
+                    onChange={(e) =>
+                      setLocationForm({
+                        ...locationForm,
+                        label: e.target.value,
+                      })
+                    }
                     className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/25"
                   />
                 </div>
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Location Type</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Location Type
+                  </label>
                   <select
                     value={locationForm.type}
-                    onChange={(e) => setLocationForm({ ...locationForm, type: e.target.value })}
+                    onChange={(e) =>
+                      setLocationForm({ ...locationForm, type: e.target.value })
+                    }
                     className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/25"
                   >
                     <option value="STUDIO">Studio</option>
@@ -3587,55 +4460,90 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Full Street Address <span className="text-[11px] font-normal text-muted/70">(Optional, defaults to Locality/City)</span></label>
+                <label className="block text-muted font-semibold mb-1">
+                  Full Street Address{" "}
+                  <span className="text-[11px] font-normal text-muted/70">
+                    (Optional, defaults to Locality/City)
+                  </span>
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. 12/A Park Street, Studio Suite 4B..."
                   value={locationForm.address}
-                  onChange={(e) => setLocationForm({ ...locationForm, address: e.target.value })}
+                  onChange={(e) =>
+                    setLocationForm({
+                      ...locationForm,
+                      address: e.target.value,
+                    })
+                  }
                   className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/25"
                 />
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Locality</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Locality
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. Bandra West"
                     value={locationForm.locality}
-                    onChange={(e) => setLocationForm({ ...locationForm, locality: e.target.value })}
+                    onChange={(e) =>
+                      setLocationForm({
+                        ...locationForm,
+                        locality: e.target.value,
+                      })
+                    }
                     className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/25"
                   />
                 </div>
                 <div>
-                  <label className="block text-muted font-semibold mb-1">City</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    City
+                  </label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Mumbai"
                     value={locationForm.city}
-                    onChange={(e) => setLocationForm({ ...locationForm, city: e.target.value })}
+                    onChange={(e) =>
+                      setLocationForm({ ...locationForm, city: e.target.value })
+                    }
                     className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-semibold text-navy outline-none focus:ring-2 focus:ring-primary/25"
                   />
                 </div>
                 <div>
-                  <label className="block text-muted font-semibold mb-1">State</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    State
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. Maharashtra"
                     value={locationForm.state}
-                    onChange={(e) => setLocationForm({ ...locationForm, state: e.target.value })}
+                    onChange={(e) =>
+                      setLocationForm({
+                        ...locationForm,
+                        state: e.target.value,
+                      })
+                    }
                     className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/25"
                   />
                 </div>
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Postal PIN</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Postal PIN
+                  </label>
                   <input
                     type="text"
                     placeholder="e.g. 400050"
                     value={locationForm.postalCode}
-                    onChange={(e) => setLocationForm({ ...locationForm, postalCode: e.target.value })}
+                    onChange={(e) =>
+                      setLocationForm({
+                        ...locationForm,
+                        postalCode: e.target.value,
+                      })
+                    }
                     className="w-full bg-lavender/40 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/25"
                   />
                 </div>
@@ -3644,7 +4552,8 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
               <div className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs">
                 <span className="text-muted">Exact GPS Coordinates:</span>
                 <span className="font-mono font-bold text-primary">
-                  {Number(locationForm.coordinates?.lat || 0).toFixed(6)}° N, {Number(locationForm.coordinates?.lng || 0).toFixed(6)}° E
+                  {Number(locationForm.coordinates?.lat || 0).toFixed(6)}° N,{" "}
+                  {Number(locationForm.coordinates?.lng || 0).toFixed(6)}° E
                 </span>
               </div>
 
@@ -3653,15 +4562,23 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   type="checkbox"
                   id="primaryOriginCheck"
                   checked={locationForm.isPrimary}
-                  onChange={(e) => setLocationForm({ ...locationForm, isPrimary: e.target.checked })}
+                  onChange={(e) =>
+                    setLocationForm({
+                      ...locationForm,
+                      isPrimary: e.target.checked,
+                    })
+                  }
                   className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
                 />
-                <label htmlFor="primaryOriginCheck" className="text-xs font-semibold text-navy cursor-pointer">
+                <label
+                  htmlFor="primaryOriginCheck"
+                  className="text-xs font-semibold text-navy cursor-pointer"
+                >
                   Set as Primary Operating Origin
                 </label>
               </div>
 
-              <div className="pt-3 flex gap-2 border-t border-gray-100">
+              <div className="vendor-modal-actions pt-3 flex gap-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setShowMapModal(false)}
@@ -3674,7 +4591,7 @@ export function ProfilePage({ user, business = '', defaultTab = 'profile' }) {
                   disabled={savingLocation}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-dark transition cursor-pointer disabled:opacity-60"
                 >
-                  {savingLocation ? 'Saving…' : 'Save Location'}
+                  {savingLocation ? "Saving…" : "Save Location"}
                 </button>
               </div>
             </form>

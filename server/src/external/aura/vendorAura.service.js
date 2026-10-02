@@ -3,8 +3,10 @@ import { VendorService } from '../models/VendorService.js';
 import { getLlmAdapter } from './llmAdapter.js';
 import { buildVendorContext, PAGES, CATEGORIES, setupSummary, isAutoBusinessName } from './vendorContext.js';
 import { applyProfileFromChat } from './profileWriter.js';
-import { validateAction, describeAction, executeAction, readConfirmation } from './setupActions.js';
+import { validateAction, describeAction, executeAction, readConfirmation, dateIn, reasonFrom, isMessageRelevantToPending } from './setupActions.js';
 import { buildVendorSystemPrompt } from './vendorSystemPrompt.js';
+import { classifyAuraRequest } from '../../common/auraRouter.js';
+import { createPerformanceTracker } from '../../common/streamUtils.js';
 
 /**
  * Vendor Aura+ chat. It answers from the vendor's own data and suggests pages.
@@ -66,7 +68,7 @@ function serialize(m) {
   return { role: m.role, content: m.content, actions: m.actions || [], createdAt: m.createdAt };
 }
 
-const pendingView = (p) => (p ? { kind: p.kind, summary: describeAction(p) } : null);
+const pendingView = (p) => (p ? { kind: p.kind, summary: describeAction(p), isUpdate: Boolean(p.isUpdate) } : null);
 
 export async function getSession({ vendor, sessionId }) {
   if (!isValidSessionId(sessionId)) throw httpError(400, 'INVALID_SESSION_ID');
@@ -118,7 +120,8 @@ async function saveTurn(sessionId, text, reply, actions, pending) {
   await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date(), pending: pending ?? null } });
 }
 
-export async function chat({ vendor, user, sessionId, message, page, confirm }) {
+export async function chat({ vendor, user, sessionId, message, page, confirm }, options = {}) {
+  const tracker = createPerformanceTracker();
   const text = typeof message === 'string' ? message.trim() : '';
   if (!text) throw httpError(400, 'MESSAGE_REQUIRED');
   if (text.length > MAX_MESSAGE) throw httpError(400, 'MESSAGE_TOO_LONG');
@@ -134,15 +137,37 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }) 
       let actions = [];
       let setup = null;
       try {
-        const activation = await executeAction(vendor, session.pending);
-        const next = nextStepText(activation, vendor);
-        setup = next.setup;
-        reply = `✅ Saved — ${describeAction(session.pending)}.${next.text}`;
-        actions = next.actions;
+        const result = await executeAction(vendor, session.pending);
+        if (session.pending.kind === 'block_date') {
+          const actionWord = result?.isUpdate || session.pending.isUpdate ? 'Updated' : 'Blocked';
+          reply = `✅ ${actionWord} ${session.pending.blockout.date} on your calendar${session.pending.blockout.reason ? ` (Reason: ${session.pending.blockout.reason})` : ''}.`;
+          actions = [
+            { label: 'View Calendar', to: '/vendor/calendar' },
+            { label: 'Availability', to: '/vendor/availability' },
+          ];
+        } else if (session.pending.kind === 'revise_quote') {
+          reply = `✅ Revised offer sent for quote ${session.pending.quote.quoteRef || ''} (${session.pending.quote.customerName || 'customer'}) — Total ₹${Number(session.pending.quote.totalAmount).toLocaleString('en-IN')}.`;
+          actions = [{ label: 'View Quotes', to: '/vendor/quotes' }];
+        } else if (session.pending.kind === 'create_quote') {
+          reply = `✅ Quotation sent to ${session.pending.quote.customerName || 'customer'} for ${session.pending.quote.serviceName} — Total ₹${Number(session.pending.quote.totalAmount).toLocaleString('en-IN')}.`;
+          actions = [{ label: 'View Quotes', to: '/vendor/quotes' }];
+        } else {
+          const activation = result;
+          const next = nextStepText(activation, vendor);
+          setup = next.setup;
+          reply = `✅ Saved — ${describeAction(session.pending)}.${next.text}`;
+          actions = next.actions;
+        }
       } catch (err) {
         console.warn('[vendor-aura] setup action failed:', err?.message || err);
         reply = "Sorry, I couldn't save that. Please try again, or do it from the page below.";
-        actions = [{ label: 'Open Services', to: '/vendor/services' }];
+        if (session.pending.kind === 'block_date') {
+          actions = [{ label: 'Availability', to: '/vendor/availability' }];
+        } else if (session.pending.kind === 'revise_quote' || session.pending.kind === 'create_quote') {
+          actions = [{ label: 'Quotes', to: '/vendor/quotes' }];
+        } else {
+          actions = [{ label: 'Open Services', to: '/vendor/services' }];
+        }
       }
       await saveTurn(sessionId, text, reply, actions, null);
       return { reply, actions, fallback: false, profileUpdated: Boolean(setup), setup, pending: null };
@@ -152,26 +177,51 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }) 
       await saveTurn(sessionId, text, reply, [], null);
       return { reply, actions: [], fallback: false, profileUpdated: false, setup: null, pending: null };
     }
-    // Anything else (e.g. "make it 30k") goes to the model, which can propose a corrected action.
+    if (!isMessageRelevantToPending(session.pending, text)) {
+      session.pending = null;
+      await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { pending: null } });
+    }
   }
 
+  tracker.markContextStart();
+  if (options.onStatus) options.onStatus('context_retrieval');
   const [context, recent] = await Promise.all([
     buildVendorContext(vendor, { page: typeof page === 'string' ? page : null }),
     VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(HISTORY).lean(),
   ]);
   context.waitingForConfirmation = session.pending ? describeAction(session.pending) : null;
   const history = recent.reverse().map((m) => ({ role: m.role, content: m.content }));
+  tracker.markContextEnd();
+
+  const route = classifyAuraRequest(text, { intent: 'VENDOR_ASSISTANT' });
+  if (options.onStatus) options.onStatus(route.stage);
 
   let reply = FALLBACK_REPLY;
   let actions = [{ label: 'Open dashboard', to: '/vendor/dashboard' }];
   let fallback = true;
   let extractedProfile = {};
   let proposed = null;
+
+  tracker.markGeminiStart();
   try {
-    const res = await getLlmAdapter().chat({ systemPrompt: buildVendorSystemPrompt(context), history, message: text });
+    const res = await getLlmAdapter().chat({
+      systemPrompt: buildVendorSystemPrompt(context),
+      history,
+      message: text,
+      model: route.model,
+      thinkingLevel: route.thinkingLevel,
+      onChunk: options.onChunk ? (token) => {
+        tracker.markFirstToken();
+        options.onChunk(token);
+      } : undefined,
+      onStatus: options.onStatus,
+    });
     if (res?.text) {
       reply = res.text.slice(0, 4000);
       actions = cleanActions(res.actions);
+      if (/^\s*(talk\s*in|speak\s*in|speak|can\s*you\s*talk|can\s*you\s*speak|bangla|english|hindi|hello|hi|hey|good\s*morning|good\s*evening|thik\s*ache|theek\s*hai)\b/i.test(text)) {
+        actions = [];
+      }
       extractedProfile = res.profile || {};
       proposed = res.setupAction || null;
       fallback = false;
@@ -179,6 +229,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }) 
   } catch (err) {
     console.warn('[vendor-aura] LLM failed, using fallback:', err?.code || err?.message || err);
   }
+  tracker.markGenerationEnd();
 
   // Brand basics: save what the vendor stated, then say exactly what was saved
   // (the server writes this line, so the reply never claims a save that didn't happen).
@@ -193,10 +244,21 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }) 
   let pending = session.pending || null;
   let proposal = null;
   let missingForProposal = null;
+
+  // Fallback: If vendor asked to edit/change a blocked date reason but the model missed setupAction
+  if (!proposed && /(?:reason|notes?)\s*(?:edit|change|badlo|badal|update|karo)|(?:edit|change|update)\s*(?:the\s*)?(?:reason|notes?)/i.test(text)) {
+    const targetDate = dateIn(text) || (context?.blockedDates?.length ? context.blockedDates[context.blockedDates.length - 1]?.date : null);
+    const newReason = reasonFrom(text);
+    if (targetDate && newReason) {
+      proposed = { kind: 'block_date', blockout: { date: targetDate, reason: newReason } };
+      fallback = false;
+    }
+  }
+
   if (proposed?.kind && !fallback) {
     const said = [...history.filter((m) => m.role === 'user').slice(-6).map((m) => m.content), text].join('\n');
     const services = await VendorService.find({ vendor: vendor._id }).lean();
-    const { action, error } = validateAction(proposed, { said, vendor, services });
+    const { action, error } = validateAction(proposed, { said, vendor, services, context });
     if (action) pending = proposal = action;
     else missingForProposal = error;
   }
@@ -205,10 +267,23 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }) 
   // questions and any "I saved it" claims are dropped — only the server reports saves.
   if (saved.length || proposal || missingForProposal) {
     const head = withoutClaims(withoutQuestions(reply));
-    const parts = [head || (proposal ? 'Great, here is what I will save:' : 'Got it!')];
+    const parts = [head || (proposal ? 'Great, here is what I will do:' : 'Got it!')];
     if (saved.length) parts.push(`\n✅ Saved to your profile — ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}.`);
     if (proposal) {
-      parts.push(`\n📝 ${describeAction(proposal)}\nShall I save this? Say “yes” to save or “no” to cancel.`);
+      if (proposal.kind === 'block_date') {
+        const actionVerb = proposal.isUpdate ? 'update' : 'block';
+        const confirmBtn = proposal.isUpdate ? '✓ Confirm Update' : '✓ Confirm Block';
+        parts.push(`\n📝 ${describeAction(proposal)}\nShall I ${actionVerb} this date? Click “${confirmBtn}” or say “yes” to confirm, or “cancel”.`);
+        actions = dedupeActions([{ label: 'Availability', to: '/vendor/availability' }, { label: 'Calendar', to: '/vendor/calendar' }, ...actions]).slice(0, MAX_ACTIONS);
+      } else if (proposal.kind === 'revise_quote') {
+        parts.push(`\n📝 ${describeAction(proposal)}\nShall I send this revised offer? Click “✓ Send Revised Offer” or say “yes” to confirm, or “cancel”.`);
+        actions = dedupeActions([{ label: 'Quotes', to: '/vendor/quotes' }, ...actions]).slice(0, MAX_ACTIONS);
+      } else if (proposal.kind === 'create_quote') {
+        parts.push(`\n📝 ${describeAction(proposal)}\nShall I send this quotation? Click “✓ Send Quote” or say “yes” to confirm, or “cancel”.`);
+        actions = dedupeActions([{ label: 'Quotes', to: '/vendor/quotes' }, ...actions]).slice(0, MAX_ACTIONS);
+      } else {
+        parts.push(`\n📝 ${describeAction(proposal)}\nShall I save this? Say “yes” to save or “no” to cancel.`);
+      }
     } else if (missingForProposal) {
       parts.push(`I still need ${missingForProposal} — what is it?`);
     } else if (missingBrand(vendor).length) {
@@ -225,7 +300,17 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }) 
   }
 
   await saveTurn(sessionId, text, reply, actions, pending);
-  return { reply, actions, fallback, profileUpdated: saved.length > 0, setup, pending: pendingView(pending) };
+  return {
+    reply,
+    actions,
+    fallback,
+    profileUpdated: saved.length > 0,
+    setup,
+    pending: pendingView(pending),
+    metrics: tracker.getMetrics(),
+    model: route.model,
+    thinkingLevel: route.thinkingLevel,
+  };
 }
 
 /** Optional profile details still empty (phone, about) — asked once setup steps are done. */

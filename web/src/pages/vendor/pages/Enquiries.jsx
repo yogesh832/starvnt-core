@@ -224,8 +224,8 @@ export default function Enquiries() {
 
       {/* Quote Submission Modal */}
       {quoteModalOpp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs animate-fade">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4">
+        <div className="vendor-modal-backdrop animate-fade">
+          <div className="vendor-modal-panel max-w-md p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h2 className="text-base font-extrabold text-navy">Send Customer Offer</h2>
@@ -304,7 +304,7 @@ export default function Enquiries() {
               </div>
             </div>
 
-            <div className="pt-2 flex gap-3">
+            <div className="vendor-modal-actions pt-2 flex gap-3">
               <button
                 onClick={() => setQuoteModalOpp(null)}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted"

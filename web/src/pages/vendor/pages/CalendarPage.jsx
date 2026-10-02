@@ -335,8 +335,8 @@ export default function CalendarPage() {
 
       {/* Modal for Blocking Date */}
       {showBlockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-[pop_.18s_ease-out]">
+        <div className="vendor-modal-backdrop">
+          <div className="vendor-modal-panel max-w-sm p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <h3 className="font-extrabold text-base text-navy">Block Calendar Date</h3>
               <button
@@ -368,7 +368,7 @@ export default function CalendarPage() {
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:border-primary"
                 />
               </div>
-              <div className="pt-2 flex gap-2">
+              <div className="vendor-modal-actions pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={() => setShowBlockModal(false)}

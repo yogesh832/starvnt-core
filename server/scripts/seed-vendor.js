@@ -5,14 +5,14 @@ import { VendorOrganization } from '../src/external/models/VendorOrganization.js
 import { hashPassword } from '../src/external/utils/password.js';
 
 const DEMO_VENDOR = {
-  fullName: 'Premium Moments Studio',
+  fullName: 'Arun Roy',
   email: 'vendor@starvnt.com',
   password: 'Password123',
   phone: '+91 98765 43210',
   accountType: 'VENDOR',
-  businessName: 'Premium Moments',
+  businessName: 'Himalayan Moments & Wedding Studio',
   category: 'Photography',
-  location: 'Kolkata, West Bengal',
+  location: 'Main Market, Kapkote, Bageshwar, Uttarakhand',
 };
 
 async function main() {

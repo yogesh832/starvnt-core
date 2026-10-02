@@ -249,7 +249,7 @@ function CategoryOptions({ eventId, category }) {
                 disabled={requestBusy}
                 className="ml-auto rounded-xl bg-emerald-600 text-white font-bold px-3 py-1.5 disabled:opacity-50"
               >
-                {requestBusy ? 'Sending...' : chosen.isDemo ? 'Create test quote →' : 'Request quote →'}
+                {requestBusy ? 'Sending...' : chosen.isDemo ? 'Continue to quote →' : 'Request vendor quote →'}
               </button>
               {requestError && <span className="basis-full text-[11px] font-bold text-red-500">{requestError}</span>}
             </div>

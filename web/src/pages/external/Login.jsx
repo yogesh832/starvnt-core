@@ -32,6 +32,7 @@ export default function ExternalLogin() {
     sendOtp,
     loginWithOtp,
     loginWithWidgetOtp,
+    switchSurface,
     user,
   } = useExternalAuth();
   const { dark, toggle: toggleTheme } = useTheme();
@@ -44,8 +45,30 @@ export default function ExternalLogin() {
     window.location.pathname === "/register" ||
     params.get("mode") === "register";
 
+  const resolveInitialAccountType = () => {
+    const as = (params.get("as") || params.get("role") || params.get("type") || "").toUpperCase();
+    if (as === "VENDOR") return "VENDOR";
+    if (as === "CUSTOMER") return "CUSTOMER";
+    if (nextPath.startsWith("/vendor")) return "VENDOR";
+    if (nextPath.startsWith("/customer")) return "CUSTOMER";
+    return "CUSTOMER";
+  };
+
   const [mode, setMode] = useState(isRegisterPath ? "register" : "login");
-  const [accountType, setAccountType] = useState("VENDOR");
+  const [accountType, setAccountType] = useState(resolveInitialAccountType);
+
+  useEffect(() => {
+    const as = (params.get("as") || params.get("role") || params.get("type") || "").toUpperCase();
+    if (as === "VENDOR") {
+      setAccountType("VENDOR");
+    } else if (as === "CUSTOMER") {
+      setAccountType("CUSTOMER");
+    } else if (nextPath.startsWith("/vendor")) {
+      setAccountType("VENDOR");
+    } else if (nextPath.startsWith("/customer")) {
+      setAccountType("CUSTOMER");
+    }
+  }, [params, nextPath]);
   // Auth Method: 'GOOGLE' | 'PHONE' | 'EMAIL'
   const [authMethod, setAuthMethod] = useState("EMAIL");
 
@@ -96,9 +119,16 @@ export default function ExternalLogin() {
 
   useEffect(() => {
     if (user) {
+      const explicitAs = (params.get("as") || params.get("role") || params.get("type") || "").toUpperCase();
+      const targetFromNext = nextPath.startsWith("/customer") ? "CUSTOMER" : nextPath.startsWith("/vendor") ? "VENDOR" : null;
+      const desiredTarget = explicitAs || targetFromNext;
+      // If user came specifically wanting a different accountType than what is currently active, don't auto-redirect them away immediately
+      if (desiredTarget && user.accountType !== desiredTarget) {
+        return;
+      }
       redirectAfterAuth(user);
     }
-  }, [user, nextPath]);
+  }, [user, nextPath, params]);
 
   // OTP Countdown Timer
   useEffect(() => {
@@ -622,9 +652,17 @@ export default function ExternalLogin() {
                 <div className="flex bg-gray-100/90 p-1 rounded-2xl text-xs font-bold shrink-0 border border-gray-200/50">
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setAccountType('CUSTOMER');
                       setError('');
+                      if (user && user.accountType !== 'CUSTOMER') {
+                        try {
+                          await switchSurface('CUSTOMER');
+                          navigate(getSafeNextPath('CUSTOMER'), { replace: true });
+                        } catch (err) {
+                          console.error("Failed to switch surface", err);
+                        }
+                      }
                     }}
                     className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
                       accountType === 'CUSTOMER' ? 'bg-navy text-white shadow-sm' : 'text-muted hover:text-navy'
@@ -634,9 +672,17 @@ export default function ExternalLogin() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setAccountType('VENDOR');
                       setError('');
+                      if (user && user.accountType !== 'VENDOR') {
+                        try {
+                          await switchSurface('VENDOR');
+                          navigate(getSafeNextPath('VENDOR'), { replace: true });
+                        } catch (err) {
+                          console.error("Failed to switch surface", err);
+                        }
+                      }
                     }}
                     className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
                       accountType === 'VENDOR' ? 'bg-navy text-white shadow-sm' : 'text-muted hover:text-navy'

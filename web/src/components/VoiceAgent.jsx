@@ -107,11 +107,31 @@ export function useVoiceAgent({ onUtterance, lang = 'en-IN' }) {
       setStatus('thinking');
       setReply('');
       let answer = null;
+      let progressTimer = null;
+      let hasSpokenProgress = false;
+
+      const PROGRESS_PHRASES = [
+        'Okay, let me get that information for you.',
+        'Sure, let me check that for you.',
+        'Got it, I’m looking into that for you.',
+      ];
+
+      progressTimer = setTimeout(() => {
+        if (activeRef.current && !hasSpokenProgress) {
+          hasSpokenProgress = true;
+          const phrase = PROGRESS_PHRASES[Math.floor(Math.random() * PROGRESS_PHRASES.length)];
+          speakProgress(phrase);
+        }
+      }, 1200);
+
       try {
         answer = await onUtteranceRef.current(said);
       } catch {
         answer = null;
+      } finally {
+        if (progressTimer) clearTimeout(progressTimer);
       }
+
       if (!activeRef.current) return;
       if (answer) {
         setReply(answer);
@@ -133,6 +153,42 @@ export function useVoiceAgent({ onUtterance, lang = 'en-IN' }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function speakProgress(text) {
+    if (!canSpeak || !activeRef.current) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = /[ऀ-ॿ]/.test(text) ? 'hi-IN' : /[ঀ-৿]/.test(text) ? 'bn-IN' : 'en-IN';
+    const voice = pickVoice(u.lang);
+    if (voice) u.voice = voice;
+
+    const t0 = performance.now();
+    const wobble = () => {
+      const t = (performance.now() - t0) / 1000;
+      setLevel(0.35 + 0.25 * Math.abs(Math.sin(t * 6.3)) * Math.abs(Math.sin(t * 2.1 + 1)));
+      speakRaf.current = requestAnimationFrame(wobble);
+    };
+
+    u.onstart = () => {
+      setStatus('speaking');
+      wobble();
+    };
+    u.onend = () => {
+      cancelAnimationFrame(speakRaf.current);
+      setLevel(0);
+      if (activeRef.current) {
+        setStatus('thinking');
+      }
+    };
+    u.onerror = () => {
+      cancelAnimationFrame(speakRaf.current);
+      setLevel(0);
+      if (activeRef.current) {
+        setStatus('thinking');
+      }
+    };
+    window.speechSynthesis.speak(u);
+  }
 
   function speak(text) {
     if (!canSpeak) {
@@ -288,49 +344,64 @@ const STATUS_TEXT = {
   speaking: 'Speaking… tap the orb to interrupt',
 };
 
-/** Full-screen voice conversation with the orb, live caption, mute and end. */
-export function VoiceAgentOverlay({ agent, title = 'Aura+', subtitle = 'Voice mode', lang, onToggleLang }) {
+/** Voice conversation with the orb, live caption, mute and end. Can be full-screen or embedded inside the Aura panel. */
+export function VoiceAgentOverlay({ agent, title = 'Aura+', subtitle = 'Voice mode', lang, onToggleLang, embedded = false }) {
   if (!agent.open) return null;
   const caption = agent.status === 'listening' ? agent.transcript : agent.status === 'speaking' || agent.status === 'thinking' ? agent.reply || agent.transcript : '';
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col items-center justify-between bg-gradient-to-b from-[#0f0b24] via-[#171036] to-[#0b1026] text-white px-6 py-8" role="dialog" aria-label={`${title} voice mode`}>
+    <div
+      className={
+        embedded
+          ? "absolute inset-0 z-30 flex flex-col items-center justify-between bg-gradient-to-b from-[#0f0b24] via-[#171036] to-[#0b1026] text-white px-5 py-6 rounded-3xl overflow-hidden shadow-2xl animate-[pop_.18s_ease-out]"
+          : "fixed inset-0 z-[70] flex flex-col items-center justify-between bg-gradient-to-b from-[#0f0b24] via-[#171036] to-[#0b1026] text-white px-6 py-8"
+      }
+      role="dialog"
+      aria-label={`${title} voice mode`}
+    >
       <div className="w-full max-w-md flex items-center justify-between">
         <div>
           <div className="text-sm font-extrabold">{title}</div>
           <div className="text-[11px] text-white/60">{subtitle}</div>
         </div>
-        {onToggleLang && (
-          <button onClick={onToggleLang} className="rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10">
-            {lang === 'hi-IN' ? 'हिंदी' : 'English'}
-          </button>
-        )}
-      </div>
-
-      <div className="flex flex-col items-center gap-8">
-        <button onClick={agent.interrupt} className="rounded-full focus:outline-none" aria-label="Voice orb" title={agent.status === 'speaking' ? 'Tap to interrupt' : undefined}>
-          <VoiceOrb status={agent.muted ? 'idle' : agent.status} level={agent.level} size={Math.min(260, typeof window !== 'undefined' ? window.innerWidth * 0.62 : 260)} />
-        </button>
-        <div className="text-center max-w-md min-h-[84px]">
-          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">{agent.muted ? STATUS_TEXT.idle : STATUS_TEXT[agent.status]}</div>
-          {caption && <p className="mt-3 text-[15px] leading-relaxed text-white/90 line-clamp-4">{caption}</p>}
-          {agent.error && <p className="mt-3 text-xs text-rose-300">{agent.error}</p>}
+        <div className="flex items-center gap-2">
+          {onToggleLang && (
+            <button onClick={onToggleLang} className="rounded-full border border-white/20 px-2.5 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10 transition">
+              {lang === 'hi-IN' ? 'हिंदी' : 'English'}
+            </button>
+          )}
+          {embedded && (
+            <button onClick={agent.end} className="w-7 h-7 grid place-items-center rounded-xl bg-white/10 hover:bg-white/20 text-white/80 transition" aria-label="Close voice mode">
+              <Icon name="close" size={14} />
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex flex-col items-center gap-5 my-auto">
+        <button onClick={agent.interrupt} className="rounded-full focus:outline-none" aria-label="Voice orb" title={agent.status === 'speaking' ? 'Tap to interrupt' : undefined}>
+          <VoiceOrb status={agent.muted ? 'idle' : agent.status} level={agent.level} size={embedded ? 165 : Math.min(260, typeof window !== 'undefined' ? window.innerWidth * 0.62 : 260)} />
+        </button>
+        <div className="text-center max-w-xs min-h-[70px]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/50">{agent.muted ? STATUS_TEXT.idle : STATUS_TEXT[agent.status]}</div>
+          {caption && <p className="mt-2.5 text-[13px] leading-relaxed text-white/90 line-clamp-3">{caption}</p>}
+          {agent.error && <p className="mt-2 text-xs text-rose-300">{agent.error}</p>}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-5 shrink-0">
         <button
           onClick={agent.toggleMute}
-          className={`w-14 h-14 rounded-full grid place-items-center transition ${agent.muted ? 'bg-white text-[#171036]' : 'bg-white/10 text-white hover:bg-white/20'}`}
+          className={`w-12 h-12 rounded-full grid place-items-center transition ${agent.muted ? 'bg-white text-[#171036]' : 'bg-white/10 text-white hover:bg-white/20'}`}
           aria-label={agent.muted ? 'Unmute' : 'Mute'}
           title={agent.muted ? 'Unmute' : 'Mute'}
         >
           <span className="relative">
-            <Icon name="mic" size={22} />
-            {agent.muted && <span className="absolute left-1/2 top-1/2 h-[2px] w-7 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-current rounded" />}
+            <Icon name="mic" size={20} />
+            {agent.muted && <span className="absolute left-1/2 top-1/2 h-[2px] w-6 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-current rounded" />}
           </span>
         </button>
-        <button onClick={agent.end} className="w-14 h-14 rounded-full grid place-items-center bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/30" aria-label="End voice mode" title="End">
-          <Icon name="close" size={22} />
+        <button onClick={agent.end} className="w-12 h-12 rounded-full grid place-items-center bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/30 transition" aria-label="End voice mode" title="End">
+          <Icon name="close" size={20} />
         </button>
       </div>
     </div>

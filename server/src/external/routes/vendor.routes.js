@@ -1278,6 +1278,21 @@ router.post('/documents/verify-gstin', async (req, res, next) => {
   }
 });
 
+function providerReviewReason(result, label) {
+  const code = String(result?.error || '').toLowerCase();
+  const message = String(result?.message || '').toLowerCase();
+  if (code.includes('insufficient') || code.includes('credit') || message.includes('insufficient') || message.includes('credit')) {
+    return `${label} automatic verification could not run because provider credits are unavailable.`;
+  }
+  if (code.includes('fetch') || message.includes('failed to fetch')) {
+    return `${label} automatic verification could not reach the provider.`;
+  }
+  if (code.includes('not_configured')) {
+    return `${label} automatic verification is not configured.`;
+  }
+  return `${label} check could not auto-verify.`;
+}
+
 router.post('/documents', async (req, res, next) => {
   try {
     const { title, type, documentNumber, fileName, fileUrl, fileSize, notes, expiryDate } = req.body || {};
@@ -1316,7 +1331,7 @@ router.post('/documents', async (req, res, next) => {
         status = 'SUBMITTED';
         const reason = result.ok
           ? `GSTIN found, but name did not confidently match "${req.vendor.businessName}".`
-          : `GSTIN check could not auto-verify: ${result.error || 'unknown error'}.`;
+          : providerReviewReason(result, 'GSTIN');
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
       }
     } else if (normalizedType === 'PAN') {
@@ -1346,7 +1361,7 @@ router.post('/documents', async (req, res, next) => {
         status = 'SUBMITTED';
         const reason = result.ok
           ? `Corporate PAN found, but registered name did not confidently match "${req.vendor.businessName}".`
-          : `Corporate PAN check could not auto-verify: ${result.error || result.message || 'unknown error'}.`;
+          : providerReviewReason(result, 'Corporate PAN');
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
       }
     }

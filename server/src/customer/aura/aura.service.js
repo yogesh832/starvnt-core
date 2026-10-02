@@ -9,6 +9,8 @@ import { writeExtraction } from './extractionWriter.js';
 import { buildUnderstanding, nextQuestion, serializeEvent } from '../services/understanding.js';
 import { findBudgetRange, budgetRangesFor, normalizeEventType } from '../services/planCatalog.js';
 import { badRequest, forbidden, notFound, HttpError } from '../utils/http.js';
+import { classifyAuraRequest } from '../../common/auraRouter.js';
+import { createPerformanceTracker } from '../../common/streamUtils.js';
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const SKIP_TOPIC_RE = /^(event|requirement|location)\.[a-z_]+$/;
@@ -103,7 +105,8 @@ function createDraftFrom(customerId, facts) {
 /**
  * POST /aura/chat pipeline (Blueprint §5.1).
  */
-export async function chat(customer, { sessionId, message, eventId, skipTopic, budgetRange, serviceLocation } = {}) {
+export async function chat(customer, { sessionId, message, eventId, skipTopic, budgetRange, serviceLocation } = {}, options = {}) {
+  const tracker = createPerformanceTracker();
   const customerId = customer._id;
   const text = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE) : '';
   if (!text) throw badRequest('MESSAGE_REQUIRED', 'Please type a message');
@@ -156,21 +159,40 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   }
   if (event && chipWrites.length) event = await core.getEvent(customerId, event._id);
 
-  // 4. Context
+  // 4. Context & Request Routing
+  tracker.markContextStart();
+  if (options.onStatus) options.onStatus('context_retrieval');
   const { prompt: context } = await buildContext({ customer, event });
   const history = await auraRepo.recentMessages(sessionId, 12);
+  tracker.markContextEnd();
+
+  const route = classifyAuraRequest(text, { intent: event?.eventType ? 'EVENT_PLAN' : 'GENERAL' });
+  if (options.onStatus) options.onStatus(route.stage);
 
   // 5. LLM
   let reply = '';
   let rawExtracted = {};
+  tracker.markGeminiStart();
   try {
-    const out = await getLlmAdapter().chat({ systemPrompt: buildSystemPrompt(context), history, message: text });
+    const out = await getLlmAdapter().chat({
+      systemPrompt: buildSystemPrompt(context),
+      history,
+      message: text,
+      model: route.model,
+      thinkingLevel: route.thinkingLevel,
+      onChunk: options.onChunk ? (token) => {
+        tracker.markFirstToken();
+        options.onChunk(token);
+      } : undefined,
+      onStatus: options.onStatus,
+    });
     reply = out.text;
     rawExtracted = out.extracted || {};
   } catch (err) {
     console.warn('[aura] LLM unavailable:', err?.message || err);
     reply = FALLBACK_REPLY;
   }
+  tracker.markGenerationEnd();
 
   // 6–7. Guards, then the deterministic fallback parser (blanks only)
   const { extracted: guarded, dropped } = applyGuards(rawExtracted, text, { askedTopic });
@@ -257,6 +279,9 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
     written: [...chipWrites, ...writes.written],
     skipped: writes.skipped,
     createdEventId: createdEventId ? String(createdEventId) : null,
+    metrics: tracker.getMetrics(),
+    model: route.model,
+    thinkingLevel: route.thinkingLevel,
     ...after,
   };
 }

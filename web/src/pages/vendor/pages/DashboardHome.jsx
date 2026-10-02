@@ -342,8 +342,8 @@ export function Performance({ enquiries = [], quotes = [], bookings = [] }) {
 function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
   if (!enquiry) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 animate-[pop_.18s_ease-out]">
+    <div className="vendor-modal-backdrop">
+      <div className="vendor-modal-panel max-w-lg p-4 sm:p-6 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
           <div>
             <div className="flex items-center gap-2">
@@ -394,7 +394,7 @@ function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
           </div>
         </div>
 
-        <div className="pt-2 flex gap-3">
+        <div className="vendor-modal-actions pt-2 flex gap-3">
           <button
             onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:text-navy transition"
@@ -426,8 +426,8 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
   const total = (Number(basePrice) || 0) + (Number(travelFee) || 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-[pop_.18s_ease-out]">
+    <div className="vendor-modal-backdrop">
+      <div className="vendor-modal-panel max-w-md p-4 sm:p-6 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-extrabold text-navy">Prepare Official Quote</h2>
@@ -474,7 +474,7 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
           </div>
         </div>
 
-        <div className="pt-2 flex gap-3">
+        <div className="vendor-modal-actions pt-2 flex gap-3">
           <button
             onClick={() => {
               onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, status: 'DRAFT' });
@@ -661,6 +661,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [activation, setActivation] = useState(null);
   const [vendorProfile, setVendorProfile] = useState(null);
+  const [googleRating, setGoogleRating] = useState(null);
   const [gotItAcknowledged, setGotItAcknowledged] = useState(() => localStorage.getItem('vendorOnboardingDismissed') === 'true');
   const [completingProfile, setCompletingProfile] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -697,6 +698,10 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       }
       if (profRes?.ok && profRes.vendor) {
         setVendorProfile(profRes.vendor);
+        if (profRes.googleRating) setGoogleRating(profRes.googleRating);
+      }
+      if (revRes?.ok && revRes.googleRating) {
+        setGoogleRating(revRes.googleRating);
       }
       if (blRes?.ok && Array.isArray(blRes.blockouts)) {
         setBlockouts(blRes.blockouts);
@@ -1084,9 +1089,18 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const confirmedBookingValue = bookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
   const activeBookingsCount = bookings.filter((b) => b.status !== 'CANCELLED').length;
   const activeEnquiriesCount = enquiries.filter((e) => e.status === 'New' || e.status === 'NEW').length;
-  const avgRatingDisplay = reviewStats?.averageRating && reviewStats.averageRating !== '0.0'
+  const hasStarvntReviews = (reviewStats?.totalReviews || 0) > 0;
+  const avgRatingDisplay = hasStarvntReviews && reviewStats.averageRating !== '0.0'
     ? `${reviewStats.averageRating}`
+    : googleRating?.rating
+    ? `${googleRating.rating}`
     : '5.0';
+
+  const ratingFoot = hasStarvntReviews
+    ? `${reviewStats?.totalReviews} verified client reviews`
+    : googleRating?.rating
+    ? `${googleRating.reviewCount || 0} reviews on Google Maps`
+    : '0 verified client reviews';
 
   const dynamicStats = [
     {
@@ -1114,10 +1128,10 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       iconBg: 'bg-primary-soft text-primary',
     },
     {
-      label: 'Client Rating',
+      label: googleRating?.rating && !hasStarvntReviews ? 'Google Maps Rating' : 'Client Rating',
       value: avgRatingDisplay,
-      foot: `${reviewStats?.totalReviews || 0} verified client reviews`,
-      footClass: (reviewStats?.totalReviews || 0) > 0 ? 'text-amber-500' : 'text-muted',
+      foot: ratingFoot,
+      footClass: (hasStarvntReviews || googleRating?.rating) ? 'text-amber-500 font-bold' : 'text-muted',
       icon: 'star',
       iconBg: 'bg-amber-50 text-amber-500',
     },
@@ -1535,47 +1549,47 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         </div>
 
         {/* 2-Column Section: Recent Enquiries & Upcoming Bookings */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 min-w-0">
 
           {/* Recent Enquiries / Matching Leads */}
-          <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 flex flex-col justify-between">
+          <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 flex flex-col justify-between min-w-0">
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-primary-soft text-primary grid place-items-center">
+                  <div className="w-7 h-7 rounded-xl bg-primary-soft text-primary grid place-items-center shrink-0">
                     <Icon name="message" size={15} />
                   </div>
                   <h2 className="font-extrabold text-base text-navy">Recent Enquiries</h2>
                   {enquiries.length > 0 && (
-                    <span className="text-[10px] font-extrabold bg-primary-soft text-primary px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-extrabold bg-primary-soft text-primary px-2 py-0.5 rounded-full shrink-0">
                       {enquiries.length}
                     </span>
                   )}
                 </div>
-                <Link to="/vendor/enquiries" className="text-xs font-bold text-primary hover:underline">
+                <Link to="/vendor/enquiries" className="text-xs font-bold text-primary hover:underline shrink-0">
                   View all leads →
                 </Link>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0">
                 {enquiries.slice(0, 3).map((e) => (
                   <div
                     key={e.id}
-                    className="flex gap-3.5 border border-gray-100 rounded-2xl p-3.5 hover:shadow-xs hover:border-gray-200 transition bg-white"
+                    className="flex gap-3.5 border border-gray-100 rounded-2xl p-3.5 hover:shadow-xs hover:border-gray-200 transition bg-white min-w-0"
                   >
                     <div className="w-12 h-12 rounded-xl bg-lavender text-primary grid place-items-center font-bold text-sm shrink-0">
                       <Icon name="message" size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
                         <span className="font-bold text-sm text-navy truncate">{e.title}</span>
-                        <span className="text-[10px] text-muted whitespace-nowrap">{e.ago}</span>
+                        <span className="text-[10px] text-muted whitespace-nowrap shrink-0">{e.ago}</span>
                       </div>
                       <div className="text-[11px] text-muted truncate mt-0.5">{e.meta}</div>
-                      <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-gray-50">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-gray-50 flex-wrap sm:flex-nowrap">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                           {e.chips.slice(0, 2).map((c) => (
-                            <span key={c} className="text-[9px] bg-lavender rounded-md px-2 py-0.5 text-muted font-semibold">
+                            <span key={c} className="text-[9px] bg-lavender rounded-md px-2 py-0.5 text-muted font-semibold truncate max-w-[110px]">
                               {c}
                             </span>
                           ))}
@@ -1583,7 +1597,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                         </div>
                         <button
                           onClick={() => setSelectedEnquiry(e)}
-                          className="text-xs font-bold text-primary hover:underline shrink-0"
+                          className="text-xs font-bold text-primary hover:underline shrink-0 ml-auto"
                         >
                           View Enquiry →
                         </button>
@@ -1628,43 +1642,43 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           </div>
 
           {/* Upcoming Bookings */}
-          <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 flex flex-col justify-between">
+          <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 flex flex-col justify-between min-w-0">
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-sky-50 text-sky-600 grid place-items-center">
+                  <div className="w-7 h-7 rounded-xl bg-sky-50 text-sky-600 grid place-items-center shrink-0">
                     <Icon name="bookings" size={15} />
                   </div>
                   <h2 className="font-extrabold text-base text-navy">Upcoming Bookings</h2>
                   {bookings.length > 0 && (
-                    <span className="text-[10px] font-extrabold bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-extrabold bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full shrink-0">
                       {bookings.length}
                     </span>
                   )}
                 </div>
-                <Link to="/vendor/bookings" className="text-xs font-bold text-primary hover:underline">
+                <Link to="/vendor/bookings" className="text-xs font-bold text-primary hover:underline shrink-0">
                   View all bookings →
                 </Link>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0">
                 {bookings.slice(0, 3).map((b) => (
                   <div
                     key={b.id}
-                    className="flex gap-3.5 items-center border border-gray-100 rounded-2xl p-3.5 hover:shadow-xs hover:border-gray-200 transition bg-white"
+                    className="flex gap-3.5 items-center border border-gray-100 rounded-2xl p-3.5 hover:shadow-xs hover:border-gray-200 transition bg-white min-w-0"
                   >
                     <div className="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 grid place-items-center font-bold text-xs shrink-0">
                       <Icon name="bookings" size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
                         <span className="font-bold text-sm text-navy truncate">{b.title}</span>
                         <StatusChip status={b.status} />
                       </div>
                       <div className="text-[11px] text-muted truncate mt-0.5">{b.meta}</div>
-                      <div className="mt-1.5 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-emerald-600">Core Escrow Secured</span>
-                        <Link to="/vendor/bookings" className="text-xs font-bold text-primary hover:underline">
+                      <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                        <span className="text-[10px] font-bold text-emerald-600 truncate">Core Escrow Secured</span>
+                        <Link to="/vendor/bookings" className="text-xs font-bold text-primary hover:underline shrink-0 ml-auto">
                           View Details →
                         </Link>
                       </div>

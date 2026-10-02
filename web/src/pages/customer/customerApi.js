@@ -62,6 +62,7 @@ export const customerApi = {
   auraSession: (sid, eventId) =>
     externalApi.call(`/aura/sessions/${encodeURIComponent(sid)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`),
   auraChat: (body) => externalApi.call('/aura/chat', { method: 'POST', body }),
+  auraChatStream: (body, onEvent, signal) => externalApi.stream('/aura/chat', { method: 'POST', body, signal }, onEvent),
 };
 
 /** Human message for an API error. */

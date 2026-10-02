@@ -258,7 +258,7 @@ export async function requestVendorQuotes(customerId, eventId) {
     }
   }
   if (!requestedCount && skippedDemoCount > 0) {
-    throw badRequest('NO_REAL_VENDOR_SELECTIONS', 'Select a real vendor option first. Demo listings only support sandbox test estimates.');
+    throw badRequest('NO_REAL_VENDOR_SELECTIONS', 'Select a real vendor option first. Demo listings can continue through catalog quote flow only.');
   }
   if (!requestedCount) throw badRequest('NO_VENDOR_REQUESTS_CREATED', 'No vendor quote request could be created for the current selections.');
   await eventsRepo.appendHistory({

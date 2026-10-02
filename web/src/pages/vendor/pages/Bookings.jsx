@@ -381,8 +381,8 @@ export default function Bookings() {
 
       {/* Cloudinary Multi-Image & Video Completion Evidence Submission Modal */}
       {evidenceModalBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-navy/70 backdrop-blur-xs overflow-y-auto animate-fade">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full p-6 space-y-4 my-auto border border-gray-100 max-h-[92vh] flex flex-col">
+        <div className="vendor-modal-backdrop animate-fade">
+          <div className="vendor-modal-panel vendor-modal-panel-flex max-w-xl p-4 sm:p-6 space-y-4">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-gray-100 shrink-0">
               <div>
@@ -403,7 +403,7 @@ export default function Bookings() {
               </button>
             </div>
 
-            <div className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+            <div className="vendor-modal-scroll space-y-4 text-xs pr-1">
               {/* Cloudinary Drag & Drop Multi-Upload Box */}
               <div>
                 <label className="block text-navy font-bold mb-1.5 flex items-center justify-between">
@@ -597,7 +597,7 @@ export default function Bookings() {
             </div>
 
             {/* Modal Actions */}
-            <div className="pt-2 flex gap-3 border-t border-gray-100 shrink-0">
+            <div className="vendor-modal-actions pt-2 flex gap-3 border-t border-gray-100">
               <button
                 type="button"
                 onClick={() => setEvidenceModalBooking(null)}

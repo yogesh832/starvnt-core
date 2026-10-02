@@ -124,6 +124,16 @@ export function ExternalAuthProvider({ children }) {
     return data.user;
   }
 
+  async function switchSurface(targetType) {
+    const data = await externalApi.call("/auth/switch-surface", {
+      method: "POST",
+      body: { targetSurface: targetType },
+    });
+    externalApi.setToken(data.accessToken);
+    setUser(data.user);
+    return data.user;
+  }
+
   async function logout() {
     await externalApi.call("/auth/logout", { method: "POST" }).catch(() => {});
     externalApi.setToken(null);
@@ -145,6 +155,7 @@ export function ExternalAuthProvider({ children }) {
         loginWithOtp,
         loginWithEmailOtp,
         loginWithWidgetOtp,
+        switchSurface,
         logout,
       }}
     >

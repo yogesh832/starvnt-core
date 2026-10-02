@@ -5,6 +5,7 @@
  */
 export function makeApi(base, refreshPath, options = {}) {
   const storageKey = options.storageKey || "";
+  const loginRedirectPath = options.loginRedirectPath || null;
   let token = null;
   let refreshing = null;
 
@@ -62,12 +63,19 @@ export function makeApi(base, refreshPath, options = {}) {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      
-      // Global Auth enforcement: If 401 after retry, session is dead.
+
+      // Auth enforcement: clear token on 401.
+      // NEVER hard redirect if:
+      // - The request was an auth endpoint (/login, /auth/login, /auth/refresh, etc.)
+      // - The user is already on a login page (/login or /admin/login)
+      // Only redirect if a protected app route returned 401 and loginRedirectPath is configured.
       if (res.status === 401) {
         setToken(null);
-        if (typeof window !== "undefined") {
-          window.location.href = "/login?expired=1";
+        const isAuthEndpoint = /\/auth\/(login|refresh|me|verify|otp)/i.test(path) || /\/login/i.test(path);
+        const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+        const isOnLoginPage = currentPath.includes("/login");
+        if (!isAuthEndpoint && !isOnLoginPage && loginRedirectPath && typeof window !== "undefined") {
+          window.location.href = `${loginRedirectPath}?expired=1`;
         }
       }
 
@@ -84,7 +92,46 @@ export function makeApi(base, refreshPath, options = {}) {
     return res.json().catch(() => ({}));
   }
 
-  return { call, raw, refresh, setToken, getToken: () => token };
+  async function stream(path, { method = "POST", body, headers = {}, signal } = {}, onEvent) {
+    const res = await raw(path, {
+      method,
+      body,
+      headers: { Accept: "text/event-stream", ...headers },
+      signal,
+    });
+
+    if (!res.body) {
+      throw new Error("ReadableStream not supported");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (let line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("data: ")) {
+          const dataStr = trimmed.slice(6);
+          try {
+            const event = JSON.parse(dataStr);
+            if (onEvent) onEvent(event);
+          } catch {
+            // ignore malformed JSON line
+          }
+        }
+      }
+    }
+  }
+
+  return { call, raw, stream, refresh, setToken, getToken: () => token };
 }
 
 export function friendlyApiMessage(code, status) {
@@ -121,9 +168,10 @@ const API_BASE = import.meta.env.VITE_API_URL
 export const externalApi = makeApi(
   `${API_BASE}/api`,
   `${API_BASE}/api/auth/refresh`,
-  { storageKey: "starvnt_external_access_token" },
+  { storageKey: "starvnt_external_access_token", loginRedirectPath: "/login" },
 );
 export const adminApi = makeApi(
   `${API_BASE}/api/admin`,
   `${API_BASE}/api/admin/auth/refresh`,
+  { storageKey: "starvnt_admin_access_token", loginRedirectPath: "/admin/login" },
 );

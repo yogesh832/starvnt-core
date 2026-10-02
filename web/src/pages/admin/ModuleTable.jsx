@@ -6,6 +6,14 @@ import { StatusChip } from '../../components/ui.jsx';
 import EventWorkspace from './EventWorkspace.jsx';
 import CouponModal from './CouponModal.jsx';
 import BookingDetailModal from './BookingDetailModal.jsx';
+import VendorKycModal from './VendorKycModal.jsx';
+import {
+  VendorEditModal,
+  CustomerEditModal,
+  UserRestrictModal,
+  UserFlagModal,
+  ConfirmDeleteModal,
+} from './UserActionModals.jsx';
 import { AdminEmptyState, AdminErrorState, AdminPageHeader, AdminStatCard, AdminTableSkeleton } from './adminUi.jsx';
 
 /**
@@ -18,16 +26,16 @@ import { AdminEmptyState, AdminErrorState, AdminPageHeader, AdminStatCard, Admin
  */
 const MODULE_DATA = {
   customers: {
-    title: 'Customers', add: '+ Add Customer',
-    tabs: ['All', 'Active', 'Inactive'], filters: ['Event Type', 'Date Range'],
-    columns: ['Name', 'Phone', 'Email', 'Events', 'Status'],
+    title: 'Customers', add: null,
+    tabs: ['All', 'Active', 'Flagged', 'Suspended', 'Inactive'], filters: [],
+    columns: ['Customer', 'Phone', 'Email', 'Status'],
     rows: [],
     total: 0, pages: 1,
   },
   vendors: {
-    title: 'Vendors', add: '+ Add Vendor',
-    tabs: ['All', 'Verified', 'Pending', 'Rejected'], filters: ['Category', 'Location'],
-    columns: ['Business', 'Category', 'Location', 'KYC', 'Status'],
+    title: 'Vendors', add: null,
+    tabs: ['All', 'Verified', 'Pending', 'Flagged', 'Suspended', 'Rejected'], filters: ['Category', 'Location'],
+    columns: ['Business', 'Contact', 'Category', 'Location', 'KYC', 'Status'],
     rows: [],
     total: 0, pages: 1,
   },
@@ -108,7 +116,7 @@ function adminEventStatusLabel(status) {
   return labels[status] || status || 'Draft';
 }
 
-export default function ModuleTable({ kind }) {
+export default function ModuleTable({ kind, embedded = false }) {
   const m = MODULE_DATA[kind];
   const [searchParams, setSearchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
@@ -119,7 +127,14 @@ export default function ModuleTable({ kind }) {
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
 
   const [selectedEventWorkspace, setSelectedEventWorkspace] = useState(null);
+  const [selectedVendorForKyc, setSelectedVendorForKyc] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // User Actions (Vendors & Customers)
+  const [editModalTarget, setEditModalTarget] = useState(null); // { item, type: 'vendor' | 'customer' }
+  const [restrictModalTarget, setRestrictModalTarget] = useState(null);
+  const [flagModalTarget, setFlagModalTarget] = useState(null);
+  const [deleteModalTarget, setDeleteModalTarget] = useState(null);
 
   // Bookings-specific filters and modals
   const [selectedBookingForDetail, setSelectedBookingForDetail] = useState(null);
@@ -267,13 +282,26 @@ export default function ModuleTable({ kind }) {
             ]);
           }
           if (kind === 'vendors' && res.organizations) {
-            mappedRows = res.organizations.map(v => [
-              v.businessName || '—',
-              v.category || '—',
-              v.location || '—',
-              v.verification?.isVerified ? 'Verified' : 'Pending',
-              v.status || 'PENDING'
-            ]);
+            mappedRows = res.organizations.map((v) => {
+              const isRestricted = v.isRestricted || v.status === 'SUSPENDED';
+              const isFlagged = v.isFlagged;
+              let statusDisplay = v.status || 'PENDING';
+              if (isFlagged) statusDisplay = 'Flagged';
+              else if (isRestricted) statusDisplay = 'Suspended';
+
+              const contact = v.owner
+                ? `${v.owner.fullName || ''}${v.phone || v.owner.phone ? ` · ${v.phone || v.owner.phone}` : ''}`
+                : (v.phone || '—');
+
+              return [
+                v.businessName || '—',
+                contact,
+                v.category || '—',
+                v.location || '—',
+                v.verification?.isVerified ? 'Verified' : 'Pending',
+                statusDisplay,
+              ];
+            });
           }
           if (kind === 'events' && res.events) {
             mappedRows = res.events.map(e => [
@@ -285,13 +313,20 @@ export default function ModuleTable({ kind }) {
             ]);
           }
           if (kind === 'customers' && res.customers) {
-            mappedRows = res.customers.map(cu => [
-              cu.fullName || '—',
-              cu.phone || '—',
-              cu.email || '—',
-              '0',
-              'ACTIVE'
-            ]);
+            mappedRows = res.customers.map((cu) => {
+              const isRestricted = cu.isRestricted || cu.status === 'SUSPENDED';
+              const isFlagged = cu.isFlagged;
+              let statusDisplay = cu.status || 'ACTIVE';
+              if (isFlagged) statusDisplay = 'Flagged';
+              else if (isRestricted) statusDisplay = 'Suspended';
+
+              return [
+                cu.fullName || '—',
+                cu.phone || '—',
+                cu.email || '—',
+                statusDisplay,
+              ];
+            });
           }
           setApiData({
             rows: mappedRows,
@@ -541,22 +576,24 @@ export default function ModuleTable({ kind }) {
                       onClick={() => {
                         if (kind === 'events') setSelectedEventWorkspace(row[0]);
                         if (kind === 'bookings' && apiData.raw?.[i]) setSelectedBookingForDetail(apiData.raw[i]);
+                        if (kind === 'vendors' && apiData.raw?.[i]) setSelectedVendorForKyc(apiData.raw[i]);
                       }}
                       className={`border-b border-gray-50 last:border-0 hover:bg-lavender/40 transition ${
-                        ['events', 'bookings'].includes(kind) ? 'cursor-pointer' : ''
+                        ['events', 'bookings', 'vendors'].includes(kind) ? 'cursor-pointer' : ''
                       }`}
                     >
                       {row.map((cell, j) => (
                         <td key={j} className="px-4 py-4 align-top">
                           {typeof cell === 'string' && [
-                            'Active','Verified','Confirmed','Completed','Planning','Pending','Scheduled','In Progress','Inactive','Rejected','Cancelled','Draft',
+                            'Active','ACTIVE','Verified','VERIFIED','Confirmed','Completed','Planning','Pending','PENDING','Scheduled','In Progress','Inactive','Rejected','REJECTED','Cancelled','Disabled','DISABLED','Draft','DRAFT',
+                            'Flagged','Suspended','SUSPENDED','PROFILE_INCOMPLETE',
                             'NOT_STARTED','SERVICE_SCHEDULED','SERVICE_STARTED','COMPLETION_SUBMITTED','COMPLETION_VERIFIED',
                             'NOT_ELIGIBLE','SETTLEMENT_ELIGIBLE','SETTLEMENT_HOLD','SETTLED',
                             'PAID','PARTIAL','FAILED','DISPUTED','PAYMENT_VERIFIED','PENDING_PAYMENT'
                           ].includes(cell) ? (
                             <StatusChip status={cell} />
                           ) : (
-                            <span className={`block leading-5 ${j === 0 ? (['events', 'bookings'].includes(kind) ? 'font-extrabold text-navy hover:text-primary' : 'font-semibold text-navy') : 'text-ink/70'}`}>
+                            <span className={`block leading-5 ${j === 0 ? (['events', 'bookings', 'vendors'].includes(kind) ? 'font-extrabold text-navy hover:text-primary' : 'font-semibold text-navy') : 'text-ink/70'}`}>
                               {cell}
                             </span>
                           )}
@@ -564,7 +601,18 @@ export default function ModuleTable({ kind }) {
                       ))}
                       <td className="px-4 py-4 text-right text-muted align-top">
                         {kind === 'vendors' && apiData.raw?.[i] ? (
-                          <div className="inline-flex items-center justify-end gap-2">
+                          <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedVendorForKyc(apiData.raw[i]);
+                              }}
+                              className="rounded-lg bg-primary-soft px-2.5 py-1 text-[11px] font-extrabold text-primary hover:bg-primary hover:text-white transition cursor-pointer"
+                              title="Review KYC Documents"
+                            >
+                              Review KYC
+                            </button>
                             {!apiData.raw[i].verification?.isVerified && (
                               <button
                                 type="button"
@@ -573,6 +621,7 @@ export default function ModuleTable({ kind }) {
                                   handleVendorVerification(apiData.raw[i], true);
                                 }}
                                 className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+                                title="Quick Approve KYC"
                               >
                                 Approve
                               </button>
@@ -581,11 +630,116 @@ export default function ModuleTable({ kind }) {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleVendorVerification(apiData.raw[i], false);
+                                setEditModalTarget({ item: apiData.raw[i], type: 'vendor' });
                               }}
-                              className="rounded-lg bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-100 cursor-pointer"
+                              className="p-1.5 rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
+                              title="Edit Vendor Details"
                             >
-                              Reject
+                              <Icon name="edit" size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFlagModalTarget({ item: apiData.raw[i], type: 'vendor' });
+                              }}
+                              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                apiData.raw[i].isFlagged
+                                  ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                                  : 'hover:bg-lavender text-muted hover:text-rose-600'
+                              }`}
+                              title={apiData.raw[i].isFlagged ? `Flagged: ${apiData.raw[i].flagReason || 'Active flag'}` : 'Flag Vendor'}
+                            >
+                              <Icon name="flag" size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRestrictModalTarget({ item: apiData.raw[i], type: 'vendor' });
+                              }}
+                              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                apiData.raw[i].isRestricted || apiData.raw[i].status === 'SUSPENDED'
+                                  ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                                  : 'hover:bg-lavender text-muted hover:text-amber-600'
+                              }`}
+                              title={
+                                apiData.raw[i].isRestricted
+                                  ? `Suspended until ${new Date(apiData.raw[i].restrictedUntil).toLocaleDateString()}`
+                                  : 'Restrict / Suspend for N Days'
+                              }
+                            >
+                              <Icon name="clock" size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteModalTarget({ item: apiData.raw[i], type: 'vendor' });
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-muted hover:text-rose-600 transition cursor-pointer"
+                              title="Delete Vendor"
+                            >
+                              <Icon name="trash" size={14} />
+                            </button>
+                          </div>
+                        ) : kind === 'customers' && apiData.raw?.[i] ? (
+                          <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditModalTarget({ item: apiData.raw[i], type: 'customer' });
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
+                              title="Edit Customer"
+                            >
+                              <Icon name="edit" size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFlagModalTarget({ item: apiData.raw[i], type: 'customer' });
+                              }}
+                              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                apiData.raw[i].isFlagged
+                                  ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
+                                  : 'hover:bg-lavender text-muted hover:text-rose-600'
+                              }`}
+                              title={apiData.raw[i].isFlagged ? `Flagged: ${apiData.raw[i].flagReason || 'Active flag'}` : 'Flag Customer'}
+                            >
+                              <Icon name="flag" size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRestrictModalTarget({ item: apiData.raw[i], type: 'customer' });
+                              }}
+                              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                apiData.raw[i].isRestricted || apiData.raw[i].status === 'SUSPENDED'
+                                  ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                                  : 'hover:bg-lavender text-muted hover:text-amber-600'
+                              }`}
+                              title={
+                                apiData.raw[i].isRestricted
+                                  ? `Suspended until ${new Date(apiData.raw[i].restrictedUntil).toLocaleDateString()}`
+                                  : 'Restrict / Suspend for N Days'
+                              }
+                            >
+                              <Icon name="clock" size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteModalTarget({ item: apiData.raw[i], type: 'customer' });
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-muted hover:text-rose-600 transition cursor-pointer"
+                              title="Delete Customer"
+                            >
+                              <Icon name="trash" size={14} />
                             </button>
                           </div>
                         ) : kind === 'bookings' && apiData.raw?.[i] ? (
@@ -661,6 +815,77 @@ export default function ModuleTable({ kind }) {
           booking={selectedBookingForDetail}
           onClose={() => setSelectedBookingForDetail(null)}
           onRefresh={() => setReloadKey((k) => k + 1)}
+        />
+      )}
+
+      {selectedVendorForKyc && (
+        <VendorKycModal
+          vendor={selectedVendorForKyc}
+          onClose={() => setSelectedVendorForKyc(null)}
+          onRefresh={() => setReloadKey((k) => k + 1)}
+        />
+      )}
+
+      {editModalTarget && editModalTarget.type === 'vendor' && (
+        <VendorEditModal
+          vendor={editModalTarget.item}
+          isOpen={true}
+          onClose={() => setEditModalTarget(null)}
+          onSaved={() => {
+            setEditModalTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {editModalTarget && editModalTarget.type === 'customer' && (
+        <CustomerEditModal
+          customer={editModalTarget.item}
+          isOpen={true}
+          onClose={() => setEditModalTarget(null)}
+          onSaved={() => {
+            setEditModalTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {restrictModalTarget && (
+        <UserRestrictModal
+          target={restrictModalTarget.item}
+          targetType={restrictModalTarget.type}
+          isOpen={true}
+          onClose={() => setRestrictModalTarget(null)}
+          onUpdated={() => {
+            setRestrictModalTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {flagModalTarget && (
+        <UserFlagModal
+          target={flagModalTarget.item}
+          targetType={flagModalTarget.type}
+          isOpen={true}
+          onClose={() => setFlagModalTarget(null)}
+          onUpdated={() => {
+            setFlagModalTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {deleteModalTarget && (
+        <ConfirmDeleteModal
+          target={deleteModalTarget.item}
+          targetType={deleteModalTarget.type}
+          isOpen={true}
+          onClose={() => setDeleteModalTarget(null)}
+          onDeleted={() => {
+            setDeleteModalTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
         />
       )}
     </div>

@@ -96,4 +96,15 @@ export const config = {
   panApiKey: process.env.PAN_API_KEY || process.env.GSTIN_API_KEY || "",
   panApiBaseUrl: process.env.PAN_API_BASE_URL || process.env.GSTIN_API_BASE_URL || "https://www.gstinapi.in/v1",
   panMockEnabled: process.env.PAN_MOCK_ENABLED === "true" || process.env.NODE_ENV === "test",
+
+  // ── Gemini & Aura+ Dual-Path Architecture ──
+  geminiApiKey: process.env.GEMINI_API_KEY || "",
+  geminiModel: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+  geminiThinkingLevel: process.env.GEMINI_THINKING_LEVEL || "minimal",
+
+  auraReasoningModel: process.env.AURA_REASONING_MODEL || "gemini-3.8-flash",
+  auraReasoningLevel: process.env.AURA_REASONING_LEVEL || "low",
+
+  chatThinkingStatusDelayMs: Number(process.env.CHAT_THINKING_STATUS_DELAY_MS || 1200),
+  chatStatusRotationMs: Number(process.env.CHAT_STATUS_ROTATION_MS || 2500),
 };

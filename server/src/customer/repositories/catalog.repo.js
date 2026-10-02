@@ -12,6 +12,24 @@ const ORG_FIELDS = 'businessName location rating bio profilePicUrl';
 const locationFields = ['city', 'locality', 'address', 'state', 'postalCode'];
 const coverageFields = ['city', 'localities', 'state'];
 
+function coordsOf(value) {
+  const lat = Number(value?.lat);
+  const lng = Number(value?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0) ? { lat, lng } : null;
+}
+
+function haversineKm(a, b) {
+  if (!a || !b) return null;
+  const toRad = (v) => (v * Math.PI) / 180;
+  const r = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(s));
+}
+
 function cityMatcher(city) {
   if (!city) return null;
   return new RegExp(escapeRegex(city), 'i');
@@ -38,37 +56,63 @@ function publicLocation(loc) {
   };
 }
 
+function nearestLocation(locations, origin) {
+  if (!locations?.length) return null;
+  if (!origin) return locations.find((loc) => loc.isPrimary) || locations[0];
+  let best = null;
+  for (const loc of locations) {
+    const distanceKm = haversineKm(origin, coordsOf(loc.coordinates));
+    if (distanceKm == null) continue;
+    if (!best || distanceKm < best.distanceKm) best = { loc, distanceKm };
+  }
+  return best?.loc || locations.find((loc) => loc.isPrimary) || locations[0];
+}
+
 /**
  * Read-only access to the vendor catalogue owned by Vendor OS.
  * Customers only ever see ACTIVE services of commercially active vendors.
  */
-export async function listBookableServices({ city } = {}) {
+export async function listBookableServices({ city, coordinates } = {}) {
   const regex = cityMatcher(city);
+  const origin = coordsOf(coordinates);
   const orgs = await VendorOrganization.find({ isCommerciallyActive: true }).select(ORG_FIELDS).lean();
   if (!orgs.length) return [];
   const byId = new Map(orgs.map((o) => [String(o._id), o]));
   const vendorIds = orgs.map((o) => o._id);
   const [services, locations, coverages] = await Promise.all([
     VendorService.find({ vendor: { $in: vendorIds }, status: 'ACTIVE' }).lean(),
-    regex ? OperatingLocation.find({ vendor: { $in: vendorIds }, ...locationQuery(regex) }).lean() : [],
-    regex ? ServiceCoverage.find({ vendor: { $in: vendorIds }, ...coverageQuery(regex) }).lean() : [],
+    OperatingLocation.find(regex && !origin ? { vendor: { $in: vendorIds }, ...locationQuery(regex) } : { vendor: { $in: vendorIds } }).lean(),
+    ServiceCoverage.find(regex && !origin ? { vendor: { $in: vendorIds }, ...coverageQuery(regex) } : { vendor: { $in: vendorIds } }).lean(),
   ]);
   const locationsByVendor = new Map();
   for (const loc of locations) {
     const key = String(loc.vendor);
-    if (!locationsByVendor.has(key)) locationsByVendor.set(key, loc);
+    if (!locationsByVendor.has(key)) locationsByVendor.set(key, []);
+    locationsByVendor.get(key).push(loc);
   }
   const coveragesByService = new Map(coverages.map((c) => [String(c.vendorService), c]));
   return services
     .map((s) => {
       const vendor = byId.get(String(s.vendor));
       if (!vendor) return null;
-      if (!regex) return { service: s, vendor };
       const vendorId = String(vendor._id);
-      const profileMatches = regex.test(vendor.location || '');
-      const matchedLocation = locationsByVendor.get(vendorId);
       const matchedCoverage = coveragesByService.get(String(s._id));
-      if (!profileMatches && !matchedLocation && !matchedCoverage) return null;
+      const vendorLocations = locationsByVendor.get(vendorId) || [];
+      const matchedLocation = nearestLocation(vendorLocations, origin);
+      if (!regex && !origin) return { service: s, vendor, matchedLocation: publicLocation(matchedLocation), matchedCoverage };
+      const profileMatches = regex ? regex.test(vendor.location || '') : false;
+      const locationTextMatches = Boolean(regex && matchedLocation && locationFields.some((field) => regex.test(String(matchedLocation[field] || ''))));
+      const coverageTextMatches = Boolean(
+        regex &&
+          matchedCoverage &&
+          (regex.test(String(matchedCoverage.city || '')) ||
+            regex.test(String(matchedCoverage.state || '')) ||
+            (matchedCoverage.localities || []).some((loc) => regex.test(String(loc || ''))))
+      );
+      const radiusKm = Number(matchedCoverage?.radiusKm || 40);
+      const distanceKm = haversineKm(origin, coordsOf(matchedLocation?.coordinates));
+      const coordinateMatches = distanceKm != null && distanceKm <= Math.max(radiusKm, 10);
+      if (!profileMatches && !locationTextMatches && !coverageTextMatches && !coordinateMatches) return null;
       return {
         service: s,
         vendor,
@@ -87,23 +131,41 @@ export async function listBookableServices({ city } = {}) {
     .filter(Boolean);
 }
 
-export async function findBookableService(serviceId, { city } = {}) {
+export async function findBookableService(serviceId, { city, coordinates } = {}) {
   if (!mongoose.isValidObjectId(serviceId)) return null;
   const service = await VendorService.findOne({ _id: serviceId, status: 'ACTIVE' }).lean();
   if (!service) return null;
   const vendor = await VendorOrganization.findOne({ _id: service.vendor, isCommerciallyActive: true }).select(ORG_FIELDS).lean();
   if (!vendor) return null;
-  if (!city) return { service, vendor };
+  const origin = coordsOf(coordinates);
+  if (!city && !origin) {
+    const matchedLocation = await OperatingLocation.findOne({ vendor: vendor._id }).sort({ isPrimary: -1 }).lean();
+    const matchedCoverage = await ServiceCoverage.findOne({ vendor: vendor._id, vendorService: service._id }).lean();
+    return { service, vendor, matchedLocation: publicLocation(matchedLocation), matchedCoverage };
+  }
   const regex = cityMatcher(city);
   const [matchedLocation, matchedCoverage] = await Promise.all([
-    OperatingLocation.findOne({ vendor: vendor._id, ...locationQuery(regex) }).lean(),
-    ServiceCoverage.findOne({ vendor: vendor._id, vendorService: service._id, ...coverageQuery(regex) }).lean(),
+    OperatingLocation.find(regex && !origin ? { vendor: vendor._id, ...locationQuery(regex) } : { vendor: vendor._id }).lean(),
+    ServiceCoverage.findOne(regex && !origin ? { vendor: vendor._id, vendorService: service._id, ...coverageQuery(regex) } : { vendor: vendor._id, vendorService: service._id }).lean(),
   ]);
-  if (!regex.test(vendor.location || '') && !matchedLocation && !matchedCoverage) return null;
+  const loc = Array.isArray(matchedLocation) ? nearestLocation(matchedLocation, origin) : matchedLocation;
+  const profileMatches = regex ? regex.test(vendor.location || '') : false;
+  const locationTextMatches = Boolean(regex && loc && locationFields.some((field) => regex.test(String(loc[field] || ''))));
+  const coverageTextMatches = Boolean(
+    regex &&
+      matchedCoverage &&
+      (regex.test(String(matchedCoverage.city || '')) ||
+        regex.test(String(matchedCoverage.state || '')) ||
+        (matchedCoverage.localities || []).some((locality) => regex.test(String(locality || ''))))
+  );
+  const radiusKm = Number(matchedCoverage?.radiusKm || 40);
+  const distanceKm = haversineKm(origin, coordsOf(loc?.coordinates));
+  const coordinateMatches = distanceKm != null && distanceKm <= Math.max(radiusKm, 10);
+  if (!profileMatches && !locationTextMatches && !coverageTextMatches && !coordinateMatches) return null;
   return {
     service,
     vendor,
-    matchedLocation: publicLocation(matchedLocation),
+    matchedLocation: publicLocation(loc),
     matchedCoverage: matchedCoverage
       ? {
           city: matchedCoverage.city || '',
