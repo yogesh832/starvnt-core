@@ -992,112 +992,123 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
         <header
           onMouseDown={handleDragStart}
-          className="flex items-center gap-2 px-3.5 py-3 border-b border-gray-100 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing group bg-white/95 backdrop-blur-sm"
+          className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing group bg-white/95 backdrop-blur-md"
           title="Drag header to move Aura anywhere on your screen"
         >
-          <span className="hidden lg:flex items-center text-gray-300 group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing shrink-0" title="Drag to move Aura">
+          <span className="hidden lg:flex w-6 h-9 items-center justify-center rounded-xl text-gray-300 group-hover:bg-lavender/70 group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing shrink-0" title="Drag to move Aura">
             <Icon name="drag" size={15} />
           </span>
-          <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-md shadow-primary/30 shrink-0">
+          <span className="w-9 h-9 rounded-2xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/25 shrink-0">
             <Icon name="bolt" size={15} />
           </span>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-extrabold text-navy flex items-center gap-1.5">
-              <span>Aura+</span>
-              <span className="hidden lg:inline text-[9px] font-semibold text-primary/80 bg-primary-soft px-1.5 py-0.5 rounded">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm font-extrabold text-navy truncate">Aura+</span>
+              <span className="hidden lg:inline-flex text-[9px] font-extrabold text-primary bg-primary-soft px-2 py-0.5 rounded-full border border-primary/10">
                 {isDocked ? 'Docked' : 'Floating'}
               </span>
             </div>
-            <div className="text-[10px] text-muted truncate">Your business assistant · answers from your data</div>
+            <div className="text-[10px] text-muted truncate">Business assistant</div>
           </div>
 
-          {/* Width Preset Button */}
-          <button
-            type="button"
-            onClick={cycleWidth}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="hidden lg:inline-flex items-center text-[10px] font-bold text-muted hover:text-navy px-2 py-1 rounded-lg hover:bg-lavender transition cursor-pointer"
-            title={`Current width: ${panelWidth}px. Click to cycle (380px → 520px → 680px)`}
-          >
-            ↔ {panelWidth}px
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={cycleWidth}
+              className="hidden lg:grid w-8 h-8 place-items-center rounded-xl border border-gray-100 bg-white text-muted hover:text-primary hover:border-primary/20 hover:bg-primary-soft/40 transition cursor-pointer"
+              title={`Width ${panelWidth}px. Click to cycle sizes.`}
+              aria-label="Change Aura width"
+            >
+              <span className="text-sm font-extrabold leading-none">↔</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={cycleHeight}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="hidden xl:inline-flex items-center text-[10px] font-bold text-muted hover:text-navy px-2 py-1 rounded-lg hover:bg-lavender transition cursor-pointer"
-            title={`Current height: ${Math.round(panelHeight)}px. Click to cycle short, medium, full height.`}
-          >
-            ↕ {Math.round(panelHeight)}px
-          </button>
+            <button
+              type="button"
+              onClick={cycleHeight}
+              className="hidden lg:grid w-8 h-8 place-items-center rounded-xl border border-gray-100 bg-white text-muted hover:text-primary hover:border-primary/20 hover:bg-primary-soft/40 transition cursor-pointer"
+              title={`Height ${Math.round(panelHeight)}px. Click to cycle heights.`}
+              aria-label="Change Aura height"
+            >
+              <span className="text-sm font-extrabold leading-none">↕</span>
+            </button>
 
-          <div className="hidden xl:flex items-center gap-0.5 rounded-lg bg-lavender/70 p-0.5" onMouseDown={(e) => e.stopPropagation()} title="Snap Aura to screen edges">
-            {[
-              ['left', 'L'],
-              ['top', 'T'],
-              ['center', 'C'],
-              ['bottom', 'B'],
-              ['right', 'R'],
-            ].map(([place, label]) => (
-              <button
-                key={place}
-                type="button"
-                onClick={() => snapTo(place)}
-                className="w-5 h-5 rounded-md text-[9px] font-extrabold text-muted hover:bg-white hover:text-primary transition"
-                aria-label={`Snap Aura ${place}`}
-                title={`Snap ${place}`}
+            <details className="hidden lg:block relative group/menu">
+              <summary
+                className="list-none w-8 h-8 grid place-items-center rounded-xl border border-gray-100 bg-white text-muted hover:text-primary hover:border-primary/20 hover:bg-primary-soft/40 transition cursor-pointer"
+                title="More Aura layout options"
+                aria-label="More Aura layout options"
               >
-                {label}
+                <Icon name="dotsVertical" size={14} />
+              </summary>
+              <div className="absolute right-0 top-10 z-50 w-44 rounded-2xl border border-gray-100 bg-white p-2 shadow-2xl shadow-navy/15">
+                <div className="px-2 pb-1 text-[10px] font-extrabold uppercase tracking-wide text-muted">Snap position</div>
+                <div className="grid grid-cols-2 gap-1">
+                  {[
+                    ['left', 'Left'],
+                    ['right', 'Right'],
+                    ['top', 'Top'],
+                    ['bottom', 'Bottom'],
+                    ['center', 'Center'],
+                  ].map(([place, label]) => (
+                    <button
+                      key={place}
+                      type="button"
+                      onClick={(e) => {
+                        e.currentTarget.closest('details')?.removeAttribute('open');
+                        snapTo(place);
+                      }}
+                      className="rounded-xl px-2 py-2 text-left text-[11px] font-bold text-navy hover:bg-lavender transition"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </details>
+
+            {/* Dock / Float Toggle */}
+            {!isDocked ? (
+              <button
+                type="button"
+                onClick={dockToRight}
+                className="hidden lg:grid w-8 h-8 place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer"
+                title="Dock to right side"
+                aria-label="Dock to right side"
+              >
+                <Icon name="dockRight" size={14} />
               </button>
-            ))}
+            ) : (
+              <button
+                type="button"
+                onClick={switchToFloat}
+                className="hidden lg:grid w-8 h-8 place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer"
+                title="Float and drag freely"
+                aria-label="Float and drag freely"
+              >
+                <Icon name="float" size={13} />
+              </button>
+            )}
+
+            {/* Minimize Button */}
+            <button
+              type="button"
+              onClick={() => updateDockMode('minimized')}
+              className="w-8 h-8 grid place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer"
+              title="Minimize Aura"
+              aria-label="Minimize"
+            >
+              <Icon name="minus" size={14} />
+            </button>
+
+            {mode === 'aura' && (
+              <button onClick={newChat} className="hidden sm:grid w-8 h-8 place-items-center rounded-xl text-primary hover:bg-primary-soft transition cursor-pointer" title="Start a new chat" aria-label="Start a new chat">
+                <Icon name="plus" size={12} />
+              </button>
+            )}
+            <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-xl hover:bg-rose-50 text-ink/60 hover:text-rose-600 transition cursor-pointer" aria-label="Close Aura+">
+              <Icon name="close" size={16} />
+            </button>
           </div>
-
-          {/* Dock / Float Toggle */}
-          {!isDocked ? (
-            <button
-              type="button"
-              onClick={dockToRight}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="hidden lg:grid w-7 h-7 place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
-              title="Dock to right side"
-              aria-label="Dock to right side"
-            >
-              <Icon name="dockRight" size={14} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={switchToFloat}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="hidden lg:grid w-7 h-7 place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
-              title="Float and drag freely"
-              aria-label="Float and drag freely"
-            >
-              <Icon name="float" size={13} />
-            </button>
-          )}
-
-          {/* Minimize Button */}
-          <button
-            type="button"
-            onClick={() => updateDockMode('minimized')}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
-            title="Minimize Aura (keep active in corner)"
-            aria-label="Minimize"
-          >
-            <Icon name="minus" size={14} />
-          </button>
-
-          {mode === 'aura' && (
-            <button onClick={newChat} onMouseDown={(e) => e.stopPropagation()} className="text-[11px] font-bold text-primary rounded-lg px-2 py-1 hover:bg-primary-soft transition cursor-pointer" title="Start a new chat">
-              New chat
-            </button>
-          )}
-          <button onClick={onClose} onMouseDown={(e) => e.stopPropagation()} className="w-8 h-8 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer" aria-label="Close Aura+">
-            <Icon name="close" size={16} />
-          </button>
         </header>
 
         <div className="px-4 pt-3 shrink-0" role="tablist">
