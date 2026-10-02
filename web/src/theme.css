@@ -272,6 +272,9 @@ html.dark .text-sky-600 { color: #7dd3fc !important; }
 html.dark .from-purple-50\/70 { --tw-gradient-from: #251d38 var(--tw-gradient-from-position) !important; }
 html.dark .via-white { --tw-gradient-via: #1a1d2e var(--tw-gradient-via-position) !important; }
 html.dark .to-amber-50\/40 { --tw-gradient-to: #291e13 var(--tw-gradient-to-position) !important; }
+html.dark .to-white { --tw-gradient-to: #1a1d2e var(--tw-gradient-to-position) !important; }
+html.dark .from-white { --tw-gradient-from: #1a1d2e var(--tw-gradient-from-position) !important; }
+html.dark .bg-lavender\/70 { background-color: rgba(21, 24, 37, 0.7) !important; }
 
 /* Accent Text Colors for Dark Mode */
 html.dark .text-amber-500 { color: #f59e0b !important; }

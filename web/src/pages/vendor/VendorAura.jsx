@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { externalApi } from '../../lib/api.js';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
+import MapLocationPicker from '../../components/MapLocationPicker.jsx';
 
 /**
  * Vendor Aura+: answers from the vendor's own data and links to the page
@@ -15,7 +16,7 @@ const SETUP_STEPS = [
   { key: 'profile', title: 'Brand name, category & city', done: (c) => c.profile, to: '/vendor/profile', prompt: 'Help me set up my brand profile' },
   { key: 'services', title: 'Add a service with a price', done: (c) => c.services, to: '/vendor/services', prompt: 'How do I add my first service?' },
   { key: 'capabilities', title: 'Team & equipment', done: (c) => c.capabilities, to: '/vendor/services?action=gear', prompt: 'What should I add for team and equipment?' },
-  { key: 'coverage', title: 'Location & coverage area', done: (c) => c.locations && c.coverage, to: '/vendor/services?action=coverage', prompt: 'How do I set my location and coverage area?' },
+  { key: 'coverage', title: 'Location & coverage area', done: (c) => c.locations && c.coverage, to: '/vendor/services?action=coverage', prompt: 'How do I set my map location pin and coverage radius?' },
   { key: 'portfolio', title: 'Add a portfolio project', done: (c) => c.portfolio, to: '/vendor/portfolio', prompt: 'What should I put in my portfolio?' },
 ];
 
@@ -26,38 +27,38 @@ function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
   const steps = SETUP_STEPS.map((s) => ({ ...s, isDone: Boolean(s.done(setup.checklist)) }));
   const next = steps.find((s) => !s.isDone);
   return (
-    <div className="mx-4 mt-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-soft/60 to-white shrink-0">
+    <div className="mx-4 mt-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-soft/60 to-white dark:from-primary-soft/20 dark:to-[#171a29] dark:border-primary/30 shrink-0">
       <button onClick={onToggle} className="w-full flex items-center gap-2 px-3 pt-2.5 pb-2 text-left" aria-expanded={expanded}>
-        <span className="text-[12px] font-extrabold text-navy flex-1">Complete your profile</span>
-        <span className="text-[11px] font-bold text-primary">{setup.percent}%</span>
-        <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} className="text-muted" />
+        <span className="text-[12px] font-extrabold text-navy dark:text-white flex-1">Complete your profile</span>
+        <span className="text-[11px] font-bold text-primary dark:text-primary-soft">{setup.percent}%</span>
+        <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} className="text-muted dark:text-gray-400" />
       </button>
-      <div className="mx-3 mb-2.5 h-1.5 rounded-full bg-white overflow-hidden">
+      <div className="mx-3 mb-2.5 h-1.5 rounded-full bg-white dark:bg-[#11131f] overflow-hidden">
         <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.max(4, setup.percent)}%` }} />
       </div>
       {expanded && (
         <ul className="px-3 pb-3 space-y-1.5">
           {steps.map((s, i) => (
-            <li key={s.key} className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${s === next ? 'bg-white shadow-sm' : ''}`}>
+            <li key={s.key} className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${s === next ? 'bg-white shadow-sm dark:bg-[#1f2336] dark:border dark:border-primary/20' : ''}`}>
               <span
                 className={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold shrink-0 ${
-                  s.isDone ? 'bg-emerald-500 text-white' : 'bg-white border border-gray-200 text-muted'
+                  s.isDone ? 'bg-emerald-500 text-white' : 'bg-white border border-gray-200 text-muted dark:bg-[#1a1d2e] dark:border-gray-700 dark:text-gray-400'
                 }`}
               >
                 {s.isDone ? '✓' : i + 1}
               </span>
-              <span className={`flex-1 min-w-0 text-[12px] truncate ${s.isDone ? 'text-muted line-through' : 'font-semibold text-navy'}`}>{s.title}</span>
+              <span className={`flex-1 min-w-0 text-[12px] truncate ${s.isDone ? 'text-muted line-through dark:text-gray-400' : 'font-semibold text-navy dark:text-gray-100'}`}>{s.title}</span>
               {!s.isDone && (
                 <span className="flex gap-1 shrink-0">
                   <button
                     onClick={() => onAura(s.prompt)}
                     disabled={busy}
-                    className="rounded-lg bg-primary text-white text-[10px] font-bold px-2 py-1 disabled:opacity-50"
+                    className="rounded-lg bg-primary text-white text-[10px] font-bold px-2 py-1 disabled:opacity-50 hover:bg-primary-dark transition"
                     title="Let Aura+ guide you"
                   >
                     With Aura
                   </button>
-                  <button onClick={() => onManual(s.to)} className="rounded-lg border border-gray-200 bg-white text-navy text-[10px] font-bold px-2 py-1 hover:bg-lavender" title="Open the page and do it yourself">
+                  <button onClick={() => onManual(s.to)} className="rounded-lg border border-gray-200 bg-white text-navy text-[10px] font-bold px-2 py-1 hover:bg-lavender dark:bg-[#1a1d2e] dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition" title="Open the page and do it yourself">
                     Manually
                   </button>
                 </span>
@@ -190,7 +191,9 @@ function Bubble({ m, onAction }) {
       <div className={`max-w-[85%] ${mine ? 'items-end' : 'items-start'} flex flex-col gap-1.5`}>
         <div
           className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
-            mine ? 'bg-primary text-white rounded-br-md' : 'bg-lavender/70 text-navy rounded-bl-md'
+            mine
+              ? 'bg-primary text-white rounded-br-md shadow-xs'
+              : 'bg-lavender/70 text-navy rounded-bl-md dark:bg-[#1e2238] dark:text-gray-100 dark:border dark:border-gray-800'
           }`}
         >
           {m.content}
@@ -201,12 +204,121 @@ function Bubble({ m, onAction }) {
               <button
                 key={a.to}
                 onClick={() => onAction(a.to)}
-                className="rounded-full border border-primary/30 bg-white text-primary text-[11px] font-bold px-2.5 py-1 hover:bg-primary-soft transition"
+                className="rounded-full border border-primary/30 bg-white text-primary text-[11px] font-bold px-2.5 py-1 hover:bg-primary-soft transition dark:bg-[#151825] dark:border-primary/40 dark:text-primary-soft dark:hover:bg-primary/20"
               >
                 {a.label} →
               </button>
             ))}
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AuraMapLocationWidget({ onConfirm, onCancel, busy }) {
+  const [location, setLocation] = useState({
+    lat: 19.076,
+    lng: 72.8777,
+    address: '',
+    locality: '',
+    city: '',
+    state: '',
+  });
+  const [radiusKm, setRadiusKm] = useState(40);
+
+  function handleConfirm() {
+    const cityStr = location.city || 'Mumbai';
+    const areaStr = location.locality || location.address || cityStr;
+    const promptText = `Confirm operating location: ${areaStr}, ${cityStr} with ${radiusKm} km coverage radius. Lat: ${location.lat}, Lng: ${location.lng}`;
+    onConfirm(promptText, { confirm: true });
+  }
+
+  return (
+    <div className="ml-9 rounded-2xl border border-primary/30 bg-white dark:bg-[#181b2a] dark:border-primary/40 p-3 space-y-3 shadow-md">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-extrabold text-primary flex items-center gap-1.5">
+          <Icon name="mapPin" size={14} />
+          <span>Interactive Location & Coverage Map</span>
+        </div>
+        <span className="text-[10px] font-bold text-muted dark:text-gray-400">
+          Drop pin to set base
+        </span>
+      </div>
+
+      <MapLocationPicker
+        value={location}
+        circleRadiusKm={radiusKm}
+        height="220px"
+        guidance="Search or drag pin to your studio / office location"
+        onChange={(geo) => {
+          setLocation({
+            lat: geo.lat,
+            lng: geo.lng,
+            address: geo.address || geo.displayName || '',
+            locality: geo.locality || '',
+            city: geo.city || '',
+            state: geo.state || '',
+            postalCode: geo.postalCode || '',
+          });
+        }}
+      />
+
+      <div className="rounded-xl border border-gray-100 bg-lavender/40 dark:bg-[#111422] dark:border-gray-800 p-2.5 space-y-1">
+        <div className="text-[10px] font-extrabold uppercase text-muted dark:text-gray-400">
+          Pinned Base Location
+        </div>
+        <div className="text-xs font-bold text-navy dark:text-white leading-tight">
+          {location.address || [location.locality, location.city, location.state].filter(Boolean).join(', ') || 'Search or drop the pin on the map'}
+        </div>
+        {location.city && (
+          <div className="text-[10px] font-bold text-primary dark:text-primary-soft">
+            City: {location.city} {location.state ? `(${location.state})` : ''}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between text-[11px] font-semibold text-navy dark:text-gray-200 mb-1">
+          <span>Operating Radius (km):</span>
+          <span className="font-extrabold text-primary">{radiusKm} km</span>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {[20, 40, 60, 100, 150, 250].map((km) => (
+            <button
+              key={km}
+              type="button"
+              onClick={() => setRadiusKm(km)}
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition cursor-pointer ${
+                radiusKm === km
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-lavender text-navy border-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700'
+              }`}
+            >
+              {km} km
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={handleConfirm}
+          className="flex-1 rounded-xl bg-primary text-white text-[11px] font-bold py-2 shadow-sm hover:opacity-95 transition disabled:opacity-50 cursor-pointer"
+        >
+          ✓ Confirm Location & Radius
+        </button>
+        {onCancel && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onCancel}
+            className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-2 hover:bg-lavender dark:bg-[#1a1d2e] dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition cursor-pointer"
+          >
+            Cancel
+          </button>
         )}
       </div>
     </div>
@@ -915,18 +1027,18 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
         <header
           onMouseDown={handleDragStart}
-          className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing group bg-white/95 backdrop-blur-md"
-          title="Drag header to move Aura anywhere on your screen"
+          className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing group bg-white/95 dark:bg-[#1a1d2e]/95 backdrop-blur-md"
+          title={isDesktop ? "Drag header to move Aura anywhere on your screen" : undefined}
         >
-          <span className="hidden lg:flex w-6 h-9 items-center justify-center rounded-xl text-gray-300 group-hover:bg-lavender/70 group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing shrink-0" title="Drag to move Aura">
+          <span className="hidden lg:flex w-6 h-9 items-center justify-center rounded-xl text-gray-300 group-hover:bg-lavender/70 group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing shrink-0 dark:text-gray-600 dark:group-hover:bg-gray-800 dark:group-hover:text-primary-soft" title="Drag to move Aura">
             <Icon name="drag" size={15} />
           </span>
           <span className="w-9 h-9 rounded-2xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/25 shrink-0">
             <Icon name="bolt" size={15} />
           </span>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-extrabold text-navy truncate">Aura+</div>
-            <div className="text-[10px] text-muted truncate">
+            <div className="text-sm font-extrabold text-navy dark:text-white truncate">Aura+</div>
+            <div className="text-[10px] text-muted dark:text-gray-400 truncate">
               {isDocked ? 'Docked assistant' : 'Floating assistant'}
             </div>
           </div>
@@ -937,7 +1049,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               <button
                 type="button"
                 onClick={dockToRight}
-                className="hidden lg:grid w-8 h-8 place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer"
+                className="hidden lg:grid w-8 h-8 place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
                 title="Dock to right side"
                 aria-label="Dock to right side"
               >
@@ -947,7 +1059,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               <button
                 type="button"
                 onClick={switchToFloat}
-                className="hidden lg:grid w-8 h-8 place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer"
+                className="hidden lg:grid w-8 h-8 place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
                 title="Float and drag freely"
                 aria-label="Float and drag freely"
               >
@@ -959,21 +1071,21 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
             <button
               type="button"
               onClick={() => updateDockMode('minimized')}
-              className="w-8 h-8 grid place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer"
+              className="w-8 h-8 grid place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
               title="Minimize Aura"
               aria-label="Minimize"
             >
               <Icon name="minus" size={14} />
             </button>
 
-            <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-xl hover:bg-rose-50 text-ink/60 hover:text-rose-600 transition cursor-pointer" aria-label="Close Aura+">
+            <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-xl hover:bg-rose-50 text-ink/60 hover:text-rose-600 transition cursor-pointer dark:text-gray-400 dark:hover:bg-rose-950/40 dark:hover:text-rose-400" aria-label="Close Aura+">
               <Icon name="close" size={16} />
             </button>
           </div>
         </header>
 
         <div className="px-4 pt-3 shrink-0" role="tablist">
-          <div className="grid grid-cols-2 gap-1 rounded-2xl bg-lavender/70 p-1">
+          <div className="grid grid-cols-2 gap-1 rounded-2xl bg-lavender/70 dark:bg-[#151825] dark:border dark:border-gray-800 p-1">
             {[
               ['aura', 'Ask Aura', 'bolt'],
               ['manual', 'Ask manually', 'edit'],
@@ -984,7 +1096,9 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
                 aria-selected={mode === key}
                 onClick={() => setMode(key)}
                 className={`flex items-center justify-center gap-1.5 rounded-xl py-1.5 text-xs font-bold transition ${
-                  mode === key ? 'bg-white text-primary shadow-sm' : 'text-muted hover:text-navy'
+                  mode === key
+                    ? 'bg-white text-primary shadow-sm dark:bg-[#1e2235] dark:text-primary-soft dark:shadow-none'
+                    : 'text-muted hover:text-navy dark:text-gray-400 dark:hover:text-white'
                 }`}
               >
                 <Icon name={icon} size={13} />
@@ -998,7 +1112,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
         {mode === 'manual' ? (
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-2">
-            <p className="text-[11px] text-muted px-1 pb-1">Go straight to what you want to do:</p>
+            <p className="text-[11px] text-muted dark:text-gray-400 px-1 pb-1">Go straight to what you want to do:</p>
             {MANUAL.map((s) => {
               const here = s.page === page;
               return (
@@ -1006,20 +1120,22 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
                   key={s.page}
                   onClick={() => goTo(`/vendor/${s.page}`)}
                   className={`w-full flex items-center gap-3 rounded-2xl border p-3 text-left transition hover:shadow-sm ${
-                    here ? 'border-primary/40 bg-primary-soft/40' : 'border-gray-100 hover:bg-lavender/50'
+                    here
+                      ? 'border-primary/40 bg-primary-soft/40 dark:border-primary/50 dark:bg-primary-soft/20'
+                      : 'border-gray-100 hover:bg-lavender/50 dark:border-gray-800 dark:hover:bg-[#1e2235]'
                   }`}
                 >
-                  <span className="w-9 h-9 rounded-xl bg-lavender text-primary grid place-items-center shrink-0">
+                  <span className="w-9 h-9 rounded-xl bg-lavender text-primary grid place-items-center shrink-0 dark:bg-[#1e2235] dark:text-primary-soft">
                     <Icon name={s.icon} size={16} />
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-1.5">
-                      <span className="text-[13px] font-bold text-navy truncate">{s.title}</span>
+                      <span className="text-[13px] font-bold text-navy dark:text-gray-100 truncate">{s.title}</span>
                       {here && <span className="text-[9px] font-bold uppercase rounded-full bg-primary text-white px-1.5 py-0.5 shrink-0">You're here</span>}
                     </span>
-                    <span className="block text-[11px] text-muted truncate">{s.sub}</span>
+                    <span className="block text-[11px] text-muted dark:text-gray-400 truncate">{s.sub}</span>
                   </span>
-                  <Icon name="chevronRight" size={15} className="text-muted shrink-0" />
+                  <Icon name="chevronRight" size={15} className="text-muted dark:text-gray-400 shrink-0" />
                 </button>
               );
             })}
@@ -1028,22 +1144,22 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
           {messages.length === 0 && !sending && (setupIncomplete ? (
             <div className="text-center pt-4">
-              <div className="text-sm font-extrabold text-navy">Welcome! Let's set up your business.</div>
-              <p className="text-xs text-muted mt-1 max-w-[290px] mx-auto">
+              <div className="text-sm font-extrabold text-navy dark:text-white">Welcome! Let's set up your business.</div>
+              <p className="text-xs text-muted dark:text-gray-400 mt-1 max-w-[290px] mx-auto">
                 Customers can find and book you once all 5 steps above are done. Just talk or type — I'll set up your brand, services
                 with prices, team &amp; gear, location and coverage (you confirm before I save). Or tap “Manually” on any step.
               </p>
               <button
                 onClick={() => setupWithAura(START_SETUP)}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-4 py-2 shadow-md shadow-primary/25"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-4 py-2 shadow-md shadow-primary/25 hover:bg-primary-dark transition"
               >
                 <Icon name="bolt" size={13} /> Start setup with Aura
               </button>
             </div>
           ) : (
             <div className="text-center pt-6">
-              <div className="text-sm font-extrabold text-navy">Hi! I'm Aura+.</div>
-              <p className="text-xs text-muted mt-1 max-w-[280px] mx-auto">
+              <div className="text-sm font-extrabold text-navy dark:text-white">Hi! I'm Aura+.</div>
+              <p className="text-xs text-muted dark:text-gray-400 mt-1 max-w-[280px] mx-auto">
                 Ask me anything about your enquiries, quotes, bookings, payments, reviews or profile — in English, Hindi or Hinglish.
               </p>
             </div>
@@ -1053,55 +1169,63 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
             return <Bubble key={i} m={m} onAction={goTo} />;
           })}
           {pending && !sending && (
-            <div className="ml-9 rounded-2xl border border-primary/30 bg-primary-soft/40 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-primary">
-                {pending.kind === 'block_date'
-                  ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Update Calendar Date' : 'Block Calendar Date')
-                  : pending.kind === 'revise_quote'
-                  ? 'Revise Offer'
-                  : pending.kind === 'create_quote'
-                  ? 'Send Quotation'
-                  : 'Save this?'}
-              </div>
-              <div className="text-[12px] font-semibold text-navy mt-0.5">{pending.summary}</div>
-              <div className="flex gap-2 mt-2.5">
-                <button
-                  onClick={() =>
-                    send(
-                      pending.kind === 'block_date'
-                        ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Confirm Update' : 'Confirm Block')
-                        : pending.kind === 'revise_quote'
-                        ? 'Send Revised Offer'
-                        : pending.kind === 'create_quote'
-                        ? 'Send Quote'
-                        : 'Yes, save it',
-                      { confirm: true }
-                    )
-                  }
-                  className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-1.5 shadow-sm hover:opacity-95 transition-opacity"
-                >
+            pending.kind === 'location' || pending.kind === 'coverage' ? (
+              <AuraMapLocationWidget
+                onConfirm={(promptText, opts) => send(promptText, opts)}
+                onCancel={() => send('Cancel', { confirm: false })}
+                busy={sending}
+              />
+            ) : (
+              <div className="ml-9 rounded-2xl border border-primary/30 bg-primary-soft/40 dark:bg-primary-soft/15 dark:border-primary/40 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-primary dark:text-primary-soft">
                   {pending.kind === 'block_date'
-                    ? (pending.isUpdate || pending.summary?.startsWith('Update') ? '✓ Confirm Update' : '✓ Confirm Block')
+                    ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Update Calendar Date' : 'Block Calendar Date')
                     : pending.kind === 'revise_quote'
-                    ? '✓ Send Revised Offer'
+                    ? 'Revise Offer'
                     : pending.kind === 'create_quote'
-                    ? '✓ Send Quote'
-                    : '✓ Save'}
-                </button>
-                <button
-                  onClick={() => send('Cancel', { confirm: false })}
-                  className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-1.5 hover:bg-lavender transition-colors"
-                >
-                  Cancel
-                </button>
+                    ? 'Send Quotation'
+                    : 'Save this?'}
+                </div>
+                <div className="text-[12px] font-semibold text-navy dark:text-white mt-0.5">{pending.summary}</div>
+                <div className="flex gap-2 mt-2.5">
+                  <button
+                    onClick={() =>
+                      send(
+                        pending.kind === 'block_date'
+                          ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Confirm Update' : 'Confirm Block')
+                          : pending.kind === 'revise_quote'
+                          ? 'Send Revised Offer'
+                          : pending.kind === 'create_quote'
+                          ? 'Send Quote'
+                          : 'Yes, save it',
+                        { confirm: true }
+                      )
+                    }
+                    className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-1.5 shadow-sm hover:opacity-95 transition-opacity"
+                  >
+                    {pending.kind === 'block_date'
+                      ? (pending.isUpdate || pending.summary?.startsWith('Update') ? '✓ Confirm Update' : '✓ Confirm Block')
+                      : pending.kind === 'revise_quote'
+                      ? '✓ Send Revised Offer'
+                      : pending.kind === 'create_quote'
+                      ? '✓ Send Quote'
+                      : '✓ Save'}
+                  </button>
+                  <button
+                    onClick={() => send('Cancel', { confirm: false })}
+                    className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-1.5 hover:bg-lavender dark:bg-[#1a1d2e] dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted dark:text-gray-400 mt-1.5">
+                  Or reply “yes” / “haan” / “confirm” — or tell me what to change.
+                </p>
               </div>
-              <p className="text-[10px] text-muted mt-1.5">
-                Or reply “yes” / “haan” / “confirm” — or tell me what to change.
-              </p>
-            </div>
+            )
           )}
           {sending && showThinkingStatus && (
-            <div className="flex gap-2 items-center text-[11px] text-muted pl-1">
+            <div className="flex gap-2 items-center text-[11px] text-muted dark:text-gray-400 pl-1">
               <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0">
                 <Icon name="bolt" size={13} />
               </span>
@@ -1115,11 +1239,11 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         )}
 
         {mode === 'manual' ? (
-          <div className="px-4 py-3 border-t border-gray-100 shrink-0 text-[10px] text-muted/80">
+          <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 shrink-0 text-[10px] text-muted/80 dark:text-gray-400">
             These shortcuts open the page directly — no AI involved.
           </div>
         ) : (
-        <div className="px-3 pb-3 pt-2 border-t border-gray-100 shrink-0 space-y-2">
+        <div className="px-3 pb-3 pt-2 border-t border-gray-100 dark:border-gray-800 shrink-0 space-y-2" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
           {error && <div className="text-[11px] text-red-500 px-1">{error}</div>}
           <div className="flex gap-1.5 overflow-x-auto pb-0.5">
             {chips.map((c) => (
@@ -1127,7 +1251,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
                 key={c}
                 onClick={() => send(c)}
                 disabled={sending}
-                className="shrink-0 rounded-full bg-lavender text-navy text-[11px] font-semibold px-3 py-1.5 hover:bg-primary-soft disabled:opacity-50"
+                className="shrink-0 rounded-full bg-lavender text-navy text-[11px] font-semibold px-3 py-1.5 hover:bg-primary-soft disabled:opacity-50 dark:bg-[#1e2235] dark:text-gray-200 dark:hover:bg-primary-soft/30 dark:border dark:border-gray-700/60 transition"
               >
                 {c}
               </button>
@@ -1139,9 +1263,9 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               e.preventDefault();
               send(input);
             }}
-            className="flex items-center gap-1 rounded-full border border-gray-200 bg-white shadow-sm focus-within:border-primary/40 pl-1.5 pr-1.5 py-1.5 transition"
+            className="flex items-center gap-1 rounded-full border border-gray-200 bg-white shadow-sm focus-within:border-primary/40 pl-1.5 pr-1.5 py-1.5 transition dark:border-gray-700 dark:bg-[#161927] dark:focus-within:border-primary"
           >
-            <button type="button" onClick={newChat} className="w-8 h-8 grid place-items-center rounded-full text-ink/70 hover:bg-lavender shrink-0" title="New chat" aria-label="New chat">
+            <button type="button" onClick={newChat} className="w-8 h-8 grid place-items-center rounded-full text-ink/70 hover:bg-lavender shrink-0 dark:text-gray-300 dark:hover:bg-gray-800 transition" title="New chat" aria-label="New chat">
               <Icon name="plus" size={17} />
             </button>
             <input
@@ -1149,14 +1273,14 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               maxLength={2000}
               onChange={(e) => setInput(e.target.value)}
               placeholder={listening === 'converse' ? 'Listening… speak now' : listening === 'dictate' ? 'Listening… tap the mic to stop' : 'Ask Aura+ anything'}
-              className="flex-1 min-w-0 bg-transparent outline-none text-[13px] px-1"
+              className="flex-1 min-w-0 bg-transparent outline-none text-[13px] px-1 dark:text-white dark:placeholder:text-gray-500"
             />
             {Recognition && (
               <>
                 <button
                   type="button"
                   onClick={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}
-                  className="h-8 rounded-full px-2 text-[11px] font-semibold text-ink/70 hover:bg-lavender shrink-0 inline-flex items-center gap-1"
+                  className="h-8 rounded-full px-2 text-[11px] font-semibold text-ink/70 hover:bg-lavender shrink-0 inline-flex items-center gap-1 dark:text-gray-300 dark:hover:bg-gray-800 transition"
                   title="Voice language — English / Hindi"
                 >
                   <span className="w-3.5 h-3.5 rounded-full border border-current grid place-items-center text-[7px] font-bold">{voiceLang === 'en-IN' ? 'A' : 'अ'}</span>
@@ -1167,7 +1291,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
                   onClick={() => (listening === 'dictate' ? stopVoice() : startVoice('dictate'))}
                   disabled={sending || listening === 'converse' || speaking}
                   className={`relative w-8 h-8 rounded-full grid place-items-center shrink-0 transition disabled:opacity-40 ${
-                    listening === 'dictate' ? 'bg-red-50 text-red-500' : 'text-ink/70 hover:bg-lavender'
+                    listening === 'dictate' ? 'bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400' : 'text-ink/70 hover:bg-lavender dark:text-gray-300 dark:hover:bg-gray-800'
                   }`}
                   title={listening === 'dictate' ? 'Stop dictation' : 'Dictate (fills the box)'}
                   aria-label={listening === 'dictate' ? 'Stop dictation' : 'Dictate'}
@@ -1181,7 +1305,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               <button
                 type="submit"
                 disabled={sending || !input.trim()}
-                className="w-8 h-8 rounded-full bg-primary text-white grid place-items-center shrink-0 disabled:opacity-50"
+                className="w-8 h-8 rounded-full bg-primary text-white grid place-items-center shrink-0 disabled:opacity-50 hover:bg-primary-dark transition"
                 aria-label="Send"
                 title="Send"
               >
@@ -1200,9 +1324,9 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               </button>
             )}
           </form>
-          <p className="text-[9px] text-muted/70 px-1 flex items-center justify-between gap-2 leading-none min-w-0">
+          <p className="text-[9px] text-muted/70 dark:text-gray-400 px-1 flex items-center justify-between gap-2 leading-none min-w-0">
             <span className="truncate">Aura saves only after you confirm.</span>
-            <button onClick={() => setMode('manual')} className="shrink-0 font-bold text-primary hover:underline">
+            <button onClick={() => setMode('manual')} className="shrink-0 font-bold text-primary dark:text-primary-soft hover:underline">
               Manual setup →
             </button>
           </p>

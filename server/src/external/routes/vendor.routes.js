@@ -413,6 +413,28 @@ router.post('/locations', async (req, res, next) => {
       await req.vendor.save();
     }
 
+    // Auto-sync default ServiceCoverage for active services if vendor has no coverage defined yet
+    const existingCoverageCount = await ServiceCoverage.countDocuments({ vendor: req.vendorId });
+    if (existingCoverageCount === 0) {
+      const activeServices = await VendorService.find({ vendor: req.vendorId, status: 'ACTIVE' });
+      for (const svc of activeServices) {
+        await ServiceCoverage.create({
+          vendor: req.vendorId,
+          vendorService: svc._id,
+          coverageType: 'RADIUS',
+          city: location.city,
+          state: location.state || '',
+          baseAddress: location.address || '',
+          baseLocality: location.locality || '',
+          basePostalCode: location.postalCode || '',
+          baseCoordinates: location.coordinates || { lat: 0, lng: 0 },
+          radiusKm: 40,
+          confidence: 'SELF_DECLARED',
+          outstationAllowed: false,
+        });
+      }
+    }
+
     const activation = await evaluateVendorActivation(req.vendorId);
     res.status(201).json({ ok: true, location, activation });
   } catch (err) {
@@ -581,6 +603,36 @@ router.post('/coverage', async (req, res, next) => {
         confidence: 'SELF_DECLARED',
         outstationAllowed: Boolean(outstationAllowed),
       });
+    }
+
+    // Auto-sync OperatingLocation if vendor has no location record defined yet
+    const existingLocCount = await OperatingLocation.countDocuments({ vendor: req.vendorId });
+    if (existingLocCount === 0) {
+      const targetCity = city ? String(city).trim() : req.vendor.location?.split(',').pop()?.trim() || 'Main City';
+      const targetState = state ? String(state).trim() : '';
+      const targetLocality = baseLocality ? String(baseLocality).trim() : localities?.[0] || '';
+      const targetAddress = baseAddress ? String(baseAddress).trim() : [targetLocality, targetCity].filter(Boolean).join(', ') || targetCity;
+      
+      const loc = await OperatingLocation.create({
+        vendor: req.vendorId,
+        label: `${req.vendor.businessName || 'Main'} Studio / Office`,
+        type: 'HEAD_OFFICE',
+        address: targetAddress,
+        locality: targetLocality,
+        city: targetCity,
+        state: targetState || 'West Bengal',
+        postalCode: basePostalCode ? String(basePostalCode).trim() : '',
+        coordinates: cleanCoordinates || { lat: 0, lng: 0 },
+        isPrimary: true,
+      });
+
+      if (!req.vendor.location) {
+        req.vendor.location = `${loc.locality ? `${loc.locality}, ` : ''}${loc.city}`;
+        if (req.vendor.businessName && req.vendor.category) {
+          req.vendor.isProfileCompleted = true;
+        }
+        await req.vendor.save();
+      }
     }
 
     const activation = await evaluateVendorActivation(req.vendorId);

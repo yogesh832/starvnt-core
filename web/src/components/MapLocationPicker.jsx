@@ -36,10 +36,12 @@ export default function MapLocationPicker({
   height = '340px',
   readOnly = false,
   guidance = 'Drag or click pointer to pin exact studio entrance',
+  circleRadiusKm = null,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
+  const circleRef = useRef(null);
   const tileLayerRef = useRef(null);
 
   const [mapType, setMapType] = useState('roadmap'); // 'roadmap' | 'satellite'
@@ -180,19 +182,41 @@ export default function MapLocationPicker({
     };
   }, []); // Mount once
 
-  // Sync external coordinates changes
+  // Sync external coordinates and radius circle changes
   useEffect(() => {
     if (!mapInstanceRef.current || !markerRef.current) return;
     const lat = Number(value?.lat);
     const lng = Number(value?.lng);
+    const radius = Number(circleRadiusKm);
+
     if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
       const currentPos = markerRef.current.getLatLng();
       if (Math.abs(currentPos.lat - lat) > 0.0001 || Math.abs(currentPos.lng - lng) > 0.0001) {
         markerRef.current.setLatLng([lat, lng]);
         mapInstanceRef.current.setView([lat, lng], mapInstanceRef.current.getZoom());
       }
+
+      if (radius && radius > 0) {
+        const meters = radius * 1000;
+        if (circleRef.current) {
+          circleRef.current.setLatLng([lat, lng]);
+          circleRef.current.setRadius(meters);
+        } else {
+          circleRef.current = L.circle([lat, lng], {
+            radius: meters,
+            color: '#5a4bd1',
+            fillColor: '#5a4bd1',
+            fillOpacity: 0.14,
+            weight: 2,
+            dashArray: '6, 6',
+          }).addTo(mapInstanceRef.current);
+        }
+      } else if (circleRef.current) {
+        circleRef.current.remove();
+        circleRef.current = null;
+      }
     }
-  }, [value?.lat, value?.lng]);
+  }, [value?.lat, value?.lng, circleRadiusKm]);
 
   // Handle Map Type Toggle (Roadmap vs Satellite)
   function handleToggleMapType(newType) {

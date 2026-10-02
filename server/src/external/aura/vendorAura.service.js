@@ -97,9 +97,7 @@ function nextStepText(activation, vendor) {
   const ask = {
     services: "Next: your first service. What service do you offer, and what's your base price?",
     capabilities: 'Next: team & equipment. How many people are in your team, and what main equipment do you use?',
-    coverage: !c.locations
-      ? 'Next: your studio / office location. Which area and city is it in?'
-      : 'Next: coverage area. How far (in km) from your base do you travel for events?',
+    coverage: 'Next: operating location & coverage area. Select your location on the interactive map below and choose your travel radius (in km)!',
     portfolio: `Everything I can set up is done ✅. Only your portfolio is left — it needs photo/video uploads, so add it from the Portfolio page whenever you like.${contactQuestion(vendor)}`,
   }[next.key];
   if (next.key === 'profile') {
@@ -253,6 +251,21 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
       proposed = { kind: 'block_date', blockout: { date: targetDate, reason: newReason } };
       fallback = false;
     }
+  }
+
+  // Fallback: If vendor asks where/how to add operating location or coverage area
+  if (!proposed && /(?:where|kahan|how|kaise)\s*(?:can|to|do|karu|karoon|karein)?\s*(?:i\s*)?(?:add|set|put)?\s*(?:op|operating\s*)?location|(?:location|coverage)\s*(?:add|set|kahan)/i.test(text)) {
+    proposed = {
+      kind: 'location',
+      location: {
+        label: `${vendor.businessName || 'Main'} Studio / Office`,
+        type: 'STUDIO',
+        city: vendor.location?.split(',').pop()?.trim() || 'Mumbai',
+        address: vendor.location || 'Main Base',
+      },
+    };
+    reply = "Main aapka operating location aur coverage area abhi set kar deta hoon! Niche interactive map par pin drop karein aur radius select karke confirm karein.";
+    fallback = false;
   }
 
   if (proposed?.kind && !fallback) {

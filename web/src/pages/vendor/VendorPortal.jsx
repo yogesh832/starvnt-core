@@ -747,7 +747,7 @@ export default function VendorPortal() {
         {!auraOpen && (
           <button
             onClick={() => setAuraOpen(true)}
-            className="lg:hidden fixed right-4 bottom-20 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/40 border-4 border-white"
+            className="lg:hidden fixed right-4 bottom-20 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/40 border-4 border-white dark:border-[#1a1d2e]"
             aria-label="Ask Aura+"
           >
             <Icon name="bolt" size={18} />

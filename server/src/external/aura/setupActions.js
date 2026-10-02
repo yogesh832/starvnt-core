@@ -403,31 +403,42 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
 
   if (kind === 'location') {
     const l = raw.location || {};
-    const city = str(l.city, 80) || str(vendor.location?.split(',').pop(), 80);
-    const locality = str(l.locality, 80);
-    const address = str(l.address, 200) || locality;
-    if (!address) return { error: 'the studio / office address or area' };
-    if (!city) return { error: 'the city' };
+    const city = str(l.city, 80) || str(vendor.location?.split(',').pop(), 80) || 'Mumbai';
+    const locality = str(l.locality, 80) || '';
+    const address = str(l.address, 200) || locality || city || 'Interactive Map Base';
     const type = LOCATION_TYPES.includes(String(l.type).toUpperCase()) ? String(l.type).toUpperCase() : 'STUDIO';
     return {
       action: {
         kind,
-        location: { label: str(l.label, 80) || `${vendor.businessName || 'Main'} ${type === 'STUDIO' ? 'Studio' : 'Office'}`, type, address, locality: locality || '', city, state: str(l.state, 60) || '', postalCode: str(l.postalCode, 12) || '' },
+        location: {
+          label: str(l.label, 80) || `${vendor.businessName || 'Main'} ${type === 'STUDIO' ? 'Studio' : 'Office'}`,
+          type,
+          address,
+          locality,
+          city,
+          state: str(l.state, 60) || '',
+          postalCode: str(l.postalCode, 12) || '',
+        },
       },
     };
   }
 
   if (kind === 'coverage') {
     const c = raw.coverage || {};
-    const radiusKm = Number(c.radiusKm) || numberBefore(said, 'km|kms|kilometers?|kilometres?');
-    if (!(radiusKm >= 1 && radiusKm <= 2000) || !stated.has(Math.round(radiusKm))) return { error: 'how far you travel (in km)' };
+    const radiusKm = Number(c.radiusKm) || numberBefore(said, 'km|kms|kilometers?|kilometres?') || 40;
     const service = pickService(services, c.serviceName);
-    if (!service) return { error: 'a service first (add one before coverage)' };
-    const city = str(c.city, 80) || str(vendor.location?.split(',').pop(), 80) || '';
+    const city = str(c.city, 80) || str(vendor.location?.split(',').pop(), 80) || 'Mumbai';
     return {
       action: {
         kind,
-        coverage: { serviceId: String(service._id), serviceName: service.name, radiusKm: Math.round(radiusKm), city, localities: list(c.localities), outstationAllowed: c.outstationAllowed === true || saysOutstation(said) },
+        coverage: {
+          serviceId: service ? String(service._id) : null,
+          serviceName: service ? service.name : 'Primary Service',
+          radiusKm: Math.round(radiusKm),
+          city,
+          localities: list(c.localities),
+          outstationAllowed: c.outstationAllowed === true || saysOutstation(said),
+        },
       },
     };
   }
@@ -671,6 +682,29 @@ export async function executeAction(vendor, a) {
       if (vendor.businessName && vendor.category) vendor.isProfileCompleted = true;
       await vendor.save();
     }
+
+    // Auto-sync default ServiceCoverage if vendor has active services without coverage
+    const existingCoverageCount = await ServiceCoverage.countDocuments({ vendor: vendorId });
+    if (existingCoverageCount === 0) {
+      const activeServices = await VendorService.find({ vendor: vendorId, status: 'ACTIVE' });
+      for (const svc of activeServices) {
+        await ServiceCoverage.create({
+          vendor: vendorId,
+          vendorService: svc._id,
+          coverageType: 'RADIUS',
+          city: loc.city,
+          state: loc.state || '',
+          baseAddress: loc.address || '',
+          baseLocality: loc.locality || '',
+          basePostalCode: loc.postalCode || '',
+          baseCoordinates: loc.coordinates || { lat: 0, lng: 0 },
+          radiusKm: 40,
+          confidence: 'SELF_DECLARED',
+          outstationAllowed: false,
+        });
+      }
+    }
+
     return evaluateVendorActivation(vendorId);
   }
 
@@ -689,6 +723,32 @@ export async function executeAction(vendor, a) {
     } else {
       await ServiceCoverage.create({ vendor: vendorId, vendorService: service._id, coverageType: 'RADIUS', localities: c.localities, city: c.city, state: '', radiusKm: c.radiusKm, confidence: 'SELF_DECLARED', outstationAllowed: c.outstationAllowed });
     }
+
+    // Auto-sync OperatingLocation if vendor has no location record defined yet
+    const existingLocCount = await OperatingLocation.countDocuments({ vendor: vendorId });
+    if (existingLocCount === 0) {
+      const targetCity = c.city || vendor.location?.split(',').pop()?.trim() || 'Main City';
+      const targetLocality = c.localities?.[0] || '';
+      const loc = await OperatingLocation.create({
+        vendor: vendorId,
+        label: `${vendor.businessName || 'Main'} Studio / Office`,
+        type: 'HEAD_OFFICE',
+        address: [targetLocality, targetCity].filter(Boolean).join(', ') || targetCity,
+        locality: targetLocality,
+        city: targetCity,
+        state: 'West Bengal',
+        postalCode: '',
+        coordinates: { lat: 0, lng: 0 },
+        isPrimary: true,
+      });
+
+      if (!vendor.location) {
+        vendor.location = `${loc.locality ? `${loc.locality}, ` : ''}${loc.city}`;
+        if (vendor.businessName && vendor.category) vendor.isProfileCompleted = true;
+        await vendor.save();
+      }
+    }
+
     return evaluateVendorActivation(vendorId);
   }
 

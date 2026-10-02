@@ -1162,7 +1162,8 @@ export function ServicesPage() {
 
                   <MapLocationPicker
                     value={covBaseLocation}
-                    height="260px"
+                    circleRadiusKm={covRadiusKm}
+                    height="280px"
                     guidance="Search or drop the pin on the exact service base / hub"
                     onChange={(geo) => {
                       const next = {
@@ -1180,20 +1181,41 @@ export function ServicesPage() {
                     }}
                   />
 
-                  <div className="rounded-2xl border border-gray-100 bg-white p-3">
-                    <div className="text-[10px] font-extrabold uppercase tracking-wide text-muted">
-                      Selected service base
+                  <div className="rounded-2xl border border-gray-100 bg-white dark:bg-[#1a1d2e] dark:border-gray-800 p-3 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[10px] font-extrabold uppercase tracking-wide text-muted dark:text-gray-400">
+                        Pinned Service Base Location
+                      </div>
+                      {(covCity || covState) && (
+                        <div className="flex items-center gap-1">
+                          {covCity && (
+                            <span className="rounded-full bg-primary-soft text-primary dark:bg-primary-soft/20 dark:text-primary-soft px-2 py-0.5 text-[10px] font-extrabold">
+                              {covCity}
+                            </span>
+                          )}
+                          {covState && (
+                            <span className="rounded-full bg-lavender text-navy dark:bg-gray-800 dark:text-gray-300 px-2 py-0.5 text-[10px] font-extrabold">
+                              {covState}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-1 text-xs font-bold text-navy leading-relaxed">
+                    <div className="text-xs font-bold text-navy dark:text-white leading-relaxed">
                       {covBaseLocation.address ||
                         [covBaseLocation.locality, covCity, covState]
                           .filter(Boolean)
                           .join(", ") ||
                         "Move the pin or search an area"}
                     </div>
-                    <div className="mt-1 text-[10px] font-semibold text-muted">
-                      GPS: {Number(covBaseLocation.lat || 0).toFixed(4)}° N,{" "}
-                      {Number(covBaseLocation.lng || 0).toFixed(4)}° E
+                    <div className="text-[10px] font-semibold text-muted dark:text-gray-400 flex items-center justify-between gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
+                      <span>
+                        GPS: {Number(covBaseLocation.lat || 0).toFixed(4)}° N,{" "}
+                        {Number(covBaseLocation.lng || 0).toFixed(4)}° E
+                      </span>
+                      <span className="text-primary font-bold">
+                        Coverage radius: {covRadiusKm} km circle
+                      </span>
                     </div>
                   </div>
                 </div>
