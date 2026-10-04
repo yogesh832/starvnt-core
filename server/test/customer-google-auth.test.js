@@ -4,52 +4,51 @@ import request from 'supertest';
 import { setup, teardown, makeUser } from './helpers.js';
 
 let app;
+let ExternalUser;
 
 before(async () => {
   const env = await setup();
   app = env.app;
+  ExternalUser = env.ExternalUser;
 });
 
 after(async () => {
   await teardown();
 });
 
-test('switchSurface allows a user to switch dynamically between VENDOR and CUSTOMER surfaces', async () => {
-  const { user, token } = await makeUser('VENDOR');
-  assert.equal(user.accountType, 'VENDOR');
+test('Google login keeps existing email on its DB-owned customer surface', async () => {
+  const { user } = await makeUser('CUSTOMER');
+  const credential = `test:${user.email}:Google Link User:google-sub-${Date.now()}`;
 
-  // Currently VENDOR: can access vendor API, forbidden on customer API
-  const v1 = await request(app).get('/api/vendor/me').set('Authorization', `Bearer ${token}`);
-  assert.equal(v1.status, 200);
-  const c1 = await request(app).get('/api/customer/me').set('Authorization', `Bearer ${token}`);
-  assert.equal(c1.status, 403);
+  const res = await request(app)
+    .post('/api/auth/google')
+    .send({
+      credential,
+      accountType: 'VENDOR',
+      businessName: 'Should Not Create Vendor',
+      category: 'Event Planning',
+      city: 'Delhi',
+    });
 
-  // Switch to CUSTOMER
+  assert.equal(res.status, 200);
+  assert.equal(res.body.user.email, user.email);
+  assert.equal(res.body.user.accountType, 'CUSTOMER');
+  assert.equal(res.body.user.vendorOrganization, null);
+
+  const saved = await ExternalUser.findById(user._id).lean();
+  assert.equal(saved.accountType, 'CUSTOMER');
+  assert.equal(saved.vendorOrganization, null);
+});
+
+test('switchSurface refuses to convert a customer account into vendor', async () => {
+  const { token } = await makeUser('CUSTOMER');
+
   const switchRes = await request(app)
     .post('/api/auth/switch-surface')
     .set('Authorization', `Bearer ${token}`)
-    .send({ targetSurface: 'CUSTOMER' });
-
-  assert.equal(switchRes.status, 200);
-  assert.equal(switchRes.body.user.accountType, 'CUSTOMER');
-  const custToken = switchRes.body.accessToken;
-
-  // Now acting as CUSTOMER: can access customer API, forbidden on vendor API
-  const c2 = await request(app).get('/api/customer/me').set('Authorization', `Bearer ${custToken}`);
-  assert.equal(c2.status, 200);
-  const v2 = await request(app).get('/api/vendor/me').set('Authorization', `Bearer ${custToken}`);
-  assert.equal(v2.status, 403);
-
-  // Switch back to VENDOR
-  const switchBack = await request(app)
-    .post('/api/auth/switch-surface')
-    .set('Authorization', `Bearer ${custToken}`)
     .send({ targetSurface: 'VENDOR' });
 
-  assert.equal(switchBack.status, 200);
-  assert.equal(switchBack.body.user.accountType, 'VENDOR');
-  const vendorToken2 = switchBack.body.accessToken;
-
-  const v3 = await request(app).get('/api/vendor/me').set('Authorization', `Bearer ${vendorToken2}`);
-  assert.equal(v3.status, 200);
+  assert.equal(switchRes.status, 403);
+  assert.equal(switchRes.body.error, 'ACCOUNT_TYPE_MISMATCH');
+  assert.equal(switchRes.body.accountType, 'CUSTOMER');
 });

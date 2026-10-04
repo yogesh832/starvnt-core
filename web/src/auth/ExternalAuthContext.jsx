@@ -32,7 +32,8 @@ export function ExternalAuthProvider({ children }) {
     restoreSession();
   }, []);
 
-  // accountType = the tab chosen (CUSTOMER | VENDOR); one email can use both.
+  // accountType is the requested signup/login surface. Existing emails keep
+  // their DB-owned accountType so a wrong tab cannot convert the identity.
   async function login(email, password, accountType) {
     const data = await externalApi.call("/auth/login", {
       method: "POST",

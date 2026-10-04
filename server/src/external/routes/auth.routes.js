@@ -412,17 +412,10 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
-      const requestedSurface = accountType === "VENDOR" ? "VENDOR" : accountType === "CUSTOMER" ? "CUSTOMER" : null;
-      signInAs = requestedSurface || resolveExistingAccountType(user);
-      grantRole(user, signInAs);
-      user.accountType = signInAs;
-      await prepareAccountType(user, signInAs, {
-        businessName,
-        brandName,
-        category: normalizedCategory.value,
-        city,
-        location,
-      });
+      // Existing identities always keep their DB-owned surface. A wrong
+      // Customer/Vendor tab selection must never mutate the account or create
+      // vendor/customer records for the same email.
+      signInAs = resolveExistingAccountType(user);
       user.lastLoginAt = new Date();
       await user.save();
     } else {
@@ -970,12 +963,16 @@ router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
       return res.status(400).json({ error: "INVALID_SURFACE" });
     }
     const user = req.externalUser;
-    grantRole(user, targetSurface);
-    await prepareAccountType(user, targetSurface);
-    user.accountType = targetSurface;
-    await user.save();
+    const primarySurface = resolveExistingAccountType(user);
+    if (targetSurface !== primarySurface) {
+      return res.status(403).json({
+        error: "ACCOUNT_TYPE_MISMATCH",
+        accountType: primarySurface,
+        message: `This email is registered as ${primarySurface.toLowerCase()}. Please use the ${primarySurface.toLowerCase()} dashboard.`,
+      });
+    }
 
-    const { session, refreshToken } = await createSession(user, req, targetSurface);
+    const { session, refreshToken } = await createSession(user, req, primarySurface);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {

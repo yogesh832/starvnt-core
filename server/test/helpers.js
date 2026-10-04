@@ -33,7 +33,7 @@ export async function setup() {
   await Promise.all(Object.values(models).filter((m) => m?.syncIndexes).map((m) => m.syncIndexes()));
 
   modules = { db, createApp, ExternalUser, ExternalSession, signExternalAccessToken, generateRefreshToken, hashRefreshToken, registerLlmAdapter, models };
-  return { app: createApp(), models };
+  return { app: createApp(), models, ExternalUser };
 }
 
 export async function teardown() {
