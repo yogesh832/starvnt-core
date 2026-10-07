@@ -5,9 +5,10 @@ import { ServiceCoverage } from '../models/ServiceCoverage.js';
 import { checkTrueAvailability } from './availability.service.js';
 import { calculateValidatedTotalCost } from './totalCost.service.js';
 import { estimateDistanceKm } from '../utils/geo.js';
+import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
 
 /**
- * Opportunity Qualification & Lowest Validated Total Cost Matching Engine (Spec §8, §9).
+ * Opportunity Qualification & Lowest Validated Total Cost Matching Engine (Spec §8, §9, §18, §19).
  *
  * Golden Acceptance Test E:
  * "STARVNT must not optimize for nearest vendor or lowest visible quote.
@@ -23,7 +24,10 @@ export async function matchVendorsForRequirement({
   guestCount = 500,
   durationHours = 8,
   requiredStyles = [],
+  overrideRadiusKm = null,
 }) {
+  const policy = await getCommercialPolicyForCategory(category);
+  const effectivePolicyRadius = overrideRadiusKm || policy.defaultRadiusKm || 25;
   // 1. Find services matching category
   const services = await VendorService.find({
     category,
@@ -177,6 +181,9 @@ export async function matchVendorsForRequirement({
       'Lowest validated total cost among vendors meeting your requirements with confirmed availability.';
   }
 
+  // Spec §22: Up to 4 validated options max. Never manufacture fake options.
+  const topValidatedOptions = eligibleCandidates.slice(0, 4);
+
   return {
     category,
     date,
@@ -184,7 +191,42 @@ export async function matchVendorsForRequirement({
     totalEvaluated: services.length,
     eligibleCount: eligibleCandidates.length,
     excludedCount: excludedCandidates.length,
-    eligibleCandidates,
+    eligibleCandidates: topValidatedOptions, // Top 4 max capped
+    topValidatedOptions,
     excludedCandidates,
   };
+}
+
+/**
+ * Search Waves Engine (Spec §19).
+ * Wave 1: Initial policy radius.
+ * Wave 2: Approved expanded radius.
+ * Wave 3: Specialist/long-distance search.
+ * Aura+ explains expansion; never silently expands geography.
+ */
+export async function matchVendorsWithSearchWaves(params) {
+  const waveLevel = params.waveLevel || 1;
+  const policy = await getCommercialPolicyForCategory(params.category);
+  const baseRadius = policy.defaultRadiusKm || 25;
+  const multiplier = waveLevel === 1 ? 1 : waveLevel === 2 ? 2 : 4;
+  const searchRadiusKm = baseRadius * multiplier;
+
+  const result = await matchVendorsForRequirement({
+    ...params,
+    overrideRadiusKm: searchRadiusKm,
+  });
+
+  result.waveInfo = {
+    waveLevel,
+    policyRadiusKm: baseRadius,
+    searchRadiusKm,
+    explanation:
+      waveLevel === 1
+        ? `Search conducted within policy radius of ${baseRadius} km.`
+        : waveLevel === 2
+        ? `Wave 2 search expanded to ${searchRadiusKm} km to locate available qualified options.`
+        : `Wave 3 specialist search expanded to ${searchRadiusKm} km for specialized vendor coverage.`,
+  };
+
+  return result;
 }

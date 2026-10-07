@@ -124,22 +124,32 @@ export default function Enquiries() {
 
       <div className="space-y-4">
         {opportunities.map((o) => (
-          <Card key={o.id} className="!p-0 overflow-hidden">
+          <Card key={o.id} className="!p-0 overflow-hidden border border-gray-100 hover:border-gray-200 transition">
             <button
               onClick={() => setExpanded(expanded === o.id ? null : o.id)}
-              className="w-full flex items-center gap-3 p-4 sm:p-5 text-left"
+              className="w-full flex items-center gap-3 p-4 sm:p-5 text-left hover:bg-gray-50/50 transition cursor-pointer"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-[15px]">{o.service}</span>
+                  <span className="font-extrabold text-[15px] text-navy">👤 {o.customerName} · {o.eventType}</span>
                   <StatusChip status={o.status} />
                   <span className="text-[10px] text-muted">{o.id} · {o.ago}</span>
                 </div>
-                <div className="text-xs text-muted mt-1">{o.date} · {o.location} · {o.guests} guests</div>
+                <div className="text-xs text-muted mt-1 font-medium flex flex-wrap items-center gap-2">
+                  <span>📅 {o.date}</span>
+                  <span>·</span>
+                  <span>📍 {o.location}</span>
+                  <span>·</span>
+                  <span>👥 {o.guests} guests</span>
+                </div>
+                <div className="mt-2 inline-flex items-center gap-1.5 bg-primary-soft/80 border border-primary/20 text-primary px-2.5 py-1 rounded-xl text-xs font-bold">
+                  <span className="text-[10px] uppercase tracking-wide opacity-80">Requested Package:</span>
+                  <span>{o.service}</span>
+                </div>
               </div>
-              <div className="text-center shrink-0">
+              <div className="text-center shrink-0 ml-2">
                 <div className="text-lg font-extrabold text-primary">{o.fit}%</div>
-                <div className="text-[9px] text-muted">match</div>
+                <div className="text-[9px] text-muted font-bold uppercase">match</div>
               </div>
               <Icon
                 name="chevronDown"
@@ -149,9 +159,12 @@ export default function Enquiries() {
             </button>
 
             {expanded === o.id && (
-              <div className="border-t border-gray-100 p-4 sm:p-5">
+              <div className="border-t border-gray-100 p-4 sm:p-5 bg-gray-50/30">
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
                   {[
+                    ['Customer Name', o.customerName],
+                    ['Event & Date', `${o.eventType} (${o.date})`],
+                    ['Requested Package', o.service],
                     ['Required capability', o.capability],
                     ['Coverage', o.coverage],
                     ['Availability', o.availability],
@@ -159,28 +172,52 @@ export default function Enquiries() {
                     ['Travel cost', o.travelCost],
                     ['Guest count', `${o.guests} guests`],
                   ].map(([k, v]) => (
-                    <div key={k} className="bg-lavender rounded-xl p-3">
-                      <div className="text-muted text-[10px] uppercase tracking-wide">{k}</div>
-                      <div className="font-semibold mt-1">{v}</div>
+                    <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-xs">
+                      <div className="text-muted text-[10px] uppercase tracking-wide font-extrabold">{k}</div>
+                      <div className="font-bold text-navy mt-1 truncate">{v}</div>
                     </div>
                   ))}
                 </div>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <button
-                    onClick={() => handleOpenQuoteModal(o)}
-                    className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-5 py-2.5 transition shadow-sm"
-                  >
-                    Respond & Quote
-                  </button>
-                  <button className="rounded-xl border border-gray-200 text-xs font-semibold px-5 py-2.5 hover:bg-lavender transition">
-                    Ask a question
-                  </button>
-                  <button
-                    onClick={() => setOpportunities((prev) => prev.filter((item) => item.id !== o.id))}
-                    className="rounded-xl text-xs font-semibold px-4 py-2.5 text-muted hover:text-red-500 transition"
-                  >
-                    Decline
-                  </button>
+                <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-gray-100">
+                  {['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED', 'Quote Sent'].includes(o.status) ? (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-extrabold px-4 py-2.5 shadow-2xs">
+                        <Icon name="check" size={14} className="text-emerald-600" />
+                        <span>✓ Offer Submitted</span>
+                      </span>
+                      <button
+                        onClick={() => handleOpenQuoteModal(o)}
+                        className="rounded-xl border border-primary/30 text-primary bg-primary-soft hover:bg-primary-soft/80 text-xs font-bold px-4 py-2.5 transition cursor-pointer"
+                      >
+                        Revise / Update Offer
+                      </button>
+                      <a
+                        href="/vendor/messages"
+                        className="rounded-xl border border-gray-200 text-xs font-semibold px-4 py-2.5 hover:bg-lavender transition flex items-center gap-1.5 text-navy"
+                      >
+                        <Icon name="message" size={13} className="text-primary" />
+                        <span>Vendor Chat</span>
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleOpenQuoteModal(o)}
+                        className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-5 py-2.5 transition shadow-sm cursor-pointer"
+                      >
+                        Respond & Quote
+                      </button>
+                      <button className="rounded-xl border border-gray-200 text-xs font-semibold px-5 py-2.5 hover:bg-lavender transition cursor-pointer">
+                        Ask a question
+                      </button>
+                      <button
+                        onClick={() => setOpportunities((prev) => prev.filter((item) => item.id !== o.id))}
+                        className="rounded-xl text-xs font-semibold px-4 py-2.5 text-muted hover:text-red-500 transition cursor-pointer"
+                      >
+                        Decline
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}

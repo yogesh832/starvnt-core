@@ -724,17 +724,22 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
           const budgetNumber = Number(o.budget || o.estimatedBudget || 0);
 
+          const customerName = o.customer?.fullName || o.customerName || (o.customer?.email ? o.customer.email.split('@')[0] : 'Customer Enquiry');
+          const eventType = o.eventType || o.eventName || 'Event Enquiry';
+
           return {
             id: o._id,
             opportunityId: o._id,
             customerId: o.customer?._id || o.customer,
+            customerName,
+            eventType,
             serviceId: o.vendorService,
-            title: o.serviceName || 'Client Opportunity',
-            meta: `${o.eventDate || 'Date flexible'} · ${locStr}`,
+            serviceName: o.serviceName || 'Requested Package',
+            title: `👤 ${customerName} · ${eventType}`,
+            meta: `📅 ${o.eventDate || 'Date flexible'} · 📍 ${locStr}`,
             chips: [
-              o.guestCount ? `${o.guestCount} guests` : null,
+              o.guestCount ? `👥 ${o.guestCount} guests` : null,
               o.requiredCapability || null,
-              o.eventType || null,
             ].filter(Boolean),
             status: o.status === 'NEW' ? 'New' : o.status || 'Active',
             ago: 'Matched opportunity',
@@ -1074,7 +1079,15 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
     capabilities: false,
     coverage: false,
     portfolio: false,
+    documents: false,
   };
+
+  const isDocVerified = Boolean(
+    checklist.verified ||
+    checklist.documents ||
+    checklist.identityVerified ||
+    checklist.bankVerified
+  );
 
   const completedStepsCount = [
     checklist.profile,
@@ -1082,6 +1095,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
     checklist.capabilities,
     checklist.coverage,
     checklist.portfolio,
+    isDocVerified,
   ].filter(Boolean).length;
 
   // Real KPI calculations
@@ -1236,44 +1250,44 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         {/* Aura+ assistant */}
         {onAskAura && <AskAuraCard onAsk={onAskAura} />}
 
-        {/* 5-STEP MANDATORY ONBOARDING READINESS */}
+        {/* 6-STEP MANDATORY ONBOARDING READINESS */}
         {(!is100Percent || !gotItAcknowledged) && (
           <div className={`rounded-3xl p-5 sm:p-6 border transition shadow-sm ${
             is100Percent
-              ? 'bg-emerald-50/80 border-emerald-200'
-              : 'bg-gradient-to-br from-purple-50/70 via-white to-amber-50/40 border-primary/25'
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50'
+              : 'bg-gradient-to-br from-purple-50/70 via-white to-amber-50/40 dark:from-[#1e1b2e] dark:via-[#161926] dark:to-[#1e1f2b] border-primary/25 dark:border-primary/40'
           }`}>
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="space-y-1.5 flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full ${
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className={`text-[10px] uppercase tracking-wider font-extrabold px-3 py-1 rounded-full border shadow-2xs ${
                     is100Percent
-                      ? 'bg-emerald-100 text-emerald-800'
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700/60'
                       : completionPercentage === 0
-                      ? 'bg-rose-100 text-rose-800 font-extrabold'
-                      : 'bg-amber-100 text-amber-800'
+                      ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 border-rose-300 dark:border-rose-700/60'
+                      : 'bg-amber-100 text-amber-900 dark:bg-amber-500/25 dark:text-amber-300 border-amber-300/80 dark:border-amber-500/40'
                   }`}>
                     {is100Percent
                       ? 'Verified 100% Active'
                       : completionPercentage === 0
                       ? 'Action Required: Initial Setup (0% Completed)'
-                      : `Onboarding in Progress (${completionPercentage}% Completed)`}
+                      : `ONBOARDING IN PROGRESS (${completionPercentage}% COMPLETED)`}
                   </span>
-                  <span className="text-xs font-bold text-navy">
-                    {is100Percent ? 'Ready for Bookings' : `${completedStepsCount} of 5 Steps Configured`}
+                  <span className="text-xs font-extrabold text-navy dark:text-white">
+                    {is100Percent ? 'Ready for Bookings' : `${completedStepsCount} of 6 Steps Configured`}
                   </span>
                 </div>
-                <h2 className="text-base sm:text-lg font-extrabold text-navy tracking-tight">
+                <h2 className="text-base sm:text-lg font-extrabold text-navy dark:text-white tracking-tight mt-1">
                   {is100Percent
                     ? 'Profile 100% Complete — Your Brand is Active and Matchable'
                     : completionPercentage === 0
-                    ? 'Welcome! Complete your 5 onboarding steps to activate client matching'
-                    : 'Complete Your Operating Profile to Unlock Client Enquiries'}
+                    ? 'Welcome! Complete your 6 onboarding steps to activate client matching'
+                    : 'Complete Your Operating Profile & Documents to Unlock Client Enquiries'}
                 </h2>
-                <p className="text-xs text-muted max-w-2xl leading-relaxed">
+                <p className="text-xs text-muted dark:text-slate-300 max-w-2xl leading-relaxed">
                   {is100Percent
-                    ? 'All operational criteria (Service, Capability, Coverage, Portfolio & Base City) are verified. Your brand is actively routed to matching client requests.'
-                    : 'STARVNT requires 100% profile completion before matching clients with your brand. Complete each of the 5 sections below: configure your brand & city, add services & pricing, gear capability, service coverage, and portfolio projects.'}
+                    ? 'All operational criteria (Service, Capability, Coverage, Portfolio, Documents & Base City) are verified. Your brand is actively routed to matching client requests.'
+                    : 'STARVNT requires profile and document completion before matching clients with your brand. Complete each section below: brand & city, services & pricing, gear capability, service coverage, portfolio projects, and document verification.'}
                 </p>
               </div>
 
@@ -1289,7 +1303,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                         ? '/vendor/services'
                         : !checklist.coverage
                         ? '/vendor/availability'
-                        : '/vendor/portfolio'
+                        : !checklist.portfolio
+                        ? '/vendor/portfolio'
+                        : '/vendor/profile?tab=documents'
                     }
                     className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-3.5 sm:px-4 py-2.5 shadow-md shadow-primary/25 transition inline-flex items-center gap-1.5"
                   >
@@ -1327,7 +1343,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             <div className="mt-5 pt-4 border-t border-gray-100 space-y-2">
               <div className="flex justify-between text-xs font-semibold">
                 <span className="text-muted">
-                  Overall Completion Progress ({completedStepsCount} of 5 steps completed)
+                  Overall Completion Progress ({completedStepsCount} of 6 steps completed)
                 </span>
                 <span className={is100Percent ? 'text-emerald-600 font-extrabold' : completionPercentage === 0 ? 'text-muted font-bold' : 'text-primary font-extrabold'}>
                   {completionPercentage}% / 100%
@@ -1348,8 +1364,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                 />
               </div>
 
-              {/* 5 Distinct Responsive Milestone Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-3.5 pt-3">
+              {/* 6 Distinct Responsive Milestone Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 pt-3">
 
                 {/* Step 1: Brand & City */}
                 <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between min-w-0 ${
@@ -1521,6 +1537,40 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                   </div>
                 </div>
 
+                {/* Step 6: Document & KYC Verification */}
+                <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between min-w-0 ${
+                  isDocVerified
+                    ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900'
+                    : 'border-gray-200 bg-white text-navy shadow-xs'
+                }`}>
+                  <div className="min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-2">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">Step 6</span>
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0 ${
+                        isDocVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-muted'
+                      }`}>
+                        <Icon name={isDocVerified ? "check" : "documents"} size={11} strokeWidth={2.2} />
+                        <span>{isDocVerified ? 'Done' : 'Pending'}</span>
+                      </span>
+                    </div>
+                    <div className="font-extrabold text-xs text-navy truncate">6. Document & KYC</div>
+                    <p className="text-[11px] text-muted mt-1 leading-snug break-words">
+                      {isDocVerified ? 'PAN, GSTIN & Bank account verified' : 'Submit PAN, GSTIN & bank account for verification.'}
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2.5 border-t border-gray-100">
+                    <Link
+                      to="/vendor/profile?tab=documents"
+                      className={`text-xs font-bold hover:underline inline-flex items-center gap-1 max-w-full truncate ${
+                        isDocVerified ? 'text-emerald-700' : 'text-primary'
+                      }`}
+                    >
+                      <span className="truncate">{isDocVerified ? 'Manage Documents' : 'Verify Documents'}</span>
+                      <Icon name="chevronRight" size={12} className="shrink-0" />
+                    </Link>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
@@ -1586,6 +1636,11 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                         <span className="text-[10px] text-muted whitespace-nowrap shrink-0">{e.ago}</span>
                       </div>
                       <div className="text-[11px] text-muted truncate mt-0.5">{e.meta}</div>
+                      {e.serviceName && (
+                        <div className="text-[10px] font-bold text-primary bg-primary-soft/70 px-2 py-0.5 rounded-md inline-block mt-1 truncate max-w-full">
+                          Package: {e.serviceName}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between gap-2 mt-2 pt-1 border-t border-gray-50 flex-wrap sm:flex-nowrap">
                         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                           {e.chips.slice(0, 2).map((c) => (
@@ -1597,9 +1652,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                         </div>
                         <button
                           onClick={() => setSelectedEnquiry(e)}
-                          className="text-xs font-bold text-primary hover:underline shrink-0 ml-auto"
+                          className="text-xs font-bold text-primary hover:underline shrink-0 ml-auto cursor-pointer"
                         >
-                          View Enquiry →
+                          {['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED'].includes(e.status) ? '✓ View Offer →' : 'Respond →'}
                         </button>
                       </div>
                     </div>

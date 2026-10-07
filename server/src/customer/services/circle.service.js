@@ -7,7 +7,9 @@ import * as auraRepo from '../repositories/aura.repo.js';
 import * as catalog from './catalog.service.js';
 import { VendorMessageThread } from '../../external/models/VendorMessageThread.js';
 import { Opportunity } from '../../external/models/Opportunity.js';
-import { notifyVendor } from '../../notifications/notification.service.js';
+import { ExternalUser } from '../../external/models/ExternalUser.js';
+import { EventMessage, CustomerEvent } from '../models/index.js';
+import { notifyVendor, notifyCustomer } from '../../notifications/notification.service.js';
 import { getOwnedEventOr404 } from './events.service.js';
 import { serializeEvent } from './understanding.js';
 import { categoryLabel } from './planCatalog.js';
@@ -26,6 +28,124 @@ const serializeMessage = (m) => ({
   bookingId: m.booking ? String(m.booking) : null,
   requirementId: m.requirement ? String(m.requirement) : null,
 });
+
+export async function recordLifecycleEventMessage({
+  vendorId,
+  customerId,
+  eventId,
+  bookingId,
+  quoteId,
+  opportunityId,
+  sender = 'SYSTEM',
+  senderName = 'STARVNT Core',
+  text,
+  title,
+  type = 'message',
+  metadata = null,
+}) {
+  if (!vendorId || !text) return null;
+
+  const now = new Date();
+
+  let thread = await VendorMessageThread.findOne({
+    vendor: vendorId,
+    $or: [
+      { customer: customerId },
+      { booking: bookingId },
+      { customerBooking: bookingId },
+      { opportunity: opportunityId },
+    ].filter(Boolean),
+  });
+
+  if (!thread && customerId) {
+    const cust = await ExternalUser.findById(customerId).lean().catch(() => null);
+    const event = eventId ? await CustomerEvent.findById(eventId).lean().catch(() => null) : null;
+    const clientName = cust?.fullName || cust?.name || event?.contactName || 'Customer';
+
+    thread = new VendorMessageThread({
+      vendor: vendorId,
+      customer: customerId,
+      opportunity: opportunityId || null,
+      booking: bookingId || null,
+      customerBooking: bookingId || null,
+      customerEvent: eventId || null,
+      clientName,
+      clientEmail: cust?.email || '',
+      clientPhone: cust?.phone || '',
+      eventName: event?.title || 'Event Booking',
+      eventType: event?.eventType || 'Service',
+      eventDate: event?.eventDate || '',
+      status: 'ACTIVE',
+      messages: [],
+    });
+  }
+
+  if (thread) {
+    thread.lastMessageText = text;
+    thread.lastMessageAt = now;
+    thread.status = 'ACTIVE';
+
+    if (!Array.isArray(thread.messages)) thread.messages = [];
+
+    const lastMsg = thread.messages[thread.messages.length - 1];
+    const isDup = lastMsg && lastMsg.text === text && (now.getTime() - new Date(lastMsg.createdAt).getTime()) < 5000;
+
+    if (!isDup) {
+      thread.messages.push({
+        sender: sender === 'VENDOR' ? 'VENDOR' : sender === 'CLIENT' ? 'CLIENT' : 'SYSTEM',
+        senderName: senderName || (sender === 'CLIENT' ? 'Customer' : sender === 'VENDOR' ? 'Vendor Partner' : 'STARVNT Core'),
+        text,
+        isRead: false,
+        createdAt: now,
+        metadata: metadata || { type },
+      });
+
+      if (sender === 'CLIENT') {
+        thread.unreadVendorCount = (thread.unreadVendorCount || 0) + 1;
+      } else {
+        thread.unreadClientCount = (thread.unreadClientCount || 0) + 1;
+      }
+
+      await thread.save().catch(() => null);
+    }
+  }
+
+  if (eventId) {
+    await EventMessage.create({
+      event: eventId,
+      booking: bookingId || null,
+      senderType: sender === 'CLIENT' ? 'customer' : sender === 'VENDOR' ? 'vendor' : 'team',
+      senderName: senderName || 'STARVNT Core',
+      body: text,
+      createdAt: now,
+    }).catch(() => null);
+  }
+
+  if (sender === 'VENDOR' || sender === 'SYSTEM') {
+    if (customerId) {
+      await notifyCustomer({
+        customerId,
+        type: type || 'message',
+        title: title || `${senderName}: ${text.slice(0, 60)}`,
+        body: text,
+        actionUrl: eventId ? `/customer/events/${eventId}/bookings` : '/customer/updates',
+        eventId: eventId ? String(eventId) : null,
+        idempotencyKey: `lifecycle-msg-${thread?._id || customerId}-${Date.now()}`,
+      }).catch(() => null);
+    }
+  } else if (sender === 'CLIENT') {
+    await notifyVendor({
+      vendorId,
+      title: title || `New message from ${senderName}`,
+      message: text.slice(0, 160),
+      type: 'MESSAGE',
+      link: '/vendor/messages',
+      idempotencyKey: `lifecycle-vendor-msg-${vendorId}-${Date.now()}`,
+    }).catch(() => null);
+  }
+
+  return thread;
+}
 
 async function syncCustomerBookingMessageToVendor({ event, bookingId, customerId, text }) {
   if (!bookingId) return;
@@ -206,16 +326,20 @@ async function backfillCustomerRequirementMessagesToVendor({ event, requirementI
 }
 
 async function resolveContext(event, { bookingId, requirementId }) {
-  if (bookingId) {
-    const b = await commerceRepo.getBooking(bookingId);
-    if (!b || String(b.event) !== String(event._id)) throw notFound('Booking not found');
-    return { bookingId: b._id };
+  if (bookingId && bookingId !== 'null' && bookingId !== 'undefined') {
+    if (mongoose.isValidObjectId(bookingId)) {
+      const b = await commerceRepo.getBooking(bookingId);
+      if (b && String(b.event) === String(event._id)) return { bookingId: b._id };
+    }
   }
-  if (requirementId) {
-    if (!mongoose.isValidObjectId(requirementId)) throw notFound('Service not found');
+  if (requirementId && requirementId !== 'null' && requirementId !== 'undefined') {
     const reqs = await reqRepo.listRequirements(event._id);
-    if (!reqs.some((r) => String(r._id) === String(requirementId))) throw notFound('Service not found');
-    return { requirementId };
+    if (mongoose.isValidObjectId(requirementId)) {
+      const matched = reqs.find((r) => String(r._id) === String(requirementId));
+      if (matched) return { requirementId: matched._id };
+    }
+    const matchedCategory = reqs.find((r) => r.category === requirementId);
+    if (matchedCategory) return { requirementId: matchedCategory._id };
   }
   return {};
 }
@@ -260,7 +384,68 @@ export async function listMessages(customerId, eventId, query = {}) {
   const event = await getOwnedEventOr404(customerId, eventId);
   const ctx = await resolveContext(event, query);
   await backfillCustomerRequirementMessagesToVendor({ event, requirementId: ctx.requirementId, customerId });
-  return { messages: (await circleRepo.listMessages(event._id, ctx)).map(serializeMessage) };
+
+  const circleMsgs = (await circleRepo.listMessages(event._id, ctx)).map(serializeMessage);
+
+  // Retrieve thread messages from VendorMessageThread so vendor replies appear seamlessly
+  let threadDocs = [];
+  if (query.threadId && mongoose.isValidObjectId(query.threadId)) {
+    const single = await VendorMessageThread.findById(query.threadId).lean().catch(() => null);
+    if (single) threadDocs = [single];
+  }
+  if (threadDocs.length === 0) {
+    const threadFilter = { customer: customerId };
+    if (ctx.bookingId) threadFilter.customerBooking = ctx.bookingId;
+    else if (ctx.requirementId) threadFilter.customerRequirement = ctx.requirementId;
+    else threadFilter.customerEvent = event._id;
+
+    threadDocs = await VendorMessageThread.find(threadFilter).lean().catch(() => []);
+    if (threadDocs.length === 0) {
+      threadDocs = await VendorMessageThread.find({ customer: customerId }).lean().catch(() => []);
+    }
+  }
+
+  if (threadDocs.length > 0) {
+    const unreadIds = threadDocs.filter((t) => (t.unreadClientCount || 0) > 0).map((t) => t._id);
+    if (unreadIds.length > 0) {
+      await VendorMessageThread.updateMany(
+        { _id: { $in: unreadIds } },
+        { $set: { unreadClientCount: 0 } }
+      ).catch(() => null);
+    }
+  }
+
+  const threadMsgs = [];
+  for (const t of threadDocs) {
+    if (Array.isArray(t.messages)) {
+      for (const m of t.messages) {
+        threadMsgs.push({
+          id: String(m._id || `vm-${m.createdAt?.getTime?.() || Math.random()}`),
+          senderType: m.sender === 'CLIENT' ? 'customer' : 'vendor',
+          senderName: m.sender === 'CLIENT' ? 'You' : m.senderName || t.clientName || 'Vendor',
+          body: m.text,
+          createdAt: m.createdAt || t.lastMessageAt || t.updatedAt,
+          bookingId: t.customerBooking ? String(t.customerBooking) : null,
+          requirementId: t.customerRequirement ? String(t.customerRequirement) : null,
+        });
+      }
+    }
+  }
+
+  // Combine and deduplicate circleMsgs and threadMsgs
+  const combined = [...circleMsgs];
+  for (const tm of threadMsgs) {
+    const isDup = combined.some(
+      (cm) => cm.body === tm.body && Math.abs(new Date(cm.createdAt) - new Date(tm.createdAt)) < 5000
+    );
+    if (!isDup) {
+      combined.push(tm);
+    }
+  }
+
+  combined.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+
+  return { messages: combined };
 }
 
 export async function postMessage(customerId, eventId, body = {}) {
@@ -269,7 +454,7 @@ export async function postMessage(customerId, eventId, body = {}) {
   if (!text || text.length > 2000) throw badRequest('INVALID_BODY', 'Message must be 1–2000 characters');
   const ctx = await resolveContext(event, {
     bookingId: body.bookingId || body.booking,
-    requirementId: body.requirementId || body.service,
+    requirementId: body.requirementId || body.service || body.requirement,
   });
   const m = await circleRepo.addMessage({
     event: event._id,
@@ -279,6 +464,25 @@ export async function postMessage(customerId, eventId, body = {}) {
     senderCustomer: customerId,
     body: text,
   });
+
+  const threadId = body.threadId;
+  if (threadId && mongoose.isValidObjectId(threadId)) {
+    const now = new Date();
+    await VendorMessageThread.findByIdAndUpdate(threadId, {
+      $set: { lastMessageText: text, lastMessageAt: now, status: 'ACTIVE' },
+      $push: {
+        messages: {
+          sender: 'CLIENT',
+          senderName: event.contactName || event.hostName || 'Customer',
+          text,
+          isRead: false,
+          createdAt: now,
+        },
+      },
+      $inc: { unreadVendorCount: 1 },
+    }).catch(() => null);
+  }
+
   await syncCustomerBookingMessageToVendor({ event, bookingId: ctx.bookingId, customerId, text });
   await syncCustomerRequirementMessageToVendor({
     event,
@@ -294,24 +498,126 @@ export async function postMessage(customerId, eventId, body = {}) {
 // ── Updates ────────────────────────────────────────────────────────────────
 const IMPORTANT = ['payment', 'booking', 'completion', 'cancellation'];
 
+export async function countUnreadTotal(customerId) {
+  const { Booking, CustomerNotification } = await import('../models/index.js');
+  const { CoreBooking } = await import('../../admin/models/CoreBooking.js');
+  const events = await eventsRepo.listEventsForCustomer(customerId).catch(() => []);
+  const validEventIds = new Set(events.map((e) => String(e._id)));
+  const [userBookings, coreBookings] = await Promise.all([
+    Booking.find({ customer: customerId }).lean().catch(() => []),
+    CoreBooking.find({ customerId }).lean().catch(() => []),
+  ]);
+  const validBookingIds = new Set([
+    ...userBookings.filter((b) => validEventIds.has(String(b.event))).map((b) => String(b._id)),
+    ...userBookings.filter((b) => b.reservation).map((b) => String(b.reservation)),
+    ...coreBookings.map((cb) => String(cb._id)),
+    ...coreBookings.filter((cb) => cb.quoteId).map((cb) => String(cb.quoteId)),
+  ]);
+
+  const [notifications, threadDocs] = await Promise.all([
+    circleRepo.listNotifications(customerId),
+    VendorMessageThread.find({ customer: customerId, unreadClientCount: { $gt: 0 } }).lean().catch(() => []),
+  ]);
+
+  const unreadNotifs = notifications.filter((n) => {
+    if (n.readAt) return false;
+    if (n.event && !validEventIds.has(String(n.event))) return false;
+    if (n.booking && !validBookingIds.has(String(n.booking))) return false;
+    if (n.payload?.bookingId && !validBookingIds.has(String(n.payload.bookingId))) return false;
+    if (events.length === 0) {
+      const t = String(n.type || '').toLowerCase();
+      const b = String(n.body || '').toLowerCase();
+      const title = String(n.title || '').toLowerCase();
+      if (
+        ['completion', 'booking', 'payment', 'quote', 'message', 'event_day', 'enquiry'].includes(t) ||
+        b.includes('bk-') ||
+        b.includes('completion evidence') ||
+        b.includes('started work') ||
+        b.includes('evidence was uploaded') ||
+        title.includes('evidence') ||
+        title.includes('started work')
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }).length;
+
+  const threadUnread = threadDocs
+    .filter((t) => (!t.customerEvent || validEventIds.has(String(t.customerEvent))) && events.length > 0)
+    .reduce((sum, t) => sum + (t.unreadClientCount || 0), 0);
+
+  return unreadNotifs + threadUnread;
+}
+
 export async function updates(customerId) {
-  const [notifications, events, sessions, unread, threads] = await Promise.all([
+  const { Booking } = await import('../models/index.js');
+  const { CoreBooking } = await import('../../admin/models/CoreBooking.js');
+  const [notifications, events, sessions, unread, threads, userBookings, coreBookings] = await Promise.all([
     circleRepo.listNotifications(customerId),
     eventsRepo.listEventsForCustomer(customerId),
     auraRepo.listSessionsForCustomer(customerId),
-    circleRepo.countUnread(customerId),
+    countUnreadTotal(customerId),
     VendorMessageThread.find({ customer: customerId })
       .populate('vendor', 'businessName category')
       .sort({ lastMessageAt: -1, updatedAt: -1 })
       .limit(30)
       .lean()
       .catch(() => []),
+    Booking.find({ customer: customerId }).lean().catch(() => []),
+    CoreBooking.find({ customerId }).lean().catch(() => []),
   ]);
+
   const titles = new Map(events.map((e) => [String(e._id), e.title]));
-  const messages = await circleRepo.listAllMessages(events.map((e) => e._id));
+  const validEventIds = new Set(events.map((e) => String(e._id)));
+  const validBookingIds = new Set([
+    ...userBookings.filter((b) => validEventIds.has(String(b.event))).map((b) => String(b._id)),
+    ...userBookings.filter((b) => b.reservation).map((b) => String(b.reservation)),
+    ...coreBookings.map((cb) => String(cb._id)),
+    ...coreBookings.filter((cb) => cb.quoteId).map((cb) => String(cb.quoteId)),
+  ]);
+
+  const validNotifications = notifications.filter((n) => {
+    if (n.event && !validEventIds.has(String(n.event))) return false;
+    if (n.booking && !validBookingIds.has(String(n.booking))) return false;
+    if (n.payload?.bookingId && !validBookingIds.has(String(n.payload.bookingId))) return false;
+
+    if (events.length === 0) {
+      const t = String(n.type || '').toLowerCase();
+      const b = String(n.body || '').toLowerCase();
+      const title = String(n.title || '').toLowerCase();
+      if (
+        ['completion', 'booking', 'payment', 'quote', 'message', 'event_day', 'enquiry'].includes(t) ||
+        b.includes('bk-') ||
+        b.includes('completion evidence') ||
+        b.includes('started work') ||
+        b.includes('evidence was uploaded') ||
+        title.includes('evidence') ||
+        title.includes('started work')
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const validThreads = threads.filter((t) => {
+    if (t.customerEvent && !validEventIds.has(String(t.customerEvent))) return false;
+    if (events.length === 0) return false;
+    return true;
+  });
+
+  const rawMessages = await circleRepo.listAllMessages(events.map((e) => e._id));
+  const validMessages = rawMessages.filter((m) => {
+    if (m.event && !validEventIds.has(String(m.event))) return false;
+    if (events.length === 0) return false;
+    return true;
+  });
+
   return {
     unread,
-    notifications: notifications.map((n) => {
+    notifications: validNotifications.map((n) => {
       let defaultTo = n.actionUrl || null;
       if (!defaultTo && n.event) {
         const evId = String(n.event);
@@ -337,8 +643,9 @@ export async function updates(customerId) {
         createdAt: n.createdAt,
       };
     }),
-    threads: (threads || []).map((t) => {
-      const evId = t.customerEvent ? String(t.customerEvent) : null;
+    threads: (validThreads || []).map((t) => {
+      const defaultEvId = events.length > 0 ? String(events[0]._id) : null;
+      const evId = t.customerEvent ? String(t.customerEvent) : defaultEvId;
       const serviceId = t.customerRequirement ? String(t.customerRequirement) : null;
       const bookingId = t.customerBooking ? String(t.customerBooking) : null;
       const toUrl = evId
@@ -353,10 +660,13 @@ export async function updates(customerId) {
         lastMessageAt: t.lastMessageAt || t.updatedAt,
         unreadCount: t.unreadClientCount || 0,
         eventId: evId,
+        bookingId: bookingId || null,
+        serviceId: serviceId || null,
+        requirementId: serviceId || null,
         to: toUrl,
       };
     }),
-    vendorMessages: messages
+    vendorMessages: validMessages
       .filter((m) => m.senderType === 'vendor' || m.senderType === 'team' || m.senderType === 'customer')
       .slice(0, 30)
       .map((m) => {
@@ -384,11 +694,16 @@ export async function readAll(customerId) {
     circleRepo.markAllRead(customerId),
     VendorMessageThread.updateMany(
       { customer: customerId },
-      { $set: { unreadClientCount: 0, 'messages.$[m].isRead': true } },
-      { arrayFilters: [{ 'm.sender': 'VENDOR' }] }
+      { $set: { unreadClientCount: 0 } }
     ).catch(() => null),
   ]);
-  return { marked: r?.modifiedCount || 0 };
+  return { marked: r?.modifiedCount || 0, unread: 0 };
 }
 
-export const unreadCount = (customerId) => circleRepo.countUnread(customerId);
+export async function readOne(customerId, notificationId) {
+  const r = await circleRepo.markOneRead(customerId, notificationId);
+  const unread = await countUnreadTotal(customerId);
+  return { ok: true, marked: r?.modifiedCount || 0, unread };
+}
+
+export const unreadCount = (customerId) => countUnreadTotal(customerId);

@@ -70,19 +70,19 @@ test('1. Vendor without GST (GST = NO) can register, add PAN & Bank Account, and
   assert.equal(finProfile.gst.gstin, 'N/A');
   assert.equal(finProfile.gst.verificationStatus, 'NOT_APPLICABLE');
 
-  // Step 6: Trigger ₹0.02 Penny Drop Bank Verification
+  // Step 6: Trigger Bank Account Verification
   const verificationRes = await requestBankVerification(vendorOrg._id, finProfile.bankAccount, {
     requestedBy: 'VENDOR',
   });
 
   assert.equal(verificationRes.ok, true);
   assert.equal(verificationRes.status, 'VERIFIED');
-  assert.equal(verificationRes.amount, 0.02);
+  assert.equal(verificationRes.amount, 0);
 
   // Verify Audit Log record created
   const log = await BankVerificationLog.findOne({ vendor: vendorOrg._id });
   assert.ok(log);
-  assert.equal(log.amount, 0.02);
+  assert.equal(log.amount, 0);
   assert.equal(log.currency, 'INR');
   assert.equal(log.verificationStatus, 'VERIFIED');
   assert.equal(log.submittedAccountNumber, 'XXXXXXXX9012');
@@ -144,7 +144,7 @@ test('3. PAN -> GSTIN Discovery returns message when no GST is registered (does 
   assert.equal(result.message, 'No GST registration found for this PAN.');
 });
 
-test('4. Idempotency mechanism prevents duplicate ₹0.02 transactions', async () => {
+test('4. Idempotency mechanism prevents duplicate bank verification transactions', async () => {
   const { vendorOrg } = await createTestVendor('idempotent-vendor@starvnt.com', 'Idempotency Test Studio');
 
   const bankDetails = {

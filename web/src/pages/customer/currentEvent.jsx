@@ -72,7 +72,7 @@ export function useCurrentEvent() {
 const SECTION_PATH = {
   quotes: 'quotes',
   bookings: 'bookings',
-  payments: 'bookings',
+  payments: 'payments',
   vendors: 'vendors',
   timeline: 'history',
   plan: 'requirements',

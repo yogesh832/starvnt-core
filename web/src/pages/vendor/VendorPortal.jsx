@@ -602,14 +602,14 @@ export default function VendorPortal() {
 
         {/* Mobile Bottom Navigation Bar (Phone Screens) */}
         <div
-          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-gray-200/80 px-2 pt-1.5 flex items-center justify-around shadow-lg"
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-[#161926]/95 backdrop-blur-md border-t border-gray-200/80 dark:border-gray-800 px-2 pt-1.5 flex items-center justify-around shadow-lg"
           style={{ paddingBottom: 'calc(0.375rem + env(safe-area-inset-bottom))' }}
         >
           <NavLink
             to="dashboard"
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+                isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
               }`
             }
           >
@@ -620,42 +620,46 @@ export default function VendorPortal() {
           <NavLink
             to="enquiries"
             className={({ isActive }) =>
-              `relative flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+              `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
+                isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
               }`
             }
           >
-            <Icon name="message" size={19} />
+            <div className="relative inline-flex items-center justify-center">
+              <Icon name="message" size={19} />
+              {navBadge('enquiries', badgeCounts.enquiriesCount) > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-[#161926] shadow-xs">
+                  {navBadge('enquiries', badgeCounts.enquiriesCount)}
+                </span>
+              )}
+            </div>
             <span>Leads</span>
-            {navBadge('enquiries', badgeCounts.enquiriesCount) > 0 && (
-              <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {navBadge('enquiries', badgeCounts.enquiriesCount)}
-              </span>
-            )}
           </NavLink>
 
           <NavLink
             to="bookings"
             className={({ isActive }) =>
-              `relative flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+              `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
+                isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
               }`
             }
           >
-            <Icon name="bookings" size={19} />
+            <div className="relative inline-flex items-center justify-center">
+              <Icon name="bookings" size={19} />
+              {navBadge('bookings', badgeCounts.bookingsCount) > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-[#161926] shadow-xs">
+                  {navBadge('bookings', badgeCounts.bookingsCount)}
+                </span>
+              )}
+            </div>
             <span>Bookings</span>
-            {navBadge('bookings', badgeCounts.bookingsCount) > 0 && (
-              <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {navBadge('bookings', badgeCounts.bookingsCount)}
-              </span>
-            )}
           </NavLink>
 
           <NavLink
             to="calendar"
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+                isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
               }`
             }
           >
@@ -665,7 +669,7 @@ export default function VendorPortal() {
 
           <button
             onClick={() => setNavOpen(true)}
-            className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold text-muted hover:text-navy transition"
+            className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white transition cursor-pointer"
           >
             <Icon name="menu" size={19} />
             <span>More</span>
@@ -676,7 +680,7 @@ export default function VendorPortal() {
         {!auraOpen && (
           <button
             onClick={() => setAuraOpen(true)}
-            className="lg:hidden fixed right-4 bottom-20 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/40 border-4 border-white"
+            className="lg:hidden fixed right-4 bottom-16 z-30 w-11 h-11 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/30 border-2 border-white dark:border-[#161926] hover:scale-105 transition cursor-pointer"
             aria-label="Ask Aura+"
           >
             <Icon name="bolt" size={18} />

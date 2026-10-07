@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, DemoBadge, Empty, PageSkeleton, useLoad } from './customerUi.jsx';
@@ -213,10 +213,466 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
   );
 }
 
+function sanitizePackageTitle(name, label, vendorName) {
+  if (!name || typeof name !== 'string' || name.includes('Event Enquiry') || name.startsWith('👤') || /customer/i.test(name)) {
+    return vendorName && vendorName !== 'Vendor' && vendorName !== 'Vendor Partner' ? `${vendorName} Package` : `${label || 'Service'} Package`;
+  }
+  return name;
+}
+
+function BookingCard({ b, eventId, onVerify, verifying, onPay, onCancel, cancelling }) {
+  const [open, setOpen] = useState(true);
+
+  let [label, cls] = BOOKING_STATUS[b.status] || ['✓ Confirmed', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40'];
+  if (b.executionStatus === 'SERVICE_STARTED') {
+    label = '⚡ Work Started — In Progress';
+    cls = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/40 font-extrabold';
+  } else if (b.executionStatus === 'COMPLETION_SUBMITTED') {
+    label = '⏳ Work Completed — Action Required';
+    cls = 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/40 font-extrabold';
+  } else if (b.executionStatus === 'COMPLETION_VERIFIED') {
+    label = '✓ Completed & Verified';
+    cls = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40 font-extrabold';
+  }
+
+  const isActionRequired = b.executionStatus === 'COMPLETION_SUBMITTED';
+  const pkgName = sanitizePackageTitle(b.packageName, b.label, b.vendorName);
+
+  return (
+    <div
+      className={`bg-white dark:bg-[#161926] rounded-2xl border transition overflow-hidden shadow-xs ${
+        isActionRequired
+          ? 'border-amber-300 dark:border-amber-700 ring-2 ring-amber-400/20'
+          : 'border-gray-100 dark:border-gray-800'
+      }`}
+    >
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50/50 dark:hover:bg-white/5 transition cursor-pointer"
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-2xl bg-lavender dark:bg-[#1f2336] text-primary dark:text-[#a5b4fc] grid place-items-center shrink-0 font-bold text-sm">
+            <Icon name="bookings" size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-extrabold text-navy dark:text-white truncate">
+                {b.label}: {b.vendorName} {b.isDemo && <DemoBadge />}
+              </span>
+              <span className={`text-[10px] font-bold rounded-full px-2.5 py-0.5 border ${cls}`}>{label}</span>
+            </div>
+            <div className="text-[11px] text-muted dark:text-slate-400 mt-1 font-medium flex items-center gap-1.5 flex-wrap">
+              <span>Booking #{b.reference} · Total <b className="text-navy dark:text-slate-200">{formatINR(b.packageTotal || b.amount)}</b> · Paid advance {formatINR(b.paidAmount || b.amount)}</span>
+              {b.balanceAmount > 0 && <span className="text-amber-700 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-800/40">Balance {formatINR(b.balanceAmount)}</span>}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          <span className="text-xs text-muted dark:text-slate-400 font-semibold">{open ? 'Collapse' : 'Details'}</span>
+          <Icon name="chevronDown" size={16} className={`text-muted dark:text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+
+      {isActionRequired && (
+        <div className="mx-4 mb-4 p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 flex items-center justify-between gap-3 flex-wrap shadow-2xs">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-extrabold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+              <Icon name="star" size={14} className="text-amber-600" />
+              <span>Work Done & Evidence Uploaded by Vendor</span>
+            </div>
+            <div className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+              Please inspect proof of work, verify completion, and pay remaining balance.
+            </div>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onVerify(b);
+            }}
+            disabled={verifying === b.id}
+            className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 transition cursor-pointer shadow-sm disabled:opacity-50"
+          >
+            {verifying === b.id ? 'Verifying...' : 'Verify Completion & Proceed'}
+          </button>
+        </div>
+      )}
+
+      {open && (
+        <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-800/60 bg-gray-50/40 dark:bg-[#131622] space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="bg-white dark:bg-[#1a1d2d] border border-gray-100 dark:border-gray-800 rounded-xl p-3 min-w-0">
+              <div className="text-[10px] text-muted dark:text-slate-400 font-bold uppercase tracking-wider">Package</div>
+              <div className="font-extrabold text-navy dark:text-white mt-1 truncate" title={pkgName}>{pkgName}</div>
+            </div>
+            <div className="bg-white dark:bg-[#1a1d2d] border border-gray-100 dark:border-gray-800 rounded-xl p-3 min-w-0">
+              <div className="text-[10px] text-muted dark:text-slate-400 font-bold uppercase tracking-wider">Paid Advance</div>
+              <div className="font-extrabold text-emerald-700 dark:text-emerald-400 mt-1">{formatINR(b.paidAmount || b.amount)}</div>
+            </div>
+            <div className="bg-white dark:bg-[#1a1d2d] border border-gray-100 dark:border-gray-800 rounded-xl p-3 min-w-0">
+              <div className="text-[10px] text-muted dark:text-slate-400 font-bold uppercase tracking-wider">Remaining Balance</div>
+              <div className="font-extrabold text-amber-700 dark:text-amber-400 mt-1">{formatINR(b.balanceAmount || 0)}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 flex-wrap gap-3">
+            <Link
+              to={`/customer/events/${eventId}/circle?booking=${b.id}`}
+              className="text-xs font-bold text-primary dark:text-[#a5b4fc] inline-flex items-center gap-1.5 hover:underline"
+            >
+              <Icon name="message" size={14} />
+              <span>Open Chat & Discussion</span>
+            </Link>
+
+            <div className="flex items-center gap-3">
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={() => onCancel(b.id)}
+                  disabled={cancelling === b.id}
+                  className="text-xs font-bold text-rose-500 hover:text-rose-700 dark:text-rose-400 hover:underline px-2 py-1 cursor-pointer disabled:opacity-50"
+                >
+                  {cancelling === b.id ? 'Removing…' : 'Cancel / Remove'}
+                </button>
+              )}
+              {b.executionStatus === 'COMPLETION_VERIFIED' && b.balanceAmount > 0 && (
+                <button
+                  onClick={() => onPay({ ...b, advanceAmount: b.balanceAmount, amount: b.balanceAmount })}
+                  className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2 hover:bg-primary-dark transition shadow-xs cursor-pointer"
+                >
+                  Pay Balance ({formatINR(b.balanceAmount)})
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function parseEvidence(ev) {
+  if (!ev) return { photos: [], videos: [], pdfs: [], driveLinks: [], otherLinks: [], deliverablesUrl: '', notes: '', checklist: [] };
+  const items = Array.isArray(ev) ? ev : [ev];
+  const photos = [];
+  const videos = [];
+  const pdfs = [];
+  const driveLinks = [];
+  const otherLinks = [];
+  let deliverablesUrl = '';
+  let notes = '';
+  let checklist = [];
+
+  const categorizeUrl = (url) => {
+    if (!url || typeof url !== 'string') return;
+    const lower = url.toLowerCase();
+    if (lower.includes('drive.google.com') || lower.includes('docs.google.com') || lower.includes('dropbox.com') || lower.includes('onedrive.live.com')) {
+      driveLinks.push(url);
+    } else if (lower.match(/\.(mp4|webm|mov|mkv|avi)$/i) || lower.includes('/video/upload/')) {
+      videos.push(url);
+    } else if (lower.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|txt)$/i) || lower.includes('/raw/upload/')) {
+      pdfs.push(url);
+    } else if (lower.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || lower.includes('/image/upload/')) {
+      photos.push(url);
+    } else if (lower.startsWith('http')) {
+      otherLinks.push(url);
+    }
+  };
+
+  items.forEach((item) => {
+    if (!item) return;
+    if (typeof item === 'string') {
+      if (item.startsWith('http')) categorizeUrl(item);
+      else notes = notes ? `${notes}\n${item}` : item;
+      return;
+    }
+    if (item.notes || item.note) notes = notes || item.notes || item.note;
+    if (item.deliverablesUrl || item.deliverableUrl) deliverablesUrl = deliverablesUrl || item.deliverablesUrl || item.deliverableUrl;
+
+    if (Array.isArray(item.photos)) item.photos.forEach(categorizeUrl);
+    if (Array.isArray(item.videos)) item.videos.forEach(categorizeUrl);
+    if (Array.isArray(item.pdfs)) item.pdfs.forEach(categorizeUrl);
+    if (Array.isArray(item.files)) {
+      item.files.forEach((f) => {
+        if (typeof f === 'string') categorizeUrl(f);
+        else if (f?.url) categorizeUrl(f.url);
+      });
+    }
+
+    if (typeof item.url === 'string') categorizeUrl(item.url);
+    if (Array.isArray(item.checklist)) checklist.push(...item.checklist);
+  });
+
+  if (deliverablesUrl) categorizeUrl(deliverablesUrl);
+
+  return {
+    photos: [...new Set(photos)],
+    videos: [...new Set(videos)],
+    pdfs: [...new Set(pdfs)],
+    driveLinks: [...new Set(driveLinks)],
+    otherLinks: [...new Set(otherLinks)],
+    deliverablesUrl,
+    notes,
+    checklist,
+  };
+}
+
+function EvidenceInspectionModal({ booking, onClose, onConfirm, verifying }) {
+  const [activePhoto, setActivePhoto] = useState(null);
+  const evidence = parseEvidence(booking.completionEvidence);
+  const hasContent = evidence.photos.length > 0 || evidence.videos.length > 0 || evidence.pdfs.length > 0 || evidence.driveLinks.length > 0 || evidence.deliverablesUrl || evidence.notes || evidence.checklist.length > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-navy/60 dark:bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-2xl bg-white dark:bg-[#161926] border border-gray-100 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1e2235]/60 shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+              <h3 className="text-base font-extrabold text-navy dark:text-white">Verify Completion Evidence</h3>
+            </div>
+            <p className="text-xs text-muted dark:text-slate-400 mt-0.5 font-medium">
+              {booking.vendorName} · {booking.packageName || booking.label} (Booking #{booking.reference})
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-800 text-muted dark:text-slate-300 hover:text-navy dark:hover:text-white grid place-items-center transition cursor-pointer"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {!hasContent ? (
+            <div className="text-center py-8 bg-gray-50 dark:bg-[#1a1d2d] rounded-2xl p-6 border border-dashed border-gray-200 dark:border-gray-700">
+              <Icon name="star" size={24} className="mx-auto text-amber-500 mb-2" />
+              <p className="text-sm font-bold text-navy dark:text-white">Service Marked Completed by Vendor</p>
+              <p className="text-xs text-muted dark:text-slate-400 mt-1 max-w-md mx-auto">
+                The vendor has declared work complete for this booking. Confirming verification will approve completion and unlock final balance settlement.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Handover Notes */}
+              {evidence.notes && (
+                <div className="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-4">
+                  <div className="text-xs font-bold text-amber-900 dark:text-amber-300 mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                    <Icon name="info" size={14} className="text-amber-600" />
+                    <span>Vendor Handover Notes</span>
+                  </div>
+                  <p className="text-xs text-amber-900/90 dark:text-amber-200 font-medium italic whitespace-pre-wrap">
+                    "{evidence.notes}"
+                  </p>
+                </div>
+              )}
+
+              {/* Google Drive / Cloud Deliverables Links */}
+              {evidence.driveLinks.length > 0 && (
+                <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 rounded-2xl p-4 space-y-2">
+                  <div className="text-xs font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Icon name="externalLink" size={14} className="text-blue-600" />
+                    <span>Google Drive / Cloud Deliverables</span>
+                  </div>
+                  <div className="space-y-2">
+                    {evidence.driveLinks.map((url, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-3 bg-white dark:bg-[#1a1d2d] p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/40">
+                        <span className="text-xs text-blue-800 dark:text-blue-300 font-medium truncate max-w-md">{url}</span>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition shrink-0"
+                        >
+                          <span>Open Drive Folder</span>
+                          <Icon name="externalLink" size={12} />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* General Deliverables URL fallback */}
+              {evidence.deliverablesUrl && evidence.driveLinks.length === 0 && (
+                <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="text-xs font-bold text-blue-900 dark:text-blue-300">Deliverables & Evidence Link</div>
+                    <p className="text-xs text-blue-800 dark:text-blue-400 truncate max-w-md mt-0.5">{evidence.deliverablesUrl}</p>
+                  </div>
+                  <a
+                    href={evidence.deliverablesUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
+                  >
+                    <span>View Link</span>
+                    <Icon name="externalLink" size={13} />
+                  </a>
+                </div>
+              )}
+
+              {/* Proof Documents & PDFs */}
+              {evidence.pdfs.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-navy dark:text-white uppercase tracking-wider mb-2">Proof Documents & PDFs ({evidence.pdfs.length})</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {evidence.pdfs.map((url, idx) => (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-between gap-2 bg-gray-50 dark:bg-[#1a1d2d] border border-gray-200 dark:border-gray-700 hover:border-primary p-3 rounded-2xl transition group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 grid place-items-center font-bold text-xs shrink-0">📄</span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-navy dark:text-white truncate">Document File {idx + 1}</div>
+                            <div className="text-[10px] text-muted dark:text-slate-400 truncate max-w-[180px]">{url}</div>
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-primary dark:text-[#a5b4fc] shrink-0 group-hover:translate-x-0.5 transition">View ↗</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Checklist */}
+              {evidence.checklist.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-navy dark:text-white uppercase tracking-wider mb-2">Completed Tasks Checklist</div>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {evidence.checklist.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 rounded-xl px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300 font-semibold">
+                        <Icon name="check" size={14} className="text-emerald-600 shrink-0" />
+                        <span className="truncate">{typeof item === 'string' ? item : item.label || item.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Photos Gallery */}
+              {evidence.photos.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-navy dark:text-white uppercase tracking-wider mb-2">Proof Photos ({evidence.photos.length})</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {evidence.photos.map((url, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => setActivePhoto(url)}
+                        className="group relative aspect-4/3 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 cursor-pointer border border-gray-200 dark:border-gray-700"
+                      >
+                        <img src={url} alt={`Evidence proof ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                        <div className="absolute inset-0 bg-navy/30 opacity-0 group-hover:opacity-100 transition grid place-items-center text-white">
+                          <Icon name="zoom" size={20} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Videos Gallery */}
+              {evidence.videos.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-navy dark:text-white uppercase tracking-wider mb-2">Proof Videos ({evidence.videos.length})</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {evidence.videos.map((url, idx) => (
+                      <div key={idx} className="rounded-2xl overflow-hidden bg-black border border-gray-700">
+                        <video src={url} controls className="w-full max-h-48 object-contain" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1e2235]/60 flex items-center justify-between gap-3 flex-wrap shrink-0">
+          <button
+            onClick={onClose}
+            disabled={verifying}
+            className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1d2d] px-4 py-2.5 text-xs font-bold text-navy dark:text-white hover:bg-gray-50 transition cursor-pointer"
+          >
+            Not Now / Back
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={verifying}
+            className="rounded-2xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold px-6 py-2.5 shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-2"
+          >
+            <Icon name="check" size={14} />
+            <span>{verifying ? 'Verifying Completion...' : 'Confirm & Approve Completion'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Photo Lightbox */}
+      {activePhoto && (
+        <div className="fixed inset-0 z-60 bg-black/90 flex items-center justify-center p-4 cursor-pointer" onClick={() => setActivePhoto(null)}>
+          <img src={activePhoto} alt="Proof zoom" className="max-w-full max-h-full rounded-2xl shadow-2xl object-contain" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BookingsPage() {
   const { id } = useParams();
+  const [params] = useSearchParams();
   const { data, error, loading, reload } = useLoad(() => customerApi.bookings(id), [id]);
   const [paying, setPaying] = useState(null);
+  const [verifying, setVerifying] = useState(null);
+  const [cancelling, setCancelling] = useState(null);
+  const [inspectingBooking, setInspectingBooking] = useState(null);
+
+  const inspectId = params.get('inspect');
+
+  useEffect(() => {
+    if (inspectId && data?.bookings?.length) {
+      const match = data.bookings.find(
+        (b) =>
+          b.id === inspectId ||
+          String(b.dbId || '') === inspectId ||
+          String(b.id || '').endsWith(inspectId) ||
+          inspectId.endsWith(String(b.dbId || ''))
+      );
+      if (match) {
+        setInspectingBooking(match);
+      }
+    }
+  }, [inspectId, data?.bookings]);
+
+  const handleCancelBooking = async (bId) => {
+    try {
+      setCancelling(bId);
+      await customerApi.cancelBooking(bId);
+      await reload();
+    } catch {
+      // ignore
+    } finally {
+      setCancelling(null);
+    }
+  };
+
+  const handleVerifyCompletion = async (b) => {
+    try {
+      setVerifying(b.id);
+      await customerApi.verifyVendorBookingCompletion(b.id);
+      setInspectingBooking(null);
+      await reload();
+    } catch {
+      // ignore
+    } finally {
+      setVerifying(null);
+    }
+  };
 
   // Poll while any payment is waiting for verification.
   const waiting = data?.payments?.some((p) => ['processing', 'paid'].includes(p.status));
@@ -280,28 +736,19 @@ export default function BookingsPage() {
         {bookings.length === 0 ? (
           <Empty title="No bookings yet">Select options, get a quote, accept it and pay — bookings appear here once verified.</Empty>
         ) : (
-          <div className="space-y-2">
-            {bookings.map((b) => {
-              const [label, cls] = BOOKING_STATUS[b.status];
-              return (
-                <div key={b.id} className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-navy truncate">{b.label}: {b.vendorName} {b.isDemo && <DemoBadge />}</div>
-                    <div className="text-[11px] text-muted">
-                      Booking #{b.reference} · Total {formatINR(b.packageTotal || b.amount)} · Paid advance {formatINR(b.paidAmount || b.amount)}
-                      {b.balanceAmount > 0 ? ` · Balance ${formatINR(b.balanceAmount)}` : ''}
-                    </div>
-                    {b.underReviewReason && <div className="text-[11px] text-amber-700 mt-0.5">{b.underReviewReason}. Our team is reviewing it.</div>}
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${cls}`}>{label}</span>
-                    <Link to={`/customer/events/${id}/circle?booking=${b.id}`} className="text-[11px] font-bold text-primary inline-flex items-center gap-1">
-                      <Icon name="message" size={11} /> Messages
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="space-y-3">
+            {bookings.map((b) => (
+              <BookingCard
+                key={b.id}
+                b={b}
+                eventId={id}
+                onVerify={setInspectingBooking}
+                verifying={verifying}
+                onPay={setPaying}
+                onCancel={handleCancelBooking}
+                cancelling={cancelling}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -337,6 +784,15 @@ export default function BookingsPage() {
             </tbody>
           </table>
         </section>
+      )}
+
+      {inspectingBooking && (
+        <EvidenceInspectionModal
+          booking={inspectingBooking}
+          onClose={() => setInspectingBooking(null)}
+          onConfirm={() => handleVerifyCompletion(inspectingBooking)}
+          verifying={verifying === inspectingBooking.id}
+        />
       )}
 
       {paying && <PaySheet event={event} reservation={paying} onClose={() => setPaying(null)} onPaid={() => { setPaying(null); reload(); }} />}

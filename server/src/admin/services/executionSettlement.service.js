@@ -1,5 +1,6 @@
 import { CoreBooking } from '../models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../../external/services/matching.service.js';
+import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
 
 /**
  * Execution, Completion Validation & Settlement Service (Spec §11, §12).
@@ -123,7 +124,12 @@ export async function submitCompletionEvidence(
  * Completion validation unlocks SETTLEMENT_ELIGIBLE.
  */
 export async function validateCompletionFromCore(bookingId, { approved = true, notes = '' } = {}, coreActor = 'CORE_ADMIN') {
-  const booking = await CoreBooking.findById(bookingId);
+  let booking = await CoreBooking.findById(bookingId).catch(() => null);
+  if (!booking) {
+    booking = await CoreBooking.findOne({
+      $or: [{ quoteId: bookingId }, { bookingReference: bookingId }],
+    });
+  }
   if (!booking) {
     const err = new Error(`CoreBooking with ID ${bookingId} not found`);
     err.statusCode = 404;
@@ -160,6 +166,20 @@ export async function validateCompletionFromCore(bookingId, { approved = true, n
   };
 
   await booking.save();
+
+  if (booking.vendorId) {
+    await recordLifecycleEventMessage({
+      vendorId: booking.vendorId,
+      customerId: booking.customerId,
+      eventId: booking.customerEvent,
+      bookingId: booking._id,
+      sender: 'SYSTEM',
+      senderName: 'STARVNT Core',
+      text: `✓ Completion Verified: STARVNT Core validated service completion for ${booking.serviceName || 'booking'}. Vendor payout is now eligible for settlement.`,
+      type: 'completion',
+    }).catch(() => null);
+  }
+
   return booking;
 }
 
@@ -195,6 +215,20 @@ export async function settleBooking(bookingId, { transactionReference = '' } = {
   };
 
   await booking.save();
+
+  if (booking.vendorId) {
+    await recordLifecycleEventMessage({
+      vendorId: booking.vendorId,
+      customerId: booking.customerId,
+      eventId: booking.customerEvent,
+      bookingId: booking._id,
+      sender: 'SYSTEM',
+      senderName: 'STARVNT Core',
+      text: `🎉 Booking Fully Settled: Final settlement (₹${Number(booking.totalAmount || 0).toLocaleString('en-IN')}) released to vendor. Service lifecycle complete!`,
+      type: 'payment',
+    }).catch(() => null);
+  }
+
   return booking;
 }
 

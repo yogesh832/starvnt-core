@@ -194,7 +194,7 @@ router.post('/bookings/:id/verify-payment', async (req, res) => {
 /**
  * Authoritative Completion Validation from Core (Golden Test K).
  */
-router.post('/bookings/:id/validate-completion', async (req, res) => {
+router.post(['/bookings/:id/validate-completion', '/bookings/:id/verify-completion'], async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
     const { approved = true, notes } = req.body || {};

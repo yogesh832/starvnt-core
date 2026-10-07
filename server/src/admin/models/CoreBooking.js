@@ -54,7 +54,7 @@ const coreBookingSchema = new Schema(
     },
     category: {
       type: String,
-      default: 'Photography',
+      default: '',
     },
     eventDate: {
       type: String,
@@ -113,6 +113,20 @@ const coreBookingSchema = new Schema(
         'COMPLETION_VERIFIED',
       ],
       default: 'NOT_STARTED',
+      index: true,
+    },
+    protectionStatus: {
+      type: String,
+      enum: [
+        'NONE',
+        'AT_RISK',
+        'PROTECTED',
+        'ISSUE_REPORTED',
+        'UNDER_REVIEW',
+        'RESOLUTION_PROPOSED',
+        'RESOLVED',
+      ],
+      default: 'NONE',
       index: true,
     },
     settlementStatus: {

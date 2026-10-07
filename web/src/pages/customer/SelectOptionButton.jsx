@@ -35,10 +35,10 @@ export default function SelectOptionButton({ eventId, eventStatus, option, selec
     return (
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-1.5">
-          <span className={`inline-flex items-center gap-1 rounded-xl bg-emerald-50 text-emerald-700 font-bold ${size}`}><Icon name="check" size={12} /> Selected</span>
-          <button disabled={busy} onClick={() => run(null)} className="text-[11px] font-bold text-muted hover:text-red-500 disabled:opacity-50">Remove</button>
+          <span className={`inline-flex items-center gap-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800/40 font-bold ${size}`}><Icon name="check" size={12} /> Selected</span>
+          <button disabled={busy} onClick={() => run(null)} className="text-[11px] font-bold text-muted dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-50 cursor-pointer">Remove</button>
         </div>
-        {error && <span className="text-[10px] text-red-500">{error}</span>}
+        {error && <span className="text-[10px] text-red-500 dark:text-red-400">{error}</span>}
       </div>
     );
   }
@@ -48,11 +48,11 @@ export default function SelectOptionButton({ eventId, eventStatus, option, selec
         disabled={busy || Boolean(reason)}
         onClick={() => run(option.id)}
         title={reason || 'Choose this option'}
-        className={`rounded-xl bg-primary hover:bg-primary-dark text-white font-bold transition disabled:opacity-40 disabled:cursor-not-allowed ${size}`}
+        className={`rounded-xl bg-primary hover:bg-primary-dark text-white font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${size}`}
       >
         {busy ? 'Selecting…' : 'Select'}
       </button>
-      {(error || (reason && !compact)) && <span className="text-[10px] text-muted">{error || reason}</span>}
+      {(error || (reason && !compact)) && <span className="text-[10px] text-muted dark:text-slate-400">{error || reason}</span>}
     </div>
   );
 }

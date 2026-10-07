@@ -3,6 +3,47 @@ import { Page, Card } from './shared.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 
+export function parseTextLinks(text) {
+  if (typeof text !== 'string') return { cleanText: '', images: [], videos: [], pdfs: [], driveLinks: [], otherLinks: [] };
+  const urlRegex = /(https?:\/\/[^\s<]+)/gi;
+  const matches = text.match(urlRegex) || [];
+  const uniqueUrls = [...new Set(matches.map((u) => u.replace(/[.,;:!?)]+$/, '')))];
+
+  const images = [];
+  const videos = [];
+  const pdfs = [];
+  const driveLinks = [];
+  const otherLinks = [];
+  const mediaUrls = [];
+
+  uniqueUrls.forEach((url) => {
+    const lower = url.toLowerCase();
+    if (lower.includes('drive.google.com') || lower.includes('docs.google.com') || lower.includes('dropbox.com') || lower.includes('onedrive.live.com')) {
+      driveLinks.push(url);
+      mediaUrls.push(url);
+    } else if (lower.match(/\.(mp4|webm|mov|mkv|avi)$/i) || lower.includes('/video/upload/')) {
+      videos.push(url);
+      mediaUrls.push(url);
+    } else if (lower.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || lower.includes('/image/upload/')) {
+      images.push(url);
+      mediaUrls.push(url);
+    } else if (lower.match(/\.(pdf|doc|docx|xls|xlsx|ppt|pptx|zip|rar|txt)$/i) || lower.includes('/raw/upload/')) {
+      pdfs.push(url);
+      mediaUrls.push(url);
+    } else {
+      otherLinks.push(url);
+    }
+  });
+
+  let cleanText = text;
+  cleanText = cleanText.replace(/(?:\[Attached Media\/Link\]:|📷\s*Attachment:|Attachment:|\[Media\]:|Chat attachment preview)/gi, '');
+  mediaUrls.forEach((url) => {
+    cleanText = cleanText.split(url).join('');
+  });
+  cleanText = cleanText.replace(/\n\s*\n/g, '\n').trim();
+
+  return { cleanText, images, videos, pdfs, driveLinks, otherLinks };
+}
 function formatMessageTime(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -22,8 +63,12 @@ export default function Messages({ onMessagesRead }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [msgText, setMsgText] = useState('');
+  const [attachedUrl, setAttachedUrl] = useState('');
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const announceMessagesRead = useCallback(() => {
     if (typeof onMessagesRead === 'function') onMessagesRead();
@@ -100,13 +145,52 @@ export default function Messages({ onMessagesRead }) {
     }
   }
 
+  // Upload file / media via Cloudinary API
+  async function handleMediaUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingMedia(true);
+    try {
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const isVideo = file.type.startsWith('video') || /\.(mp4|mov|webm|mkv|avi)$/i.test(file.name);
+      const res = await externalApi.call('/media/upload', {
+        method: 'POST',
+        body: {
+          file: base64Data,
+          filename: file.name,
+          mediaType: isVideo ? 'VIDEO' : 'IMAGE',
+        },
+      });
+
+      if (res?.url) {
+        setAttachedUrl(res.url);
+      } else {
+        alert('Failed to upload file. Please try again.');
+      }
+    } catch (err) {
+      alert(`Could not upload file: ${err.message || 'Upload failed'}`);
+    } finally {
+      setUploadingMedia(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
   // Send message
   async function handleSendMessage(e) {
     e.preventDefault();
-    if (!msgText.trim() || !activeThread?._id || sending) return;
+    const textToSend = attachedUrl
+      ? (msgText.trim() ? `${msgText.trim()}\n[Attached Media/Link]: ${attachedUrl}` : `[Attached Media/Link]: ${attachedUrl}`)
+      : msgText.trim();
+
+    if (!textToSend || !activeThread?._id || sending || uploadingMedia) return;
 
     setSending(true);
-    const textToSend = msgText.trim();
     try {
       const res = await externalApi.call(`/vendor/messages/threads/${activeThread._id}`, {
         method: 'POST',
@@ -115,6 +199,7 @@ export default function Messages({ onMessagesRead }) {
 
       if (res.ok && res.message) {
         setMsgText('');
+        setAttachedUrl('');
         setActiveThread((prev) => ({
           ...prev,
           messages: [...(prev?.messages || []), res.message],
@@ -349,7 +434,8 @@ export default function Messages({ onMessagesRead }) {
                   activeThread.messages.map((m, idx) => {
                     const isVendor = m.sender === 'VENDOR';
                     const isSystem = m.sender === 'SYSTEM' || m.sender === 'SUPPORT';
-                    const isCounterQuote = m.metadata?.type === 'COUNTER_QUOTE' || m.text.includes('Counter Quote Proposal');
+                    const isCounterQuote = m.metadata?.type === 'COUNTER_QUOTE' || (m.text || '').includes('Counter Quote Proposal');
+                    const parsed = parseTextLinks(m.text);
 
                     if (isSystem) {
                       return (
@@ -374,7 +460,69 @@ export default function Messages({ onMessagesRead }) {
                               : 'bg-white text-navy border border-gray-100 rounded-bl-xs'
                           }`}
                         >
-                          <p className="break-words font-medium whitespace-pre-line leading-relaxed">{m.text}</p>
+                          {Boolean(parsed.cleanText) && (
+                            <p className="break-words font-medium whitespace-pre-line leading-relaxed">{parsed.cleanText}</p>
+                          )}
+
+                          {/* Media & Links Attachment Renderer */}
+                          {Boolean(parsed.images.length || parsed.videos.length || parsed.pdfs.length || parsed.driveLinks.length) && (
+                            <div className={`space-y-2 ${parsed.cleanText ? 'mt-2.5 pt-2 border-t border-black/10 dark:border-white/10' : ''}`}>
+                              {parsed.images.length > 0 && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                                  {parsed.images.map((imgUrl, i) => (
+                                    <div
+                                      key={i}
+                                      onClick={() => setLightboxUrl(imgUrl)}
+                                      className="relative rounded-2xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/5 cursor-pointer group shadow-xs"
+                                    >
+                                      <img src={imgUrl} alt="Attachment" className="w-full max-h-56 object-cover group-hover:scale-105 transition duration-300" />
+                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                        <span className="bg-black/70 text-white text-[10px] font-bold px-2.5 py-1 rounded-full backdrop-blur-xs flex items-center gap-1">
+                                          <Icon name="maximize" size={10} /> View image
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {parsed.videos.map((vidUrl, i) => (
+                                <div key={i} className="rounded-2xl overflow-hidden bg-black border border-gray-700 max-w-xs my-1">
+                                  <video src={vidUrl} controls className="w-full max-h-48 object-contain" />
+                                </div>
+                              ))}
+
+                              {parsed.pdfs.map((pdfUrl, i) => (
+                                <a
+                                  key={i}
+                                  href={pdfUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={`flex items-center gap-2 p-2 px-3 rounded-xl font-bold text-xs transition border max-w-xs ${
+                                    isVendor ? 'bg-white/20 text-white border-white/30 hover:bg-white/30' : 'bg-slate-900 text-white border-slate-700 hover:bg-slate-800'
+                                  }`}
+                                >
+                                  <span className="text-amber-400 font-extrabold text-sm">📄</span>
+                                  <span className="truncate">Document / PDF Attachment</span>
+                                </a>
+                              ))}
+
+                              {parsed.driveLinks.map((driveUrl, i) => (
+                                <a
+                                  key={i}
+                                  href={driveUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={`flex items-center gap-2 p-2 px-3 rounded-xl font-bold text-xs transition border max-w-xs ${
+                                    isVendor ? 'bg-white/20 text-white border-white/30 hover:bg-white/30' : 'bg-blue-50 text-blue-900 border-blue-200 hover:bg-blue-100'
+                                  }`}
+                                >
+                                  <span className="text-blue-500 font-extrabold text-sm">📁</span>
+                                  <span className="truncate">External Drive / Cloud Folder Link</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Interactive Counter Quote Proposal CTA Card */}
                           {isCounterQuote && (
@@ -418,18 +566,60 @@ export default function Messages({ onMessagesRead }) {
 
               {/* Message Composer */}
               <div className="p-3.5 bg-white border-t border-gray-100">
-                <form onSubmit={handleSendMessage} className="flex gap-2">
+                {attachedUrl && (
+                  <div className="mb-2 px-3 py-1.5 bg-lavender/50 border border-gray-200 rounded-2xl flex items-center gap-2">
+                    {attachedUrl.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || attachedUrl.includes('/image/upload/') ? (
+                      <img src={attachedUrl} alt="Attachment preview" className="w-8 h-8 rounded-lg object-cover border border-gray-200" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-lg bg-primary-soft text-primary grid place-items-center font-bold text-xs">📁</div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-navy truncate">Attached Media / File</div>
+                      <div className="text-[10px] text-muted truncate">{attachedUrl}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAttachedUrl('')}
+                      className="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-0.5 cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleMediaUpload}
+                  accept="image/*,video/*,application/pdf,.pdf,.doc,.docx,.zip"
+                  className="hidden"
+                />
+
+                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending || uploadingMedia}
+                    className="p-2.5 rounded-2xl border border-gray-200/80 bg-lavender/40 hover:bg-lavender text-muted hover:text-navy transition cursor-pointer disabled:opacity-40 shrink-0"
+                    title="Attach file, image, video, or PDF"
+                  >
+                    {uploadingMedia ? (
+                      <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin block" />
+                    ) : (
+                      <Icon name="upload" size={17} />
+                    )}
+                  </button>
                   <input
                     type="text"
                     value={msgText}
                     onChange={(e) => setMsgText(e.target.value)}
                     placeholder="Type a message to client..."
-                    disabled={sending}
+                    disabled={sending || uploadingMedia}
                     className="flex-1 bg-lavender/60 border border-gray-200/80 rounded-2xl px-4 py-2.5 text-xs font-medium text-navy placeholder:text-muted outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
                   />
                   <button
                     type="submit"
-                    disabled={!msgText.trim() || sending}
+                    disabled={(!msgText.trim() && !attachedUrl) || sending || uploadingMedia}
                     className="rounded-2xl bg-primary hover:bg-primary-dark text-white px-5 py-2.5 text-xs font-bold transition disabled:opacity-40 cursor-pointer shadow-xs shadow-primary/20 flex items-center gap-1.5"
                   >
                     <span>{sending ? 'Sending...' : 'Send'}</span>
@@ -451,6 +641,25 @@ export default function Messages({ onMessagesRead }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Image Lightbox Modal */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl">
+            <img src={lightboxUrl} alt="Zoomed preview" className="w-full h-full object-contain max-h-[85vh]" />
+            <button
+              type="button"
+              onClick={() => setLightboxUrl(null)}
+              className="absolute top-3 right-3 bg-black/60 hover:bg-black text-white w-9 h-9 rounded-full grid place-items-center font-bold text-sm transition cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
     </Page>

@@ -165,8 +165,9 @@ router.get('/google-places/search', async (req, res, next) => {
 
 router.put('/profile', async (req, res, next) => {
   try {
-    const { businessName, category, location, city, phone, website, bio, googlePlaceId } = req.body || {};
+    const { businessName, brandName, category, location, city, phone, website, bio, googlePlaceId } = req.body || {};
     if (businessName) req.vendor.businessName = businessName.trim();
+    if (brandName !== undefined) req.vendor.brandName = brandName.trim();
     const categoryResult = normalizePrimaryCategory(category);
     if (categoryResult.error) {
       return res.status(400).json({ error: categoryResult.error });

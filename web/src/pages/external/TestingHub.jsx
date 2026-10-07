@@ -10,116 +10,52 @@ import Icon from "../../components/Icon.jsx";
 const DEFAULT_PASSWORD = "Password123";
 
 const TEST_ACCOUNTS = [
-  {
-    role: "VENDOR",
-    category: "Photography",
-    businessName: "Himalayan Moments & Wedding Studio",
-    ownerName: "Arun Roy",
-    email: "vendor@starvnt.com",
-    city: "Kapkote",
-    rating: "4.9 ⭐",
-    badge: "bg-purple-100 text-purple-800 border-purple-200",
-    icon: "camera",
-  },
-  {
-    role: "VENDOR",
-    category: "Catering",
-    businessName: "Royal Kumaoni Feast & Traditional Catering",
-    ownerName: "Chef Sanjeev Verma",
-    email: "catering@starvnt.com",
-    city: "Kapkote",
-    rating: "4.8 ⭐",
-    badge: "bg-amber-100 text-amber-800 border-amber-200",
-    icon: "wallet",
-  },
-  {
-    role: "VENDOR",
-    category: "Decoration",
-    businessName: "Pahadi Varmala & Grandeur Event Decor",
-    ownerName: "Priya Sharma",
-    email: "decor@starvnt.com",
-    city: "Kapkote",
-    rating: "4.9 ⭐",
-    badge: "bg-rose-100 text-rose-800 border-rose-200",
-    icon: "star",
-  },
-  {
-    role: "VENDOR",
-    category: "Venue",
-    businessName: "Himalayan Heritage Pine Lawns & Resort",
-    ownerName: "Raghav Singhania",
-    email: "venue@starvnt.com",
-    city: "Kapkote",
-    rating: "5.0 ⭐",
-    badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    icon: "mapPin",
-  },
-  {
-    role: "VENDOR",
-    category: "Sound & DJ",
-    businessName: "Kumaon Beats & Sound FX",
-    ownerName: "Kabir Malhotra",
-    email: "dj@starvnt.com",
-    city: "Kapkote",
-    rating: "4.8 ⭐",
-    badge: "bg-blue-100 text-blue-800 border-blue-200",
-    icon: "trend",
-  },
-  {
-    role: "VENDOR",
-    category: "Makeup",
-    businessName: "Pahadi Bridal Glow & Artistry Studio",
-    ownerName: "Natasha Mehra",
-    email: "makeup@starvnt.com",
-    city: "Kapkote",
-    rating: "4.9 ⭐",
-    badge: "bg-pink-100 text-pink-800 border-pink-200",
-    icon: "star",
-  },
-  {
-    role: "VENDOR",
-    category: "Live Band",
-    businessName: "Kumaon Folk Fusion & Live Band",
-    ownerName: "Aftab Hussain",
-    email: "liveband@starvnt.com",
-    city: "Kapkote",
-    rating: "4.9 ⭐",
-    badge: "bg-indigo-100 text-indigo-800 border-indigo-200",
-    icon: "mic",
-  },
-  {
-    role: "VENDOR",
-    category: "Event Planning",
-    businessName: "Himalayan Vows Event Planning",
-    ownerName: "Tanya & Rohan Mehta",
-    email: "planner@starvnt.com",
-    city: "Kapkote",
-    rating: "5.0 ⭐",
-    badge: "bg-teal-100 text-teal-800 border-teal-200",
-    icon: "calendar",
-  },
-  {
-    role: "CUSTOMER",
-    category: "Customer Host",
-    businessName: "Ananya Roy",
-    ownerName: "Wedding Host",
-    email: "customer@starvnt.com",
-    city: "Kapkote / Bageshwar",
-    rating: "Active Host",
-    badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    icon: "customers",
-  },
-  {
-    role: "ADMIN",
-    category: "Super Admin",
-    businessName: "Chief Systems Architect",
-    ownerName: "Platform Admin",
-    email: "admin@starvnt.com",
-    city: "Command Center",
-    rating: "Full RBAC",
-    badge: "bg-slate-900 text-amber-300 border-slate-700",
-    icon: "shieldCheck",
-  },
+  // ── 1. Photography ──
+  { role: "VENDOR", category: "Photography", businessName: "Himalayan Moments & Wedding Studio", ownerName: "Arun Roy", email: "vendor@starvnt.com", city: "Kapkote", rating: "4.9 ⭐", badge: "bg-purple-100 text-purple-800 border-purple-200", icon: "camera" },
+  { role: "VENDOR", category: "Photography", businessName: "Kumaon Candid & Birthday Reel Stories", ownerName: "Vikram Negi", email: "photo2@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-purple-100 text-purple-800 border-purple-200", icon: "camera" },
+  { role: "VENDOR", category: "Photography", businessName: "Valley Peak Photography & Drone Films", ownerName: "Deepak Pant", email: "photo3@starvnt.com", city: "Kapkote", rating: "4.7 ⭐", badge: "bg-purple-100 text-purple-800 border-purple-200", icon: "camera" },
+
+  // ── 2. Catering ──
+  { role: "VENDOR", category: "Catering", businessName: "Royal Kumaoni Feast & Traditional Catering", ownerName: "Chef Sanjeev Verma", email: "catering@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-amber-100 text-amber-800 border-amber-200", icon: "wallet" },
+  { role: "VENDOR", category: "Catering", businessName: "Mountain Bites & Birthday Party Catering", ownerName: "Ramesh Bisht", email: "catering2@starvnt.com", city: "Kapkote", rating: "4.7 ⭐", badge: "bg-amber-100 text-amber-800 border-amber-200", icon: "wallet" },
+  { role: "VENDOR", category: "Catering", businessName: "Grand Bageshwar Feast & Gourmet Catering", ownerName: "Kavita Bisht", email: "catering3@starvnt.com", city: "Kapkote", rating: "4.9 ⭐", badge: "bg-amber-100 text-amber-800 border-amber-200", icon: "wallet" },
+
+  // ── 3. Decoration ──
+  { role: "VENDOR", category: "Decoration", businessName: "Pahadi Varmala & Grandeur Event Decor", ownerName: "Priya Sharma", email: "decor@starvnt.com", city: "Kapkote", rating: "4.9 ⭐", badge: "bg-rose-100 text-rose-800 border-rose-200", icon: "star" },
+  { role: "VENDOR", category: "Decoration", businessName: "Kumaon Floral Arches & Theme Party Decor", ownerName: "Sanjay Rawat", email: "decor2@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-rose-100 text-rose-800 border-rose-200", icon: "star" },
+  { role: "VENDOR", category: "Decoration", businessName: "Himalayan Fairy Lights & Birthday Decor Studio", ownerName: "Meenakshi Parihar", email: "decor3@starvnt.com", city: "Kapkote", rating: "4.9 ⭐", badge: "bg-rose-100 text-rose-800 border-rose-200", icon: "star" },
+
+  // ── 4. Venue ──
+  { role: "VENDOR", category: "Venue", businessName: "Himalayan Heritage Pine Lawns & Resort", ownerName: "Raghav Singhania", email: "venue@starvnt.com", city: "Kapkote", rating: "5.0 ⭐", badge: "bg-emerald-100 text-emerald-800 border-emerald-200", icon: "mapPin" },
+  { role: "VENDOR", category: "Venue", businessName: "Kapkote Party Lawn & Celebration Banquet", ownerName: "Harish Chandra", email: "venue2@starvnt.com", city: "Kapkote", rating: "4.7 ⭐", badge: "bg-emerald-100 text-emerald-800 border-emerald-200", icon: "mapPin" },
+  { role: "VENDOR", category: "Venue", businessName: "Valley View Garden & Birthday Pavilion", ownerName: "Kamla Devi", email: "venue3@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-emerald-100 text-emerald-800 border-emerald-200", icon: "mapPin" },
+
+  // ── 5. Sound & DJ ──
+  { role: "VENDOR", category: "Sound & DJ", businessName: "Kumaon Beats & Sound FX (DJ & Audio)", ownerName: "Kabir Malhotra", email: "dj@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-blue-100 text-blue-800 border-blue-200", icon: "trend" },
+  { role: "VENDOR", category: "Sound & DJ", businessName: "Himalayan Echoes Party DJ & Lighting", ownerName: "Rohan Goswami", email: "sound2@starvnt.com", city: "Kapkote", rating: "4.7 ⭐", badge: "bg-blue-100 text-blue-800 border-blue-200", icon: "trend" },
+  { role: "VENDOR", category: "Sound & DJ", businessName: "Kapkote Concert Sound & Karaoke Setup", ownerName: "Amit Danu", email: "sound3@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-blue-100 text-blue-800 border-blue-200", icon: "trend" },
+
+  // ── 6. Makeup ──
+  { role: "VENDOR", category: "Makeup", businessName: "Pahadi Bridal Glow & Artistry Studio", ownerName: "Natasha Mehra", email: "makeup@starvnt.com", city: "Kapkote", rating: "4.9 ⭐", badge: "bg-pink-100 text-pink-800 border-pink-200", icon: "star" },
+  { role: "VENDOR", category: "Makeup", businessName: "Glamour Peaks Makeup & Party Styling", ownerName: "Pooja Bhatt", email: "makeup2@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-pink-100 text-pink-800 border-pink-200", icon: "star" },
+  { role: "VENDOR", category: "Makeup", businessName: "Kumaon Beauty & Birthday Makeover Lounge", ownerName: "Soniya Arya", email: "makeup3@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-pink-100 text-pink-800 border-pink-200", icon: "star" },
+
+  // ── 7. Entertainment ──
+  { role: "VENDOR", category: "Entertainment", businessName: "Kumaon Folk & Fusion Live Ensemble", ownerName: "Aftab Hussain", email: "liveband@starvnt.com", city: "Kapkote", rating: "4.9 ⭐", badge: "bg-indigo-100 text-indigo-800 border-indigo-200", icon: "mic" },
+  { role: "VENDOR", category: "Entertainment", businessName: "Himalayan Magic, Puppet & Kids Fun Crew", ownerName: "Ramesh Kumar", email: "entertainment2@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-indigo-100 text-indigo-800 border-indigo-200", icon: "mic" },
+  { role: "VENDOR", category: "Entertainment", businessName: "Kapkote Acoustic Live Band & Singers", ownerName: "Neha Karki", email: "entertainment3@starvnt.com", city: "Kapkote", rating: "4.9 ⭐", badge: "bg-indigo-100 text-indigo-800 border-indigo-200", icon: "mic" },
+
+  // ── 8. Anchor / Emcee ──
+  { role: "VENDOR", category: "Anchor", businessName: "Delhi & Kumaon Emcee Desk (Master of Ceremonies)", ownerName: "Rajesh Tripathi", email: "anchor1@starvnt.com", city: "Kapkote", rating: "4.9 ⭐", badge: "bg-amber-100 text-amber-800 border-amber-200", icon: "mic" },
+  { role: "VENDOR", category: "Anchor", businessName: "Pahadi Celebrations Birthday Host & Anchor", ownerName: "Divya Pathak", email: "anchor2@starvnt.com", city: "Kapkote", rating: "4.8 ⭐", badge: "bg-amber-100 text-amber-800 border-amber-200", icon: "mic" },
+  { role: "VENDOR", category: "Anchor", businessName: "Himalayan Stage Anchors & Game Coordinators", ownerName: "Manoj Tiwari", email: "anchor3@starvnt.com", city: "Kapkote", rating: "4.7 ⭐", badge: "bg-amber-100 text-amber-800 border-amber-200", icon: "mic" },
+
+  // ── 9. Event Planning ──
+  { role: "VENDOR", category: "Event Planning", businessName: "Devbhoomi Vows Wedding & Event Planning", ownerName: "Tanya & Rohan Mehta", email: "planner@starvnt.com", city: "Kapkote", rating: "5.0 ⭐", badge: "bg-teal-100 text-teal-800 border-teal-200", icon: "calendar" },
+
+  // ── Core System Personas ──
+  { role: "CUSTOMER", category: "Customer Host", businessName: "Ananya Roy", ownerName: "Wedding Host", email: "customer@starvnt.com", city: "Kapkote / Bageshwar", rating: "Active Host", badge: "bg-emerald-100 text-emerald-800 border-emerald-200", icon: "customers" },
+  { role: "ADMIN", category: "Super Admin", businessName: "Chief Systems Architect", ownerName: "Platform Admin", email: "admin@starvnt.com", city: "Command Center", rating: "Full RBAC", badge: "bg-slate-900 text-amber-300 border-slate-700", icon: "shieldCheck" },
 ];
 
 const PRESET_ENDPOINTS = [
@@ -135,7 +71,7 @@ const PRESET_ENDPOINTS = [
   { label: "Google Place Search (Kolkata)", method: "GET", path: "/api/vendor/google-places/search?q=kolkata", domain: "EXTERNAL" },
   { label: "Google Place Search (Kapkote)", method: "GET", path: "/api/vendor/google-places/search?q=kapkote%20bageshwar", domain: "EXTERNAL" },
   { label: "Customer Events", method: "GET", path: "/api/customer/events", domain: "EXTERNAL" },
-  { label: "Customer Catalog (Services)", method: "GET", path: "/api/customer/catalog", domain: "EXTERNAL" },
+  { label: "Fresh Test Vendor Catalog", method: "GET", path: "/api/auth/demo-catalog", domain: "EXTERNAL" },
   { label: "Customer Updates & Threads", method: "GET", path: "/api/customer/circle/updates", domain: "EXTERNAL" },
   { label: "Customer Me Profile", method: "GET", path: "/api/customer/me", domain: "EXTERNAL" },
   { label: "Admin Users List", method: "GET", path: "/api/admin/external-users", domain: "ADMIN" },
@@ -438,6 +374,8 @@ export default function TestingHub() {
             </button>
           </div>
         )}
+
+
 
         {/* SECTION 1: 1-Click Persona Switcher Grid */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-gray-200/90 dark:border-slate-800 shadow-sm space-y-4">

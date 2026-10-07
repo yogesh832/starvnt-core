@@ -38,12 +38,17 @@ export const customerApi = {
   eventDay: (id) => externalApi.call(`/customer/events/${id}/event-day`),
   circle: (id) => externalApi.call(`/customer/events/${id}/circle`),
   messages: (id, ctx = {}) => {
-    const q = ctx.bookingId ? `?bookingId=${ctx.bookingId}` : ctx.requirementId ? `?requirementId=${ctx.requirementId}` : '';
-    return externalApi.call(`/customer/events/${id}/messages${q}`);
+    const params = new URLSearchParams();
+    if (ctx.bookingId) params.set('bookingId', ctx.bookingId);
+    if (ctx.requirementId) params.set('requirementId', ctx.requirementId);
+    if (ctx.threadId) params.set('threadId', ctx.threadId);
+    const qs = params.toString();
+    return externalApi.call(`/customer/events/${id}/messages${qs ? `?${qs}` : ''}`);
   },
   postMessage: (id, body) => externalApi.call(`/customer/events/${id}/messages`, { method: 'POST', body }),
   updates: () => externalApi.call('/customer/updates'),
   readAll: () => externalApi.call('/customer/notifications/read-all', { method: 'POST' }),
+  readNotification: (id) => externalApi.call(`/customer/notifications/${id}/read`, { method: 'POST' }),
   createEvent: (body) => externalApi.call('/customer/events', { method: 'POST', body }),
   createMahimanDemoEnquiry: (body = {}) => externalApi.call('/customer/demo/mahiman-enquiry', { method: 'POST', body }),
   vendorQuotes: () => externalApi.call('/customer/vendor-quotes'),
@@ -58,11 +63,16 @@ export const customerApi = {
   reconcileVendorQuotePayment: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/reconcile-payment`, { method: 'POST' }),
   verifyVendorBookingCompletion: (bookingId, notes = '') =>
     externalApi.call(`/customer/bookings/${bookingId}/verify-completion`, { method: 'POST', body: { notes } }),
+  cancelBooking: (bookingId) => externalApi.call(`/customer/bookings/${bookingId}`, { method: 'DELETE' }),
   patchProfile: (body) => externalApi.call('/customer/profile', { method: 'PATCH', body }),
   auraSession: (sid, eventId) =>
     externalApi.call(`/aura/sessions/${encodeURIComponent(sid)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`),
   auraChat: (body) => externalApi.call('/aura/chat', { method: 'POST', body }),
   auraChatStream: (body, onEvent, signal) => externalApi.stream('/aura/chat', { method: 'POST', body, signal }, onEvent),
+  uploadMedia: (file, filename, mediaType = 'IMAGE') =>
+    externalApi.call('/media/upload', {
+      body: { file, filename, mediaType },
+    }),
 };
 
 /** Human message for an API error. */

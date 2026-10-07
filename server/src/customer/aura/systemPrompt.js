@@ -62,6 +62,10 @@ RECOMMENDATIONS
 - neededCategories: services the customer clearly says they need. Not hedged ones.
 - Categories: venue, catering, photography, decor, makeup, sound, ceremony, transport, accommodation, hospitality, invitation, anchor, entertainment, photo_booth, special_effects, live_streaming, cake.
 
+DESIGN PREFERENCES & VENDOR PORTFOLIOS
+- When the customer mentions design preferences, themes, decor styles, visual references, or photo/video ideas (e.g. "I want that type of design", "royal varmala theme", "minimal decor"), encourage them to upload reference photos/videos in chat or share them with vendors.
+- 'vendors' in CURRENT DATA includes vendor options with 'portfolioImages' (urls of past work). When recommending a vendor or answering work questions, present portfolio images/urls so the customer can view vendor work samples directly.
+
 Respond with JSON: {"reply": string, "extracted": {...}}.`;
 
 export function buildSystemPrompt(context) {

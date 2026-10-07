@@ -61,11 +61,11 @@ function activationStepList(activation) {
     },
     {
       key: "verified",
-      label: "KYC verification",
-      detail: "Documents uploaded and verified by STARVNT",
+      label: "PAN/KYC + bank verification",
+      detail: "PAN or KYC identity plus a verified bank account",
       done: Boolean(checklist.verified),
       href: "/vendor/profile?tab=documents",
-      action: "Upload documents",
+      action: checklist.identityVerified ? "Verify bank" : "Verify identity",
     },
   ];
 }
@@ -75,84 +75,158 @@ function VendorActivationCard({ activation, compact = false }) {
   const steps = activationStepList(activation);
   const next = steps.find((step) => !step.done);
   const complete = steps.every((step) => step.done);
+  const percent = activation.completionPercentage ?? 0;
+  const [showSteps, setShowSteps] = useState(false);
 
   return (
-    <div
-      className={`rounded-2xl border ${complete ? "border-emerald-200 bg-emerald-50/80" : "border-amber-200 bg-amber-50/70"} p-4 sm:p-5 shadow-xs`}
-    >
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="min-w-0">
-          <div
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${complete ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}
+    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#161926] p-4 shadow-xs space-y-3">
+      {/* Header Row: Status & Readiness % */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0 flex items-start gap-3">
+          <span
+            className={`mt-0.5 h-9 w-9 rounded-2xl grid place-items-center shrink-0 ${
+              complete
+                ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400"
+                : "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400"
+            }`}
           >
-            <Icon name={complete ? "check" : "lock"} size={12} />
-            {complete ? "Client matching active" : "Client matching locked"}
-          </div>
-          <h2 className="mt-2 text-base font-extrabold text-navy">
-            {complete
-              ? "Your vendor profile is live for customers"
-              : "Finish these steps to appear in customer search"}
-          </h2>
-          <p className="mt-1 text-xs text-muted leading-relaxed">
-            There is no manual vendor toggle. STARVNT turns commercial matching
-            on automatically after service, coverage, portfolio, and
-            verification are complete.
-          </p>
-        </div>
-        <div className="shrink-0 text-left sm:text-right">
-          <div className="text-2xl font-extrabold text-navy">
-            {activation.completionPercentage ?? 0}%
-          </div>
-          <div className="text-[11px] font-bold text-muted">readiness</div>
-        </div>
-      </div>
-
-      <div
-        className={`mt-4 grid ${compact ? "grid-cols-1" : "sm:grid-cols-2 xl:grid-cols-3"} gap-2.5`}
-      >
-        {steps.map((step) => (
-          <a
-            key={step.key}
-            href={step.href}
-            className={`rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-sm ${step.done ? "border-emerald-200 bg-white text-emerald-900" : "border-amber-200 bg-white text-navy"}`}
-          >
-            <div className="flex items-start gap-2">
-              <span
-                className={`mt-0.5 h-5 w-5 rounded-full grid place-items-center shrink-0 ${step.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-              >
-                <Icon name={step.done ? "check" : "chevronRight"} size={11} />
+            <Icon name={complete ? "check" : "lock"} size={16} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-muted dark:text-gray-400">
+                {complete ? "Client matching active" : "Client matching locked"}
               </span>
-              <span className="min-w-0">
-                <span className="block text-xs font-extrabold">
-                  {step.label}
-                </span>
-                <span className="block text-[11px] text-muted leading-snug mt-0.5">
-                  {step.done ? "Done" : step.detail}
-                </span>
-                {!step.done && (
-                  <span className="block text-[11px] font-bold text-primary mt-1">
-                    {step.action}
-                  </span>
-                )}
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  complete
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"
+                }`}
+              >
+                {complete ? "✓ Live" : next ? `Next: ${next.label}` : "In Progress"}
               </span>
             </div>
-          </a>
-        ))}
+            <h2 className="mt-0.5 text-sm font-extrabold text-navy dark:text-white truncate">
+              {complete
+                ? "Live for customer matching"
+                : next
+                  ? `Next: ${next.label}`
+                  : "Finish verification to go live"}
+            </h2>
+            <p className="mt-0.5 text-[11px] text-muted dark:text-gray-400 leading-snug">
+              Activation requires service, coverage, portfolio, PAN/KYC, and verified bank account.
+            </p>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xl font-black text-navy dark:text-white font-mono">
+              {percent}%
+            </span>
+            <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted dark:text-gray-400">
+              readiness
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSteps(!showSteps)}
+            className="text-[11px] font-bold text-primary dark:text-[#a5b4fc] hover:underline cursor-pointer flex items-center gap-1"
+          >
+            <span>{showSteps ? "Hide Steps" : "View Steps"}</span>
+            <Icon name={showSteps ? "chevronUp" : "chevronDown"} size={12} />
+          </button>
+        </div>
       </div>
 
+      {/* Sleek Horizontal Gradient Progress Bar */}
+      <div className="space-y-1.5 pt-1">
+        <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden relative">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              complete
+                ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                : "bg-gradient-to-r from-amber-500 via-primary to-emerald-500"
+            }`}
+            style={{ width: `${Math.max(4, percent)}%` }}
+          />
+        </div>
+
+        {/* Compact Horizontal Step Indicators */}
+        <div className="flex items-center justify-between gap-1 overflow-x-auto py-1 no-scrollbar">
+          {steps.map((step) => (
+            <div key={step.key} className="flex items-center gap-1 text-[10px] shrink-0">
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  step.done
+                    ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"
+                    : "bg-gray-300 dark:bg-gray-700"
+                }`}
+              />
+              <span
+                className={`truncate max-w-[90px] sm:max-w-[120px] ${
+                  step.done ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-muted dark:text-gray-400 opacity-80"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Expandable Checklist Cards */}
+      {showSteps && (
+        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
+          {steps.map((step) => (
+            <a
+              key={step.key}
+              href={step.done ? undefined : step.href}
+              className={`rounded-xl border px-3 py-2 transition ${
+                step.done
+                  ? "border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300"
+                  : "border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-navy dark:text-gray-200 hover:-translate-y-0.5 hover:shadow-sm"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-5 w-5 rounded-full grid place-items-center shrink-0 ${
+                    step.done
+                      ? "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300"
+                      : "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300"
+                  }`}
+                >
+                  <Icon name={step.done ? "check" : "chevronRight"} size={11} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-extrabold truncate">
+                    {step.label}
+                  </span>
+                  <span className="block text-[10px] text-muted dark:text-gray-400 leading-snug truncate">
+                    {step.done ? "Done" : step.action}
+                  </span>
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Next Action Banner */}
       {!complete && next && (
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-white border border-amber-100 p-3">
+        <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40 p-3">
           <div className="text-xs">
-            <div className="font-extrabold text-navy">
+            <div className="font-extrabold text-navy dark:text-white">
               Next step: {next.label}
             </div>
-            <div className="text-muted mt-0.5">{next.detail}</div>
+            <div className="text-muted dark:text-gray-400 text-[11px] mt-0.5">{next.detail}</div>
           </div>
           <a
             href={next.href}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark cursor-pointer shrink-0"
           >
-            {next.action}
+            <span>{next.action}</span>
             <Icon name="chevronRight" size={12} />
           </a>
         </div>
@@ -2231,6 +2305,162 @@ export function AvailabilityPage() {
   );
 }
 
+const CASHFREE_BANK_TEST_CASES = [
+  {
+    label: "Valid YES Bank",
+    expected: "VALID",
+    accountHolderName: "JOHN DOE",
+    accountNumber: "026291800001191",
+    ifsc: "YESB0000262",
+    bankName: "YES BANK",
+    phone: "9999999999",
+  },
+  {
+    label: "Valid HDFC",
+    expected: "VALID",
+    accountHolderName: "JANE DOE",
+    accountNumber: "00011020001772",
+    ifsc: "HDFC0000001",
+    bankName: "HDFC Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Invalid account / IFSC",
+    expected: "INVALID",
+    accountHolderName: "Test User",
+    accountNumber: "7766666585146",
+    ifsc: "YESB0000001",
+    bankName: "YES BANK",
+    phone: "9999999999",
+  },
+  {
+    label: "Invalid IFSC",
+    expected: "INVALID",
+    accountHolderName: "Test User",
+    accountNumber: "7766667287515",
+    ifsc: "ICIC0000001",
+    bankName: "ICICI Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Blocked account",
+    expected: "INVALID",
+    accountHolderName: "Test User",
+    accountNumber: "7766667989884",
+    ifsc: "RATN0000070",
+    bankName: "RBL Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "NRE account",
+    expected: "INVALID",
+    accountHolderName: "Test User",
+    accountNumber: "7766667755761",
+    ifsc: "ICIC0000001",
+    bankName: "ICICI Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Source bank declined",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766674831270",
+    ifsc: "SBIN0000003",
+    bankName: "State Bank of India",
+    phone: "9999999999",
+  },
+  {
+    label: "Failed at bank",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766671735852",
+    ifsc: "SBIN0000004",
+    bankName: "State Bank of India",
+    phone: "9999999999",
+  },
+  {
+    label: "Beneficiary bank offline",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766668692253",
+    ifsc: "INDB0000018",
+    bankName: "IndusInd Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "NPCI unavailable",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766668458130",
+    ifsc: "INDB0000018",
+    bankName: "IndusInd Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "IMPS mode fail",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766667521638",
+    ifsc: "ICIC0000001",
+    bankName: "ICICI Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Verification failed",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766667053392",
+    ifsc: "ICIC0000001",
+    bankName: "ICICI Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Temporary unavailable",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "007711000031",
+    ifsc: "HDFC0000077",
+    bankName: "HDFC Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Could not verify",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "00224412311300",
+    ifsc: "YESB0000001",
+    bankName: "YES BANK",
+    phone: "9999999999",
+  },
+  {
+    label: "Insufficient balance",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "50101329442375",
+    ifsc: "HDFC0000001",
+    bankName: "HDFC Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Invalid name",
+    expected: "ERROR",
+    accountHolderName: "Test User @",
+    accountNumber: "026291800001191",
+    ifsc: "YESB0000262",
+    bankName: "YES BANK",
+    phone: "9999999999",
+  },
+  {
+    label: "Invalid phone",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "026291800001191",
+    ifsc: "YESB0000262",
+    bankName: "YES BANK",
+    phone: "9999999999999",
+  },
+];
+
 /* ── STARVNT Financial & Verification Onboarding Manager ───────────────────── */
 export function VendorFinancialOnboardingCard() {
   const [profile, setProfile] = useState(null);
@@ -2256,11 +2486,16 @@ export function VendorFinancialOnboardingCard() {
     ifsc: "",
     bankName: "",
     accountType: "SAVINGS",
+    phone: "",
   });
   const [savingBank, setSavingBank] = useState(false);
   const [verifyingBank, setVerifyingBank] = useState(false);
   const [logs, setLogs] = useState([]);
   const [showLogs, setShowLogs] = useState(false);
+  const [documents, setDocuments] = useState([]);
+  const [isEditingPan, setIsEditingPan] = useState(false);
+  const [isEditingGst, setIsEditingGst] = useState(false);
+  const [isEditingBank, setIsEditingBank] = useState(false);
 
   const loadFinancialData = useCallback(async () => {
     try {
@@ -2282,6 +2517,7 @@ export function VendorFinancialOnboardingCard() {
             ifsc: res.profile.bankAccount.ifsc || "",
             bankName: res.profile.bankAccount.bankName || "",
             accountType: res.profile.bankAccount.accountType || "SAVINGS",
+            phone: "",
           });
         }
       }
@@ -2289,6 +2525,11 @@ export function VendorFinancialOnboardingCard() {
       const logRes = await externalApi.call("/vendor/financial/bank/verifications");
       if (logRes.ok && Array.isArray(logRes.verifications)) {
         setLogs(logRes.verifications);
+      }
+
+      const docRes = await externalApi.call("/vendor/documents");
+      if (docRes.ok && Array.isArray(docRes.documents)) {
+        setDocuments(docRes.documents);
       }
     } catch (err) {
       console.warn("[VendorFinancialOnboardingCard] load error:", err.message);
@@ -2344,14 +2585,15 @@ export function VendorFinancialOnboardingCard() {
     }
   }
 
-  async function handleSaveGst(e) {
+  async function handleSaveGst(e, explicitRegistered = null) {
     if (e) e.preventDefault();
+    const isReg = explicitRegistered !== null ? explicitRegistered : gstRegistered;
     try {
       setSavingGst(true);
       setFeedback("");
       const payload = {
-        isRegistered: gstRegistered,
-        gstin: gstRegistered ? gstinInput.trim() : "N/A",
+        isRegistered: isReg,
+        gstin: isReg ? gstinInput.trim() : "N/A",
       };
       const res = await externalApi.call("/vendor/financial/gst", {
         method: "POST",
@@ -2360,7 +2602,7 @@ export function VendorFinancialOnboardingCard() {
       if (res.ok) {
         setFeedbackType("success");
         setFeedback(
-          gstRegistered
+          isReg
             ? "✓ GSTIN verified and saved successfully!"
             : "✓ GST status updated to NOT REGISTERED (N/A). Onboarding continues via PAN!"
         );
@@ -2388,7 +2630,7 @@ export function VendorFinancialOnboardingCard() {
       });
       if (res.ok) {
         setFeedbackType("success");
-        setFeedback("Bank account details saved. Proceed to ₹0.02 Penny Drop verification.");
+        setFeedback("Bank account details saved. Proceed to bank account verification.");
         await loadFinancialData();
       } else {
         setFeedbackType("error");
@@ -2412,7 +2654,7 @@ export function VendorFinancialOnboardingCard() {
       });
       if (res.ok && res.status === "VERIFIED") {
         setFeedbackType("success");
-        setFeedback("✓ Bank Account Verified via ₹0.02 Penny Drop transaction!");
+        setFeedback("✓ Bank Account Verified successfully!");
         await loadFinancialData();
       } else {
         setFeedbackType("error");
@@ -2427,6 +2669,19 @@ export function VendorFinancialOnboardingCard() {
     }
   }
 
+  function applyCashfreeTestCase(testCase) {
+    setBankForm({
+      ...bankForm,
+      accountHolderName: testCase.accountHolderName,
+      accountNumber: testCase.accountNumber,
+      ifsc: testCase.ifsc,
+      bankName: testCase.bankName,
+      phone: testCase.phone,
+    });
+    setFeedbackType("info");
+    setFeedback(`Loaded Cashfree sandbox case: ${testCase.label}. Expected result: ${testCase.expected}.`);
+  }
+
   if (loading && !profile) {
     return (
       <Card className="p-6">
@@ -2439,33 +2694,58 @@ export function VendorFinancialOnboardingCard() {
 
   const panVerified = profile?.pan?.verificationStatus === "VERIFIED";
   const gstStatus = profile?.gst?.verificationStatus;
+  const gstVerified = gstStatus === "VERIFIED";
   const isGstNotReq = profile?.gst?.isRegistered === false;
   const bankStatus = profile?.bankAccount?.verificationStatus;
   const isBankVerified = bankStatus === "VERIFIED";
-  const isSettlementEligible = Boolean(profile?.isSettlementEligible);
+  const identityVerified = panVerified || gstVerified || isGstNotReq || documents.some((d) => d.status === "VERIFIED");
+  const financialReady = identityVerified && isBankVerified;
 
   return (
     <Card className="p-5 sm:p-6 space-y-6 border border-gray-100 dark:border-gray-800 dark:bg-dark-card shadow-xs">
-      {/* Header & Overall Status */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
               Tax Identity & Bank Verification
             </h2>
-            {isSettlementEligible ? (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
-                ✓ Settlement Eligible
+            {financialReady ? (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center gap-1">
+                <Icon name="check" size={12} /> Ready
               </span>
             ) : (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
-                Action Required
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 flex items-center gap-1">
+                <Icon name="info" size={12} /> Action Required
               </span>
             )}
           </div>
-          <p className="text-xs text-muted dark:text-gray-400 mt-1">
-            Single source of truth for PAN, GST, and Bank Account verification. GST registration is optional.
+          <p className="text-xs text-muted dark:text-gray-400 mt-1 max-w-2xl">
+            You can add PAN, GST, or both for your business identity (at least one is required). Bank account verification is mandatory for onboarding and payouts.
           </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 w-full lg:w-auto lg:min-w-[360px]">
+          {[
+            { label: "PAN/KYC", ok: panVerified, value: panVerified ? "Verified" : gstVerified || isGstNotReq ? "Optional" : "Required" },
+            { label: "GST", ok: isGstNotReq || gstVerified, value: isGstNotReq ? "N/A (Exempt)" : gstVerified ? "Verified" : panVerified ? "Optional" : "Choose" },
+            { label: "Bank", ok: isBankVerified, value: isBankVerified ? "Verified" : "Mandatory" },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className={`rounded-xl border px-3 py-2 ${
+                item.ok
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
+                  : "border-amber-200 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
+              }`}
+            >
+              <div className="text-[10px] font-extrabold uppercase tracking-wide opacity-75">
+                {item.label}
+              </div>
+              <div className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold">
+                <Icon name={item.ok ? "check" : "info"} size={12} />
+                <span>{item.value}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -2495,54 +2775,99 @@ export function VendorFinancialOnboardingCard() {
             </span>
           )}
         </div>
-        <form onSubmit={handleSavePan} className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="text"
-            maxLength={10}
-            value={panInput}
-            onChange={(e) => setPanInput(e.target.value.toUpperCase())}
-            placeholder="e.g. ABCDE1234F"
-            className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
-          />
-          <button
-            type="submit"
-            disabled={savingPan || !panInput.trim()}
-            className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
-          >
-            {savingPan ? "Saving & Verifying..." : "Verify PAN"}
-          </button>
-          <button
-            type="button"
-            onClick={handleDiscoverGstins}
-            disabled={discoveringGstin || !panInput.trim()}
-            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
-          >
-            {discoveringGstin ? "Searching..." : "Search GSTINs under PAN"}
-          </button>
-        </form>
 
-        {discoveryResult && (
-          <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 text-xs space-y-2">
-            <div className="font-bold text-navy dark:text-gray-200">{discoveryResult.message}</div>
-            {discoveryResult.gstins && discoveryResult.gstins.length > 0 && (
-              <ul className="space-y-1 pl-2 border-l-2 border-primary">
-                {discoveryResult.gstins.map((g, idx) => (
-                  <li key={idx} className="flex items-center justify-between text-[11px]">
-                    <span className="font-mono font-bold text-primary">{g.gstin}</span>
-                    <span className="text-muted dark:text-gray-400">{g.state} — {g.legalName}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGstRegistered(true);
-                        setGstinInput(g.gstin);
-                      }}
-                      className="text-[10px] font-bold text-primary hover:underline"
-                    >
-                      Use this GSTIN
-                    </button>
-                  </li>
-                ))}
-              </ul>
+        {panVerified && !isEditingPan ? (
+          <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-extrabold text-sm text-navy dark:text-white uppercase tracking-wide">
+                  {profile?.pan?.panNumber || panInput}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center gap-1">
+                  <Icon name="check" size={10} /> Verified PAN
+                </span>
+              </div>
+              <div className="text-xs text-emerald-900 dark:text-emerald-200 font-medium">
+                Legal Registered Name: <strong className="font-bold">{profile?.pan?.legalName || "Matched / Approved"}</strong>
+              </div>
+              {documents.filter(d => d.type === "PAN" || d.title?.toUpperCase().includes("PAN")).map(doc => (
+                <div key={doc._id} className="mt-1.5 flex items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-black/40 px-2.5 py-1 rounded-lg border border-emerald-200/80">
+                  <Icon name="documents" size={12} />
+                  <span className="font-bold">{doc.fileName || doc.title}</span>
+                  {doc.documentNumber && <span className="font-mono text-[10px]">({doc.documentNumber})</span>}
+                  <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-400">✓ Uploaded Document</span>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsEditingPan(true)}
+              className="px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/70 transition shrink-0 cursor-pointer"
+            >
+              Edit PAN
+            </button>
+          </div>
+        ) : (
+          <div>
+            <form onSubmit={handleSavePan} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                maxLength={10}
+                value={panInput}
+                onChange={(e) => setPanInput(e.target.value.toUpperCase())}
+                placeholder="e.g. ABCDE1234F"
+                className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
+              />
+              <button
+                type="submit"
+                disabled={savingPan || !panInput.trim()}
+                className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
+              >
+                {savingPan ? "Saving & Verifying..." : "Verify PAN"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscoverGstins}
+                disabled={discoveringGstin || !panInput.trim()}
+                className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
+              >
+                {discoveringGstin ? "Searching..." : "Search GSTINs under PAN"}
+              </button>
+              {panVerified && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPan(false)}
+                  className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
+                >
+                  Cancel
+                </button>
+              )}
+            </form>
+
+            {discoveryResult && (
+              <div className="p-3 mt-2 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 text-xs space-y-2">
+                <div className="font-bold text-navy dark:text-gray-200">{discoveryResult.message}</div>
+                {discoveryResult.gstins && discoveryResult.gstins.length > 0 && (
+                  <ul className="space-y-1 pl-2 border-l-2 border-primary">
+                    {discoveryResult.gstins.map((g, idx) => (
+                      <li key={idx} className="flex items-center justify-between text-[11px]">
+                        <span className="font-mono font-bold text-primary">{g.gstin}</span>
+                        <span className="text-muted dark:text-gray-400">{g.state} — {g.legalName}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGstRegistered(true);
+                            setGstinInput(g.gstin);
+                          }}
+                          className="text-[10px] font-bold text-primary hover:underline"
+                        >
+                          Use this GSTIN
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -2566,74 +2891,117 @@ export function VendorFinancialOnboardingCard() {
           )}
         </div>
 
-        <div className="flex items-center gap-6">
-          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
-            <input
-              type="radio"
-              name="gstRegistered"
-              checked={gstRegistered === true}
-              onChange={() => setGstRegistered(true)}
-              className="accent-primary"
-            />
-            <span>YES (I have GST registration)</span>
-          </label>
-          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
-            <input
-              type="radio"
-              name="gstRegistered"
-              checked={gstRegistered === false}
-              onChange={() => {
-                setGstRegistered(false);
-                setGstinInput("");
-              }}
-              className="accent-primary"
-            />
-            <span>NO (GST not registered)</span>
-          </label>
-        </div>
-
-        {gstRegistered ? (
-          <form onSubmit={handleSaveGst} className="flex flex-col sm:flex-row gap-2 mt-2">
-            <input
-              type="text"
-              maxLength={15}
-              value={gstinInput}
-              onChange={(e) => setGstinInput(e.target.value.toUpperCase())}
-              placeholder="e.g. 19ABCDE1234F1Z5"
-              className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
-            />
-            <button
-              type="submit"
-              disabled={savingGst || !gstinInput.trim()}
-              className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
-            >
-              {savingGst ? "Verifying..." : "Verify & Save GSTIN"}
-            </button>
-          </form>
-        ) : (
-          <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-300 flex items-center justify-between">
-            <span>GST registration is not required. You can complete onboarding and add bank details using your PAN.</span>
+        {(gstStatus === "VERIFIED" || isGstNotReq) && !isEditingGst ? (
+          <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                {isGstNotReq ? (
+                  <span className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
+                    GST Not Applicable / Exempt (Onboarding Active via PAN)
+                  </span>
+                ) : (
+                  <span className="font-mono font-extrabold text-sm text-navy dark:text-white uppercase tracking-wide">
+                    GSTIN: {profile?.gst?.gstin || gstinInput}
+                  </span>
+                )}
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center gap-1">
+                  <Icon name="check" size={10} /> {isGstNotReq ? "Exempt / N/A" : "Verified GSTIN"}
+                </span>
+              </div>
+              {documents.filter(d => d.type === "GST" || d.title?.toUpperCase().includes("GST")).map(doc => (
+                <div key={doc._id} className="mt-1.5 flex items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-black/40 px-2.5 py-1 rounded-lg border border-emerald-200/80">
+                  <Icon name="documents" size={12} />
+                  <span className="font-bold">{doc.fileName || doc.title}</span>
+                  {doc.documentNumber && <span className="font-mono text-[10px]">({doc.documentNumber})</span>}
+                  <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-400">✓ Uploaded Document ({doc.status})</span>
+                </div>
+              ))}
+            </div>
             <button
               type="button"
-              onClick={handleSaveGst}
-              disabled={savingGst}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-[11px] hover:bg-emerald-700 shrink-0 ml-2 cursor-pointer"
+              onClick={() => setIsEditingGst(true)}
+              className="px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/70 transition shrink-0 cursor-pointer"
             >
-              Confirm GST = NO
+              Edit GST Status
             </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-6">
+              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
+                <input
+                  type="radio"
+                  name="gstRegistered"
+                  checked={gstRegistered === true}
+                  onChange={() => setGstRegistered(true)}
+                  className="accent-primary"
+                />
+                <span>YES (I have GST registration)</span>
+              </label>
+              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
+                <input
+                  type="radio"
+                  name="gstRegistered"
+                  checked={gstRegistered === false}
+                  onChange={() => {
+                    setGstRegistered(false);
+                    setGstinInput("");
+                    handleSaveGst(null, false);
+                  }}
+                  className="accent-primary"
+                />
+                <span>NO (GST not registered)</span>
+              </label>
+            </div>
+
+            {gstRegistered ? (
+              <form onSubmit={handleSaveGst} className="flex flex-col sm:flex-row gap-2 mt-2">
+                <input
+                  type="text"
+                  maxLength={15}
+                  value={gstinInput}
+                  onChange={(e) => setGstinInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. 19ABCDE1234F1Z5"
+                  className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={savingGst || !gstinInput.trim()}
+                  className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
+                >
+                  {savingGst ? "Verifying..." : "Verify & Save GSTIN"}
+                </button>
+                {(gstStatus === "VERIFIED" || isGstNotReq) && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingGst(false)}
+                    className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </form>
+            ) : (
+              <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-300 flex items-center justify-between">
+                <span className="flex items-center gap-2 font-medium">
+                  <span className="font-bold text-emerald-700 dark:text-emerald-400">✓ Ready:</span> GST registration is not required. You can complete onboarding and add bank details using your PAN.
+                </span>
+                {savingGst && <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 animate-pulse">Saving status...</span>}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Module 3: BANK DETAILS & ₹0.02 PENNY DROP VERIFICATION (GST Independent) */}
+      {/* Module 3: BANK DETAILS & BANK VERIFICATION (GST Independent) */}
       <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-xs font-extrabold text-navy dark:text-gray-200">
-              3. Bank Details & ₹0.02 Penny-Drop Verification
+              3. Bank Details & Bank Verification
             </h3>
             <p className="text-[11px] text-muted dark:text-gray-400">
-              Bank details are independent from GST status. ₹0.02 verification is strictly for bank identity control.
+              Bank details are independent from GST status. Verification is strictly for bank identity control, not payout or settlement.
             </p>
           </div>
           {isBankVerified ? (
@@ -2651,96 +3019,206 @@ export function VendorFinancialOnboardingCard() {
           )}
         </div>
 
-        <form onSubmit={handleSaveBank} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              Account Holder Name *
-            </label>
-            <input
-              type="text"
-              value={bankForm.accountHolderName}
-              onChange={(e) => setBankForm({ ...bankForm, accountHolderName: e.target.value })}
-              placeholder="Full name as in bank record"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            />
+        {isBankVerified && !isEditingBank ? (
+          <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm text-navy dark:text-white">
+                  {bankForm.bankName || "Bank Account"}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center gap-1">
+                  <Icon name="check" size={10} /> Verified Bank Account
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditingBank(true)}
+                className="px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/70 transition self-start shrink-0 cursor-pointer"
+              >
+                Edit Bank Details
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="bg-white/80 dark:bg-black/40 p-2.5 rounded-xl border border-emerald-200/60">
+                <div className="text-[10px] font-bold text-muted">Holder Name</div>
+                <div className="font-extrabold text-navy dark:text-white truncate">{bankForm.accountHolderName || "Verified"}</div>
+              </div>
+              <div className="bg-white/80 dark:bg-black/40 p-2.5 rounded-xl border border-emerald-200/60">
+                <div className="text-[10px] font-bold text-muted">Account No.</div>
+                <div className="font-mono font-extrabold text-navy dark:text-white">{bankForm.accountNumber ? `••••${bankForm.accountNumber.slice(-4)}` : "Verified"}</div>
+              </div>
+              <div className="bg-white/80 dark:bg-black/40 p-2.5 rounded-xl border border-emerald-200/60">
+                <div className="text-[10px] font-bold text-muted">IFSC Code</div>
+                <div className="font-mono font-extrabold text-navy dark:text-white">{bankForm.ifsc || "Verified"}</div>
+              </div>
+              <div className="bg-white/80 dark:bg-black/40 p-2.5 rounded-xl border border-emerald-200/60">
+                <div className="text-[10px] font-bold text-muted">Account Type</div>
+                <div className="font-extrabold text-navy dark:text-white">{bankForm.accountType}</div>
+              </div>
+            </div>
+            {documents.filter(d => d.type === "BANK_PROOF" || d.title?.toLowerCase().includes("bank") || d.title?.toLowerCase().includes("cheque")).map(doc => (
+              <div key={doc._id} className="flex items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-black/40 px-2.5 py-1.5 rounded-lg border border-emerald-200/80">
+                <Icon name="documents" size={12} />
+                <span className="font-bold">{doc.fileName || doc.title}</span>
+                <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-400">✓ Bank Proof Uploaded</span>
+              </div>
+            ))}
           </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="p-3 rounded-xl bg-sky-50/80 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="text-[11px] font-extrabold text-sky-900 dark:text-sky-200">
+                    Cashfree sandbox test data
+                  </div>
+                  <p className="text-[11px] text-sky-800/80 dark:text-sky-300/80">
+                    Use these only with Cashfree sandbox credentials. They fill the form and let you trigger valid, invalid, and bank-error responses.
+                  </p>
+                </div>
+                <a
+                  href="https://www.cashfree.com/docs/secure-id/get-started/integration/sample-responses-from-bank"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] font-extrabold text-sky-700 dark:text-sky-300 hover:underline shrink-0"
+                >
+                  Cashfree docs
+                </a>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {CASHFREE_BANK_TEST_CASES.map((testCase) => (
+                  <button
+                    key={`${testCase.accountNumber}-${testCase.ifsc}`}
+                    type="button"
+                    onClick={() => applyCashfreeTestCase(testCase)}
+                    className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-extrabold transition cursor-pointer ${
+                      testCase.expected === "VALID"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                        : testCase.expected === "INVALID"
+                          ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                          : "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
+                    }`}
+                  >
+                    {testCase.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              Account Number *
-            </label>
-            <input
-              type="text"
-              value={bankForm.accountNumber}
-              onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
-              placeholder="e.g. 123456789012"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            />
+            <form onSubmit={handleSaveBank} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+                  Account Holder Name *
+                </label>
+                <input
+                  type="text"
+                  value={bankForm.accountHolderName}
+                  onChange={(e) => setBankForm({ ...bankForm, accountHolderName: e.target.value })}
+                  placeholder="Full name as in bank record"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+                  Account Number *
+                </label>
+                <input
+                  type="text"
+                  value={bankForm.accountNumber}
+                  onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+                  placeholder="e.g. 123456789012"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+                  IFSC Code *
+                </label>
+                <input
+                  type="text"
+                  maxLength={11}
+                  value={bankForm.ifsc}
+                  onChange={(e) => setBankForm({ ...bankForm, ifsc: e.target.value.toUpperCase() })}
+                  placeholder="e.g. HDFC0001234"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+                  Bank Name *
+                </label>
+                <input
+                  type="text"
+                  value={bankForm.bankName}
+                  onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
+                  placeholder="e.g. HDFC Bank / ICICI Bank"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+                  Account Type *
+                </label>
+                <select
+                  value={bankForm.accountType}
+                  onChange={(e) => setBankForm({ ...bankForm, accountType: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none"
+                >
+                  <option value="SAVINGS">Savings Account</option>
+                  <option value="CURRENT">Current Account</option>
+                  <option value="CC_OD">Cash Credit / Overdraft</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
+                  Phone for Cashfree Verification
+                </label>
+                <input
+                  type="tel"
+                  value={bankForm.phone}
+                  onChange={(e) => setBankForm({ ...bankForm, phone: e.target.value.replace(/\D/g, "").slice(0, 13) })}
+                  placeholder="e.g. 9999999999"
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={savingBank}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
+                >
+                  {savingBank ? "Saving Details..." : "Save Bank Details"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleVerifyBank}
+                  disabled={verifyingBank || !bankForm.accountNumber || !bankForm.ifsc}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Icon name="check" size={14} />
+                  <span>{verifyingBank ? "Verifying Bank Account..." : "Verify Bank Account"}</span>
+                </button>
+                {isBankVerified && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingBank(false)}
+                    className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              IFSC Code *
-            </label>
-            <input
-              type="text"
-              maxLength={11}
-              value={bankForm.ifsc}
-              onChange={(e) => setBankForm({ ...bankForm, ifsc: e.target.value.toUpperCase() })}
-              placeholder="e.g. HDFC0001234"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              Bank Name *
-            </label>
-            <input
-              type="text"
-              value={bankForm.bankName}
-              onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
-              placeholder="e.g. HDFC Bank / ICICI Bank"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              Account Type *
-            </label>
-            <select
-              value={bankForm.accountType}
-              onChange={(e) => setBankForm({ ...bankForm, accountType: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none"
-            >
-              <option value="SAVINGS">Savings Account</option>
-              <option value="CURRENT">Current Account</option>
-              <option value="CC_OD">Cash Credit / Overdraft</option>
-              <option value="OTHER">Other</option>
-            </select>
-          </div>
-
-          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={savingBank}
-              className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
-            >
-              {savingBank ? "Saving Details..." : "Save Bank Details"}
-            </button>
-            <button
-              type="button"
-              onClick={handleVerifyBank}
-              disabled={verifyingBank || !bankForm.accountNumber || !bankForm.ifsc}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Icon name="check" size={14} />
-              <span>{verifyingBank ? "Executing ₹0.02 Penny Drop..." : "Verify with ₹0.02 Penny Drop"}</span>
-            </button>
-          </div>
-        </form>
-
+        )}
+      </div>
         {logs.length > 0 && (
           <div className="pt-2">
             <button
@@ -2772,7 +3250,6 @@ export function VendorFinancialOnboardingCard() {
             )}
           </div>
         )}
-      </div>
     </Card>
   );
 }
@@ -2937,29 +3414,46 @@ export function DocumentsManager({ isTab = false }) {
     }
   }
 
+  const verifiedDocuments = documents.filter((doc) => doc.status === "VERIFIED").length;
+  const pendingDocuments = documents.filter((doc) => doc.status !== "VERIFIED").length;
+
   const content = (
     <div className="space-y-6">
       {/* Decoupled Financial & Verification Onboarding Module */}
       <VendorFinancialOnboardingCard />
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-dark-card p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
-        <div>
-          <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
-            KYC & Business Document Records
-          </h2>
-          <p className="text-xs text-muted mt-0.5">
-            GSTIN and Corporation PAN are verified automatically via API.
-            Matching registered names are verified instantly; mismatches go to
-            admin review.
-          </p>
+      <div className="bg-white dark:bg-dark-card p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div>
+            <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
+              Supporting KYC Documents
+            </h2>
+            <p className="text-xs text-muted mt-0.5 max-w-2xl">
+              Use this for GST certificates, firm PAN, address proof, or any document that needs STARVNT Core/admin review. PAN and bank verification above remain the activation gate.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition flex items-center gap-1.5 self-start shrink-0 cursor-pointer"
+          >
+            <Icon name="plus" size={14} />
+            <span>Upload Document</span>
+          </button>
         </div>
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition flex items-center gap-1.5 self-start sm:self-center shrink-0 cursor-pointer"
-        >
-          <Icon name="plus" size={14} />
-          <span>Upload Document</span>
-        </button>
+
+        <div className="grid sm:grid-cols-3 gap-2">
+          {[
+            { label: "Auto-check", value: "GSTIN / PAN", detail: "API verifies when credits are available" },
+            { label: "Admin review", value: pendingDocuments, detail: "Pending or needs manual confirmation" },
+            { label: "Verified records", value: verifiedDocuments, detail: "Approved by Core/API" },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/40 p-3">
+              <div className="text-[10px] uppercase tracking-wide font-extrabold text-muted">{item.label}</div>
+              <div className="mt-0.5 text-sm font-extrabold text-navy dark:text-gray-100">{item.value}</div>
+              <div className="text-[11px] text-muted mt-0.5 leading-snug">{item.detail}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {documents.length > 0 ? (
@@ -3036,13 +3530,15 @@ export function DocumentsManager({ isTab = false }) {
                           <span>
                             {doc.status === "VERIFIED"
                               ? doc.verificationSource === "PAN_API"
-                                ? "Corporate PAN Auto-Verified"
-                                : "GSTIN Auto-Verified"
+                                ? "Corporate PAN Verified"
+                                : doc.notes?.toLowerCase().includes("admin") || doc.verificationResult?.confidence === "NONE"
+                                  ? "GSTIN Verified (Admin Approved)"
+                                  : "GSTIN Auto-Verified"
                               : doc.verificationSource === "PAN_API"
                                 ? "Corporate PAN Needs Admin Review"
                                 : "GSTIN Needs Admin Review"}
                           </span>
-                          {doc.verificationResult?.confidence && (
+                          {doc.verificationResult?.confidence && doc.verificationResult.confidence !== "NONE" && (
                             <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] uppercase">
                               {doc.verificationResult.confidence}
                             </span>
@@ -3144,25 +3640,29 @@ export function DocumentsManager({ isTab = false }) {
           </ul>
         </Card>
       ) : !loading ? (
-        <Card className="text-center py-10 px-4 space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-primary-soft text-primary grid place-items-center mx-auto">
+        <Card className="py-6 px-4 sm:px-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-primary-soft text-primary grid place-items-center shrink-0">
             <Icon name="documents" size={22} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-navy">
+                  No supporting documents yet
+                </h3>
+                <p className="text-xs text-muted max-w-xl mt-1 leading-relaxed">
+                  This is okay if PAN and bank verification are complete. Upload GST certificate, firm PAN, address proof, or business registration only when available or requested by admin.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition cursor-pointer shrink-0"
+            >
+              <Icon name="plus" size={14} />
+              <span>Upload document</span>
+            </button>
           </div>
-          <div>
-            <h3 className="font-extrabold text-sm text-navy">
-              No Verification Documents Uploaded Yet
-            </h3>
-            <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
-              Upload your GST Registration Certificate or Corporate PAN Card to complete partner verification.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition cursor-pointer"
-          >
-            <Icon name="plus" size={14} />
-            <span>+ Upload Your First Document</span>
-          </button>
         </Card>
       ) : (
         <Card className="space-y-3">
@@ -4125,6 +4625,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
       if (profRes.ok && profRes.vendor) {
         setProfile({
           businessName: profRes.vendor.businessName || business || "",
+          brandName: profRes.vendor.brandName || "",
           category: profRes.vendor.category || "",
           location: profRes.vendor.location || "",
           phone: profRes.vendor.phone || user?.phone || "",
@@ -4471,9 +4972,6 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
 
           {/* Desktop-only readiness bar */}
           <div className="pt-3 mt-2 border-t border-gray-100 px-2 pb-1 hidden lg:block">
-            <div className="text-[11px] font-semibold text-muted">
-              Profile Readiness
-            </div>
             {loadingProfile && !activation ? (
               <div className="space-y-2 mt-2">
                 <div className="flex items-center justify-between">
@@ -4484,8 +4982,8 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
-                  <span>{activation?.completionPercentage ?? 0}% Complete</span>
+                <div className="flex items-center justify-between text-[11px] font-bold text-navy">
+                  <span>Readiness</span>
                   <span
                     className={
                       activation?.is100Percent
@@ -4493,7 +4991,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                         : "text-amber-600"
                     }
                   >
-                    {activation?.is100Percent ? "✓ Active" : "● Setup Required"}
+                    {activation?.completionPercentage ?? 0}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">
@@ -4505,6 +5003,15 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                       width: `${activation?.completionPercentage ?? 0}%`,
                     }}
                   />
+                </div>
+                <div
+                  className={`mt-1.5 text-[10px] font-bold ${
+                    activation?.is100Percent ? "text-emerald-600" : "text-amber-600"
+                  }`}
+                >
+                  {activation?.is100Percent
+                    ? "Active for matching"
+                    : "Bank, KYC, service, coverage required"}
                 </div>
               </>
             )}
@@ -4663,11 +5170,30 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
-                        Brand / Business Name
+                        Brand / Display Name (Trade Name) *
                       </label>
                       <input
-                        placeholder="e.g. CineMandap Studios"
-                        value={profile.businessName}
+                        placeholder="e.g. Himalayan Heritage Pine Lawns & Resort"
+                        value={profile.brandName || ""}
+                        onChange={(e) =>
+                          setProfile({
+                            ...profile,
+                            brandName: e.target.value,
+                          })
+                        }
+                        className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-navy dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <span className="text-[10px] text-muted dark:text-gray-400 mt-0.5 block">
+                        Visible to customers on STARVNT marketplace
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                        Legal Business Entity Name (PAN / GST Name) *
+                      </label>
+                      <input
+                        placeholder="e.g. BILLIONEDGE INVESTMENT ADVISORS"
+                        value={profile.businessName || ""}
                         onChange={(e) =>
                           setProfile({
                             ...profile,
@@ -4675,8 +5201,11 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                           })
                         }
                         required
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-navy dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
+                      <span className="text-[10px] text-muted dark:text-gray-400 mt-0.5 block">
+                        Registered company/firm name used for PAN/GST verification
+                      </span>
                     </div>
                     <div>
                       <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">

@@ -16,7 +16,7 @@ export function Donut({ data, size = 140, center }) {
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="#eceaf7" strokeWidth="12" />
+        <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" className="text-gray-100 dark:text-gray-800" strokeWidth="12" />
         {total > 0 &&
           rows.map((d, i) => {
             const len = (d.value / total) * c;
@@ -33,12 +33,12 @@ export function Donut({ data, size = 140, center }) {
 }
 
 const STATUS_TONE = {
-  draft: 'bg-amber-50 text-amber-600',
-  planning: 'bg-primary-soft text-primary',
-  booked: 'bg-emerald-50 text-emerald-600',
-  in_progress: 'bg-violet-50 text-violet-600',
-  completed: 'bg-emerald-50 text-emerald-700',
-  cancelled: 'bg-gray-100 text-muted',
+  draft: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
+  planning: 'bg-primary-soft dark:bg-primary/20 text-primary dark:text-[#a5b4fc]',
+  booked: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400',
+  in_progress: 'bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400',
+  completed: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+  cancelled: 'bg-gray-100 dark:bg-gray-800 text-muted dark:text-slate-400',
 };
 
 export function EventStatusPill({ status }) {
@@ -51,7 +51,7 @@ export function EventStatusPill({ status }) {
 
 export function ProgressBar({ percent }) {
   return (
-    <div className="h-1.5 rounded-full bg-lavender overflow-hidden">
+    <div className="h-1.5 rounded-full bg-lavender dark:bg-gray-800 overflow-hidden">
       <div className="h-full bg-gradient-to-r from-primary to-[#9b6dff] rounded-full" style={{ width: `${percent || 0}%` }} />
     </div>
   );
@@ -65,9 +65,9 @@ export function EventMeta({ event }) {
     event.guestCount && ['customers', `${event.guestCount} guests`],
     budgetText(event) && ['wallet', budgetText(event)],
   ].filter(Boolean);
-  if (!parts.length) return <div className="text-[11px] text-muted">Details not added yet</div>;
+  if (!parts.length) return <div className="text-[11px] text-muted dark:text-slate-400">Details not added yet</div>;
   return (
-    <div className="text-[11px] text-muted flex flex-wrap gap-x-3 gap-y-0.5">
+    <div className="text-[11px] text-muted dark:text-slate-400 flex flex-wrap gap-x-3 gap-y-0.5">
       {parts.map(([icon, text]) => (
         <span key={icon} className="inline-flex items-center gap-1"><Icon name={icon} size={11} /> {text}</span>
       ))}
@@ -77,16 +77,16 @@ export function EventMeta({ event }) {
 
 export function EventCard({ event }) {
   return (
-    <Link to={`/customer/events/${event.id}`} className="block bg-white rounded-2xl shadow-sm p-4 hover:shadow-md transition">
+    <Link to={`/customer/events/${event.id}`} className="block bg-white dark:bg-[#161926] rounded-2xl shadow-sm p-4 hover:shadow-md transition border border-gray-100 dark:border-gray-800">
       <div className="flex items-center justify-between gap-2">
-        <div className="font-bold text-navy truncate">{event.title || event.eventTypeLabel || 'Event'}</div>
+        <div className="font-bold text-navy dark:text-white truncate">{event.title || event.eventTypeLabel || 'Event'}</div>
         <EventStatusPill status={event.status} />
       </div>
       <div className="mt-1"><EventMeta event={event} /></div>
       {event.status !== 'draft' && (
         <>
           <div className="mt-3"><ProgressBar percent={event.progressPercent} /></div>
-          <div className="text-[10px] text-muted mt-1.5">
+          <div className="text-[10px] text-muted dark:text-slate-400 mt-1.5">
             {event.essentialsHandled} of {event.essentialsTotal} essentials handled
           </div>
         </>
@@ -113,17 +113,26 @@ export function AskBox({ placeholder = 'Tell us what you want to arrange…', ch
           e.preventDefault();
           go(text);
         }}
-        className="flex items-center gap-2 bg-white rounded-2xl shadow-sm px-4 py-2.5 border border-gray-100"
+        className="flex items-center gap-2 bg-white/95 dark:bg-[#161926]/90 backdrop-blur rounded-2xl shadow-md px-4 py-2.5 border border-white/40 dark:border-gray-700/60 transition"
       >
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} className="flex-1 outline-none text-sm bg-transparent placeholder:text-muted/60" />
-        <button className="w-9 h-9 grid place-items-center rounded-full bg-primary text-white hover:bg-primary-dark transition" aria-label="Ask Aura+">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={placeholder}
+          className="flex-1 outline-none text-sm bg-transparent text-navy dark:text-white placeholder:text-muted/70 dark:placeholder:text-slate-400 font-medium"
+        />
+        <button className="w-9 h-9 grid place-items-center rounded-xl bg-primary text-white hover:bg-primary-dark transition shadow-sm shrink-0" aria-label="Ask Aura+">
           <Icon name="send" size={14} />
         </button>
       </form>
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-3">
           {chips.map((c) => (
-            <button key={c} onClick={() => go(c)} className="text-xs bg-white hover:bg-primary-soft hover:text-primary border border-gray-100 rounded-full px-3.5 py-1.5 transition font-medium">
+            <button
+              key={c}
+              onClick={() => go(c)}
+              className="text-xs bg-white/80 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 text-navy dark:text-white border border-white/30 dark:border-white/15 backdrop-blur rounded-full px-3.5 py-1.5 transition font-semibold shadow-xs"
+            >
               {c}
             </button>
           ))}
@@ -135,10 +144,10 @@ export function AskBox({ placeholder = 'Tell us what you want to arrange…', ch
 
 export function Empty({ title, children, action }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
-      <div className="w-11 h-11 mx-auto rounded-2xl bg-primary-soft text-primary grid place-items-center"><Icon name="events" size={18} /></div>
-      <div className="mt-3 font-extrabold text-navy">{title}</div>
-      {children && <p className="text-xs text-muted mt-1 leading-relaxed">{children}</p>}
+    <div className="bg-white dark:bg-[#161926] rounded-2xl shadow-sm p-6 text-center border border-gray-100 dark:border-gray-800">
+      <div className="w-11 h-11 mx-auto rounded-2xl bg-primary-soft dark:bg-primary/20 text-primary dark:text-[#a5b4fc] grid place-items-center"><Icon name="events" size={18} /></div>
+      <div className="mt-3 font-extrabold text-navy dark:text-white">{title}</div>
+      {children && <p className="text-xs text-muted dark:text-slate-400 mt-1 leading-relaxed">{children}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -163,14 +172,14 @@ export function ProgressRing({ percent = 0, size = 88, label = 'Planning complet
             <stop offset="100%" stopColor="#9b6dff" />
           </linearGradient>
         </defs>
-        <circle cx="40" cy="40" r={r} fill="none" stroke="#eceaf7" strokeWidth="8" />
+        <circle cx="40" cy="40" r={r} fill="none" stroke="currentColor" className="text-gray-100 dark:text-gray-800" strokeWidth="8" />
         <circle cx="40" cy="40" r={r} fill="none" stroke="url(#custRingGrad)" strokeWidth="8" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(100, percent) / 100)} />
       </svg>
       <div className="absolute inset-0 grid place-items-center text-center">
         <div>
-          <div className="text-lg font-extrabold text-navy leading-none">{percent}%</div>
-          <div className="text-[8px] text-muted leading-tight mt-0.5 px-2">{label}</div>
+          <div className="text-lg font-extrabold text-navy dark:text-white leading-none">{percent}%</div>
+          <div className="text-[8px] text-muted dark:text-slate-400 leading-tight mt-0.5 px-2">{label}</div>
         </div>
       </div>
     </div>
@@ -183,15 +192,15 @@ export function StepTracker({ steps = [] }) {
     <ol className="flex items-start">
       {steps.map((s, i) => (
         <li key={s.key} className="flex-1 flex flex-col items-center text-center relative min-w-0">
-          {i > 0 && <span className={`absolute top-3 right-1/2 w-full h-0.5 ${s.state === 'upcoming' ? 'bg-gray-200' : 'bg-primary'}`} />}
+          {i > 0 && <span className={`absolute top-3 right-1/2 w-full h-0.5 ${s.state === 'upcoming' ? 'bg-gray-200 dark:bg-gray-700' : 'bg-primary'}`} />}
           <span
-            className={`relative z-10 w-6 h-6 rounded-full grid place-items-center text-[10px] font-bold ${
-              s.state === 'done' ? 'bg-primary text-white' : s.state === 'current' ? 'bg-white border-2 border-primary text-primary' : 'bg-gray-100 text-muted'
+            className={`relative z-10 w-6 h-6 rounded-full grid place-items-center text-[10px] font-bold transition ${
+              s.state === 'done' ? 'bg-primary text-white shadow-xs' : s.state === 'current' ? 'bg-white dark:bg-[#161926] border-2 border-primary text-primary shadow-xs' : 'bg-gray-100 dark:bg-gray-800 text-muted dark:text-slate-400'
             }`}
           >
             {s.state === 'done' ? <Icon name="check" size={11} /> : i + 1}
           </span>
-          <span className={`text-[9px] sm:text-[10px] mt-1 font-semibold truncate max-w-full ${s.state === 'upcoming' ? 'text-muted' : 'text-navy'}`}>{s.label}</span>
+          <span className={`text-[9px] sm:text-[10px] mt-1 font-semibold truncate max-w-full ${s.state === 'upcoming' ? 'text-muted dark:text-slate-400' : 'text-navy dark:text-white'}`}>{s.label}</span>
         </li>
       ))}
     </ol>
@@ -200,15 +209,15 @@ export function StepTracker({ steps = [] }) {
 
 export function Tabs({ tabs, value, onChange }) {
   return (
-    <div className="flex gap-1 bg-white rounded-2xl p-1 shadow-xs overflow-x-auto">
+    <div className="flex gap-1 bg-white dark:bg-[#161926] border border-gray-100 dark:border-gray-800/80 rounded-2xl p-1 shadow-xs overflow-x-auto">
       {tabs.map((t) => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition ${value === t.key ? 'bg-primary text-white' : 'text-muted hover:text-navy'}`}
+          className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${value === t.key ? 'bg-primary text-white' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'}`}
         >
           {t.label}
-          {t.count != null && <span className={`ml-1.5 ${value === t.key ? 'text-white/80' : 'text-muted/70'}`}>{t.count}</span>}
+          {t.count != null && <span className={`ml-1.5 ${value === t.key ? 'text-white/80' : 'text-muted/70 dark:text-slate-400'}`}>{t.count}</span>}
         </button>
       ))}
     </div>
@@ -216,15 +225,15 @@ export function Tabs({ tabs, value, onChange }) {
 }
 
 export function BackLink({ to, children }) {
-  return <Link to={to} className="text-xs font-bold text-muted hover:text-primary">← {children}</Link>;
+  return <Link to={to} className="text-xs font-bold text-muted dark:text-slate-400 hover:text-primary dark:hover:text-primary">← {children}</Link>;
 }
 
 const AVAIL = {
-  unconfirmed: ['Calendar clear - send enquiry', 'bg-emerald-50 text-emerald-600'],
-  blocked: ['Not available on your date', 'bg-red-50 text-red-500'],
-  booked: ['Already booked on your date', 'bg-red-50 text-red-500'],
-  available: ['Available on your date', 'bg-emerald-50 text-emerald-600'],
-  no_event_date: ['Add a date to check availability', 'bg-amber-50 text-amber-600'],
+  unconfirmed: ['Calendar clear - send enquiry', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-800/40'],
+  blocked: ['Not available on your date', 'bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400 border border-red-100/50 dark:border-red-800/40'],
+  booked: ['Already booked on your date', 'bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400 border border-red-100/50 dark:border-red-800/40'],
+  available: ['Available on your date', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-800/40'],
+  no_event_date: ['Add a date to check availability', 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100/50 dark:border-amber-800/40'],
 };
 export function AvailabilityPill({ value }) {
   const [text, cls] = AVAIL[value] || AVAIL.unconfirmed;
@@ -232,12 +241,12 @@ export function AvailabilityPill({ value }) {
 }
 
 export function DemoBadge() {
-  return <span className="text-[9px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 whitespace-nowrap">Demo listing</span>;
+  return <span className="text-[9px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-transparent dark:border-amber-800/40 whitespace-nowrap">Demo listing</span>;
 }
 
 export function RatingText({ rating, reviewCount }) {
-  if (rating == null) return <span className="text-[11px] text-muted">No ratings yet</span>;
-  return <span className="text-[11px] font-semibold text-navy">★ {rating.toFixed(1)} <span className="text-muted font-normal">({reviewCount} reviews)</span></span>;
+  if (rating == null) return <span className="text-[11px] text-muted dark:text-slate-400">No ratings yet</span>;
+  return <span className="text-[11px] font-semibold text-navy dark:text-slate-200">★ {rating.toFixed(1)} <span className="text-muted dark:text-slate-400 font-normal">({reviewCount} reviews)</span></span>;
 }
 
 /** Price as a validated total, or the honest reason there isn't one. */
@@ -246,27 +255,27 @@ export function PriceText({ option, large = false }) {
   if (option.price != null) {
     return (
       <div>
-        <div className={`${large ? 'text-2xl' : 'text-base'} font-extrabold text-navy`}>{inr(option.price)}</div>
-        <div className="text-[10px] text-muted">validated total{option.pricingType === 'PER_PERSON' ? ` · ${inr(option.basePrice)} per ${option.unit || 'guest'}` : ''}</div>
+        <div className={`${large ? 'text-2xl' : 'text-base'} font-extrabold text-navy dark:text-white`}>{inr(option.price)}</div>
+        <div className="text-[10px] text-muted dark:text-slate-400">validated total{option.pricingType === 'PER_PERSON' ? ` · ${inr(option.basePrice)} per ${option.unit || 'guest'}` : ''}</div>
       </div>
     );
   }
   if (option.basePrice != null) {
     return (
       <div>
-        <div className={`${large ? 'text-xl' : 'text-sm'} font-extrabold text-navy`}>{inr(option.basePrice)} <span className="text-xs font-semibold text-muted">/ {option.unit || 'unit'}</span></div>
-        <div className="text-[10px] text-muted">{option.pricingType === 'PER_PERSON' ? 'Add a guest count for a total' : 'No fixed total listed'}</div>
+        <div className={`${large ? 'text-xl' : 'text-sm'} font-extrabold text-navy dark:text-white`}>{inr(option.basePrice)} <span className="text-xs font-semibold text-muted dark:text-slate-400">/ {option.unit || 'unit'}</span></div>
+        <div className="text-[10px] text-muted dark:text-slate-400">{option.pricingType === 'PER_PERSON' ? 'Add a guest count for a total' : 'No fixed total listed'}</div>
       </div>
     );
   }
-  return <div className="text-xs text-muted">No price listed yet</div>;
+  return <div className="text-xs text-muted dark:text-slate-400">No price listed yet</div>;
 }
 
 /** Art tile: the vendor's own image if any, else a category-icon gradient (no stock photos). */
 export function ArtTile({ option, className = 'h-28' }) {
   if (option.images?.[0]) return <img src={option.images[0]} alt="" className={`w-full object-cover rounded-xl ${className}`} />;
   return (
-    <div className={`w-full rounded-xl bg-gradient-to-br from-primary-soft to-[#e6dcff] grid place-items-center text-primary ${className}`}>
+    <div className={`w-full rounded-xl bg-gradient-to-br from-primary-soft to-[#e6dcff] dark:from-primary/30 dark:to-[#2d2557] grid place-items-center text-primary dark:text-[#a5b4fc] ${className}`}>
       <Icon name={categoryIcon(option.category)} size={28} />
     </div>
   );

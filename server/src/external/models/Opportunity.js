@@ -32,6 +32,14 @@ const opportunitySchema = new Schema(
       default: 'NEW',
       index: true,
     },
+    slaResponse: {
+      type: String,
+      enum: ['CAN_EXECUTE', 'NEED_CLARIFICATION', 'NOT_AVAILABLE', 'PENDING'],
+      default: 'PENDING',
+      index: true,
+    },
+    slaResponseTimeMs: { type: Number, default: null },
+    slaExpiresAt: { type: Date, default: null },
     action: { type: String, default: 'Respond / Quote' },
   },
   { timestamps: true }

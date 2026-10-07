@@ -25,47 +25,41 @@ const START_SETUP = 'Help me complete my profile setup';
 function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
   const steps = SETUP_STEPS.map((s) => ({ ...s, isDone: Boolean(s.done(setup.checklist)) }));
   const next = steps.find((s) => !s.isDone);
+  const doneCount = steps.filter((s) => s.isDone).length;
+  const nextLabel = next ? next.title.replace('Brand name, category & city', 'Profile').replace('Add a service with a price', 'Service') : 'Ready';
   return (
-    <div className="mx-4 mt-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-soft/60 to-white shrink-0">
-      <button onClick={onToggle} className="w-full flex items-center gap-2 px-3 pt-2.5 pb-2 text-left" aria-expanded={expanded}>
-        <span className="text-[12px] font-extrabold text-navy flex-1">Complete your profile</span>
-        <span className="text-[11px] font-bold text-primary">{setup.percent}%</span>
-        <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} className="text-muted" />
-      </button>
-      <div className="mx-3 mb-2.5 h-1.5 rounded-full bg-white overflow-hidden">
-        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.max(4, setup.percent)}%` }} />
+    <div className="mx-3 mt-2 rounded-xl border border-primary/15 bg-white/95 px-2.5 py-2 shadow-xs shrink-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="h-1.5 w-14 rounded-full bg-lavender overflow-hidden shrink-0">
+          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.max(4, setup.percent)}%` }} />
+        </div>
+        <div className="min-w-0 flex-1 text-[11px] text-muted">
+          <span className="font-extrabold text-navy">Profile {setup.percent}%</span>
+          <span> · {doneCount}/{steps.length} done</span>
+          {!next ? <span> · active</span> : <span> · next: {nextLabel}</span>}
+        </div>
+        {next ? (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => onAura(next.prompt)}
+              disabled={busy}
+              className="rounded-lg bg-primary text-white text-[10px] font-bold px-2 py-1 disabled:opacity-50"
+              title="Let Aura+ guide you"
+            >
+              Aura
+            </button>
+            <button
+              onClick={() => onManual(next.to)}
+              className="rounded-lg border border-gray-200 bg-white text-navy text-[10px] font-bold px-2 py-1 hover:bg-lavender"
+              title="Open manually"
+            >
+              Open
+            </button>
+          </div>
+        ) : (
+          <Icon name="check" size={14} className="text-emerald-600 shrink-0" />
+        )}
       </div>
-      {expanded && (
-        <ul className="px-3 pb-3 space-y-1.5">
-          {steps.map((s, i) => (
-            <li key={s.key} className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${s === next ? 'bg-white shadow-sm' : ''}`}>
-              <span
-                className={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold shrink-0 ${
-                  s.isDone ? 'bg-emerald-500 text-white' : 'bg-white border border-gray-200 text-muted'
-                }`}
-              >
-                {s.isDone ? '✓' : i + 1}
-              </span>
-              <span className={`flex-1 min-w-0 text-[12px] truncate ${s.isDone ? 'text-muted line-through' : 'font-semibold text-navy'}`}>{s.title}</span>
-              {!s.isDone && (
-                <span className="flex gap-1 shrink-0">
-                  <button
-                    onClick={() => onAura(s.prompt)}
-                    disabled={busy}
-                    className="rounded-lg bg-primary text-white text-[10px] font-bold px-2 py-1 disabled:opacity-50"
-                    title="Let Aura+ guide you"
-                  >
-                    With Aura
-                  </button>
-                  <button onClick={() => onManual(s.to)} className="rounded-lg border border-gray-200 bg-white text-navy text-[10px] font-bold px-2 py-1 hover:bg-lavender" title="Open the page and do it yourself">
-                    Manually
-                  </button>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
@@ -446,7 +440,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               cleanupTimers();
               setShowThinkingStatus(false);
             }
-            accumulatedText += event.text || '';
+            accumulatedText += event.content || event.text || '';
             setMessages((m) => {
               const next = [...m];
               const last = next[next.length - 1];

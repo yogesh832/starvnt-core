@@ -44,6 +44,9 @@ export const getQuote = async (req, res) => res.json({ quote: await decision.get
 export const createEvent = async (req, res) => res.status(201).json(await events.createManualEvent(me(req), req.body));
 export const acceptQuote = async (req, res) => res.json(await commerce.acceptQuote(me(req), req.params.quoteId));
 export const bookings = async (req, res) => res.json(await commerce.bookingsView(me(req), req.params.id));
+export const cancelBooking = async (req, res) => res.json(await commerce.cancelBooking(me(req), req.params.id));
+export const verifyBookingCompletion = async (req, res) =>
+  res.json(await commerce.verifyBookingCompletion(me(req), req.params.id, req.body));
 export const previewCoupon = async (req, res) =>
   res.json(await commerce.previewReservationCoupon(me(req), req.params.id, req.params.rid, req.body?.couponCode));
 export const pay = async (req, res) => res.json(await commerce.payReservation(req.externalUser, req.params.id, req.params.rid, req.body));
@@ -55,6 +58,7 @@ export const eventDay = async (req, res) => res.json(await events.eventDay(me(re
 export const circle = async (req, res) => res.json(await circleSvc.circle(me(req), req.params.id));
 export const listMessages = async (req, res) =>
   res.json(await circleSvc.listMessages(me(req), req.params.id, {
+    threadId: req.query.threadId,
     bookingId: req.query.bookingId || req.query.booking,
     requirementId: req.query.requirementId || req.query.service,
   }));
@@ -65,6 +69,7 @@ export const notifications = async (req, res) => {
   res.json({ notifications: u.notifications, unread: u.unread });
 };
 export const readAll = async (req, res) => res.json(await circleSvc.readAll(me(req)));
+export const readOne = async (req, res) => res.json(await circleSvc.readOne(me(req), req.params.id));
 export const listRequirements = async (req, res) => res.json(await events.requirementsDetail(me(req), req.params.id));
 export const patchRequirement = async (req, res) => {
   const requirement = await events.setRequirement(me(req), req.params.id, req.params.category, req.body);

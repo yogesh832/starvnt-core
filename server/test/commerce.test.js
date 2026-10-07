@@ -187,7 +187,7 @@ test('ops verification needs the key and an operator', async () => {
 
   const hist = await request(app).get(`/api/customer/events/${ev._id}/history`).set(auth(token)).expect(200);
   assert.ok(!JSON.stringify(hist.body).includes('ravi'), 'operator names never reach customers');
-  assert.ok(hist.body.history.some((h) => h.text === 'Sound booked with Beat Box Audio'));
+  assert.ok(hist.body.history.some((h) => h.text === 'Sound booked with BassBox Birthday Audio'));
 });
 
 test('double booking: the second payment waits under review', async () => {
@@ -277,7 +277,7 @@ test('Event Circle contexts, messages and updates', async () => {
 
   const circle = await request(app).get(`/api/customer/events/${ev._id}/circle`).set(auth(token)).expect(200);
   const ctx = circle.body.contexts.find((c) => c.bookingId === booking.id);
-  assert.deepEqual(ctx.path.slice(0, 3), ['My wedding', 'Decoration', 'Royal Decor Co.']);
+  assert.deepEqual(ctx.path.slice(0, 3), ['My wedding', 'Decoration', 'Party Pop Decor']);
   assert.match(ctx.path[3], /^Booking #/);
 
   await request(app).post(`/api/customer/events/${ev._id}/messages`).set(auth(token)).send({ body: 'Can we add marigolds?', bookingId: booking.id }).expect(201);
@@ -293,7 +293,7 @@ test('Event Circle contexts, messages and updates', async () => {
   await internal(`/ops/events/${ev._id}/messages`).send({ operator: 'ops', senderType: 'vendor', body: 'No booking' }).expect(400);
 
   const thread = await request(app).get(`/api/customer/events/${ev._id}/messages?bookingId=${booking.id}`).set(auth(token)).expect(200);
-  assert.deepEqual(thread.body.messages.map((m) => m.senderName), ['You', 'Royal Decor Co.']);
+  assert.deepEqual(thread.body.messages.map((m) => m.senderName), ['You', 'Party Pop Decor']);
   const bookingAliasThread = await request(app).get(`/api/customer/events/${ev._id}/messages?booking=${booking.id}`).set(auth(token)).expect(200);
   assert.deepEqual(bookingAliasThread.body.messages.map((m) => m.body), ['Can we add marigolds?', 'Yes, marigolds added.']);
   const whole = await request(app).get(`/api/customer/events/${ev._id}/messages`).set(auth(token)).expect(200);

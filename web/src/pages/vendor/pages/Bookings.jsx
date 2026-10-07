@@ -66,24 +66,24 @@ export default function Bookings() {
       try {
         const res = await externalApi.call('/vendor/bookings');
         const rows = Array.isArray(res) ? res : Array.isArray(res?.bookings) ? res.bookings : [];
-        if (rows.length > 0) {
-          const mapped = rows.map((b) => ({
-            id: b.bookingReference || `BK-${b._id?.slice(-4)}`,
-            dbId: b._id,
-            title: `${b.serviceName || 'Wedding Service'} (${b.customerName || 'Direct Booking'})`,
-            date: b.eventDate ? new Date(b.eventDate).toLocaleDateString() : 'Scheduled',
-            location: b.serviceLocation?.address || b.serviceLocation?.locality || b.serviceLocation?.city || 'Selected Venue',
-            amount: `₹${(b.totalAmount || 0).toLocaleString()}`,
-            advancePaid: b.paymentSummary?.paidAmount || 0,
-            balanceAmount: b.paymentSummary?.balanceAmount ?? Math.max(0, (b.totalAmount || 0) - (b.paymentSummary?.paidAmount || 0)),
-            status: bookingStatusLabel(b.executionStatus, b.status || 'Confirmed'),
-            executionStatus: b.executionStatus || 'SCHEDULED',
-            settlementStatus: b.settlementStatus || 'NOT_ELIGIBLE',
-            payment: b.paymentStatus || 'PAYMENT_VERIFIED',
-            team: b.assignedTeam || 'Lead Team Scheduled',
-            checklist: executionChecklistFor(b.executionStatus, b.checklist),
-          }));
-          setBookings(mapped);
+        const mapped = rows.map((b) => ({
+          id: b.bookingReference || `BK-${b._id?.slice(-4)}`,
+          dbId: b._id,
+          title: `${b.serviceName || 'Wedding Service'} (${b.customerName || 'Direct Booking'})`,
+          date: b.eventDate ? new Date(b.eventDate).toLocaleDateString() : 'Scheduled',
+          location: b.serviceLocation?.address || b.serviceLocation?.locality || b.serviceLocation?.city || 'Selected Venue',
+          amount: `₹${(b.totalAmount || 0).toLocaleString()}`,
+          advancePaid: b.paymentSummary?.paidAmount || 0,
+          balanceAmount: b.paymentSummary?.balanceAmount ?? Math.max(0, (b.totalAmount || 0) - (b.paymentSummary?.paidAmount || 0)),
+          status: bookingStatusLabel(b.executionStatus, b.status || 'Confirmed'),
+          executionStatus: b.executionStatus || 'SCHEDULED',
+          settlementStatus: b.settlementStatus || 'NOT_ELIGIBLE',
+          payment: b.paymentStatus || 'PAYMENT_VERIFIED',
+          team: b.assignedTeam || 'Lead Team Scheduled',
+          checklist: executionChecklistFor(b.executionStatus, b.checklist),
+        }));
+        setBookings(mapped);
+        if (mapped.length > 0) {
           const nextActionable = mapped.find((b) => !isExecutionDone(b.executionStatus)) || mapped[0];
           if (nextActionable) setOpen(nextActionable.id);
         }
@@ -102,7 +102,16 @@ export default function Bookings() {
         await externalApi.call(`/vendor/bookings/${booking.dbId}/start`, { method: 'POST' });
       }
       setBookings((prev) =>
-        prev.map((b) => (b.id === booking.id ? { ...b, status: 'In Progress', executionStatus: 'SERVICE_STARTED' } : b))
+        prev.map((b) =>
+          b.id === booking.id
+            ? {
+                ...b,
+                status: 'In Progress',
+                executionStatus: 'SERVICE_STARTED',
+                checklist: executionChecklistFor('SERVICE_STARTED', b.checklist),
+              }
+            : b
+        )
       );
       setFeedback(`Service started for ${booking.title}. Status updated to In Progress.`);
     } catch (err) {
@@ -126,6 +135,9 @@ export default function Bookings() {
       try {
         const base64Data = await readFileAsDataURL(file);
         const isVideo = file.type.startsWith('video') || /\.(mp4|mov|webm|mkv|avi)$/i.test(file.name);
+        const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+        const isDoc = /\.(doc|docx|xls|xlsx|ppt|pptx|zip|rar|txt)$/i.test(file.name);
+        const mediaType = isVideo ? 'VIDEO' : isPdf ? 'PDF' : isDoc ? 'DOCUMENT' : 'IMAGE';
 
         let uploadRes;
         try {
@@ -134,16 +146,16 @@ export default function Bookings() {
             body: {
               file: base64Data,
               filename: file.name,
-              mediaType: isVideo ? 'VIDEO' : 'IMAGE',
+              mediaType: mediaType === 'DOCUMENT' || mediaType === 'PDF' ? 'IMAGE' : mediaType,
             },
           });
         } catch (uploadErr) {
           console.warn('[Cloudinary Upload fallback]:', uploadErr.message);
-          uploadRes = { ok: true, url: base64Data, resourceType: isVideo ? 'VIDEO' : 'IMAGE', provider: 'local' };
+          uploadRes = { ok: true, url: base64Data, resourceType: mediaType, provider: 'local' };
         }
 
         const url = uploadRes.ok && uploadRes.url ? uploadRes.url : base64Data;
-        const resType = uploadRes.resourceType || (isVideo ? 'VIDEO' : 'IMAGE');
+        const resType = mediaType;
         const thumb = uploadRes.thumbnailUrl || (resType === 'VIDEO' ? `${url}-poster.jpg` : url);
 
         newUploaded.push({
@@ -296,28 +308,34 @@ export default function Bookings() {
                     ))}
                   </ul>
                   <div className="flex flex-wrap gap-2 mt-4">
-                    {!isExecutionDone(b.executionStatus) && (
+                    {b.executionStatus === 'SERVICE_STARTED' ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-2 flex items-center gap-1.5">
+                        <Icon name="check" size={14} />
+                        <span>Service Commenced (Check-in Done)</span>
+                      </div>
+                    ) : !isExecutionDone(b.executionStatus) ? (
                       <button
                         onClick={() => handleStartService(b)}
                         className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-4 py-2.5 transition shadow-sm cursor-pointer"
                       >
-                        Start Service
+                        Start Service (Check-in)
                       </button>
-                    )}
+                    ) : null}
+
                     {isExecutionDone(b.executionStatus) ? (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold px-4 py-2.5 flex items-center gap-1.5">
                         <Icon name="check" size={14} />
-                        <span>Evidence submitted</span>
+                        <span>Evidence Submitted — Under Core Review</span>
                       </div>
-                    ) : (
+                    ) : b.executionStatus === 'SERVICE_STARTED' ? (
                       <button
                         onClick={() => openEvidenceModal(b)}
-                        className="rounded-xl border border-primary/30 bg-primary-soft text-primary text-xs font-bold px-4 py-2.5 hover:bg-primary hover:text-white transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                        className="rounded-xl text-xs font-bold px-4 py-2.5 transition shadow-sm cursor-pointer flex items-center gap-1.5 bg-primary hover:bg-primary-dark text-white"
                       >
                         <Icon name="upload" size={14} />
-                        <span>Upload Completion Evidence</span>
+                        <span>Upload Completion Evidence (Next Step)</span>
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 <div className="space-y-2.5 text-xs">
@@ -382,21 +400,21 @@ export default function Bookings() {
       {/* Cloudinary Multi-Image & Video Completion Evidence Submission Modal */}
       {evidenceModalBooking && (
         <div className="vendor-modal-backdrop animate-fade">
-          <div className="vendor-modal-panel vendor-modal-panel-flex max-w-xl p-4 sm:p-6 space-y-4">
+          <div className="vendor-modal-panel vendor-modal-panel-flex max-w-xl p-4 sm:p-6 space-y-4 bg-white dark:bg-[#161926] border border-gray-100 dark:border-white/10 text-navy dark:text-white">
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 shrink-0">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-white/10 shrink-0">
               <div>
-                <h2 className="text-base font-extrabold text-navy flex items-center gap-2">
-                  <Icon name="upload" size={17} className="text-primary" />
+                <h2 className="text-base font-extrabold text-navy dark:text-white flex items-center gap-2">
+                  <Icon name="upload" size={17} className="text-primary dark:text-[#a5b4fc]" />
                   <span>Submit Completion Evidence</span>
                 </h2>
-                <p className="text-xs text-muted mt-0.5">
-                  {evidenceModalBooking.title} · <span className="font-mono font-semibold text-primary">{evidenceModalBooking.id}</span>
+                <p className="text-xs text-muted dark:text-slate-400 mt-0.5">
+                  {evidenceModalBooking.title} · <span className="font-mono font-semibold text-primary dark:text-[#a5b4fc]">{evidenceModalBooking.id}</span>
                 </p>
               </div>
               <button
                 onClick={() => setEvidenceModalBooking(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 text-ink/70 hover:text-ink grid place-items-center transition cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 text-ink/70 dark:text-slate-300 hover:text-ink dark:hover:text-white grid place-items-center transition cursor-pointer"
                 aria-label="Close"
               >
                 <Icon name="close" size={14} />
@@ -406,9 +424,9 @@ export default function Bookings() {
             <div className="vendor-modal-scroll space-y-4 text-xs pr-1">
               {/* Cloudinary Drag & Drop Multi-Upload Box */}
               <div>
-                <label className="block text-navy font-bold mb-1.5 flex items-center justify-between">
+                <label className="block text-navy dark:text-white font-bold mb-1.5 flex items-center justify-between">
                   <span>Upload Photos & Videos (Cloudinary CDN)</span>
-                  <span className="text-[11px] font-normal text-muted">
+                  <span className="text-[11px] font-normal text-muted dark:text-slate-400">
                     {uploadedMedia.length} file(s) attached
                   </span>
                 </label>
@@ -429,15 +447,15 @@ export default function Bookings() {
                   onClick={() => fileInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 ${
                     isDragOver
-                      ? 'border-primary bg-primary-soft/60 scale-[0.99]'
-                      : 'border-primary/30 hover:border-primary bg-slate-50/60 hover:bg-slate-50'
+                      ? 'border-primary bg-primary-soft/60 dark:bg-primary/20 scale-[0.99]'
+                      : 'border-primary/30 hover:border-primary dark:border-primary/40 dark:hover:border-primary bg-slate-50/60 dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10'
                   }`}
                 >
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="image/*,video/*"
+                    accept="image/*,video/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar"
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files) {
@@ -445,32 +463,32 @@ export default function Bookings() {
                       }
                     }}
                   />
-                  <div className="w-12 h-12 rounded-2xl bg-primary-soft text-primary grid place-items-center shadow-xs">
-                    <Icon name="image" size={22} />
+                  <div className="w-12 h-12 rounded-2xl bg-primary-soft dark:bg-primary/20 text-primary dark:text-[#a5b4fc] grid place-items-center shadow-xs">
+                    <Icon name="upload" size={22} />
                   </div>
                   <div>
-                    <span className="font-bold text-navy text-xs block">
-                      Click to browse or drag & drop deliverables
+                    <span className="font-bold text-navy dark:text-white text-xs block">
+                      Click to browse or drag & drop deliverables / files
                     </span>
-                    <span className="text-[11px] text-muted block mt-0.5">
-                      Supports multiple JPG, PNG, WEBP, and MP4/MOV videos up to 100MB
+                    <span className="text-[11px] text-muted dark:text-slate-400 block mt-0.5">
+                      Supports Photos, Videos, PDFs, Word/Excel Docs, Zip Archives, and Google Drive links
                     </span>
                   </div>
-                  <span className="px-3 py-1 bg-white border border-gray-200 text-primary font-bold text-[11px] rounded-lg shadow-xs mt-1">
-                    Select Photos & Videos
+                  <span className="px-3 py-1 bg-white dark:bg-[#101321] border border-gray-200 dark:border-white/15 text-primary dark:text-[#a5b4fc] font-bold text-[11px] rounded-lg shadow-xs mt-1">
+                    Select Deliverables & Files
                   </span>
                 </div>
               </div>
 
               {/* Upload Progress Indicator */}
               {uploadingToCloudinary && uploadProgress && (
-                <div className="bg-primary-soft border border-primary/20 rounded-xl p-3 flex items-center gap-3">
+                <div className="bg-primary-soft dark:bg-primary/10 border border-primary/20 dark:border-primary/30 rounded-xl p-3 flex items-center gap-3">
                   <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-navy">
+                    <div className="text-xs font-bold text-navy dark:text-white">
                       Uploading to Cloudinary CDN ({uploadProgress.current} / {uploadProgress.total})...
                     </div>
-                    <div className="w-full bg-white h-1.5 rounded-full mt-1.5 overflow-hidden">
+                    <div className="w-full bg-white dark:bg-slate-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
                       <div
                         className="bg-primary h-full transition-all duration-200"
                         style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
@@ -480,25 +498,25 @@ export default function Bookings() {
                 </div>
               )}
 
-              {/* Uploaded Media Thumbnails Grid */}
+              {/* Uploaded Media & File Thumbnails Grid */}
               {uploadedMedia.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-navy text-xs">Attached Media Files:</span>
+                    <span className="font-bold text-navy dark:text-white text-xs">Attached Deliverables & Files ({uploadedMedia.length}):</span>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="text-primary hover:underline font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                      className="text-primary dark:text-[#a5b4fc] hover:underline font-bold text-[11px] flex items-center gap-1 cursor-pointer"
                     >
                       <Icon name="plus" size={12} />
                       <span>Add More</span>
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-52 overflow-y-auto p-1 bg-slate-50/70 border border-gray-100 rounded-2xl">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-52 overflow-y-auto p-1.5 bg-slate-50/70 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl">
                     {uploadedMedia.map((m) => (
                       <div
                         key={m.id}
-                        className="relative group rounded-xl overflow-hidden border border-gray-200 bg-black aspect-video flex items-center justify-center shadow-xs"
+                        className="relative group rounded-xl overflow-hidden border border-gray-200 dark:border-white/15 bg-slate-900 aspect-video flex items-center justify-center shadow-xs"
                       >
                         {m.resourceType === 'VIDEO' ? (
                           <div className="w-full h-full relative flex items-center justify-center bg-navy/90">
@@ -508,6 +526,11 @@ export default function Bookings() {
                                 <Icon name="video" size={13} />
                               </span>
                             </div>
+                          </div>
+                        ) : m.resourceType === 'PDF' || m.resourceType === 'DOCUMENT' ? (
+                          <div className="w-full h-full relative flex flex-col items-center justify-center bg-slate-800 dark:bg-slate-900 text-white p-2 text-center">
+                            <span className="text-xl mb-0.5">📄</span>
+                            <span className="text-[9px] font-extrabold truncate max-w-full px-1">{m.name}</span>
                           </div>
                         ) : (
                           <img src={m.url} alt={m.name} className="w-full h-full object-cover" />
@@ -545,8 +568,8 @@ export default function Bookings() {
 
               {/* Execution Checklist */}
               <div>
-                <label className="block text-navy font-bold mb-1.5">Sign-off Checklist</label>
-                <div className="bg-slate-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                <label className="block text-navy dark:text-white font-bold mb-1.5">Sign-off Checklist</label>
+                <div className="bg-slate-50 dark:bg-[#101321] border border-gray-200 dark:border-white/10 rounded-xl p-3 space-y-2">
                   {checklistState.map((chk, idx) => (
                     <label key={idx} className="flex items-center gap-2 cursor-pointer select-none">
                       <input
@@ -557,9 +580,9 @@ export default function Bookings() {
                           updated[idx].checked = e.target.checked;
                           setChecklistState(updated);
                         }}
-                        className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                        className="rounded border-gray-300 dark:border-gray-600 dark:bg-slate-800 text-primary focus:ring-primary h-4 w-4"
                       />
-                      <span className="text-navy font-medium text-[11px]">{chk.item}</span>
+                      <span className="text-navy dark:text-slate-200 font-medium text-[11px]">{chk.item}</span>
                     </label>
                   ))}
                 </div>
@@ -567,19 +590,19 @@ export default function Bookings() {
 
               {/* Notes & Summary */}
               <div>
-                <label className="block text-navy font-bold mb-1">Completion Notes & Deliverable Summary</label>
+                <label className="block text-navy dark:text-white font-bold mb-1">Completion Notes & Deliverable Summary</label>
                 <textarea
                   rows={2}
                   placeholder="e.g. All 8 hours completed. Client signed off on ceremony coverage. High-res files and teaser uploaded to CDN."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-slate-50 border border-gray-200 rounded-xl p-3 text-navy outline-none focus:border-primary resize-none font-medium"
+                  className="w-full bg-slate-50 dark:bg-[#101321] border border-gray-200 dark:border-white/10 rounded-xl p-3 text-navy dark:text-white dark:placeholder-slate-500 outline-none focus:border-primary resize-none font-medium"
                 />
               </div>
 
               {/* Optional External Archive Link */}
               <div>
-                <label className="block text-muted font-semibold mb-1">
+                <label className="block text-muted dark:text-slate-400 font-semibold mb-1">
                   Additional Archive Link <span className="font-normal">(Optional Google Drive / Dropbox)</span>
                 </label>
                 <input
@@ -587,21 +610,21 @@ export default function Bookings() {
                   placeholder="https://drive.google.com/drive/folders/..."
                   value={deliverablesUrl}
                   onChange={(e) => setDeliverablesUrl(e.target.value)}
-                  className="w-full bg-slate-50 border border-gray-200 rounded-xl px-3 py-2 text-navy outline-none focus:border-primary font-medium"
+                  className="w-full bg-slate-50 dark:bg-[#101321] border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-navy dark:text-white dark:placeholder-slate-500 outline-none focus:border-primary font-medium"
                 />
               </div>
 
-              <div className="bg-primary-soft/50 border border-primary/20 rounded-xl p-3 text-[11px] text-navy">
-                <b>Core Platform Guarantee:</b> Once submitted, Core Operations verifies your deliverables against customer requirements. Upon validation, settlement unlocks automatically.
+              <div className="bg-primary-soft/50 dark:bg-primary/10 border border-primary/20 dark:border-primary/30 rounded-xl p-3 text-[11px] text-navy dark:text-slate-200">
+                <b className="text-navy dark:text-white">Core Platform Guarantee:</b> Once submitted, Core Operations verifies your deliverables against customer requirements. Upon validation, settlement unlocks automatically.
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="vendor-modal-actions pt-2 flex gap-3 border-t border-gray-100">
+            <div className="vendor-modal-actions pt-2 flex gap-3 border-t border-gray-100 dark:border-white/10">
               <button
                 type="button"
                 onClick={() => setEvidenceModalBooking(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:bg-gray-50 transition cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-muted dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-white/10 transition cursor-pointer"
               >
                 Cancel
               </button>

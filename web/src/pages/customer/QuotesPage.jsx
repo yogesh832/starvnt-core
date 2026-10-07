@@ -1,75 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import { BackLink, CardSkeleton, DemoBadge, Empty, PageSkeleton, useLoad } from './customerUi.jsx';
+import { BackLink, CardSkeleton, PageSkeleton, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
-
-
-const QUOTE_STATUS = {
-  draft: ['Awaiting your decision', 'bg-amber-50 text-amber-600'],
-  accepted: ['Accepted', 'bg-emerald-50 text-emerald-600'],
-  cancelled: ['Replaced by a newer quote', 'bg-gray-100 text-muted'],
-  expired: ['Expired', 'bg-gray-100 text-muted'],
-};
-
-function QuoteCard({ quote, eventId }) {
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  async function accept() {
-    setBusy(true);
-    setError('');
-    try {
-      await customerApi.acceptQuote(quote.id);
-      navigate(`/customer/events/${eventId}/bookings`);
-    } catch (err) {
-      setError(errorText(err));
-      setBusy(false);
-    }
-  }
-  const [label, cls] = QUOTE_STATUS[quote.status] || QUOTE_STATUS.draft;
-  const faded = quote.status === 'cancelled' || quote.status === 'expired';
-  return (
-    <div className={`bg-white rounded-2xl shadow-sm p-4 ${faded ? 'opacity-60' : ''}`}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-extrabold text-navy">Quote estimate · {new Date(quote.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
-        <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 ${cls}`}>{label}</span>
-      </div>
-      <ul className="mt-3 divide-y divide-gray-50">
-        {quote.items.map((i) => (
-          <li key={i.id} className="py-2 flex items-center justify-between gap-3 text-xs">
-            <div className="min-w-0">
-              <div className="font-bold text-navy truncate">{i.label}: {i.vendorName} {i.isDemo && <DemoBadge />}</div>
-              <div className="text-[11px] text-muted truncate">{i.packageName}</div>
-            </div>
-            <div className="font-bold text-navy shrink-0">{formatINR(i.price)}</div>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
-        <span className="text-xs text-muted">Quote total</span>
-        <span className="text-base font-extrabold text-navy">{formatINR(quote.total)}</span>
-      </div>
-      {quote.status === 'draft' && (
-        <p className="text-[11px] text-muted mt-2">
-          Valid until {new Date(quote.validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. Demo-marked listings are catalog estimates; vendor offers appear separately above.
-        </p>
-      )}
-      {quote.status === 'draft' && (
-        <div className="mt-3">
-          {error && <div className="text-xs text-red-500 mb-2">{error}</div>}
-          <button onClick={accept} disabled={busy} className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 disabled:opacity-60">
-            {busy ? 'Reserving…' : 'Reserve from quote'}
-          </button>
-          <span className="text-[10px] text-muted ml-2">Creates a hold so you can continue to payment and booking.</span>
-        </div>
-      )}
-      {quote.status === 'accepted' && (
-        <Link to={`/customer/events/${eventId}/bookings`} className="inline-flex mt-3 text-xs font-bold text-primary">Go to bookings & payments →</Link>
-      )}
-    </div>
-  );
-}
 
 function VendorOfferCard({ quote, eventId, onChanged }) {
   const navigate = useNavigate();
@@ -213,23 +146,8 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
 
 export default function QuotesPage() {
   const { id } = useParams();
-  const { data, error, loading, reload } = useLoad(() => customerApi.quotes(id), [id]);
+  const { data, error, loading } = useLoad(() => customerApi.quotes(id), [id]);
   const vendorOffers = useLoad(() => customerApi.vendorQuotes(), [id]);
-  const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState('');
-
-  async function getQuote() {
-    setBusy(true);
-    setActionError('');
-    try {
-      await customerApi.createQuote(id);
-      reload();
-    } catch (err) {
-      setActionError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (loading && !data) return <PageSkeleton title="Quotes & Offers" count={3} type="cards" />;
   if (error) {
@@ -240,8 +158,7 @@ export default function QuotesPage() {
       </div>
     );
   }
-  const { event, selections, quotes } = data;
-  const selectionTotal = selections.reduce((s, r) => s + (r.selectedOption?.price || 0), 0);
+  const { event } = data;
   const commercialQuotes = Array.isArray(vendorOffers.data?.quotes)
     ? vendorOffers.data.quotes.filter((q) => !event.eventDate || q.eventDate === event.eventDate)
     : [];
@@ -295,52 +212,6 @@ export default function QuotesPage() {
           </div>
         )}
       </div>
-
-      <div className="bg-white rounded-2xl shadow-sm p-4 border border-dashed border-amber-200 bg-amber-50/20">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-bold text-navy">Selected catalog quote</div>
-            <p className="text-[11px] text-muted mt-0.5">
-              Use this to create a quote from the options you selected. Direct vendor-entered offers still appear above.
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full bg-amber-100 text-amber-700 text-[10px] font-extrabold px-2 py-0.5">CATALOG</span>
-        </div>
-        {selections.length === 0 ? (
-          <p className="text-xs text-muted mt-2">
-            You haven't selected any options yet. <Link to={`/customer/events/${id}/services`} className="font-bold text-primary">Find options →</Link>
-          </p>
-        ) : (
-          <>
-            <ul className="mt-2 divide-y divide-gray-50">
-              {selections.map((r) => (
-                <li key={r.id} className="py-2 flex items-center justify-between gap-3 text-xs">
-                  <div className="min-w-0">
-                    <div className="font-bold text-navy truncate">{r.label}: {r.selectedOption.vendorName} {r.selectedOption.isDemo && <DemoBadge />}</div>
-                    <div className="text-[11px] text-muted truncate">{r.selectedOption.packageName}</div>
-                  </div>
-                  <div className="font-semibold text-navy shrink-0">{formatINR(r.selectedOption.price)}</div>
-                </li>
-              ))}
-            </ul>
-            <div className="text-[11px] text-muted mt-1">These prices come from selected catalog options. Vendor-entered negotiation offers appear above.</div>
-            {actionError && <div className="text-xs text-red-500 mt-2">{actionError}</div>}
-            <button
-              onClick={getQuote}
-              disabled={busy || event.status === 'draft'}
-              className="mt-3 rounded-xl bg-amber-600 text-white text-xs font-bold px-4 py-2.5 disabled:opacity-50"
-            >
-              {busy ? 'Preparing…' : `Create quote (${formatINR(selectionTotal)})`}
-            </button>
-          </>
-        )}
-      </div>
-
-      {quotes.length === 0 ? (
-        <Empty title="No catalog quotes yet">Select an option and create a quote to continue toward reservation and payment.</Empty>
-      ) : (
-        quotes.map((q) => <QuoteCard key={q.id} quote={q} eventId={id} />)
-      )}
     </div>
   );
 }

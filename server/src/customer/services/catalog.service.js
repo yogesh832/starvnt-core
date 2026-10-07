@@ -127,7 +127,7 @@ export function listedTotal(pricing, guestCount) {
   return null;
 }
 
-function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { guestCount } = {}) {
+function fromVendor({ service, vendor, matchedLocation, matchedCoverage, portfolio, isRegionalMatch }, { guestCount } = {}) {
   const reviewCount = vendor?.rating?.count || 0;
   const price = listedTotal(service.pricing, guestCount);
   const resolvedLocation = matchedLocation || null;
@@ -137,6 +137,8 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { gue
     resolvedLocation?.state,
   ].filter(Boolean).join(', ');
   const vendorLocation = locationLabel || vendor.location || '';
+  const portfolioImages = (portfolio || []).map((p) => p.thumbnailUrl || p.url).filter(Boolean);
+  const images = [...(vendor.profilePicUrl ? [vendor.profilePicUrl] : []), ...portfolioImages];
   return {
     id: vsId(service._id),
     source: 'vendor',
@@ -154,7 +156,8 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { gue
     unit: service.pricing?.unit || null,
     mayApply: (service.pricing?.conditionalCharges || []).map((c) => ({ name: c.name, amount: c.amount, condition: c.condition || '' })),
     includes: service.deliverables || [],
-    images: vendor.profilePicUrl ? [vendor.profilePicUrl] : [],
+    images,
+    portfolioImages: portfolioImages.slice(0, 5),
     rating: reviewCount > 0 ? vendor.rating.average : null,
     reviewCount,
     cancellationPolicy: service.cancellationPolicy || null,
@@ -165,6 +168,7 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { gue
       coordinates: resolvedLocation?.coordinates || null,
     },
     serviceRadiusKm: matchedCoverage?.radiusKm || null,
+    isRegionalMatch: Boolean(isRegionalMatch),
     strengths: [],
     limitations: [],
     negotiable: [],
@@ -340,7 +344,7 @@ export async function compactOptionsFor(event, categories) {
   for (const c of categories) {
     options
       .filter((o) => o.category === c)
-      .sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity))
+      .sort((a, b) => Number(a.isDemo) - Number(b.isDemo) || (a.price ?? Infinity) - (b.price ?? Infinity))
       .slice(0, 3)
       .forEach((o) =>
         out.push({
@@ -352,6 +356,7 @@ export async function compactOptionsFor(event, categories) {
           availability: o.availability,
           isDemo: o.isDemo,
           rating: o.rating,
+          portfolioImages: o.portfolioImages || o.images || [],
         })
       );
   }

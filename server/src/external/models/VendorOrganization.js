@@ -12,6 +12,7 @@ const { Schema } = mongoose;
 const vendorOrganizationSchema = new Schema(
   {
     businessName: { type: String, required: true, trim: true, maxlength: 160 },
+    brandName: { type: String, trim: true, default: '', maxlength: 160 },
     category: { type: String, trim: true, default: '' }, // Photography, Catering, Venue, Decoration…
     owner: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
     status: {
@@ -53,6 +54,20 @@ const vendorOrganizationSchema = new Schema(
     },
     isCommerciallyActive: { type: Boolean, default: false, index: true },
     isProfileCompleted: { type: Boolean, default: false, index: true },
+    verificationLadderLevel: {
+      type: String,
+      enum: [
+        'SELF_DECLARED',
+        'PHONE_VERIFIED',
+        'KYC_VERIFIED',
+        'DOCUMENT_VERIFIED',
+        'PORTFOLIO_VERIFIED',
+        'BOOKING_VERIFIED',
+        'STARVNT_VERIFIED',
+      ],
+      default: 'SELF_DECLARED',
+      index: true,
+    },
     location: { type: String, trim: true, default: '' },
     phone: { type: String, trim: true, default: '' },
     website: { type: String, trim: true, default: '' },

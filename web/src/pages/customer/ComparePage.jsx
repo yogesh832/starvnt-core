@@ -29,22 +29,22 @@ export default function ComparePage() {
     ['Travel', travel],
     ['Includes', (o) => (o.includes.length ? o.includes.join(', ') : 'Not specified')],
     ['Rating', (o) => <RatingText rating={o.rating} reviewCount={o.reviewCount} />],
-    ['Summary', (o) => <b className={o.summary === 'Best value' ? 'text-primary' : o.summary === 'Not available' ? 'text-red-500' : 'text-navy'}>{o.summary}</b>],
+    ['Summary', (o) => <b className={o.summary === 'Best value' ? 'text-primary dark:text-[#a5b4fc]' : o.summary === 'Not available' ? 'text-red-500 dark:text-red-400' : 'text-navy dark:text-white'}>{o.summary}</b>],
   ];
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <BackLink to={`/customer/events/${id}/services?category=${category}`}>{label} options</BackLink>
-      <h1 className="text-xl font-extrabold text-navy">Compare {label.toLowerCase()} options</h1>
+      <h1 className="text-xl font-extrabold text-navy dark:text-white">Compare {label.toLowerCase()} options</h1>
 
-      <div className="bg-white rounded-2xl shadow-sm overflow-x-auto">
+      <div className="bg-white dark:bg-[#161926] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-xs min-w-[520px]">
           <thead>
-            <tr className="border-b border-gray-100">
+            <tr className="border-b border-gray-100 dark:border-gray-800">
               <th className="text-left p-3 w-28" />
               {options.map((o) => (
                 <th key={o.id} className="text-left p-3 align-top">
-                  <div className="font-extrabold text-navy text-sm">{o.vendorName}</div>
+                  <div className="font-extrabold text-navy dark:text-white text-sm">{o.vendorName}</div>
                   {o.isDemo && <div className="mt-1"><DemoBadge /></div>}
                 </th>
               ))}
@@ -52,9 +52,9 @@ export default function ComparePage() {
           </thead>
           <tbody>
             {rows.map(([name, render]) => (
-              <tr key={name} className="border-b border-gray-50 last:border-0">
-                <td className="p-3 text-muted font-semibold align-top">{name}</td>
-                {options.map((o) => <td key={o.id} className="p-3 align-top text-ink/80">{render(o)}</td>)}
+              <tr key={name} className="border-b border-gray-50 dark:border-gray-800/60 last:border-0">
+                <td className="p-3 text-muted dark:text-slate-400 font-semibold align-top">{name}</td>
+                {options.map((o) => <td key={o.id} className="p-3 align-top text-ink/80 dark:text-slate-200">{render(o)}</td>)}
               </tr>
             ))}
             <tr>
@@ -69,7 +69,7 @@ export default function ComparePage() {
                     onChanged={(optionId) => setData({ ...data, selectedOptionId: optionId })}
                     compact
                   />
-                  <Link to={`/customer/events/${id}/services/${o.id}`} className="block text-xs font-bold text-primary">View details →</Link>
+                  <Link to={`/customer/events/${id}/services/${o.id}`} className="block text-xs font-bold text-primary dark:text-[#a5b4fc]">View details →</Link>
                 </td>
               ))}
             </tr>

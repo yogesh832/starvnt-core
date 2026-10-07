@@ -26,18 +26,32 @@ export async function evaluateVendorActivation(vendorId) {
 
   const missingRequirements = [];
 
-  // Check if financial profile or verified documents exist to auto-pass verification
+  // Check if financial profile or verified documents exist to auto-pass identity.
+  // Bank verification is mandatory for vendor verification/commercial matching.
   const finProfile = await VendorFinancialProfile.findOne({ vendor: vendorId });
   const hasVerifiedDoc = await VendorDocument.exists({ vendor: vendorId, status: 'VERIFIED' });
-  const isFinancialVerified =
-    finProfile?.pan?.verificationStatus === 'VERIFIED' || Boolean(hasVerifiedDoc);
+  const hasVerifiedIdentity =
+    finProfile?.pan?.verificationStatus === 'VERIFIED' ||
+    finProfile?.gst?.verificationStatus === 'VERIFIED' ||
+    finProfile?.gst?.isRegistered === false ||
+    Boolean(hasVerifiedDoc);
+  const hasVerifiedBank = finProfile?.bankAccount?.verificationStatus === 'VERIFIED';
+  const isFinancialVerified = hasVerifiedIdentity && hasVerifiedBank;
+
+  if (!hasVerifiedIdentity) {
+    missingRequirements.push('Verified PAN or approved KYC identity document');
+  }
+
+  if (!hasVerifiedBank) {
+    missingRequirements.push('Verified bank account');
+  }
 
   if (isFinancialVerified && !vendor.verification?.isVerified) {
     vendor.verification = {
       ...(vendor.verification?.toObject?.() || vendor.verification || {}),
       isVerified: true,
       verifiedAt: vendor.verification?.verifiedAt || new Date(),
-      notes: 'Auto-verified via PAN / Financial Identity Verification',
+      notes: 'Auto-verified via financial identity and bank verification',
     };
   }
 
@@ -105,6 +119,7 @@ export async function evaluateVendorActivation(vendorId) {
     hasCapability,
     hasLocation && hasCoverage,
     hasPortfolio,
+    isFinancialVerified,
   ];
   const completedCount = steps.filter(Boolean).length;
   const completionPercentage = Math.round((completedCount / steps.length) * 100);
@@ -116,12 +131,12 @@ export async function evaluateVendorActivation(vendorId) {
 
   if (!hasProfile) {
     targetState = 'PROFILE_INCOMPLETE';
-  } else if (!vendor.verification?.isVerified) {
+  } else if (!isFinancialVerified) {
     // If profile is ready but admin has not marked verified
     targetState = isModelComplete ? 'ELIGIBLE' : 'VERIFICATION_PENDING';
-  } else if (vendor.verification?.isVerified && !isModelComplete) {
+  } else if (isFinancialVerified && !isModelComplete) {
     targetState = 'VERIFIED';
-  } else if (vendor.verification?.isVerified && isModelComplete) {
+  } else if (isFinancialVerified && isModelComplete) {
     targetState = 'ACTIVE';
   }
 
@@ -147,7 +162,9 @@ export async function evaluateVendorActivation(vendorId) {
       locations: hasLocation,
       coverage: hasCoverage,
       portfolio: hasPortfolio,
-      verified: Boolean(vendor.verification?.isVerified),
+      verified: isFinancialVerified,
+      identityVerified: hasVerifiedIdentity,
+      bankVerified: hasVerifiedBank,
     },
     missingRequirements,
   };

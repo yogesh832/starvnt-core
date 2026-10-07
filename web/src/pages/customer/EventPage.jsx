@@ -291,22 +291,66 @@ export default function EventPage() {
             <AskBox eventId={event.id} placeholder="Ask about this event…" chips={['What am I missing?', 'Budget check', 'Is everything on track?']} />
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <div className="text-sm font-bold text-navy mb-2">Upcoming actions</div>
-            {attention.length === 0 ? (
-              <p className="text-xs text-muted">You're all caught up.</p>
-            ) : (
+          <div className="bg-white dark:bg-[#151827] rounded-2xl shadow-sm p-4 border border-gray-100 dark:border-white/10">
+            <div className="text-sm font-bold text-navy dark:text-white mb-2">Upcoming actions</div>
+            {attention.length > 0 ? (
               <ul className="space-y-2">
                 {attention.map((a, i) => (
                   <li key={i}>
-                    <Link to={attentionLink(a)} className="block rounded-xl bg-lavender/60 hover:bg-primary-soft p-2.5 text-xs">
-                      <b className="text-navy">{a.title}</b>
-                      <div className="text-muted text-[11px]">{a.detail}</div>
+                    <Link to={attentionLink(a)} className="block rounded-xl bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/40 p-2.5 text-xs border border-amber-200 dark:border-amber-900/40">
+                      <b className="text-amber-900 dark:text-amber-200">{a.title}</b>
+                      <div className="text-amber-700 dark:text-amber-300 text-[11px] mt-0.5">{a.detail}</div>
                     </Link>
                   </li>
                 ))}
               </ul>
-            )}
+            ) : (() => {
+              const unbookedItems = (summary?.items || []).filter((i) => ['missing', 'pending'].includes(i.status) && !i.selectedOption?.vendorName);
+              if (unbookedItems.length > 0) {
+                return (
+                  <div className="space-y-3">
+                    <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 p-2.5 border border-indigo-100 dark:border-indigo-900/50">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-800 dark:text-indigo-300">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0" />
+                        {event.title || 'Event'} status
+                      </div>
+                      <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-0.5">
+                        No urgent alerts. {unbookedItems.length} service category{unbookedItems.length > 1 ? 's' : ''} remaining for vendor selection.
+                      </p>
+                    </div>
+                    <ul className="space-y-2">
+                      {unbookedItems.slice(0, 3).map((item) => (
+                        <li key={item.category}>
+                          <Link
+                            to={`/customer/events/${event.id}/services?category=${item.category}`}
+                            className="block rounded-xl bg-lavender/60 dark:bg-white/5 hover:bg-primary-soft dark:hover:bg-primary/20 p-2.5 text-xs transition"
+                          >
+                            <div className="flex items-center justify-between">
+                              <b className="text-navy dark:text-white">Choose {item.label}</b>
+                              <span className="text-[10px] font-bold text-primary dark:text-[#a5b4fc]">Select →</span>
+                            </div>
+                            <div className="text-muted dark:text-slate-400 text-[11px] mt-0.5">
+                              {item.optionCount ? `${item.optionCount} verified options available` : 'Explore recommendations for your event'}
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              }
+              return (
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-3 border border-emerald-100 dark:border-emerald-900/50">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    You're all caught up for {event.title || 'this event'} 🎉
+                  </div>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300/80 mt-0.5 leading-relaxed">
+                    All services are confirmed and on schedule. No urgent customer action is pending right now.
+                  </p>
+                </div>
+              );
+            })()}
           </div>
 
           <BudgetCard eventId={event.id} budget={summary.budget} />

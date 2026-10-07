@@ -109,6 +109,55 @@ router.get("/demo-accounts", async (req, res, next) => {
   }
 });
 
+// ── Customer Test Catalog Preview ──────────────────────────────────────────
+// Public QA helper for /test. Development data only; production demo seeding is
+// still blocked by the seeder itself.
+router.get("/demo-catalog", async (req, res, next) => {
+  try {
+    const { DEMO_LISTINGS } = await import("../../customer/seeds/demoListings.js");
+    const groups = new Map();
+    for (const item of DEMO_LISTINGS) {
+      const category = item.category || "other";
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category).push({
+        id: `demo_${item.externalRef}`,
+        externalRef: item.externalRef,
+        category,
+        vendorName: item.vendorName,
+        packageName: item.packageName,
+        price: item.price,
+        location: item.location,
+        serviceRadiusKm: item.serviceRadiusKm,
+        includes: item.includes || [],
+        strengths: item.strengths || [],
+        limitations: item.limitations || [],
+        negotiable: item.negotiable || [],
+      });
+    }
+
+    const categories = [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([category, options]) => ({
+        category,
+        label: category
+          .split("_")
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" "),
+        optionCount: options.length,
+        options,
+      }));
+
+    res.json({
+      ok: true,
+      total: DEMO_LISTINGS.length,
+      minimumPerCategory: Math.min(...categories.map((c) => c.optionCount)),
+      categories,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Reseed Real Vendors Trigger (Testing & QA Playground) ───────────────────
 router.post("/reseed", async (req, res, next) => {
   try {
