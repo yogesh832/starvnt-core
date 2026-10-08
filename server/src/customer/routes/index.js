@@ -46,8 +46,9 @@ customerRouter.post('/bookings/:id/verify-completion', h(c.verifyBookingCompleti
 customerRouter.delete('/bookings/:id', h(c.cancelBooking));
 customerRouter.post('/events/:id/reservations/:rid/coupon-preview', h(c.previewCoupon));
 customerRouter.post('/events/:id/reservations/:rid/pay', h(c.pay));
-// TODO_REMOVE_BEFORE_PRODUCTION: QA-only shortcut to mark a reservation advance as paid.
-customerRouter.post('/events/:id/reservations/:rid/dev-success-payment', h(c.devVerifyReservationPayment));
+if (process.env.ENABLE_QA_PAYMENT_BYPASS === 'true' && process.env.NODE_ENV !== 'production') {
+  customerRouter.post('/events/:id/reservations/:rid/dev-success-payment', h(c.devVerifyReservationPayment));
+}
 customerRouter.post('/events/:id/payments/:pid/checkout-complete', h(c.checkoutComplete));
 customerRouter.get('/events/:id/event-day', h(c.eventDay));
 

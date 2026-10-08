@@ -25,6 +25,7 @@ import adminPolicyRoutes from './admin/routes/policy.routes.js';
 import adminExternalUsersRoutes from './admin/routes/external-users.routes.js';
 import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
+import { metricsMiddleware, renderPrometheusMetrics } from './metrics.js';
 
 export function createApp() {
   const app = express();
@@ -37,10 +38,15 @@ export function createApp() {
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use(cookieParser());
+  if (config.metricsEnabled) app.use(metricsMiddleware);
 
   app.get('/api/health', (req, res) =>
     res.json({ ok: true, domains: ['EXTERNAL', 'ADMIN'] })
   );
+  app.get('/metrics', (req, res) => {
+    if (!config.metricsEnabled) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.type('text/plain; version=0.0.4').send(renderPrometheusMetrics());
+  });
 
   // ── EXTERNAL domain: single auth for Customers + Vendors ──────────────────
   app.use('/api/auth', externalAuthRoutes);

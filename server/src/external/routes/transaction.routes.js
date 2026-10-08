@@ -13,6 +13,7 @@ import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../services/matching.service.js';
 import { createQuote, transitionQuote } from '../services/quoteStateMachine.service.js';
 import { startService, submitCompletionEvidence, validateCompletionFromCore } from '../../admin/services/executionSettlement.service.js';
+import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.js';
 import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
 import * as razorpay from '../../customer/services/payments/razorpay.js';
 import { validateCouponForPayment, recordCouponUsageOnce } from '../../customer/services/coupon.service.js';
@@ -230,8 +231,14 @@ router.post('/opportunities/generate', requireExternalAuth, async (req, res, nex
 
     const createdOpportunities = [];
 
-    // Create an actionable Opportunity for each eligible candidate
-    for (const candidate of matchResult.eligibleCandidates) {
+    // Create standard opportunities first. If none exist, surface extended-service
+    // fallback opportunities separately; do not rewrite vendor coverage.
+    const candidatesForOpportunities = matchResult.eligibleCandidates.length
+      ? matchResult.eligibleCandidates
+      : matchResult.extendedServiceCandidates || [];
+
+    for (const candidate of candidatesForOpportunities) {
+      const isExtended = candidate.coverageStatus === 'EXTENDED_SERVICE_REQUIRED';
       const opp = await Opportunity.create({
         vendor: candidate.vendorId,
         customer: req.externalUser._id,
@@ -247,15 +254,18 @@ router.post('/opportunities/generate', requireExternalAuth, async (req, res, nex
           ? `${candidate.cost.travelBreakdown.originLocality} -> ${serviceLocation?.locality || serviceLocation?.city || 'Venue'}`
           : `${serviceLocation?.locality || serviceLocation?.city || 'Local'}`,
         travelCost: candidate.cost?.travelCost || 0,
+        coverageStatus: isExtended ? 'EXTENDED_SERVICE_REQUIRED' : 'STANDARD_COVERAGE',
+        extendedService: isExtended ? candidate.extendedService : null,
         status: 'NEW',
-        action: 'Respond / Quote',
+        slaExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        action: isExtended ? 'Confirm Extended Service / Quote' : 'Respond / Quote',
       });
       createdOpportunities.push(opp);
 
       // Create live notification for candidate vendor through central notification service.
       await notifyVendor({
         vendorId: candidate.vendorId,
-        title: 'New Enquiry Received',
+        title: isExtended ? 'Extended Service Enquiry' : 'New Enquiry Received',
         message: `${candidate.serviceName} · ${date} · ${serviceLocation?.locality || 'New Town'} · ${guestCount} guests`,
         type: 'ENQUIRY',
         priority: 'HIGH',
@@ -405,8 +415,8 @@ router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VEN
     const quotedOppMap = new Map(existingQuotes.map((q) => [String(q.opportunity), q.status]));
 
     const enrichedOpps = opportunities.map((o) => {
-      const plain = o.toObject();
       const quoteStatus = quotedOppMap.get(String(o._id));
+      const plain = maskOpportunityCustomer(o, quoteStatus);
       if (quoteStatus || plain.status === 'RESPONDED') {
         plain.status = 'RESPONDED';
         plain.quoteStatus = quoteStatus || 'SUBMITTED';

@@ -26,6 +26,7 @@ export default function ComparePage() {
     ['Package', (o) => o.packageName],
     ['Price', (o) => <PriceText option={o} />],
     ['Availability', (o) => <AvailabilityPill value={o.availability} />],
+    ['Coverage', (o) => o.requiresVendorConfirmation ? (o.extendedService?.label || 'Extended service - confirmation required') : 'Within configured coverage'],
     ['Travel', travel],
     ['Includes', (o) => (o.includes.length ? o.includes.join(', ') : 'Not specified')],
     ['Rating', (o) => <RatingText rating={o.rating} reviewCount={o.reviewCount} />],

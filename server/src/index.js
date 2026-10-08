@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import { connectDB } from "./db/index.js";
 import { createApp } from "./app.js";
+import { startCoreWorkers } from "./workers/coreWorkers.js";
 
 function startProductionKeepAlive() {
   if (process.env.NODE_ENV !== "production" || !config.keepAliveUrl) {
@@ -41,6 +42,7 @@ async function main() {
       console.log(`[starvnt] server is running on :${config.port}`);
     }, 8000);
     startProductionKeepAlive();
+    startCoreWorkers();
   });
 }
 

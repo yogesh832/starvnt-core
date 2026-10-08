@@ -98,6 +98,46 @@ export function serviceFields(category, eventType) {
   return definitions(category, eventType);
 }
 
+export function serviceDetailsJsonSchema(category, eventType) {
+  const properties = {};
+  for (const field of definitions(category, eventType)) {
+    if (field.type === 'number') {
+      properties[field.key] = {
+        type: ['integer', 'null'],
+        title: field.label,
+        minimum: field.min ?? 0,
+        maximum: field.max ?? 1000000000,
+      };
+    } else if (field.type === 'select') {
+      properties[field.key] = {
+        type: ['string', 'null'],
+        title: field.label,
+        enum: [...field.options, null],
+      };
+    } else if (field.type === 'multiselect') {
+      properties[field.key] = {
+        type: ['array', 'null'],
+        title: field.label,
+        items: { type: 'string', enum: field.options },
+        uniqueItems: true,
+      };
+    } else {
+      properties[field.key] = {
+        type: ['string', 'null'],
+        title: field.label,
+        maxLength: field.max || 300,
+      };
+    }
+  }
+  return {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    title: `${category} service details`,
+    type: 'object',
+    additionalProperties: false,
+    properties,
+  };
+}
+
 /**
  * Services whose location commonly differs from the event venue: the
  * customer is asked about these; for others the event location is a sensible

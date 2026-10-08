@@ -35,7 +35,7 @@ import {
   serializeRequirement,
 } from './understanding.js';
 import * as catalog from './catalog.service.js';
-import { serviceFields, validateDetails, validateServiceLocation, LOCATION_SENSITIVE, ROUTE_CATEGORIES } from './serviceRequirements.js';
+import { serviceDetailsJsonSchema, serviceFields, validateDetails, validateServiceLocation, LOCATION_SENSITIVE, ROUTE_CATEGORIES } from './serviceRequirements.js';
 import { computeEventSummary, eventSteps, attentionFor } from './summary.js';
 import { customerHistory } from './history.service.js';
 
@@ -802,6 +802,7 @@ export function planOptions(eventType) {
     budgetRanges: t ? budgetRangesFor(t) : { wedding: budgetRangesFor('wedding'), other: budgetRangesFor('other') },
     // Event Type + Service Category → relevant requirement fields (options from the Vendor OS taxonomy).
     serviceFields: Object.fromEntries(Object.keys(CATEGORY_LABELS).map((c) => [c, serviceFields(c, t || 'other')])),
+    serviceSchemas: Object.fromEntries(Object.keys(CATEGORY_LABELS).map((c) => [c, serviceDetailsJsonSchema(c, t || 'other')])),
     locationSensitive: LOCATION_SENSITIVE,
     routeCategories: ROUTE_CATEGORIES,
   };

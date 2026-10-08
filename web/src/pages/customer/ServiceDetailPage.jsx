@@ -541,6 +541,11 @@ export default function ServiceDetailPage() {
                     </span>
                   )}
                   {option.isDemo && <DemoBadge />}
+                  {option.requiresVendorConfirmation && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                      Extended service
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-muted">
                   {(vp.category || option.category) && <span className="font-semibold">{vp.category || option.category}</span>}
@@ -561,6 +566,14 @@ export default function ServiceDetailPage() {
           </div>
           {(option.description || vp.bio) && (
             <p className="text-[13px] text-ink/80 leading-relaxed mt-4">{option.description || vp.bio}</p>
+          )}
+          {option.requiresVendorConfirmation && (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900">
+              <div className="font-extrabold">{option.extendedService?.label || 'Extended Service'}</div>
+              <p className="mt-1 leading-relaxed">
+                This vendor is outside their configured coverage radius. Additional travel/logistics charges may apply, and the vendor must explicitly confirm they can serve this location before it becomes a valid quote option.
+              </p>
+            </div>
           )}
           {vp.website && (
             <a href={vp.website.startsWith('http') ? vp.website : `https://${vp.website}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-bold text-primary mt-2 hover:underline">
@@ -585,6 +598,11 @@ export default function ServiceDetailPage() {
             ) : null}
           </div>
           <div className="mt-3"><PriceText option={option} large /></div>
+          {option.requiresVendorConfirmation && (
+            <div className="mt-3 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              Final total is pending vendor confirmation for extended distance, capacity, travel, and logistics.
+            </div>
+          )}
           {option.mayApply?.length > 0 && (
             <div className="mt-3 text-[11px] text-muted">
               <div className="font-bold text-navy">May apply</div>

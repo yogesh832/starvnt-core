@@ -7,6 +7,8 @@ import { calculateValidatedTotalCost } from './totalCost.service.js';
 import { estimateDistanceKm } from '../utils/geo.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
 
+const EXTENDED_FALLBACK_RADIUS_KM = 150;
+
 /**
  * Opportunity Qualification & Lowest Validated Total Cost Matching Engine (Spec §8, §9, §18, §19).
  *
@@ -35,6 +37,7 @@ export async function matchVendorsForRequirement({
   }).populate('vendor');
 
   const eligibleCandidates = [];
+  const extendedServiceCandidates = [];
   const excludedCandidates = [];
 
   for (const svc of services) {
@@ -65,10 +68,43 @@ export async function matchVendorsForRequirement({
     });
 
     let coversTargetLocation = false;
+    let extendedService = null;
     const reqLocality = (serviceLocation?.locality || '').toLowerCase().trim();
     const reqCity = (serviceLocation?.city || '').toLowerCase().trim();
 
     for (const cov of coverages) {
+      if (cov.coverageType === 'RADIUS' && cov.radiusKm) {
+        const dist = estimateDistanceKm(
+          { locality: cov.localities?.[0] || cov.city, city: cov.city },
+          serviceLocation
+        );
+        if (dist <= cov.radiusKm) {
+          coversTargetLocation = true;
+          break;
+        }
+        const fallbackLimit = cov.outstationAllowed ? Math.max(EXTENDED_FALLBACK_RADIUS_KM, cov.radiusKm * 3) : EXTENDED_FALLBACK_RADIUS_KM;
+        if (dist <= fallbackLimit && (!extendedService || dist < extendedService.distanceKm)) {
+          extendedService = {
+            label: `Extended Service — ${Math.round(dist)} km away`,
+            distanceKm: Math.round(dist * 10) / 10,
+            configuredRadiusKm: cov.radiusKm,
+            fallbackLimitKm: fallbackLimit,
+            requiresVendorConfirmation: true,
+            note: 'Outside configured service coverage. Vendor must confirm travel/logistics and final cost before this can become a valid quote.',
+            fallbackFlow: [
+              'coverage',
+              'availability',
+              'capacity',
+              'operational_feasibility',
+              'travel_logistics',
+              'validated_total_cost',
+              'vendor_confirmation',
+            ],
+          };
+        }
+        continue;
+      }
+
       // Check specific locality
       if (
         reqLocality &&
@@ -82,21 +118,10 @@ export async function matchVendorsForRequirement({
         coversTargetLocation = true;
         break;
       }
-      // Check radius
-      if (cov.coverageType === 'RADIUS' && cov.radiusKm) {
-        const dist = estimateDistanceKm(
-          { locality: cov.localities?.[0] || cov.city, city: cov.city },
-          serviceLocation
-        );
-        if (dist <= cov.radiusKm) {
-          coversTargetLocation = true;
-          break;
-        }
-      }
     }
 
     // If coverage records exist and none matched, exclude
-    if (coverages.length > 0 && !coversTargetLocation) {
+    if (coverages.length > 0 && !coversTargetLocation && !extendedService) {
       excludedCandidates.push({
         vendorId: vendor._id,
         businessName: vendor.businessName,
@@ -156,7 +181,7 @@ export async function matchVendorsForRequirement({
     }
     matchScore = Math.min(98, matchScore);
 
-    eligibleCandidates.push({
+    const candidatePayload = {
       vendorId: vendor._id,
       businessName: vendor.businessName,
       serviceId: svc._id,
@@ -168,7 +193,35 @@ export async function matchVendorsForRequirement({
       validatedTotalCost: costBreakdown.validatedTotalCost,
       capability: capability || null,
       recommended: false,
-    });
+      explainability: {
+        coverage: coversTargetLocation ? 'standard_coverage' : 'extended_service_fallback',
+        availability: 'feasible',
+        capacity: availability.capacity || 'not_reported',
+        cost: {
+          validatedTotalCost: costBreakdown.validatedTotalCost,
+          travelCost: costBreakdown.travelCost || 0,
+        },
+        capabilityScore: matchScore,
+        factors: [
+          'configured coverage evaluated before proximity',
+          'availability and travel buffer checked',
+          'validated total cost calculated before ranking',
+          requiredStyles.length ? 'requested styles compared with vendor capability' : 'no style-specific preference supplied',
+        ],
+      },
+    };
+
+    if (coversTargetLocation || coverages.length === 0) {
+      eligibleCandidates.push(candidatePayload);
+    } else {
+      extendedServiceCandidates.push({
+        ...candidatePayload,
+        recommended: false,
+        coverageStatus: 'EXTENDED_SERVICE_REQUIRED',
+        extendedService,
+        whyCallout: 'Fallback only: outside normal coverage and requires explicit vendor confirmation.',
+      });
+    }
   }
 
   // Soft Ranking: Deterministic sort primarily by Lowest Validated Total Cost
@@ -183,6 +236,9 @@ export async function matchVendorsForRequirement({
 
   // Spec §22: Up to 4 validated options max. Never manufacture fake options.
   const topValidatedOptions = eligibleCandidates.slice(0, 4);
+  const fallbackExtendedOptions = eligibleCandidates.length === 0
+    ? extendedServiceCandidates.sort((a, b) => a.validatedTotalCost - b.validatedTotalCost).slice(0, 4)
+    : [];
 
   return {
     category,
@@ -193,6 +249,7 @@ export async function matchVendorsForRequirement({
     excludedCount: excludedCandidates.length,
     eligibleCandidates: topValidatedOptions, // Top 4 max capped
     topValidatedOptions,
+    extendedServiceCandidates: fallbackExtendedOptions,
     excludedCandidates,
   };
 }
@@ -200,7 +257,7 @@ export async function matchVendorsForRequirement({
 /**
  * Search Waves Engine (Spec §19).
  * Wave 1: Initial policy radius.
- * Wave 2: Approved expanded radius.
+ * Wave 2: Broader fallback discovery only; configured vendor coverage is not rewritten.
  * Wave 3: Specialist/long-distance search.
  * Aura+ explains expansion; never silently expands geography.
  */

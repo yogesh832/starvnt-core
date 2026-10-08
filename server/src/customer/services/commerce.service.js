@@ -52,7 +52,7 @@ export function serializeReservation(r) {
     amount: advanceAmount,
     advanceAmount,
     packageTotal,
-    advancePercent: r.advancePercent ?? ADVANCE_PERCENT,
+    advancePercent: r.advancePercent ?? DEFAULT_ADVANCE_PERCENT,
     balanceAmount: r.balanceAmount ?? balanceAmountOf(r, advanceAmount),
     isDemo: r.isDemo,
     status: r.status,
@@ -503,7 +503,7 @@ export async function payReservation(customer, eventId, reservationId, body = {}
             reservationId: String(reservation._id),
             paymentType: isBalancePayment ? 'balance' : 'advance',
             packageTotal: String(packageTotalOf(reservation)),
-            advancePercent: String(reservation.advancePercent ?? ADVANCE_PERCENT),
+            advancePercent: String(reservation.advancePercent ?? DEFAULT_ADVANCE_PERCENT),
             couponCode: coupon?.code || '',
             couponDiscount: discountAmount ? String(discountAmount) : '',
           },
@@ -555,9 +555,8 @@ export async function checkoutComplete(customerId, eventId, paymentId, body = {}
   return { payment: serializePayment(moved || payment) };
 }
 
-// TODO_REMOVE_BEFORE_PRODUCTION: local customer test helper for bypassing Razorpay during QA.
 export async function devVerifyReservationPayment(customer, eventId, reservationId) {
-  if (process.env.NODE_ENV === 'production') {
+  if (!process.env.ENABLE_QA_PAYMENT_BYPASS || process.env.NODE_ENV === 'production') {
     throw notFound('Not found');
   }
   const { payment } = await payReservation(customer, eventId, reservationId, {}, { skipRazorpay: true });
@@ -683,7 +682,7 @@ export async function confirmBookingFor(payment) {
     try {
       vq.advancePayment = {
         ...(vq.advancePayment?.toObject?.() || vq.advancePayment || {}),
-        percentage: reservation.advancePercent || ADVANCE_PERCENT,
+        percentage: reservation.advancePercent || DEFAULT_ADVANCE_PERCENT,
         amount: payment.amount,
         status: 'VERIFIED',
         provider: payment.provider || 'razorpay',
@@ -725,7 +724,7 @@ export async function confirmBookingFor(payment) {
             customerName,
             category: vq.vendor?.category || reservation.category,
             paymentSummary: {
-              advancePercentage: reservation.advancePercent || ADVANCE_PERCENT,
+              advancePercentage: reservation.advancePercent || DEFAULT_ADVANCE_PERCENT,
               advanceAmount: paidAmount,
               paidAmount,
               balanceAmount: reservation.balanceAmount ?? Math.max(0, totalAmount - paidAmount),

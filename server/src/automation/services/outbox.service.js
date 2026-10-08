@@ -1,5 +1,7 @@
 import { OutboxEvent } from '../../admin/models/OutboxEvent.js';
+import { recordBusinessAudit } from '../../admin/utils/audit.js';
 import { dispatchEvent } from './dispatcher.service.js';
+import { incrementMetric, observeMetric } from '../../metrics.js';
 
 /**
  * Publishes an event to the Central Automation Outbox (Spec §12).
@@ -50,23 +52,26 @@ export async function processOutboxBatch({ batchSize = 10, immediate = false } =
     query.nextRunAt = { $lte: new Date() };
   }
 
-  const pendingEvents = await OutboxEvent.find(query)
-    .sort({ createdAt: 1 })
-    .limit(batchSize);
-
   const results = [];
 
-  for (const event of pendingEvents) {
-    // Atomic lock: Transition to PROCESSING
-    event.status = 'PROCESSING';
-    await event.save();
+  for (let i = 0; i < batchSize; i += 1) {
+    const event = await OutboxEvent.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          status: 'PROCESSING',
+          processingStartedAt: new Date(),
+        },
+      },
+      { sort: { createdAt: 1 }, new: true }
+    );
+    if (!event) break;
 
     const startTs = Date.now();
-    let outcomeStatus = 'COMPLETED';
-    let outcomeError = null;
 
     try {
       const handlerResult = await dispatchEvent(event);
+      const durationMs = Date.now() - startTs;
       event.status = 'COMPLETED';
       event.processedAt = new Date();
       event.lastError = null;
@@ -75,14 +80,15 @@ export async function processOutboxBatch({ batchSize = 10, immediate = false } =
         attempt: event.attempts + 1,
         timestamp: new Date(),
         status: 'COMPLETED',
-        durationMs: Date.now() - startTs,
+        durationMs,
       });
 
       await event.save();
+      incrementMetric('starvnt_outbox_events_total', { eventType: event.eventType, status: 'COMPLETED' });
+      observeMetric('starvnt_outbox_event_duration_ms', { eventType: event.eventType }, durationMs);
       results.push({ id: event._id, success: true, result: handlerResult });
     } catch (err) {
-      outcomeStatus = 'FAILED';
-      outcomeError = err.message;
+      const durationMs = Date.now() - startTs;
       event.attempts += 1;
       event.lastError = err.message;
 
@@ -91,11 +97,24 @@ export async function processOutboxBatch({ batchSize = 10, immediate = false } =
         timestamp: new Date(),
         status: 'FAILED',
         error: err.message,
-        durationMs: Date.now() - startTs,
+        durationMs,
       });
 
       if (event.attempts >= event.maxAttempts) {
         event.status = 'DEAD_LETTER';
+        await recordBusinessAudit({
+          actorType: 'SYSTEM',
+          action: 'OUTBOX_DEAD_LETTER',
+          resourceType: 'OutboxEvent',
+          resourceId: String(event._id),
+          referenceId: event.idempotencyKey,
+          fromState: { status: 'PROCESSING', attempts: event.attempts - 1 },
+          toState: { status: 'DEAD_LETTER', attempts: event.attempts, lastError: err.message },
+          why: `Outbox handler failed ${event.attempts} times: ${err.message}`,
+          source: 'AUTOMATION_WORKER',
+          authority: 'CORE_AUTOMATION',
+          idempotencyKey: `outbox_dead_letter_${event._id}_${event.attempts}`,
+        });
       } else {
         // Exponential backoff: 2^attempt * 500ms
         const backoffMs = Math.pow(2, event.attempts) * 500;
@@ -104,6 +123,8 @@ export async function processOutboxBatch({ batchSize = 10, immediate = false } =
       }
 
       await event.save();
+      incrementMetric('starvnt_outbox_events_total', { eventType: event.eventType, status: event.status });
+      observeMetric('starvnt_outbox_event_duration_ms', { eventType: event.eventType }, durationMs);
       results.push({ id: event._id, success: false, error: err.message });
     }
   }

@@ -11,6 +11,7 @@ import { VendorBlockout } from '../models/VendorBlockout.js';
 import { VendorBookingSlot } from '../models/VendorBookingSlot.js';
 import { Notification } from '../models/Notification.js';
 import { Opportunity } from '../models/Opportunity.js';
+import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.js';
 import { Quote } from '../models/Quote.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
@@ -1024,7 +1025,8 @@ router.get('/messages/threads', async (req, res, next) => {
         .limit(5);
 
       if (opportunities.length > 0) {
-        for (const opp of opportunities) {
+        for (const rawOpp of opportunities) {
+          const opp = maskOpportunityCustomer(rawOpp);
           const clientName = opp.customer?.fullName || 'Prospective Client';
           await VendorMessageThread.create({
             vendor: req.vendorId,

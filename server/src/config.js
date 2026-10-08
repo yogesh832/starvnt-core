@@ -114,4 +114,17 @@ export const config = {
 
   chatThinkingStatusDelayMs: Number(process.env.CHAT_THINKING_STATUS_DELAY_MS || 1200),
   chatStatusRotationMs: Number(process.env.CHAT_STATUS_ROTATION_MS || 2500),
+
+  // ── Core workers / safety gates ──
+  enableQaPaymentBypass: process.env.ENABLE_QA_PAYMENT_BYPASS === "true",
+  outboxWorkerEnabled: process.env.OUTBOX_WORKER_ENABLED !== "false",
+  outboxWorkerIntervalMs: Number(process.env.OUTBOX_WORKER_INTERVAL_MS || 15000),
+  reservationExpiryWorkerEnabled: process.env.RESERVATION_EXPIRY_WORKER_ENABLED !== "false",
+  reservationExpiryIntervalMs: Number(process.env.RESERVATION_EXPIRY_INTERVAL_MS || 60000),
+  metricsEnabled: process.env.METRICS_ENABLED !== "false",
+
+  // ── Settlement math ──
+  platformCommissionPercent: Number(process.env.PLATFORM_COMMISSION_PERCENT || 10),
+  tdsPercent: Number(process.env.TDS_PERCENT || 1),
+  gstPercent: Number(process.env.GST_PERCENT || 18),
 };

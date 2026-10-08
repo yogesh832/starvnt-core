@@ -230,6 +230,7 @@ export function BackLink({ to, children }) {
 
 const AVAIL = {
   unconfirmed: ['Calendar clear - send enquiry', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-800/40'],
+  requires_vendor_confirmation: ['Needs vendor confirmation', 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-100/50 dark:border-amber-800/40'],
   blocked: ['Not available on your date', 'bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400 border border-red-100/50 dark:border-red-800/40'],
   booked: ['Already booked on your date', 'bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400 border border-red-100/50 dark:border-red-800/40'],
   available: ['Available on your date', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100/50 dark:border-emerald-800/40'],

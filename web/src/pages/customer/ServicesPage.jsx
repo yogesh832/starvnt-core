@@ -80,13 +80,18 @@ function OptionCard({ eventId, eventStatus, option, best, selected, onSelected, 
   };
   return (
     <div className={`bg-white dark:bg-[#161926] rounded-2xl border p-3 flex flex-col ${best ? 'border-primary/40 dark:border-primary/60 shadow-sm shadow-primary/10' : 'border-gray-100 dark:border-gray-800'}`}>
-      <div className="relative">
-        <ArtTile option={option} />
-        <div className="absolute top-2 left-2 flex gap-1">
-          {best && <span className="text-[9px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-primary text-white">Best value</span>}
-          {option.isDemo && <DemoBadge />}
+        <div className="relative">
+          <ArtTile option={option} />
+          <div className="absolute top-2 left-2 flex gap-1">
+            {best && <span className="text-[9px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-primary text-white">Best value</span>}
+            {option.isDemo && <DemoBadge />}
+            {option.requiresVendorConfirmation && (
+              <span className="text-[9px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-200/70 dark:border-amber-800/60">
+                Extended service
+              </span>
+            )}
+          </div>
         </div>
-      </div>
       <div className="mt-2.5 flex-1">
         <div className="text-sm font-extrabold text-navy dark:text-white truncate">{option.vendorName}</div>
         <div className="text-[11px] text-muted dark:text-slate-400 flex items-center justify-between gap-1 mt-0.5">
@@ -102,6 +107,14 @@ function OptionCard({ eventId, eventStatus, option, best, selected, onSelected, 
           <PriceText option={option} />
           <AvailabilityPill value={option.availability} />
         </div>
+        {option.requiresVendorConfirmation && (
+          <div className="mt-2 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/40 p-2.5 text-[10px] text-amber-900 dark:text-amber-200">
+            <div className="font-extrabold">{option.extendedService?.label || 'Extended Service'}</div>
+            <div className="mt-0.5">
+              Outside the vendor&apos;s configured {option.extendedService?.configuredRadiusKm || option.serviceRadiusKm || 'standard'} km coverage. Travel/logistics charges may apply and the vendor must confirm before this becomes a valid option.
+            </div>
+          </div>
+        )}
         {rec.auraScore && (
           <div className="mt-2 rounded-2xl border border-primary/10 dark:border-primary/30 bg-primary-soft/50 dark:bg-primary/15 p-2.5">
             <div className="flex items-center justify-between gap-2">
@@ -256,7 +269,7 @@ function CategoryOptions({ eventId, category }) {
                 disabled={requestBusy}
                 className="ml-auto rounded-xl bg-emerald-600 dark:bg-emerald-500 text-white font-bold px-3 py-1.5 hover:bg-emerald-700 transition disabled:opacity-50 cursor-pointer"
               >
-                {requestBusy ? 'Sending...' : chosen.isDemo ? 'Continue to quote →' : 'Request vendor quote →'}
+                {requestBusy ? 'Sending...' : chosen.isDemo ? 'Continue to quote →' : chosen.requiresVendorConfirmation ? 'Request extended confirmation →' : 'Request vendor quote →'}
               </button>
               {requestError && <span className="basis-full text-[11px] font-bold text-red-500 dark:text-red-400">{requestError}</span>}
             </div>
@@ -267,6 +280,15 @@ function CategoryOptions({ eventId, category }) {
               <div>
                 <span className="font-extrabold">No direct vendors in {event.city || 'your immediate location'}.</span>{" "}
                 Showing top verified regional options available in nearby areas that cover your event:
+              </div>
+            </div>
+          )}
+          {options.some((o) => o.requiresVendorConfirmation) && (
+            <div className="flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl p-3.5 shadow-xs">
+              <Icon name="info" size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-extrabold">No standard in-radius vendors were found for this service.</span>{' '}
+                These are fallback opportunities outside configured coverage. They are not shown as available; vendors must confirm distance, capacity, logistics, and final cost first.
               </div>
             </div>
           )}

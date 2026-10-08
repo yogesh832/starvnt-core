@@ -31,8 +31,6 @@ export const customerApi = {
     externalApi.call(`/customer/events/${id}/reservations/${reservationId}/coupon-preview`, { method: 'POST', body: { couponCode } }),
   pay: (id, reservationId, couponCode = '') =>
     externalApi.call(`/customer/events/${id}/reservations/${reservationId}/pay`, { method: 'POST', body: { couponCode } }),
-  devSuccessPayment: (id, reservationId) =>
-    externalApi.call(`/customer/events/${id}/reservations/${reservationId}/dev-success-payment`, { method: 'POST' }),
   checkoutComplete: (id, paymentId, body) =>
     externalApi.call(`/customer/events/${id}/payments/${paymentId}/checkout-complete`, { method: 'POST', body }),
   eventDay: (id) => externalApi.call(`/customer/events/${id}/event-day`),

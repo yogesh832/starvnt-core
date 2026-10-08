@@ -11,10 +11,11 @@ export default function SelectOptionButton({ eventId, eventStatus, option, selec
   const [error, setError] = useState('');
 
   const unavailable = option.availability === 'blocked' || option.availability === 'booked';
+  const extended = Boolean(option.requiresVendorConfirmation);
   const reason =
     eventStatus === 'draft' ? 'Confirm your event details first'
       : unavailable ? 'Not available on your date'
-        : option.price == null ? 'No fixed total to quote yet'
+        : !extended && option.price == null ? 'No fixed total to quote yet'
           : null;
 
   async function run(optionId) {
@@ -50,7 +51,7 @@ export default function SelectOptionButton({ eventId, eventStatus, option, selec
         title={reason || 'Choose this option'}
         className={`rounded-xl bg-primary hover:bg-primary-dark text-white font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${size}`}
       >
-        {busy ? 'Selecting…' : 'Select'}
+        {busy ? 'Selecting...' : extended ? 'Request confirmation' : 'Select'}
       </button>
       {(error || (reason && !compact)) && <span className="text-[10px] text-muted dark:text-slate-400">{error || reason}</span>}
     </div>

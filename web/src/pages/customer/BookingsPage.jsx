@@ -30,12 +30,10 @@ function holdLeft(expiresAt) {
 /** "You're almost done." review sheet before paying. */
 function PaySheet({ event, reservation, onClose, onPaid }) {
   const [busy, setBusy] = useState(false);
-  const [testBusy, setTestBusy] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [coupon, setCoupon] = useState(null);
   const [couponBusy, setCouponBusy] = useState(false);
   const [error, setError] = useState('');
-  const showDevPaymentButton = import.meta.env.DEV;
   const packageTotal = reservation.packageTotal || reservation.amount;
   const originalAdvance = reservation.advanceAmount || reservation.amount;
   const discountAmount = coupon?.discountAmount || 0;
@@ -86,19 +84,6 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
     setCouponCode(value.toUpperCase().replace(/\s+/g, ''));
     if (coupon) setCoupon(null);
     setError('');
-  }
-
-  async function testSuccessPayment() {
-    setTestBusy(true);
-    setError('');
-    try {
-      await customerApi.devSuccessPayment(event.id, reservation.id);
-      onPaid();
-    } catch (err) {
-      setError(errorText(err, 'Could not mark the test payment successful.'));
-    } finally {
-      setTestBusy(false);
-    }
   }
 
   const rows = [
@@ -194,17 +179,6 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
         <button onClick={pay} disabled={!canPay} className="mt-4 w-full rounded-2xl bg-primary text-white text-sm font-extrabold py-3 disabled:opacity-60">
           {busy ? 'Opening payment...' : couponBusy ? 'Checking coupon...' : `Confirm & Pay Advance ${formatINR(payableAdvance)}`}
         </button>
-        {/* TODO_REMOVE_BEFORE_PRODUCTION: temporary QA shortcut for payment-success testing. */}
-        {showDevPaymentButton && (
-          <button
-            type="button"
-            onClick={testSuccessPayment}
-            disabled={busy || testBusy}
-            className="mt-2 w-full rounded-2xl border border-amber-300 bg-amber-50 text-amber-800 text-xs font-extrabold py-2.5 disabled:opacity-60"
-          >
-            {testBusy ? 'Marking test payment…' : 'Test success payment'}
-          </button>
-        )}
         <div className="text-[11px] text-center text-muted mt-2">🔒 100% secure payments via Razorpay</div>
         <div className="text-[10px] text-center text-muted mt-1">Your booking is confirmed only after STARVNT verifies the payment.</div>
         <button onClick={onClose} disabled={busy} className="mt-3 w-full text-xs font-bold text-muted">Not now</button>

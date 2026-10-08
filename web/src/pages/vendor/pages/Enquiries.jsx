@@ -37,11 +37,13 @@ export default function Enquiries() {
             guests: o.guestCount || 'As required',
             capability: o.requiredCapability || 'Standard Service Execution',
             coverage: `Serves ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Zone'} (Verified)`,
-            availability: 'Eligible slot verified',
+            availability: o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED' ? 'Extended distance - confirmation required' : 'Eligible slot verified',
             travel: o.estimatedTravel || 'Local Transit',
             travelCost: o.travelCost ? `₹${Number(o.travelCost).toLocaleString()}` : 'Included',
             basePrice: o.basePrice || 0,
             fit: o.fit || 95,
+            coverageStatus: o.coverageStatus,
+            extendedService: o.extendedService || null,
           }));
           setOpportunities(mapped);
           if (mapped[0]) setExpanded(mapped[0].id);
@@ -146,6 +148,12 @@ export default function Enquiries() {
                   <span className="text-[10px] uppercase tracking-wide opacity-80">Requested Package:</span>
                   <span>{o.service}</span>
                 </div>
+                {o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED' && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1 rounded-xl text-xs font-bold">
+                    <span>Extended Service:</span>
+                    <span>{o.extendedService?.label || 'outside configured radius'}</span>
+                  </div>
+                )}
               </div>
               <div className="text-center shrink-0 ml-2">
                 <div className="text-lg font-extrabold text-primary">{o.fit}%</div>
@@ -170,6 +178,12 @@ export default function Enquiries() {
                     ['Availability', o.availability],
                     ['Estimated travel', o.travel],
                     ['Travel cost', o.travelCost],
+                    ...(o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED'
+                      ? [
+                          ['Normal radius', `${o.extendedService?.configuredRadiusKm || 'Configured'} km`],
+                          ['Extended requirement', 'Vendor must explicitly confirm distance, logistics, and final cost'],
+                        ]
+                      : []),
                     ['Guest count', `${o.guests} guests`],
                   ].map(([k, v]) => (
                     <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-xs">

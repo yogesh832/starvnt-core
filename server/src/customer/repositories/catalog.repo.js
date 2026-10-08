@@ -12,6 +12,7 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ORG_FIELDS = 'businessName location rating bio profilePicUrl';
 const locationFields = ['city', 'locality', 'address', 'state', 'postalCode'];
 const coverageFields = ['city', 'localities', 'state'];
+const EXTENDED_FALLBACK_RADIUS_KM = 150;
 
 function coordsOf(value) {
   const lat = Number(value?.lat);
@@ -69,6 +70,58 @@ function nearestLocation(locations, origin) {
   return best?.loc || locations.find((loc) => loc.isPrimary) || locations[0];
 }
 
+function publicCoverage(cov) {
+  if (!cov) return null;
+  return {
+    city: cov.city || '',
+    state: cov.state || '',
+    localities: cov.localities || [],
+    radiusKm: cov.radiusKm || null,
+    outstationAllowed: Boolean(cov.outstationAllowed),
+  };
+}
+
+function coverageFit({ regex, origin, vendor, loc, cov }) {
+  if (!regex && !origin) {
+    return { isNormal: true, reason: 'NO_LOCATION_FILTER', radiusKm: Number(cov?.radiusKm || 40), distanceKm: null };
+  }
+
+  const profileMatches = regex ? regex.test(vendor.location || '') : false;
+  const locationTextMatches = Boolean(regex && loc && locationFields.some((field) => regex.test(String(loc[field] || ''))));
+  const coverageTextMatches = Boolean(
+    regex &&
+      cov &&
+      (regex.test(String(cov.city || '')) ||
+        regex.test(String(cov.state || '')) ||
+        (cov.localities || []).some((locality) => regex.test(String(locality || ''))))
+  );
+  const radiusKm = Number(cov?.radiusKm || 40);
+  const distanceKm = haversineKm(origin, coordsOf(loc?.coordinates));
+  const coordinateMatches = distanceKm != null && distanceKm <= radiusKm;
+  const radiusIsAuthoritative = Boolean(cov?.coverageType === 'RADIUS' && distanceKm != null);
+  const isNormal = radiusIsAuthoritative
+    ? coordinateMatches
+    : Boolean(profileMatches || locationTextMatches || coverageTextMatches || coordinateMatches);
+
+  return { isNormal, radiusKm, distanceKm, profileMatches, locationTextMatches, coverageTextMatches, coordinateMatches };
+}
+
+function extendedFallbackMeta(fit, cov) {
+  if (fit.distanceKm == null) return null;
+  if (fit.distanceKm <= fit.radiusKm) return null;
+  const fallbackLimit = cov?.outstationAllowed ? Math.max(EXTENDED_FALLBACK_RADIUS_KM, fit.radiusKm * 3) : EXTENDED_FALLBACK_RADIUS_KM;
+  if (fit.distanceKm > fallbackLimit) return null;
+  return {
+    status: 'requires_vendor_confirmation',
+    label: `Extended Service — ${Math.round(fit.distanceKm)} km away`,
+    distanceKm: Math.round(fit.distanceKm * 10) / 10,
+    configuredRadiusKm: fit.radiusKm,
+    fallbackLimitKm: fallbackLimit,
+    requiresVendorConfirmation: true,
+    note: 'Outside the vendor’s configured service radius. Travel/logistics charges may apply and the vendor must explicitly confirm this location before it is a valid quote option.',
+  };
+}
+
 /**
  * Read-only access to the vendor catalogue owned by Vendor OS.
  * Customers only ever see ACTIVE services of commercially active vendors.
@@ -109,65 +162,35 @@ export async function listBookableServices({ city, coordinates } = {}) {
       const vendorLocations = locationsByVendor.get(vendorId) || [];
       const matchedLocation = nearestLocation(vendorLocations, origin);
       const portfolio = portfolioByVendor.get(vendorId) || [];
-      if (!regex && !origin) return { service: s, vendor, matchedLocation: publicLocation(matchedLocation), matchedCoverage, portfolio, isExactMatch: true };
-
-      const profileMatches = regex ? regex.test(vendor.location || '') : false;
-      const locationTextMatches = Boolean(regex && matchedLocation && locationFields.some((field) => regex.test(String(matchedLocation[field] || ''))));
-      const coverageTextMatches = Boolean(
-        regex &&
-          matchedCoverage &&
-          (regex.test(String(matchedCoverage.city || '')) ||
-            regex.test(String(matchedCoverage.state || '')) ||
-            (matchedCoverage.localities || []).some((loc) => regex.test(String(loc || ''))))
-      );
-      const radiusKm = Number(matchedCoverage?.radiusKm || 40);
-      const distanceKm = haversineKm(origin, coordsOf(matchedLocation?.coordinates));
-      const coordinateMatches = distanceKm != null && distanceKm <= Math.max(radiusKm, 10);
-      const isExactMatch = Boolean(profileMatches || locationTextMatches || coverageTextMatches || coordinateMatches);
+      const fit = coverageFit({ regex, origin, vendor, loc: matchedLocation, cov: matchedCoverage });
+      const extendedService = fit.isNormal ? null : extendedFallbackMeta(fit, matchedCoverage);
 
       return {
         service: s,
         vendor,
         matchedLocation: publicLocation(matchedLocation),
         portfolio,
-        isExactMatch,
-        distanceKm,
-        matchedCoverage: matchedCoverage
-          ? {
-              city: matchedCoverage.city || '',
-              state: matchedCoverage.state || '',
-              localities: matchedCoverage.localities || [],
-              radiusKm: matchedCoverage.radiusKm || null,
-              outstationAllowed: Boolean(matchedCoverage.outstationAllowed),
-            }
-          : null,
+        isExactMatch: fit.isNormal,
+        distanceKm: fit.distanceKm,
+        matchedCoverage: publicCoverage(matchedCoverage),
+        extendedService,
+        coverageStatus: fit.isNormal ? 'normal' : extendedService ? 'extended_fallback' : 'out_of_coverage',
       };
     })
     .filter(Boolean);
 
-  const hasExactByCategory = new Map();
+  const hasNormalByCategory = new Map();
   for (const item of mapped) {
     if (item.isExactMatch) {
-      hasExactByCategory.set(item.service.category, true);
+      hasNormalByCategory.set(item.service.category, true);
     }
   }
 
   return mapped.filter((item) => {
     if (!regex && !origin) return true;
-    const catHasExact = hasExactByCategory.get(item.service.category);
-    if (catHasExact) return item.isExactMatch;
-    const isEligibleRegional = Boolean(
-      item.matchedCoverage?.outstationAllowed ||
-        (item.distanceKm != null && item.distanceKm <= 300) ||
-        (regex &&
-          ((item.matchedLocation?.state && regex.test(item.matchedLocation.state)) ||
-            (item.matchedCoverage?.state && regex.test(item.matchedCoverage.state))))
-    );
-    if (isEligibleRegional) {
-      item.isRegionalMatch = true;
-      return true;
-    }
-    return false;
+    const catHasNormal = hasNormalByCategory.get(item.service.category);
+    if (catHasNormal) return item.isExactMatch;
+    return Boolean(item.extendedService);
   });
 }
 
@@ -189,36 +212,20 @@ export async function findBookableService(serviceId, { city, coordinates } = {})
     ServiceCoverage.findOne({ vendor: vendor._id, vendorService: service._id }).lean(),
   ]);
   const loc = Array.isArray(matchedLocation) ? nearestLocation(matchedLocation, origin) : matchedLocation;
-  const profileMatches = regex ? regex.test(vendor.location || '') : false;
-  const locationTextMatches = Boolean(regex && loc && locationFields.some((field) => regex.test(String(loc[field] || ''))));
-  const coverageTextMatches = Boolean(
-    regex &&
-      matchedCoverage &&
-      (regex.test(String(matchedCoverage.city || '')) ||
-        regex.test(String(matchedCoverage.state || '')) ||
-        (matchedCoverage.localities || []).some((locality) => regex.test(String(locality || ''))))
-  );
-  const radiusKm = Number(matchedCoverage?.radiusKm || 40);
-  const distanceKm = haversineKm(origin, coordsOf(loc?.coordinates));
-  const coordinateMatches = distanceKm != null && distanceKm <= Math.max(radiusKm, 10);
-  const isExactMatch = Boolean(profileMatches || locationTextMatches || coverageTextMatches || coordinateMatches);
-  if (!isExactMatch) return null;
+  const fit = coverageFit({ regex, origin, vendor, loc, cov: matchedCoverage });
+  const extendedService = fit.isNormal ? null : extendedFallbackMeta(fit, matchedCoverage);
+  if (!fit.isNormal && !extendedService) return null;
 
   return {
     service,
     vendor,
     matchedLocation: publicLocation(loc),
-    isExactMatch: true,
+    isExactMatch: fit.isNormal,
     isRegionalMatch: false,
-    matchedCoverage: matchedCoverage
-      ? {
-          city: matchedCoverage.city || '',
-          state: matchedCoverage.state || '',
-          localities: matchedCoverage.localities || [],
-          radiusKm: matchedCoverage.radiusKm || null,
-          outstationAllowed: Boolean(matchedCoverage.outstationAllowed),
-        }
-      : null,
+    distanceKm: fit.distanceKm,
+    matchedCoverage: publicCoverage(matchedCoverage),
+    extendedService,
+    coverageStatus: fit.isNormal ? 'normal' : 'extended_fallback',
   };
 }
 

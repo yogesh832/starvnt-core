@@ -26,6 +26,22 @@ const opportunitySchema = new Schema(
     requiredCapability: { type: String, default: '' },
     estimatedTravel: { type: String, default: '' },
     travelCost: { type: Number, default: 0 },
+    coverageStatus: {
+      type: String,
+      enum: ['STANDARD_COVERAGE', 'EXTENDED_SERVICE_REQUIRED'],
+      default: 'STANDARD_COVERAGE',
+      index: true,
+    },
+    extendedService: {
+      label: { type: String, default: '' },
+      distanceKm: { type: Number, default: null },
+      configuredRadiusKm: { type: Number, default: null },
+      fallbackLimitKm: { type: Number, default: null },
+      note: { type: String, default: '' },
+      requiresVendorConfirmation: { type: Boolean, default: false },
+      normalEligibilityRule: { type: String, default: '' },
+      fallbackFlow: [{ type: String }],
+    },
     status: {
       type: String,
       enum: ['NEW', 'VIEWED', 'RESPONDED', 'DECLINED', 'EXPIRED'],

@@ -64,7 +64,9 @@ async function createVendorOpportunityForSelection({ customerId, event, requirem
     requiredCapability: serviceRequirementSummary(requirement, option, event),
     estimatedTravel: `${option.vendorLocation || 'Vendor base'} -> ${serviceLocation.locality || serviceLocation.city || 'Event location'}`,
     travelCost: Number(option.costBreakdown?.travel || 0),
-    action: 'Respond / Quote',
+    action: option.requiresVendorConfirmation ? 'Confirm Extended Service / Quote' : 'Respond / Quote',
+    coverageStatus: option.requiresVendorConfirmation ? 'EXTENDED_SERVICE_REQUIRED' : 'STANDARD_COVERAGE',
+    extendedService: option.extendedService || null,
   };
 
   if (existing) {
@@ -131,8 +133,9 @@ export async function selectOption(customerId, eventId, categoryParam, optionId)
     throw err;
   }
   if (option.category !== category) throw badRequest('WRONG_CATEGORY', `That option is not a ${categoryLabel(category).toLowerCase()} option`);
-  if (!catalog.isBookable(option)) throw badRequest('OPTION_NOT_AVAILABLE', 'That option is not available on your date');
-  if (option.price == null) throw badRequest('NO_PRICE', 'That option has no fixed total yet, so it can’t be quoted');
+  const isExtendedConfirmation = catalog.canRequestVendorConfirmation(option);
+  if (!catalog.canSelectForEnquiry(option)) throw badRequest('OPTION_NOT_AVAILABLE', 'That option is not available on your date');
+  if (!isExtendedConfirmation && option.price == null) throw badRequest('NO_PRICE', 'That option has no fixed total yet, so it can’t be quoted');
 
   const { row, changed } = await reqRepo.upsertRequirement(
     event._id,
@@ -153,7 +156,12 @@ export async function selectOption(customerId, eventId, categoryParam, optionId)
     actorType: 'customer',
     actorId: customerId,
     action: 'option_selected',
-    details: { category, vendorName: option.vendorName, isDemo: option.isDemo },
+    details: {
+      category,
+      vendorName: option.vendorName,
+      isDemo: option.isDemo,
+      coverageStatus: option.requiresVendorConfirmation ? 'extended_service_required' : 'standard',
+    },
   });
   await createVendorOpportunityForSelection({ customerId, event, requirement: row, option, optionId });
   return serializeRequirement(event.eventType, row);
@@ -198,6 +206,7 @@ export async function createQuote(customerId, eventId) {
   for (const r of selected) {
     try {
       const o = await catalog.getOption(event, r.selectedOptionId);
+      if (o.requiresVendorConfirmation) throw new Error('extended_service_requires_vendor_confirmation');
       if (o.category !== r.category || !catalog.isBookable(o) || o.price == null) throw new Error('unavailable');
       items.push({
         requirement: r._id,

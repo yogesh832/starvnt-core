@@ -1,6 +1,8 @@
 import { CoreBooking } from '../models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../../external/services/matching.service.js';
 import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
+import { VendorFinancialProfile } from '../../external/models/VendorFinancialProfile.js';
+import { ensureInvoiceForBooking, recordSettlementRelease, settlementMath } from './financeLedger.service.js';
 
 /**
  * Execution, Completion Validation & Settlement Service (Spec §11, §12).
@@ -159,6 +161,7 @@ export async function validateCompletionFromCore(bookingId, { approved = true, n
   // Approved by Core
   booking.executionStatus = 'COMPLETION_VERIFIED';
   booking.settlementStatus = 'SETTLEMENT_ELIGIBLE';
+  await ensureInvoiceForBooking(booking, coreActor);
   booking.validationAudit = {
     verifiedBy: coreActor,
     verifiedAt: new Date(),
@@ -206,15 +209,30 @@ export async function settleBooking(bookingId, { transactionReference = '' } = {
     throw err;
   }
 
+  const financialProfile = await VendorFinancialProfile.findOne({ vendor: booking.vendorId }).lean().catch(() => null);
+  if (financialProfile?.wallet?.isFrozen) {
+    const err = new Error(`SETTLEMENT_WALLET_FROZEN: Vendor wallet is frozen pending review. ${financialProfile.wallet.freezeReason || ''}`.trim());
+    err.statusCode = 409;
+    err.code = 'SETTLEMENT_WALLET_FROZEN';
+    throw err;
+  }
+
+  const tax = settlementMath(booking.totalAmount);
   booking.settlementStatus = 'SETTLED';
   booking.settlementDetails = {
     settledBy: coreActor,
     settledAt: new Date(),
-    amount: booking.totalAmount,
+    amount: tax.vendorPayable,
+    grossAmount: booking.totalAmount,
+    platformFee: tax.platformFee,
+    gstAmount: tax.gstAmount,
+    tdsAmount: tax.tdsAmount,
+    vendorPayable: tax.vendorPayable,
     transactionReference: transactionReference || `SETTLE-${Date.now()}`,
   };
 
   await booking.save();
+  await recordSettlementRelease(booking, coreActor);
 
   if (booking.vendorId) {
     await recordLifecycleEventMessage({
