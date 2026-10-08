@@ -44,12 +44,36 @@ function activationStepList(activation) {
       action: "Add gear",
     },
     {
+      key: "capacity",
+      label: "Capacity configured",
+      detail: "Team size and concurrent event capacity recorded in Core",
+      done: Boolean(checklist.capacity),
+      href: "/vendor/services?action=gear",
+      action: "Set capacity",
+    },
+    {
+      key: "resources",
+      label: "Operational resources",
+      detail: "Required team, equipment, or resource declarations are present",
+      done: Boolean(checklist.resources),
+      href: "/vendor/services?action=gear",
+      action: "Declare resources",
+    },
+    {
       key: "coverage",
       label: "Coverage and travel",
       detail: "Operating hub plus service coverage radius/localities",
       done: Boolean(checklist.locations && checklist.coverage),
       href: "/vendor/services?action=coverage",
       action: "Set coverage",
+    },
+    {
+      key: "availability",
+      label: "Operational availability",
+      detail: "Working days and hours are configured for feasibility checks",
+      done: Boolean(checklist.availability),
+      href: "/vendor/availability",
+      action: "Set availability",
     },
     {
       key: "portfolio",
@@ -74,7 +98,11 @@ function VendorActivationCard({ activation, compact = false }) {
   if (!activation) return null;
   const steps = activationStepList(activation);
   const next = steps.find((step) => !step.done);
-  const complete = steps.every((step) => step.done);
+  const matchingEligible = Boolean(activation.matchingEligible);
+  const readiness = activation.readiness || {};
+  const reasonText =
+    activation.missingRequirements?.[0] ||
+    (next ? next.label : readiness.matchingEligibility || "Core readiness locked");
   const percent = activation.completionPercentage ?? 0;
   const [showSteps, setShowSteps] = useState(false);
 
@@ -85,37 +113,35 @@ function VendorActivationCard({ activation, compact = false }) {
         <div className="min-w-0 flex items-start gap-3">
           <span
             className={`mt-0.5 h-9 w-9 rounded-2xl grid place-items-center shrink-0 ${
-              complete
+              matchingEligible
                 ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400"
                 : "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400"
             }`}
           >
-            <Icon name={complete ? "check" : "lock"} size={16} />
+            <Icon name={matchingEligible ? "check" : "lock"} size={16} />
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[11px] font-extrabold uppercase tracking-wide text-muted dark:text-gray-400">
-                {complete ? "Client matching active" : "Client matching locked"}
+                {matchingEligible ? "Client matching active" : "Client matching locked"}
               </span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                  complete
+                  matchingEligible
                     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
                     : "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"
                 }`}
               >
-                {complete ? "✓ Live" : next ? `Next: ${next.label}` : "In Progress"}
+                {matchingEligible ? "Live" : next ? `Next: ${next.label}` : readiness.matchingEligibility || "Locked"}
               </span>
             </div>
             <h2 className="mt-0.5 text-sm font-extrabold text-navy dark:text-white truncate">
-              {complete
+              {matchingEligible
                 ? "Live for customer matching"
-                : next
-                  ? `Next: ${next.label}`
-                  : "Finish verification to go live"}
+                : `Locked: ${reasonText}`}
             </h2>
             <p className="mt-0.5 text-[11px] text-muted dark:text-gray-400 leading-snug">
-              Activation requires service, coverage, portfolio, PAN/KYC, and verified bank account.
+              Profile completion and matching eligibility are separate. Core requires verification, capacity, coverage, availability, portfolio, and financial readiness.
             </p>
           </div>
         </div>
@@ -145,7 +171,7 @@ function VendorActivationCard({ activation, compact = false }) {
         <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden relative">
           <div
             className={`h-full rounded-full transition-all duration-500 ${
-              complete
+              matchingEligible
                 ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
                 : "bg-gradient-to-r from-amber-500 via-primary to-emerald-500"
             }`}
@@ -214,7 +240,7 @@ function VendorActivationCard({ activation, compact = false }) {
       )}
 
       {/* Next Action Banner */}
-      {!complete && next && (
+      {!matchingEligible && next && (
         <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40 p-3">
           <div className="text-xs">
             <div className="font-extrabold text-navy dark:text-white">
@@ -4329,10 +4355,10 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
             ) : (
               activation && (
                 <span
-                  className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.is100Percent ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                  className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.matchingEligible ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
                 >
                   {activation.completionPercentage ?? 0}%{" "}
-                  {activation.is100Percent ? "✓ Active" : "Setup"}
+                  {activation.matchingEligible ? "Active" : "Locked"}
                 </span>
               )
             )}
@@ -4400,7 +4426,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   <span>Readiness</span>
                   <span
                     className={
-                      activation?.is100Percent
+                      activation?.matchingEligible
                         ? "text-emerald-600"
                         : "text-amber-600"
                     }
@@ -4411,7 +4437,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                 <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      activation?.is100Percent ? "bg-emerald-500" : "bg-primary"
+                      activation?.matchingEligible ? "bg-emerald-500" : "bg-primary"
                     }`}
                     style={{
                       width: `${activation?.completionPercentage ?? 0}%`,
@@ -4420,12 +4446,12 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                 </div>
                 <div
                   className={`mt-1.5 text-[10px] font-bold ${
-                    activation?.is100Percent ? "text-emerald-600" : "text-amber-600"
+                    activation?.matchingEligible ? "text-emerald-600" : "text-amber-600"
                   }`}
                 >
-                  {activation?.is100Percent
+                  {activation?.matchingEligible
                     ? "Active for matching"
-                    : "Bank, KYC, service, coverage required"}
+                    : activation?.missingRequirements?.[0] || "Core readiness locked"}
                 </div>
               </>
             )}

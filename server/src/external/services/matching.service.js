@@ -6,6 +6,7 @@ import { checkTrueAvailability } from './availability.service.js';
 import { calculateValidatedTotalCost } from './totalCost.service.js';
 import { estimateDistanceKm } from '../utils/geo.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
+import { evaluateVendorActivation } from './vendorActivation.service.js';
 
 const EXTENDED_FALLBACK_RADIUS_KM = 150;
 
@@ -39,23 +40,30 @@ export async function matchVendorsForRequirement({
   const eligibleCandidates = [];
   const extendedServiceCandidates = [];
   const excludedCandidates = [];
+  const readinessByVendor = new Map();
 
   for (const svc of services) {
     const vendor = svc.vendor;
     if (!vendor) continue;
 
-    // Hard Gate 1: Vendor commercial eligibility
-    // Must be verified or commercially active
-    const isReady =
-      vendor.isCommerciallyActive ||
-      ['ACTIVE', 'ELIGIBLE', 'VERIFIED'].includes(vendor.activationState || vendor.status);
+    // Hard Gate 1: Vendor commercial eligibility.
+    // Core readiness is authoritative; profile completion alone is not enough.
+    const vendorKey = String(vendor._id);
+    let readiness = readinessByVendor.get(vendorKey);
+    if (!readinessByVendor.has(vendorKey)) {
+      readiness = await evaluateVendorActivation(vendor._id).catch(() => null);
+      readinessByVendor.set(vendorKey, readiness);
+    }
+    const isReady = Boolean(readiness?.matchingEligible);
 
     if (!isReady) {
       excludedCandidates.push({
         vendorId: vendor._id,
         businessName: vendor.businessName,
         serviceId: svc._id,
-        ineligibleReason: `Vendor is not commercially eligible (Status: ${vendor.activationState || vendor.status})`,
+        ineligibleReason: readiness?.missingRequirements?.join(', ') || `Vendor is not commercially eligible (Status: ${vendor.activationState || vendor.status})`,
+        reasonCodes: readiness?.reasonCodes || ['COMMERCIAL_PROFILE_INCOMPLETE'],
+        readiness: readiness?.readiness || null,
         gate: 'VENDOR_ACTIVATION_GATE',
       });
       continue;

@@ -1071,7 +1071,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const completionPercentage = activation?.completionPercentage !== undefined
     ? activation.completionPercentage
     : 0;
-  const is100Percent = Boolean(activation?.is100Percent || activation?.isCommerciallyActive);
+  const is100Percent = Boolean(activation?.matchingEligible || activation?.isCommerciallyActive);
 
   const checklist = activation?.checklist || {
     profile: false,
@@ -1108,7 +1108,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
     ? `${reviewStats.averageRating}`
     : googleRating?.rating
     ? `${googleRating.rating}`
-    : '5.0';
+    : '—';
 
   const ratingFoot = hasStarvntReviews
     ? `${reviewStats?.totalReviews} verified client reviews`
@@ -1365,7 +1365,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
               </div>
 
               {/* 6 Distinct Responsive Milestone Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 pt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3.5 pt-3">
 
                 {/* Step 1: Brand & City */}
                 <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between min-w-0 ${
