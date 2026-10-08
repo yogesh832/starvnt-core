@@ -5,8 +5,8 @@ const COMPLEX_PHRASES_RE = /(which (vendor|photographer|venue|caterer|decor|serv
 
 /**
  * Lightweight deterministic request classifier for Aura+ request routing.
- * Routes fast path requests to Gemini 3.5 Flash-Lite (thinking=minimal)
- * and complex reasoning requests to Gemini 3.8 Flash (thinking=low).
+ * Routes fast path requests to the configured Gemini chat model and complex
+ * reasoning requests to the configured Aura reasoning model.
  * 
  * @param {string} message - User chat message
  * @param {object} [context] - Optional conversation context / metadata

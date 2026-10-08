@@ -2,6 +2,7 @@ import { Routes, Route, NavLink, Navigate, useNavigate, useLocation, useSearchPa
 import { useState, useEffect, useMemo } from 'react';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import { useTheme } from '../../lib/ThemeContext.jsx';
+import { adminApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { LogoWord } from '../../components/ui.jsx';
 import Dashboard from './Dashboard.jsx';
@@ -34,6 +35,10 @@ export default function AdminShell() {
   const { admin, logout, can } = useAdminAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const [navOpen, setNavOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationError, setNotificationError] = useState('');
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,6 +58,93 @@ export default function AdminShell() {
       : '/admin/vendors';
     navigate(`${targetModule}${query ? `?search=${encodeURIComponent(query)}` : ''}`);
   }
+
+  async function loadNotifications() {
+    setNotificationsLoading(true);
+    setNotificationError('');
+    try {
+      const calls = await Promise.allSettled([
+        can('vendors.read') ? adminApi.call('/external-users/organizations?limit=10&tab=Pending') : Promise.resolve(null),
+        can('execution.read') ? adminApi.call('/operations/bookings?limit=5') : Promise.resolve(null),
+        can('automation.read') ? adminApi.call('/automation/stats') : Promise.resolve(null),
+        can('audit.read') ? adminApi.call('/audit?limit=4') : Promise.resolve(null),
+      ]);
+      const [vendors, bookings, automation, audit] = calls.map((r) => (r.status === 'fulfilled' ? r.value : null));
+      const items = [];
+      const pendingVendors = vendors?.organizations?.filter?.((v) => !v.verification?.isVerified) || [];
+      if (pendingVendors.length) {
+        items.push({
+          id: 'vendor-kyc',
+          title: `${pendingVendors.length} vendor KYC review${pendingVendors.length === 1 ? '' : 's'}`,
+          body: pendingVendors.slice(0, 2).map((v) => v.businessName).filter(Boolean).join(', ') || 'Vendor documents need review',
+          to: '/admin/vendors?tab=Pending',
+          tone: 'amber',
+        });
+      }
+      const bookingStats = bookings?.stats || {};
+      if (Number(bookingStats.pendingPaymentCount || 0) > 0) {
+        items.push({
+          id: 'pending-payments',
+          title: `${bookingStats.pendingPaymentCount} payment verification${bookingStats.pendingPaymentCount === 1 ? '' : 's'} pending`,
+          body: 'Review escrow/payment status before execution continues.',
+          to: '/admin/bookings?tab=Pending',
+          tone: 'rose',
+        });
+      }
+      if (Number(bookingStats.inProgressCount || 0) > 0) {
+        items.push({
+          id: 'execution',
+          title: `${bookingStats.inProgressCount} booking${bookingStats.inProgressCount === 1 ? '' : 's'} in execution`,
+          body: 'Track evidence, completion, and settlement readiness.',
+          to: '/admin/bookings?tab=In%20Progress',
+          tone: 'blue',
+        });
+      }
+      const automationStats = automation?.stats || {};
+      if (Number(automationStats.deadLetter || 0) > 0 || Number(automationStats.pending || 0) > 0) {
+        items.push({
+          id: 'automation',
+          title: `${automationStats.deadLetter || 0} failed · ${automationStats.pending || 0} queued automation`,
+          body: 'Inspect outbox health and retry failed events if needed.',
+          to: '/admin/automation',
+          tone: Number(automationStats.deadLetter || 0) > 0 ? 'rose' : 'violet',
+        });
+      }
+      for (const log of audit?.logs || []) {
+        items.push({
+          id: `audit-${log._id}`,
+          title: log.action || 'Admin activity',
+          body: `${log.actorEmail || 'System'} · ${log.createdAt ? new Date(log.createdAt).toLocaleString() : 'Just now'}`,
+          to: '/admin/audit',
+          tone: 'slate',
+        });
+      }
+      setNotifications(items.slice(0, 8));
+    } catch (err) {
+      setNotificationError(err.message || 'Could not load notifications.');
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }
+
+  function openNotifications() {
+    setNotificationsOpen((open) => {
+      const next = !open;
+      if (next) loadNotifications();
+      return next;
+    });
+  }
+
+  function goNotification(to) {
+    setNotificationsOpen(false);
+    navigate(to);
+  }
+
+  useEffect(() => {
+    loadNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin.id]);
 
   const visible = MODULES.filter((m) => {
     if (m.superOnly) return admin.role === 'SUPER_ADMIN';
@@ -77,6 +169,7 @@ export default function AdminShell() {
   const utilityButton = dark
     ? 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
     : 'text-slate-600 hover:bg-lavender hover:text-navy';
+  const notificationCount = notifications.length;
 
   return (
     <div className="h-screen overflow-hidden bg-[#f5f6fb] dark:bg-[#0f1117] flex">
@@ -163,10 +256,78 @@ export default function AdminShell() {
             )}
           </form>
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
-            <button className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60" aria-label="Notifications">
-              <Icon name="bell" size={18} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={openNotifications}
+                className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60"
+                aria-label="Notifications"
+                aria-expanded={notificationsOpen}
+              >
+                <Icon name="bell" size={18} />
+                {notificationCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold grid place-items-center">
+                    {notificationCount > 9 ? '9+' : notificationCount}
+                  </span>
+                ) : (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
+                )}
+              </button>
+              {notificationsOpen && (
+                <div className="absolute right-0 top-11 w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-gray-100 bg-white shadow-2xl shadow-navy/10 z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-extrabold text-navy">Admin Notifications</div>
+                      <div className="text-[10px] text-muted">Live platform signals</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={loadNotifications}
+                      disabled={notificationsLoading}
+                      className="text-[11px] font-bold text-primary hover:text-primary-dark disabled:opacity-50"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notificationsLoading ? (
+                      <div className="px-4 py-5 text-xs text-muted">Loading notifications...</div>
+                    ) : notificationError ? (
+                      <div className="px-4 py-5 text-xs font-semibold text-rose-600">{notificationError}</div>
+                    ) : notifications.length ? (
+                      notifications.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => goNotification(item.to)}
+                          className="w-full text-left px-4 py-3 flex gap-3 hover:bg-lavender/60 border-b border-gray-50 last:border-b-0 transition"
+                        >
+                          <span
+                            className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${
+                              item.tone === 'rose'
+                                ? 'bg-rose-500'
+                                : item.tone === 'amber'
+                                ? 'bg-amber-500'
+                                : item.tone === 'blue'
+                                ? 'bg-sky-500'
+                                : item.tone === 'violet'
+                                ? 'bg-primary'
+                                : 'bg-slate-400'
+                            }`}
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-extrabold text-navy leading-5">{item.title}</span>
+                            <span className="block text-[11px] text-muted leading-4 truncate">{item.body}</span>
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-5 text-xs text-muted">No admin notifications right now.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2.5 pl-2">
               {admin.avatarUrl ? (
                 <img src={admin.avatarUrl} alt="Admin" className="w-9 h-9 rounded-full object-cover shrink-0 border border-gray-200" />

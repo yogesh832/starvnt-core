@@ -72,6 +72,13 @@ const MODULE_DATA = {
     rows: [],
     total: 0, pages: 1,
   },
+  automation: {
+    title: 'Automation', add: null,
+    tabs: ['All', 'Pending', 'Processing', 'Completed', 'Dead Letter'], filters: [],
+    columns: ['Event Type', 'Aggregate', 'Status', 'Attempts', 'Next Run'],
+    rows: [],
+    total: 0, pages: 1,
+  },
   reports: {
     title: 'Reports & Analytics', add: '⇩ Export',
     tabs: [], filters: ['Last 30 Days', 'All Event Types'],
@@ -240,6 +247,11 @@ export default function ModuleTable({ kind, embedded = false }) {
       endpoint = `/events?limit=${limit}&skip=${skip}${searchParam}${tabParam}`;
     } else if (kind === 'coupons') {
       endpoint = `/coupons?limit=${limit}&skip=${skip}${searchParam}${tabParam}`;
+    } else if (kind === 'automation') {
+      const statusParam = tab && tab !== 'All'
+        ? `&status=${encodeURIComponent(tab === 'Dead Letter' ? 'DEAD_LETTER' : tab.toUpperCase().replace(/\s+/g, '_'))}`
+        : '';
+      endpoint = `/automation/outbox?limit=${limit}${statusParam}`;
     }
 
     if (endpoint) {
@@ -258,6 +270,16 @@ export default function ModuleTable({ kind, embedded = false }) {
               c.validUntil ? new Date(c.validUntil).toLocaleDateString() : 'Never',
               `${c.usageCount || 0} / ${c.usageLimit || '∞'}`,
               c.isActive ? 'Active' : 'Inactive',
+            ]);
+          }
+          if (kind === 'automation' && res.events) {
+            totalItems = res.total ?? res.count ?? res.events.length;
+            mappedRows = res.events.map((evt) => [
+              evt.eventType || evt.type || 'Outbox Event',
+              evt.aggregateId || evt.aggregateType || '—',
+              evt.status || 'PENDING',
+              String(evt.attempts ?? 0),
+              evt.nextRunAt ? new Date(evt.nextRunAt).toLocaleString() : '—',
             ]);
           }
           if (kind === 'bookings' && res.bookings) {

@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
     "seed": "node scripts/seed-super-admin.js",
     "seed:vendor": "node scripts/seed-vendor.js",
     "seed:vendors": "node scripts/seed-real-vendors.js",
@@ -29,9 +28,5 @@
     "nodemailer": "^10.0.10",
     "openai": "^7.21.0",
     "resend": "^6.28.1"
-  },
-  "devDependencies": {
-    "mongodb-memory-server": "^10.1.3",
-    "supertest": "^7.0.0"
   }
 }

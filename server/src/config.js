@@ -109,7 +109,7 @@ export const config = {
   geminiModel: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   geminiThinkingLevel: process.env.GEMINI_THINKING_LEVEL || "minimal",
 
-  auraReasoningModel: process.env.AURA_REASONING_MODEL || "gemini-3.8-flash",
+  auraReasoningModel: process.env.AURA_REASONING_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   auraReasoningLevel: process.env.AURA_REASONING_LEVEL || "low",
 
   chatThinkingStatusDelayMs: Number(process.env.CHAT_THINKING_STATUS_DELAY_MS || 1200),

@@ -4,8 +4,6 @@ import { useExternalAuth } from './auth/ExternalAuthContext.jsx';
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext.jsx';
 import { LogoWord } from './components/ui.jsx';
 import ExternalLogin from './pages/external/Login.jsx';
-import TestLogin from './pages/external/TestLogin.jsx';
-import TestingHub from './pages/external/TestingHub.jsx';
 import Landing from './pages/customer/Landing.jsx';
 import CustomerPortal from './pages/customer/CustomerPortal.jsx';
 import VendorPortal from './pages/vendor/VendorPortal.jsx';
@@ -90,19 +88,6 @@ export default function App() {
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />
       <Route path="/register" element={<ExternalLogin />} />
-      <Route path="/test-login" element={<TestLogin />} />
-      <Route path="/dev-login" element={<Navigate to="/test-login" replace />} />
-      <Route
-        path="/test"
-        element={
-          <AdminAuthProvider>
-            <TestingHub />
-          </AdminAuthProvider>
-        }
-      />
-      <Route path="/qa" element={<Navigate to="/test" replace />} />
-      <Route path="/testing" element={<Navigate to="/test" replace />} />
-      <Route path="/test-all" element={<Navigate to="/test" replace />} />
       <Route
         path="/customer/*"
         element={

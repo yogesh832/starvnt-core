@@ -223,14 +223,7 @@ export default function AdminLogin() {
                 </button>
               </form>
 
-              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-muted dark:text-gray-400">
-                <button
-                  type="button"
-                  onClick={() => navigate('/test-login')}
-                  className="text-primary hover:underline font-bold"
-                >
-                  🧪 Test Accounts Portal
-                </button>
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end text-[11px] text-muted dark:text-gray-400">
                 <button
                   type="button"
                   onClick={() => navigate('/login')}

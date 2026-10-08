@@ -1,17 +1,8 @@
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
+import { useEffect, useState } from 'react';
+import { adminApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { AdminEmptyState, AdminPageHeader, AdminStatCard } from './adminUi.jsx';
-
-const STATS = [
-  { label: 'Total Customers', value: '0', delta: '0% this month', icon: 'customers', iconBg: 'bg-primary-soft text-primary' },
-  { label: 'Total Vendors', value: '0', delta: '0% this month', icon: 'vendors', iconBg: 'bg-sky-50 text-sky-600' },
-  { label: 'Active Events', value: '0', delta: '0% this month', icon: 'events', iconBg: 'bg-orange-50 text-orange-500' },
-  { label: 'GMV (Total Bookings)', value: '₹0', delta: '0% this month', icon: 'wallet', iconBg: 'bg-emerald-50 text-emerald-600' },
-];
-
-const ACTIVITIES = [];
-
-const ATTENTION = [];
 
 const DONUT = [
   { label: 'Planning', pct: 0, color: '#5a4bd1' },
@@ -103,7 +94,77 @@ function EventsDonut() {
 
 export default function Dashboard() {
   const { admin } = useAdminAuth();
+  const [summary, setSummary] = useState({
+    stats: [
+      { label: 'Total Customers', value: '0', delta: 'Live count', icon: 'customers' },
+      { label: 'Total Vendors', value: '0', delta: 'Live count', icon: 'vendors' },
+      { label: 'Active Events', value: '0', delta: 'Planning + booked', icon: 'events' },
+      { label: 'GMV (Total Bookings)', value: '₹0', delta: 'Booked value', icon: 'wallet' },
+    ],
+    activities: [],
+    attention: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError('');
+
+    Promise.allSettled([
+      adminApi.call('/external-users/customers?limit=1'),
+      adminApi.call('/external-users/organizations?limit=1'),
+      adminApi.call('/events?limit=50'),
+      adminApi.call('/operations/bookings?limit=1'),
+      adminApi.call('/audit?limit=5'),
+    ])
+      .then((results) => {
+        if (!alive) return;
+        const [customers, vendors, events, bookings, audit] = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
+        const customerCount = customers?.total ?? customers?.count ?? customers?.customers?.length ?? 0;
+        const vendorCount = vendors?.total ?? vendors?.count ?? vendors?.organizations?.length ?? 0;
+        const eventRows = events?.events || [];
+        const eventCount = events?.total ?? events?.count ?? eventRows.length;
+        const activeEventCount = eventRows.filter((e) => ['planning', 'booked', 'in_progress'].includes(e.status)).length || eventCount;
+        const bookingStats = bookings?.stats || {};
+        const gmv = Number(bookingStats.totalGmv || 0);
+        const pendingVendors = vendors?.organizations?.filter?.((v) => !v.verification?.isVerified)?.length || 0;
+        const pendingPayments = Number(bookingStats.pendingPaymentCount || 0);
+        const inProgress = Number(bookingStats.inProgressCount || 0);
+
+        const attention = [
+          pendingVendors ? `${pendingVendors} vendor verification${pendingVendors === 1 ? '' : 's'} need review` : null,
+          pendingPayments ? `${pendingPayments} booking payment${pendingPayments === 1 ? '' : 's'} need verification` : null,
+          inProgress ? `${inProgress} booking${inProgress === 1 ? '' : 's'} in execution` : null,
+        ].filter(Boolean);
+
+        setSummary({
+          stats: [
+            { label: 'Total Customers', value: customerCount.toLocaleString('en-IN'), delta: 'Live count', icon: 'customers' },
+            { label: 'Total Vendors', value: vendorCount.toLocaleString('en-IN'), delta: 'Live count', icon: 'vendors' },
+            { label: 'Active Events', value: activeEventCount.toLocaleString('en-IN'), delta: `${eventCount.toLocaleString('en-IN')} total`, icon: 'events' },
+            { label: 'GMV (Total Bookings)', value: `₹${gmv.toLocaleString('en-IN')}`, delta: `${bookingStats.totalBookings || 0} bookings`, icon: 'wallet' },
+          ],
+          activities: audit?.logs || [],
+          attention,
+        });
+
+        if (results.some((r) => r.status === 'rejected')) {
+          setError('Some dashboard data could not be loaded.');
+        }
+      })
+      .catch(() => {
+        if (alive) setError('Failed to load admin dashboard data.');
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => { alive = false; };
+  }, []);
+
   return (
     <div className="space-y-5">
       <AdminPageHeader
@@ -113,10 +174,16 @@ export default function Dashboard() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        {STATS.map((s) => (
+        {summary.stats.map((s) => (
           <AdminStatCard key={s.label} icon={s.icon} value={s.value} label={s.label} foot={s.delta} />
         ))}
       </div>
+
+      {error && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+          {error}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-5">
         <BookingsTrend />
@@ -126,16 +193,18 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-white/80">
           <h2 className="font-bold text-[15px] mb-3">Recent Activities</h2>
-          {ACTIVITIES.length > 0 ? (
+          {loading ? (
+            <div className="text-xs text-muted">Loading recent admin activity...</div>
+          ) : summary.activities.length > 0 ? (
             <ul className="space-y-3">
-              {ACTIVITIES.map((a, i) => (
-                <li key={i} className="flex items-center gap-3">
-                  <span className={`w-8 h-8 rounded-full grid place-items-center shrink-0 ${a.cls}`}>
-                    <Icon name={a.icon} size={15} />
+              {summary.activities.map((a) => (
+                <li key={a._id} className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-full grid place-items-center shrink-0 bg-lavender text-primary">
+                    <Icon name="audit" size={15} />
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-medium truncate">{a.text}</div>
-                    <div className="text-[11px] text-muted">{a.ago}</div>
+                    <div className="text-[13px] font-medium truncate">{a.action || 'Admin action'}</div>
+                    <div className="text-[11px] text-muted">{a.actorEmail || 'System'} · {a.createdAt ? new Date(a.createdAt).toLocaleString() : 'Just now'}</div>
                   </div>
                 </li>
               ))}
@@ -146,9 +215,11 @@ export default function Dashboard() {
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-white/80">
           <h2 className="font-bold text-[15px] mb-3">Needs Attention</h2>
-          {ATTENTION.length > 0 ? (
+          {loading ? (
+            <div className="text-xs text-muted">Checking platform queues...</div>
+          ) : summary.attention.length > 0 ? (
             <ul className="space-y-2.5">
-              {ATTENTION.map((t) => (
+              {summary.attention.map((t) => (
                 <li key={t} className="flex items-center gap-2.5 text-[13px]">
                   <span className="w-5 h-5 rounded-full bg-red-50 text-red-500 grid place-items-center text-[10px] font-bold">!</span>
                   {t}

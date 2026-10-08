@@ -2461,7 +2461,50 @@ const CASHFREE_BANK_TEST_CASES = [
   },
 ];
 
-/* ── STARVNT Financial & Verification Onboarding Manager ───────────────────── */
+/* ── STARVNT Financial, Verification & Document Hub ────────────────────── */
+function ModuleDocumentCard({ doc, onPreview, onDelete }) {
+  const isImg = doc.fileUrl?.startsWith("data:image/") || /\.(jpg|jpeg|png|webp)$/i.test(doc.fileName || "");
+  return (
+    <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl border border-gray-200/80 dark:border-gray-700/80 bg-white/90 dark:bg-gray-900/60 text-xs shadow-2xs">
+      <div className="flex items-center gap-3 min-w-0">
+        {isImg && doc.fileUrl ? (
+          <img src={doc.fileUrl} alt={doc.title} className="w-10 h-10 rounded-lg object-cover border border-gray-200 dark:border-gray-700 shrink-0" />
+        ) : (
+          <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
+            <Icon name="documents" size={18} />
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="font-bold text-navy dark:text-gray-100 truncate">{doc.fileName || doc.title}</div>
+          <div className="text-[10px] text-muted dark:text-gray-400 flex items-center gap-2 flex-wrap">
+            <span>{doc.fileSize || "File"}</span>
+            <span>·</span>
+            <span className={doc.status === "VERIFIED" ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-amber-600 dark:text-amber-400 font-bold"}>
+              {doc.status === "VERIFIED" ? "✓ Verified Document" : "Under Admin Review"}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+        <button
+          type="button"
+          onClick={() => onPreview(doc)}
+          className="px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-navy dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
+        >
+          Preview
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(doc._id)}
+          className="px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-900/50 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function VendorFinancialOnboardingCard() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2478,6 +2521,8 @@ export function VendorFinancialOnboardingCard() {
   const [gstRegistered, setGstRegistered] = useState(false);
   const [gstinInput, setGstinInput] = useState("");
   const [savingGst, setSavingGst] = useState(false);
+  const [verifyingGst, setVerifyingGst] = useState(false);
+  const [gstVerificationResult, setGstVerificationResult] = useState(null);
 
   // Bank state
   const [bankForm, setBankForm] = useState({
@@ -2497,39 +2542,43 @@ export function VendorFinancialOnboardingCard() {
   const [isEditingGst, setIsEditingGst] = useState(false);
   const [isEditingBank, setIsEditingBank] = useState(false);
 
+  // File upload state & previews
+  const [uploadingDocType, setUploadingDocType] = useState(null);
+  const [selectedPreviewDoc, setSelectedPreviewDoc] = useState(null);
+
   const loadFinancialData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await externalApi.call("/vendor/financial");
-      if (res.ok && res.profile) {
-        setProfile(res.profile);
-        if (res.profile.pan?.panNumber) {
-          setPanInput(res.profile.pan.panNumber);
-        }
-        if (res.profile.gst) {
-          setGstRegistered(Boolean(res.profile.gst.isRegistered));
-          setGstinInput(res.profile.gst.gstin !== "N/A" ? res.profile.gst.gstin || "" : "");
-        }
-        if (res.profile.bankAccount) {
-          setBankForm({
-            accountHolderName: res.profile.bankAccount.accountHolderName || "",
-            accountNumber: res.profile.bankAccount.accountNumber || "",
-            ifsc: res.profile.bankAccount.ifsc || "",
-            bankName: res.profile.bankAccount.bankName || "",
-            accountType: res.profile.bankAccount.accountType || "SAVINGS",
-            phone: "",
-          });
-        }
+      const [financialRes, auditRes, docsRes] = await Promise.allSettled([
+        externalApi.call("/vendor/financial"),
+        externalApi.call("/vendor/financial/bank/verifications"),
+        externalApi.call("/vendor/documents"),
+      ]);
+
+      if (financialRes.status === "fulfilled" && financialRes.value?.ok) {
+        const p = financialRes.value.profile || {};
+        setProfile(p);
+        setPanInput(p.pan?.panNumber || "");
+        setGstRegistered(Boolean(p.gst?.isRegistered));
+        setGstinInput(p.gst?.gstin && p.gst.gstin !== "N/A" ? p.gst.gstin : "");
+
+        const b = p.bankAccount || {};
+        setBankForm({
+          accountHolderName: b.accountHolderName || "",
+          accountNumber: b.accountNumber || "",
+          ifsc: b.ifsc || "",
+          bankName: b.bankName || "",
+          accountType: b.accountType || "SAVINGS",
+          phone: b.phone || "",
+        });
       }
 
-      const logRes = await externalApi.call("/vendor/financial/bank/verifications");
-      if (logRes.ok && Array.isArray(logRes.verifications)) {
-        setLogs(logRes.verifications);
+      if (auditRes.status === "fulfilled" && auditRes.value?.ok) {
+        setLogs(auditRes.value.verifications || []);
       }
 
-      const docRes = await externalApi.call("/vendor/documents");
-      if (docRes.ok && Array.isArray(docRes.documents)) {
-        setDocuments(docRes.documents);
+      if (docsRes.status === "fulfilled" && docsRes.value?.ok) {
+        setDocuments(docsRes.value.documents || []);
       }
     } catch (err) {
       console.warn("[VendorFinancialOnboardingCard] load error:", err.message);
@@ -2542,704 +2591,756 @@ export function VendorFinancialOnboardingCard() {
     loadFinancialData();
   }, [loadFinancialData]);
 
-  async function handleSavePan(e) {
-    if (e) e.preventDefault();
+  const triggerFileUpload = async (file, docType, defaultTitle) => {
+    if (!file) return;
+    try {
+      setUploadingDocType(docType);
+      setFeedback("");
+      
+      let base64Url = "";
+      if (file.type.startsWith("image/")) {
+        base64Url = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const payload = {
+        title: defaultTitle,
+        type: docType,
+        documentNumber: docType === "PAN" ? panInput : docType === "GST" ? gstinInput : bankForm.accountNumber || "",
+        fileName: file.name,
+        fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        fileUrl: base64Url,
+        notes: `Uploaded for inline ${docType} verification`,
+      };
+
+      const res = await externalApi.call("/vendor/documents", {
+        method: "POST",
+        body: payload,
+      });
+
+      if (res.ok) {
+        setFeedbackType("success");
+        setFeedback(`✓ ${defaultTitle} document attached successfully.`);
+        await loadFinancialData();
+      } else {
+        setFeedbackType("error");
+        setFeedback(`Document upload failed: ${res.error || "Server error"}`);
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(`Upload error: ${err.message}`);
+    } finally {
+      setUploadingDocType(null);
+    }
+  };
+
+  const handleVerifyPan = async (e) => {
+    e?.preventDefault();
     if (!panInput.trim()) return;
     try {
       setSavingPan(true);
       setFeedback("");
+
       const res = await externalApi.call("/vendor/financial/pan", {
         method: "POST",
-        body: { panNumber: panInput.trim() },
+        body: { panNumber: panInput.trim().toUpperCase() },
       });
+
       if (res.ok) {
         setFeedbackType("success");
-        setFeedback(res.pan?.verificationStatus === "VERIFIED" ? "✓ PAN Number verified successfully!" : "PAN saved.");
+        setFeedback(res.pan?.verificationStatus === "VERIFIED" ? "✓ PAN Number verified successfully!" : "PAN saved for review.");
+        setIsEditingPan(false);
+        setDiscoveryResult(res.verificationResult || null);
         await loadFinancialData();
       } else {
         setFeedbackType("error");
-        setFeedback(res.message || res.error || "Failed to save PAN.");
+        setFeedback(`Could not save PAN: ${res.error || "API error"}`);
       }
     } catch (err) {
       setFeedbackType("error");
-      setFeedback(err.message);
+      setFeedback(`PAN Save Error: ${err.message}`);
     } finally {
       setSavingPan(false);
     }
-  }
+  };
 
-  async function handleDiscoverGstins() {
+  const handleDiscoverGstins = async () => {
     if (!panInput.trim()) return;
     try {
       setDiscoveringGstin(true);
       setDiscoveryResult(null);
+      setFeedback("");
+
       const res = await externalApi.call("/vendor/financial/discover-gstin", {
         method: "POST",
-        body: { pan: panInput.trim() },
+        body: { pan: panInput.trim().toUpperCase() },
       });
-      setDiscoveryResult(res);
-    } catch (err) {
-      setDiscoveryResult({ ok: false, message: err.message });
-    } finally {
-      setDiscoveringGstin(false);
-    }
-  }
 
-  async function handleSaveGst(e, explicitRegistered = null) {
-    if (e) e.preventDefault();
-    const isReg = explicitRegistered !== null ? explicitRegistered : gstRegistered;
-    try {
-      setSavingGst(true);
-      setFeedback("");
-      const payload = {
-        isRegistered: isReg,
-        gstin: isReg ? gstinInput.trim() : "N/A",
-      };
-      const res = await externalApi.call("/vendor/financial/gst", {
-        method: "POST",
-        body: payload,
-      });
       if (res.ok) {
-        setFeedbackType("success");
-        setFeedback(
-          isReg
-            ? "✓ GSTIN verified and saved successfully!"
-            : "✓ GST status updated to NOT REGISTERED (N/A). Onboarding continues via PAN!"
-        );
-        await loadFinancialData();
+        setDiscoveryResult(res);
+        setFeedbackType("info");
+        setFeedback(res.message || (res.found ? "GSTINs discovered under this PAN." : "No GST registration found for this PAN."));
       } else {
         setFeedbackType("error");
-        setFeedback(res.message || res.error || "Failed to save GST status.");
+        setFeedback(res.error || "Could not complete PAN discovery.");
       }
     } catch (err) {
       setFeedbackType("error");
-      setFeedback(err.message);
+      setFeedback(`PAN Discovery Error: ${err.message}`);
+    } finally {
+      setDiscoveringGstin(false);
+    }
+  };
+
+  const handleVerifyGstApi = async () => {
+    if (!gstinInput.trim()) return;
+    try {
+      setVerifyingGst(true);
+      setGstVerificationResult(null);
+      setFeedback("");
+
+      const res = await externalApi.call("/vendor/financial/gst", {
+        method: "POST",
+        body: { isRegistered: true, gstin: gstinInput.trim().toUpperCase() },
+      });
+
+      if (res.ok && res.verificationResult) {
+        setGstVerificationResult(res.verificationResult);
+        if (res.verificationResult.matched) {
+          setFeedbackType("success");
+          setFeedback(`✓ GSTIN auto-verified via API! Legal Name: "${res.verificationResult.legalName || res.verificationResult.registeredName}" matched your profile.`);
+        } else {
+          setFeedbackType("info");
+          setFeedback(`GSTIN API lookup complete. Official Name: "${res.verificationResult.legalName || res.verificationResult.registeredName || "N/A"}" (Trade: "${res.verificationResult.tradeName || "N/A"}")`);
+        }
+      } else {
+        setFeedbackType("error");
+        setFeedback(res.error || "Could not complete GSTIN verification API check.");
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(`GST Verification Error: ${err.message}`);
+    } finally {
+      setVerifyingGst(false);
+    }
+  };
+
+  const handleSaveGst = async (e) => {
+    e?.preventDefault();
+    try {
+      setSavingGst(true);
+      setFeedback("");
+
+      const res = await externalApi.call("/vendor/financial/gst", {
+        method: "POST",
+        body: {
+          isRegistered: !!gstRegistered,
+          gstin: gstRegistered ? gstinInput.trim().toUpperCase() : "N/A",
+        },
+      });
+
+      if (res.ok) {
+        setGstVerificationResult(res.verificationResult || null);
+        setFeedbackType("success");
+        setFeedback(
+          gstRegistered
+            ? "✓ GSTIN saved and verification completed."
+            : "✓ GST status saved: Exempt / Not Registered."
+        );
+        setIsEditingGst(false);
+        await loadFinancialData();
+      } else {
+        setFeedbackType("error");
+        setFeedback(`Could not save GST: ${res.error || "API error"}`);
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(`GST Save Error: ${err.message}`);
     } finally {
       setSavingGst(false);
     }
-  }
+  };
 
-  async function handleSaveBank(e) {
-    if (e) e.preventDefault();
+  const handleSaveBankDetails = async (e) => {
+    e?.preventDefault();
     try {
       setSavingBank(true);
       setFeedback("");
+
       const res = await externalApi.call("/vendor/financial/bank", {
         method: "POST",
         body: bankForm,
       });
+
       if (res.ok) {
         setFeedbackType("success");
-        setFeedback("Bank account details saved. Proceed to bank account verification.");
+        setFeedback("✓ Bank account details saved successfully.");
         await loadFinancialData();
       } else {
         setFeedbackType("error");
-        setFeedback(res.message || res.error || "Failed to save bank details.");
+        setFeedback(`Could not save bank details: ${res.error || "API error"}`);
       }
     } catch (err) {
       setFeedbackType("error");
-      setFeedback(err.message);
+      setFeedback(`Bank Save Error: ${err.message}`);
     } finally {
       setSavingBank(false);
     }
-  }
+  };
 
-  async function handleVerifyBank() {
+  const handleVerifyBank = async () => {
     try {
       setVerifyingBank(true);
       setFeedback("");
+
       const res = await externalApi.call("/vendor/financial/bank/verify", {
         method: "POST",
         body: { ...bankForm, forceRetry: true },
       });
+
       if (res.ok && res.status === "VERIFIED") {
         setFeedbackType("success");
         setFeedback("✓ Bank Account Verified successfully!");
+        setIsEditingBank(false);
         await loadFinancialData();
       } else {
         setFeedbackType("error");
-        setFeedback(res.failureReason || res.message || "Bank account verification failed. Please check Account Number and IFSC.");
+        setFeedback(res.failureReason || res.message || res.error || "Bank verification failed.");
         await loadFinancialData();
       }
     } catch (err) {
       setFeedbackType("error");
-      setFeedback(`Bank verification failed: ${err.message}`);
+      setFeedback(`Bank Verification Error: ${err.message}`);
     } finally {
       setVerifyingBank(false);
     }
-  }
+  };
 
-  function applyCashfreeTestCase(testCase) {
-    setBankForm({
-      ...bankForm,
-      accountHolderName: testCase.accountHolderName,
-      accountNumber: testCase.accountNumber,
-      ifsc: testCase.ifsc,
-      bankName: testCase.bankName,
-      phone: testCase.phone,
-    });
-    setFeedbackType("info");
-    setFeedback(`Loaded Cashfree sandbox case: ${testCase.label}. Expected result: ${testCase.expected}.`);
-  }
+  const handleDeleteDoc = async (docId) => {
+    if (!window.confirm("Remove this document record?")) return;
+    try {
+      const res = await externalApi.call(`/vendor/documents/${docId}`, { method: "DELETE" });
+      if (res.ok) {
+        await loadFinancialData();
+      }
+    } catch (err) {
+      alert(`Could not delete document: ${err.message}`);
+    }
+  };
 
-  if (loading && !profile) {
+  if (loading) {
     return (
-      <Card className="p-6">
-        <SkeletonLine className="h-6 w-1/3 mb-4" />
-        <SkeletonLine className="h-4 w-2/3 mb-2" />
-        <SkeletonLine className="h-20 w-full" />
+      <Card className="space-y-4">
+        <SkeletonLine className="h-6 w-56" />
+        <SkeletonLine className="h-20 w-full rounded-2xl" />
+        <SkeletonLine className="h-20 w-full rounded-2xl" />
       </Card>
     );
   }
 
-  const panVerified = profile?.pan?.verificationStatus === "VERIFIED";
+  const panStatus = profile?.pan?.verificationStatus;
   const gstStatus = profile?.gst?.verificationStatus;
-  const gstVerified = gstStatus === "VERIFIED";
-  const isGstNotReq = profile?.gst?.isRegistered === false;
   const bankStatus = profile?.bankAccount?.verificationStatus;
+  const isPanProvided = Boolean(profile?.pan?.panNumber || panInput);
+  const isPanVerified = panStatus === "VERIFIED";
+  const isGstProvided = Boolean(profile?.gst?.gstin && profile.gst.gstin !== "N/A") || Boolean(gstRegistered && gstinInput);
+  const isGstExempt = profile?.gst?.isRegistered === false || !gstRegistered;
+  const isGstVerified = gstStatus === "VERIFIED";
   const isBankVerified = bankStatus === "VERIFIED";
-  const identityVerified = panVerified || gstVerified || isGstNotReq || documents.some((d) => d.status === "VERIFIED");
-  const financialReady = identityVerified && isBankVerified;
+  const isTaxIdentityValid = isPanVerified || isGstVerified || isGstExempt || isPanProvided || isGstProvided;
+
+  const panDocs = documents.filter((d) => d.type === "PAN");
+  const gstDocs = documents.filter((d) => d.type === "GST");
+  const bankDocs = documents.filter((d) => d.type === "BANK_PROOF" || d.type === "CHEQUE");
+  const otherDocs = documents.filter((d) => !["PAN", "GST", "BANK_PROOF", "CHEQUE"].includes(d.type));
 
   return (
-    <Card className="p-5 sm:p-6 space-y-6 border border-gray-100 dark:border-gray-800 dark:bg-dark-card shadow-xs">
-      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
+    <Card className="space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
-              Tax Identity & Bank Verification
+            <h2 className="font-extrabold text-lg text-navy dark:text-gray-100">
+              Tax Identity & Bank Verification Hub
             </h2>
-            {financialReady ? (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center gap-1">
-                <Icon name="check" size={12} /> Ready
-              </span>
-            ) : (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 flex items-center gap-1">
-                <Icon name="info" size={12} /> Action Required
-              </span>
-            )}
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-soft text-primary uppercase">
+              Core Activation Gate
+            </span>
           </div>
           <p className="text-xs text-muted dark:text-gray-400 mt-1 max-w-2xl">
-            You can add PAN, GST, or both for your business identity (at least one is required). Bank account verification is mandatory for onboarding and payouts.
+            Provide either PAN or GST (or both) to verify tax identity. Mandatory bank account verification enables payouts and customer matching.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 w-full lg:w-auto lg:min-w-[360px]">
-          {[
-            { label: "PAN/KYC", ok: panVerified, value: panVerified ? "Verified" : gstVerified || isGstNotReq ? "Optional" : "Required" },
-            { label: "GST", ok: isGstNotReq || gstVerified, value: isGstNotReq ? "N/A (Exempt)" : gstVerified ? "Verified" : panVerified ? "Optional" : "Choose" },
-            { label: "Bank", ok: isBankVerified, value: isBankVerified ? "Verified" : "Mandatory" },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className={`rounded-xl border px-3 py-2 ${
-                item.ok
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
-                  : "border-amber-200 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
-              }`}
-            >
-              <div className="text-[10px] font-extrabold uppercase tracking-wide opacity-75">
-                {item.label}
-              </div>
-              <div className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold">
-                <Icon name={item.ok ? "check" : "info"} size={12} />
-                <span>{item.value}</span>
-              </div>
-            </div>
-          ))}
+
+        {/* Readiness Badges */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 ${
+            isTaxIdentityValid
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
+              : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300"
+          }`}>
+            <Icon name={isTaxIdentityValid ? "shieldCheck" : "alertTriangle"} size={14} />
+            <span>Tax ID: {isTaxIdentityValid ? (isPanProvided ? "PAN Verified/Provided" : "GST Exempt") : "Action Required"}</span>
+          </div>
+
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 ${
+            isBankVerified
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
+              : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300"
+          }`}>
+            <Icon name={isBankVerified ? "check" : "bank"} size={14} />
+            <span>Bank: {isBankVerified ? "Verified" : "Mandatory Verification Required"}</span>
+          </div>
         </div>
       </div>
 
+      {/* Feedback Banner */}
       {feedback && (
-        <div
-          className={`p-3 rounded-xl text-xs font-bold flex items-start gap-2 ${
-            feedbackType === "success"
-              ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
-              : "bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800"
-          }`}
-        >
-          <Icon name={feedbackType === "success" ? "check" : "info"} size={16} className="shrink-0 mt-0.5" />
+        <div className={`p-3.5 rounded-2xl text-xs font-bold border flex items-center justify-between gap-2 ${
+          feedbackType === "success"
+            ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 text-emerald-900 dark:text-emerald-200"
+            : feedbackType === "error"
+            ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 text-rose-900 dark:text-rose-200"
+            : "bg-sky-50 dark:bg-sky-950/40 border-sky-200 text-sky-900 dark:text-sky-200"
+        }`}>
           <span>{feedback}</span>
+          <button type="button" onClick={() => setFeedback("")} className="text-muted hover:text-navy dark:hover:text-white font-mono text-sm cursor-pointer">✕</button>
         </div>
       )}
 
-      {/* Module 1: PAN NUMBER (Required for all) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-extrabold text-navy dark:text-gray-200 flex items-center gap-1.5">
-            <span>1. PAN Number</span>
-            <span className="text-rose-500 font-bold text-[11px]">*Required</span>
-          </label>
-          {panVerified && (
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <Icon name="check" size={12} /> Verified ({profile?.pan?.legalName || "Matched"})
-            </span>
-          )}
+      {/* MODULE 1: PAN NUMBER & DOCUMENT */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-extrabold text-xs grid place-items-center">1</span>
+              <h3 className="font-extrabold text-sm text-navy dark:text-gray-100">PAN Identity Card & Document</h3>
+              {isPanProvided && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✓ PAN Configured</span>}
+            </div>
+            <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
+              Personal or Firm 10-digit PAN (e.g., ABCDE1234F). Verified against official entity name & brand name.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {isPanProvided && !isEditingPan && (
+              <button
+                type="button"
+                onClick={() => setIsEditingPan(true)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-navy dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                Edit PAN
+              </button>
+            )}
+            <label className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer">
+              <Icon name="plus" size={13} />
+              <span>{uploadingDocType === "PAN" ? "Uploading..." : "Upload PAN Image/PDF"}</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                disabled={uploadingDocType === "PAN"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) triggerFileUpload(f, "PAN", "Corporate / Firm PAN Card");
+                }}
+              />
+            </label>
+          </div>
         </div>
 
-        {panVerified && !isEditingPan ? (
-          <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="font-mono font-extrabold text-sm text-navy dark:text-white uppercase tracking-wide">
-                  {profile?.pan?.panNumber || panInput}
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center gap-1">
-                  <Icon name="check" size={10} /> Verified PAN
-                </span>
-              </div>
-              <div className="text-xs text-emerald-900 dark:text-emerald-200 font-medium">
-                Legal Registered Name: <strong className="font-bold">{profile?.pan?.legalName || "Matched / Approved"}</strong>
-              </div>
-              {documents.filter(d => d.type === "PAN" || d.title?.toUpperCase().includes("PAN")).map(doc => (
-                <div key={doc._id} className="mt-1.5 flex items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-black/40 px-2.5 py-1 rounded-lg border border-emerald-200/80">
-                  <Icon name="documents" size={12} />
-                  <span className="font-bold">{doc.fileName || doc.title}</span>
-                  {doc.documentNumber && <span className="font-mono text-[10px]">({doc.documentNumber})</span>}
-                  <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-400">✓ Uploaded Document</span>
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsEditingPan(true)}
-              className="px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/70 transition shrink-0 cursor-pointer"
-            >
-              Edit PAN
-            </button>
-          </div>
-        ) : (
-          <div>
-            <form onSubmit={handleSavePan} className="flex flex-col sm:flex-row gap-2">
+        {(!isPanProvided || isEditingPan) ? (
+          <form onSubmit={handleVerifyPan} className="grid sm:grid-cols-3 gap-3 pt-2">
+            <div className="sm:col-span-2">
               <input
                 type="text"
-                maxLength={10}
                 value={panInput}
                 onChange={(e) => setPanInput(e.target.value.toUpperCase())}
                 placeholder="e.g. ABCDE1234F"
-                className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
+                maxLength={10}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20 uppercase text-xs"
               />
+            </div>
+            <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={savingPan || !panInput.trim()}
-                className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
+                className="flex-1 px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer"
               >
-                {savingPan ? "Saving & Verifying..." : "Verify PAN"}
+                {savingPan ? "Saving..." : "Save PAN"}
               </button>
               <button
                 type="button"
                 onClick={handleDiscoverGstins}
-                disabled={discoveringGstin || !panInput.trim()}
-                className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
+                disabled={discoveringGstin || panInput.length < 10}
+                className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 transition cursor-pointer"
               >
-                {discoveringGstin ? "Searching..." : "Search GSTINs under PAN"}
+                {discoveringGstin ? "Verifying..." : "Verify Name"}
               </button>
-              {panVerified && (
+            </div>
+          </form>
+        ) : (
+          <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-mono font-bold text-navy dark:text-gray-100">
+            <span>PAN: {panInput}</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-sans text-[11px] font-bold">✓ PAN Identity Active</span>
+          </div>
+        )}
+
+        {discoveryResult && (
+          <div className={`p-3 rounded-xl border text-xs ${discoveryResult.matched ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 text-emerald-900 dark:text-emerald-200" : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 text-amber-900 dark:text-amber-200"}`}>
+            <div className="font-extrabold flex items-center justify-between">
+              <span>{discoveryResult.matched ? "✓ Name Auto-Verified" : "⚠ Admin Review Required"}</span>
+              <span className="text-[10px] uppercase font-bold">{discoveryResult.entityType || "PAN Record"}</span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              <div>Legal Entity Name: <strong>{discoveryResult.legalName || discoveryResult.registeredName || "N/A"}</strong></div>
+              {discoveryResult.tradeName && <div>Trade/Brand Name: <strong>{discoveryResult.tradeName}</strong></div>}
+            </div>
+          </div>
+        )}
+
+        {panDocs.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[11px] font-extrabold uppercase text-muted dark:text-gray-400 tracking-wider">Attached PAN Documents ({panDocs.length})</div>
+            {panDocs.map((doc) => (
+              <ModuleDocumentCard key={doc._id} doc={doc} onPreview={setSelectedPreviewDoc} onDelete={handleDeleteDoc} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* MODULE 2: GST REGISTRATION */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-extrabold text-xs grid place-items-center">2</span>
+              <h3 className="font-extrabold text-sm text-navy dark:text-gray-100">GST Registration & Certificate</h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                {gstRegistered ? "Active GSTIN" : "Exempt / Not Registered"}
+              </span>
+            </div>
+            <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
+              GST is optional if not registered. Enter 15-digit GSTIN or upload certificate for instant API verification.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {!isEditingGst && (
+              <button
+                type="button"
+                onClick={() => setIsEditingGst(true)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-navy dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                Change GST Status
+              </button>
+            )}
+            <label className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer">
+              <Icon name="plus" size={13} />
+              <span>{uploadingDocType === "GST" ? "Uploading..." : "Upload GST Certificate"}</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                disabled={uploadingDocType === "GST"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) triggerFileUpload(f, "GST", "GST Registration Certificate");
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {isEditingGst ? (
+          <form onSubmit={handleSaveGst} className="space-y-3 pt-2">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2 text-xs font-bold ${!gstRegistered ? "border-primary bg-primary/5 text-primary" : "border-gray-200 dark:border-gray-700 text-navy dark:text-gray-300"}`}>
+                <input
+                  type="radio"
+                  name="gstStatusChoice"
+                  checked={!gstRegistered}
+                  onChange={() => setGstRegistered(false)}
+                />
+                <span>GST Exempt / Not Registered (Active via PAN)</span>
+              </label>
+
+              <label className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2 text-xs font-bold ${gstRegistered ? "border-primary bg-primary/5 text-primary" : "border-gray-200 dark:border-gray-700 text-navy dark:text-gray-300"}`}>
+                <input
+                  type="radio"
+                  name="gstStatusChoice"
+                  checked={gstRegistered}
+                  onChange={() => setGstRegistered(true)}
+                />
+                <span>I have an Active GSTIN</span>
+              </label>
+            </div>
+
+            {gstRegistered && (
+              <div>
+                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">15-Digit GSTIN Number *</label>
+                <input
+                  type="text"
+                  value={gstinInput}
+                  onChange={(e) => setGstinInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. 33AASFB5978N1ZK"
+                  maxLength={15}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20 uppercase text-xs"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="submit"
+                disabled={savingGst || verifyingGst}
+                className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer"
+              >
+                {savingGst || verifyingGst ? "Verifying with API..." : gstRegistered ? "Verify & Save GSTIN" : "Save GST Status"}
+              </button>
+              {gstRegistered && (
                 <button
                   type="button"
-                  onClick={() => setIsEditingPan(false)}
-                  className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
+                  onClick={handleVerifyGstApi}
+                  disabled={verifyingGst || gstinInput.length < 10}
+                  className="px-3.5 py-2.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50 transition cursor-pointer"
+                >
+                  {verifyingGst ? "Verifying..." : "⚡ Check GSTIN via API"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsEditingGst(false)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs flex items-center justify-between font-bold text-navy dark:text-gray-100">
+            <span>GST Status: {gstRegistered ? `GSTIN ${gstinInput}` : "GST Not Applicable / Exempt (Onboarding Active via PAN)"}</span>
+            <span className="text-emerald-600 dark:text-emerald-400 text-[11px]">✓ Validated</span>
+          </div>
+        )}
+
+        {gstVerificationResult && (
+          <div className={`p-3 rounded-xl border text-xs ${gstVerificationResult.matched ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 text-emerald-900 dark:text-emerald-200" : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 text-amber-900 dark:text-amber-200"}`}>
+            <div className="font-extrabold flex items-center justify-between">
+              <span>{gstVerificationResult.matched ? "✓ GSTIN Auto-Verified (API)" : "⚠ Name Review Required"}</span>
+              <span className="text-[10px] uppercase font-bold">{gstVerificationResult.gstinStatus || "Active"}</span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              <div>Legal Registered Name: <strong>{gstVerificationResult.legalName || gstVerificationResult.registeredName || "N/A"}</strong></div>
+              {gstVerificationResult.tradeName && <div>Trade/Brand Name: <strong>{gstVerificationResult.tradeName}</strong></div>}
+              {gstVerificationResult.taxpayerType && <div>Taxpayer Type: <strong>{gstVerificationResult.taxpayerType}</strong></div>}
+            </div>
+          </div>
+        )}
+
+        {gstDocs.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[11px] font-extrabold uppercase text-muted dark:text-gray-400 tracking-wider">Attached GST Certificates ({gstDocs.length})</div>
+            {gstDocs.map((doc) => (
+              <ModuleDocumentCard key={doc._id} doc={doc} onPreview={setSelectedPreviewDoc} onDelete={handleDeleteDoc} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* MODULE 3: BANK ACCOUNT & VERIFICATION */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs grid place-items-center">3</span>
+              <h3 className="font-extrabold text-sm text-navy dark:text-gray-100">Bank Details & Verification</h3>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isBankVerified ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"}`}>
+                {isBankVerified ? "✓ Bank Account Verified" : "Action Required (Mandatory)"}
+              </span>
+            </div>
+            <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
+              Direct verification required via penny drop API. Payouts and customer matching unlock upon verification.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {isBankVerified && !isEditingBank && (
+              <button
+                type="button"
+                onClick={() => setIsEditingBank(true)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-navy dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                Edit Bank Details
+              </button>
+            )}
+            <label className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer">
+              <Icon name="plus" size={13} />
+              <span>{uploadingDocType === "BANK_PROOF" ? "Uploading..." : "Upload Passbook/Cheque"}</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                disabled={uploadingDocType === "BANK_PROOF"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) triggerFileUpload(f, "BANK_PROOF", "Bank Passbook / Cancelled Cheque");
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {(!isBankVerified || isEditingBank) ? (
+          <form onSubmit={handleSaveBankDetails} className="grid sm:grid-cols-2 gap-3 pt-2">
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Account Holder Name *</label>
+              <input
+                type="text"
+                required
+                value={bankForm.accountHolderName}
+                onChange={(e) => setBankForm({ ...bankForm, accountHolderName: e.target.value })}
+                placeholder="Full name as in bank records"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Account Number *</label>
+              <input
+                type="text"
+                required
+                value={bankForm.accountNumber}
+                onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value.replace(/\D/g, "") })}
+                placeholder="e.g. 123456789012"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">IFSC Code *</label>
+              <input
+                type="text"
+                required
+                value={bankForm.ifsc}
+                onChange={(e) => setBankForm({ ...bankForm, ifsc: e.target.value.toUpperCase() })}
+                placeholder="e.g. YESB0000262"
+                maxLength={11}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20 uppercase"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Bank Name *</label>
+              <input
+                type="text"
+                required
+                value={bankForm.bankName}
+                onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
+                placeholder="e.g. YES Bank / HDFC Bank"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Account Type *</label>
+              <select
+                value={bankForm.accountType}
+                onChange={(e) => setBankForm({ ...bankForm, accountType: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none"
+              >
+                <option value="SAVINGS">Savings Account</option>
+                <option value="CURRENT">Current Account</option>
+                <option value="CC_OD">Cash Credit / Overdraft</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Phone Number for Verification</label>
+              <input
+                type="tel"
+                value={bankForm.phone}
+                onChange={(e) => setBankForm({ ...bankForm, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                placeholder="e.g. 9888833333"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="submit"
+                disabled={savingBank}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                {savingBank ? "Saving..." : "Save Bank Details"}
+              </button>
+              <button
+                type="button"
+                onClick={handleVerifyBank}
+                disabled={verifyingBank || !bankForm.accountNumber || !bankForm.ifsc}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs disabled:opacity-50 transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Icon name="check" size={14} />
+                <span>{verifyingBank ? "Verifying Bank..." : "Verify Bank Account Now"}</span>
+              </button>
+              {isBankVerified && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingBank(false)}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
                 >
                   Cancel
                 </button>
               )}
-            </form>
-
-            {discoveryResult && (
-              <div className="p-3 mt-2 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 text-xs space-y-2">
-                <div className="font-bold text-navy dark:text-gray-200">{discoveryResult.message}</div>
-                {discoveryResult.gstins && discoveryResult.gstins.length > 0 && (
-                  <ul className="space-y-1 pl-2 border-l-2 border-primary">
-                    {discoveryResult.gstins.map((g, idx) => (
-                      <li key={idx} className="flex items-center justify-between text-[11px]">
-                        <span className="font-mono font-bold text-primary">{g.gstin}</span>
-                        <span className="text-muted dark:text-gray-400">{g.state} — {g.legalName}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setGstRegistered(true);
-                            setGstinInput(g.gstin);
-                          }}
-                          className="text-[10px] font-bold text-primary hover:underline"
-                        >
-                          Use this GSTIN
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Module 2: GST REGISTRATION STATUS (Mandatory Yes/No) */}
-      <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-extrabold text-navy dark:text-gray-200">
-            2. GST Registration Status <span className="text-rose-500 font-bold text-[11px]">*Mandatory</span>
-          </label>
-          {isGstNotReq && (
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
-              GST Not Applicable (Onboarding Active)
-            </span>
-          )}
-          {gstStatus === "VERIFIED" && !isGstNotReq && (
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-              ✓ GSTIN Verified ({profile?.gst?.gstin})
-            </span>
-          )}
-        </div>
-
-        {(gstStatus === "VERIFIED" || isGstNotReq) && !isEditingGst ? (
-          <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                {isGstNotReq ? (
-                  <span className="font-extrabold text-xs text-emerald-900 dark:text-emerald-200">
-                    GST Not Applicable / Exempt (Onboarding Active via PAN)
-                  </span>
-                ) : (
-                  <span className="font-mono font-extrabold text-sm text-navy dark:text-white uppercase tracking-wide">
-                    GSTIN: {profile?.gst?.gstin || gstinInput}
-                  </span>
-                )}
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center gap-1">
-                  <Icon name="check" size={10} /> {isGstNotReq ? "Exempt / N/A" : "Verified GSTIN"}
-                </span>
-              </div>
-              {documents.filter(d => d.type === "GST" || d.title?.toUpperCase().includes("GST")).map(doc => (
-                <div key={doc._id} className="mt-1.5 flex items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-black/40 px-2.5 py-1 rounded-lg border border-emerald-200/80">
-                  <Icon name="documents" size={12} />
-                  <span className="font-bold">{doc.fileName || doc.title}</span>
-                  {doc.documentNumber && <span className="font-mono text-[10px]">({doc.documentNumber})</span>}
-                  <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-400">✓ Uploaded Document ({doc.status})</span>
-                </div>
-              ))}
             </div>
-            <button
-              type="button"
-              onClick={() => setIsEditingGst(true)}
-              className="px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/70 transition shrink-0 cursor-pointer"
-            >
-              Edit GST Status
-            </button>
-          </div>
+          </form>
         ) : (
-          <div className="space-y-3">
-            <div className="flex items-center gap-6">
-              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
-                <input
-                  type="radio"
-                  name="gstRegistered"
-                  checked={gstRegistered === true}
-                  onChange={() => setGstRegistered(true)}
-                  className="accent-primary"
-                />
-                <span>YES (I have GST registration)</span>
-              </label>
-              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
-                <input
-                  type="radio"
-                  name="gstRegistered"
-                  checked={gstRegistered === false}
-                  onChange={() => {
-                    setGstRegistered(false);
-                    setGstinInput("");
-                    handleSaveGst(null, false);
-                  }}
-                  className="accent-primary"
-                />
-                <span>NO (GST not registered)</span>
-              </label>
+          <div className="p-3.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-extrabold text-navy dark:text-gray-100">{bankForm.bankName || "Bank Account"} ({bankForm.accountType})</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">✓ Penny Drop Verified</span>
             </div>
-
-            {gstRegistered ? (
-              <form onSubmit={handleSaveGst} className="flex flex-col sm:flex-row gap-2 mt-2">
-                <input
-                  type="text"
-                  maxLength={15}
-                  value={gstinInput}
-                  onChange={(e) => setGstinInput(e.target.value.toUpperCase())}
-                  placeholder="e.g. 19ABCDE1234F1Z5"
-                  className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={savingGst || !gstinInput.trim()}
-                  className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
-                >
-                  {savingGst ? "Verifying..." : "Verify & Save GSTIN"}
-                </button>
-                {(gstStatus === "VERIFIED" || isGstNotReq) && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingGst(false)}
-                    className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </form>
-            ) : (
-              <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-300 flex items-center justify-between">
-                <span className="flex items-center gap-2 font-medium">
-                  <span className="font-bold text-emerald-700 dark:text-emerald-400">✓ Ready:</span> GST registration is not required. You can complete onboarding and add bank details using your PAN.
-                </span>
-                {savingGst && <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 animate-pulse">Saving status...</span>}
-              </div>
-            )}
+            <div className="text-muted dark:text-gray-400 font-mono flex items-center gap-3">
+              <span>Holder: <strong>{bankForm.accountHolderName}</strong></span>
+              <span>Acc: <strong>••••{bankForm.accountNumber?.slice(-4)}</strong></span>
+              <span>IFSC: <strong>{bankForm.ifsc}</strong></span>
+            </div>
           </div>
         )}
-      </div>
 
-      {/* Module 3: BANK DETAILS & BANK VERIFICATION (GST Independent) */}
-      <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-xs font-extrabold text-navy dark:text-gray-200">
-              3. Bank Details & Bank Verification
-            </h3>
-            <p className="text-[11px] text-muted dark:text-gray-400">
-              Bank details are independent from GST status. Verification is strictly for bank identity control, not payout or settlement.
-            </p>
-          </div>
-          {isBankVerified ? (
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center gap-1">
-              <Icon name="check" size={12} /> Bank Account Verified
-            </span>
-          ) : bankStatus === "FAILED" ? (
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400">
-              Verification Failed
-            </span>
-          ) : (
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
-              Not Verified
-            </span>
-          )}
-        </div>
-
-        {isBankVerified && !isEditingBank ? (
-          <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="font-extrabold text-sm text-navy dark:text-white">
-                  {bankForm.bankName || "Bank Account"}
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 flex items-center gap-1">
-                  <Icon name="check" size={10} /> Verified Bank Account
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditingBank(true)}
-                className="px-3 py-1.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/70 transition self-start shrink-0 cursor-pointer"
-              >
-                Edit Bank Details
-              </button>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              <div className="bg-white/80 dark:bg-black/40 p-2.5 rounded-xl border border-emerald-200/60">
-                <div className="text-[10px] font-bold text-muted">Holder Name</div>
-                <div className="font-extrabold text-navy dark:text-white truncate">{bankForm.accountHolderName || "Verified"}</div>
-              </div>
-              <div className="bg-white/80 dark:bg-black/40 p-2.5 rounded-xl border border-emerald-200/60">
-                <div className="text-[10px] font-bold text-muted">Account No.</div>
-                <div className="font-mono font-extrabold text-navy dark:text-white">{bankForm.accountNumber ? `••••${bankForm.accountNumber.slice(-4)}` : "Verified"}</div>
-              </div>
-              <div className="bg-white/80 dark:bg-black/40 p-2.5 rounded-xl border border-emerald-200/60">
-                <div className="text-[10px] font-bold text-muted">IFSC Code</div>
-                <div className="font-mono font-extrabold text-navy dark:text-white">{bankForm.ifsc || "Verified"}</div>
-              </div>
-              <div className="bg-white/80 dark:bg-black/40 p-2.5 rounded-xl border border-emerald-200/60">
-                <div className="text-[10px] font-bold text-muted">Account Type</div>
-                <div className="font-extrabold text-navy dark:text-white">{bankForm.accountType}</div>
-              </div>
-            </div>
-            {documents.filter(d => d.type === "BANK_PROOF" || d.title?.toLowerCase().includes("bank") || d.title?.toLowerCase().includes("cheque")).map(doc => (
-              <div key={doc._id} className="flex items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-black/40 px-2.5 py-1.5 rounded-lg border border-emerald-200/80">
-                <Icon name="documents" size={12} />
-                <span className="font-bold">{doc.fileName || doc.title}</span>
-                <span className="ml-auto text-[10px] font-bold text-emerald-700 dark:text-emerald-400">✓ Bank Proof Uploaded</span>
-              </div>
+        {bankDocs.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[11px] font-extrabold uppercase text-muted dark:text-gray-400 tracking-wider">Attached Bank Proofs ({bankDocs.length})</div>
+            {bankDocs.map((doc) => (
+              <ModuleDocumentCard key={doc._id} doc={doc} onPreview={setSelectedPreviewDoc} onDelete={handleDeleteDoc} />
             ))}
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="p-3 rounded-xl bg-sky-50/80 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <div className="text-[11px] font-extrabold text-sky-900 dark:text-sky-200">
-                    Cashfree sandbox test data
-                  </div>
-                  <p className="text-[11px] text-sky-800/80 dark:text-sky-300/80">
-                    Use these only with Cashfree sandbox credentials. They fill the form and let you trigger valid, invalid, and bank-error responses.
-                  </p>
-                </div>
-                <a
-                  href="https://www.cashfree.com/docs/secure-id/get-started/integration/sample-responses-from-bank"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] font-extrabold text-sky-700 dark:text-sky-300 hover:underline shrink-0"
-                >
-                  Cashfree docs
-                </a>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {CASHFREE_BANK_TEST_CASES.map((testCase) => (
-                  <button
-                    key={`${testCase.accountNumber}-${testCase.ifsc}`}
-                    type="button"
-                    onClick={() => applyCashfreeTestCase(testCase)}
-                    className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-extrabold transition cursor-pointer ${
-                      testCase.expected === "VALID"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
-                        : testCase.expected === "INVALID"
-                          ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
-                          : "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
-                    }`}
-                  >
-                    {testCase.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveBank} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-                  Account Holder Name *
-                </label>
-                <input
-                  type="text"
-                  value={bankForm.accountHolderName}
-                  onChange={(e) => setBankForm({ ...bankForm, accountHolderName: e.target.value })}
-                  placeholder="Full name as in bank record"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-                  Account Number *
-                </label>
-                <input
-                  type="text"
-                  value={bankForm.accountNumber}
-                  onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
-                  placeholder="e.g. 123456789012"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-                  IFSC Code *
-                </label>
-                <input
-                  type="text"
-                  maxLength={11}
-                  value={bankForm.ifsc}
-                  onChange={(e) => setBankForm({ ...bankForm, ifsc: e.target.value.toUpperCase() })}
-                  placeholder="e.g. HDFC0001234"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-                  Bank Name *
-                </label>
-                <input
-                  type="text"
-                  value={bankForm.bankName}
-                  onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
-                  placeholder="e.g. HDFC Bank / ICICI Bank"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-                  Account Type *
-                </label>
-                <select
-                  value={bankForm.accountType}
-                  onChange={(e) => setBankForm({ ...bankForm, accountType: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none"
-                >
-                  <option value="SAVINGS">Savings Account</option>
-                  <option value="CURRENT">Current Account</option>
-                  <option value="CC_OD">Cash Credit / Overdraft</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-                  Phone for Cashfree Verification
-                </label>
-                <input
-                  type="tel"
-                  value={bankForm.phone}
-                  onChange={(e) => setBankForm({ ...bankForm, phone: e.target.value.replace(/\D/g, "").slice(0, 13) })}
-                  placeholder="e.g. 9999999999"
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={savingBank}
-                  className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
-                >
-                  {savingBank ? "Saving Details..." : "Save Bank Details"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleVerifyBank}
-                  disabled={verifyingBank || !bankForm.accountNumber || !bankForm.ifsc}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Icon name="check" size={14} />
-                  <span>{verifyingBank ? "Verifying Bank Account..." : "Verify Bank Account"}</span>
-                </button>
-                {isBankVerified && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingBank(false)}
-                    className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-          </div>
         )}
-      </div>
+
         {logs.length > 0 && (
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               type="button"
               onClick={() => setShowLogs(!showLogs)}
               className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
             >
               <Icon name={showLogs ? "chevronUp" : "chevronDown"} size={12} />
-              <span>{showLogs ? "Hide" : "View"} Verification Audit Log ({logs.length})</span>
+              <span>{showLogs ? "Hide" : "View"} Bank Verification Audit Logs ({logs.length})</span>
             </button>
 
             {showLogs && (
-              <div className="mt-2 space-y-2 p-3 bg-gray-50 dark:bg-gray-800/70 rounded-xl text-[11px] border border-gray-200 dark:border-gray-700">
+              <div className="mt-2 space-y-2 p-3 bg-white dark:bg-gray-800 rounded-xl text-[11px] border border-gray-200 dark:border-gray-700">
                 {logs.map((log) => (
-                  <div key={log.verificationId} className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 last:border-0 pb-1.5 last:pb-0">
+                  <div key={log.verificationId} className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700/60 last:border-0 pb-1.5 last:pb-0">
                     <div>
                       <span className="font-mono font-bold text-navy dark:text-gray-200">{log.verificationId}</span>
-                      <span className="text-muted dark:text-gray-400 ml-2">Amount: ₹{log.amount}</span>
+                      <span className="text-muted dark:text-gray-400 ml-2">₹{log.amount} Penny Drop</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded font-bold ${log.verificationStatus === "VERIFIED" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+                      <span className={`px-2 py-0.5 rounded font-bold ${log.verificationStatus === "VERIFIED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"}`}>
                         {log.verificationStatus}
                       </span>
                       <span className="text-muted text-[10px]">{new Date(log.requestedAt).toLocaleDateString()}</span>
@@ -3250,780 +3351,100 @@ export function VendorFinancialOnboardingCard() {
             )}
           </div>
         )}
-    </Card>
-  );
-}
-
-/* ── Working Documents Manager (KYC & Verification) ───────────────────────── */
-export function DocumentsManager({ isTab = false }) {
-  const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [selectedDocForPreview, setSelectedDocForPreview] = useState(null);
-  const [checkingApi, setCheckingApi] = useState(false);
-  const [apiCheckResult, setApiCheckResult] = useState(null);
-
-  const [docForm, setDocForm] = useState({
-    title: "GST Registration Certificate",
-    type: "GST",
-    documentNumber: "",
-    fileName: "GST_Certificate.pdf",
-    fileSize: "1.2 MB",
-    expiryDate: "",
-    notes: "",
-  });
-
-  function getVerificationIssue(result) {
-    const code = String(result?.error || "").toLowerCase();
-    const message = String(result?.message || "").toLowerCase();
-    if (!code && !message) return null;
-
-    if (
-      code.includes("insufficient") ||
-      code.includes("credit") ||
-      message.includes("insufficient") ||
-      message.includes("credit")
-    ) {
-      return {
-        title: "Manual admin review required",
-        detail:
-          "The verification provider could not complete this check because API credits are unavailable. Your document is still submitted to STARVNT Core for manual review.",
-      };
-    }
-
-    if (code.includes("fetch") || message.includes("failed to fetch")) {
-      return {
-        title: "Manual admin review required",
-        detail:
-          "The verification provider is temporarily unreachable. Your document can still be submitted and reviewed by STARVNT Core.",
-      };
-    }
-
-    if (code.includes("not_configured")) {
-      return {
-        title: "Manual admin review required",
-        detail:
-          "Automatic verification is not configured yet. STARVNT Core will review this document manually.",
-      };
-    }
-
-    return {
-      title: "Manual admin review required",
-      detail:
-        result?.message ||
-        "Automatic verification could not confirm this document. STARVNT Core will review it manually.",
-    };
-  }
-
-  const loadDocuments = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await externalApi.call("/vendor/documents");
-      if (res.ok && Array.isArray(res.documents)) {
-        setDocuments(res.documents);
-      }
-    } catch (err) {
-      console.warn("[DocumentsManager] Load error:", err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadDocuments();
-  }, [loadDocuments]);
-
-  async function handleQuickCheck() {
-    if (!docForm.documentNumber?.trim()) return;
-    try {
-      setCheckingApi(true);
-      setApiCheckResult(null);
-      const isPan = docForm.type === "PAN";
-      const endpoint = isPan
-        ? "/vendor/documents/verify-pan"
-        : "/vendor/documents/verify-gstin";
-      const payload = isPan
-        ? { pan: docForm.documentNumber.trim() }
-        : { gstin: docForm.documentNumber.trim() };
-      const res = await externalApi.call(endpoint, {
-        method: "POST",
-        body: payload,
-      });
-      if (res.ok && res.result) {
-        setApiCheckResult(res.result);
-      } else {
-        setApiCheckResult({
-          ok: false,
-          error: res.error || "Verification check failed",
-        });
-      }
-    } catch (err) {
-      setApiCheckResult({ ok: false, error: err.message });
-    } finally {
-      setCheckingApi(false);
-    }
-  }
-
-  async function handleUpload(e) {
-    e.preventDefault();
-    if (!docForm.title.trim()) return;
-
-    try {
-      setUploading(true);
-      const res = await externalApi.call("/vendor/documents", {
-        method: "POST",
-        body: docForm,
-      });
-
-      if (res.ok) {
-        setShowUploadModal(false);
-        setApiCheckResult(null);
-        setDocForm({
-          title: "GST Registration Certificate",
-          type: "GST",
-          documentNumber: "",
-          fileName: "GST_Certificate.pdf",
-          fileSize: "1.2 MB",
-          expiryDate: "",
-          notes: "",
-        });
-        await loadDocuments();
-      }
-    } catch (err) {
-      alert(`Could not upload document: ${err.message}`);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleDelete(docId) {
-    if (
-      !window.confirm("Are you sure you want to remove this document record?")
-    )
-      return;
-    try {
-      const res = await externalApi.call(`/vendor/documents/${docId}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        await loadDocuments();
-      }
-    } catch (err) {
-      alert(`Could not delete document: ${err.message}`);
-    }
-  }
-
-  const verifiedDocuments = documents.filter((doc) => doc.status === "VERIFIED").length;
-  const pendingDocuments = documents.filter((doc) => doc.status !== "VERIFIED").length;
-
-  const content = (
-    <div className="space-y-6">
-      {/* Decoupled Financial & Verification Onboarding Module */}
-      <VendorFinancialOnboardingCard />
-
-      <div className="bg-white dark:bg-dark-card p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-          <div>
-            <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
-              Supporting KYC Documents
-            </h2>
-            <p className="text-xs text-muted mt-0.5 max-w-2xl">
-              Use this for GST certificates, firm PAN, address proof, or any document that needs STARVNT Core/admin review. PAN and bank verification above remain the activation gate.
-            </p>
-          </div>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition flex items-center gap-1.5 self-start shrink-0 cursor-pointer"
-          >
-            <Icon name="plus" size={14} />
-            <span>Upload Document</span>
-          </button>
-        </div>
-
-        <div className="grid sm:grid-cols-3 gap-2">
-          {[
-            { label: "Auto-check", value: "GSTIN / PAN", detail: "API verifies when credits are available" },
-            { label: "Admin review", value: pendingDocuments, detail: "Pending or needs manual confirmation" },
-            { label: "Verified records", value: verifiedDocuments, detail: "Approved by Core/API" },
-          ].map((item) => (
-            <div key={item.label} className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/40 p-3">
-              <div className="text-[10px] uppercase tracking-wide font-extrabold text-muted">{item.label}</div>
-              <div className="mt-0.5 text-sm font-extrabold text-navy dark:text-gray-100">{item.value}</div>
-              <div className="text-[11px] text-muted mt-0.5 leading-snug">{item.detail}</div>
-            </div>
-          ))}
-        </div>
       </div>
 
-      {documents.length > 0 ? (
-        <Card className="!p-0 overflow-hidden">
-          <ul className="divide-y divide-gray-100">
-            {documents.map((doc) => (
-              <li
-                key={doc._id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-lavender/30 transition"
-              >
-                <div className="flex items-start gap-3 min-w-0">
-                  <div
-                    className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${
-                      doc.type === "GST"
-                        ? "bg-purple-50 text-purple-600"
-                        : doc.type === "PAN"
-                          ? "bg-sky-50 text-sky-600"
-                          : doc.type === "BANK_PROOF"
-                            ? "bg-emerald-50 text-emerald-600"
-                            : "bg-primary-soft text-primary"
-                    }`}
-                  >
-                    <Icon name="documents" size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-sm text-navy">
-                        {doc.title}
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-lavender text-muted uppercase">
-                        {doc.type}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted mt-0.5 flex items-center gap-2 flex-wrap">
-                      {doc.documentNumber && (
-                        <span>
-                          ID:{" "}
-                          <strong className="text-navy">
-                            {doc.documentNumber}
-                          </strong>
-                        </span>
-                      )}
-                      <span>·</span>
-                      <span>
-                        {doc.fileName || "document.pdf"} (
-                        {doc.fileSize || "1.2 MB"})
-                      </span>
-                      <span>·</span>
-                      <span>
-                        Added {new Date(doc.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    {doc.notes && (
-                      <p className="text-[11px] text-muted italic mt-1">
-                        {doc.notes}
-                      </p>
-                    )}
-                    {(doc.verificationSource === "GSTIN_API" ||
-                      doc.verificationSource === "PAN_API") && (
-                      <div
-                        className={`mt-2 rounded-xl border p-3 text-[11px] ${
-                          doc.status === "VERIFIED"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                            : "border-amber-200 bg-amber-50 text-amber-950"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 font-extrabold flex-wrap">
-                          <Icon
-                            name={
-                              doc.status === "VERIFIED" ? "shieldCheck" : "help"
-                            }
-                            size={13}
-                          />
-                          <span>
-                            {doc.status === "VERIFIED"
-                              ? doc.verificationSource === "PAN_API"
-                                ? "Corporate PAN Verified"
-                                : doc.notes?.toLowerCase().includes("admin") || doc.verificationResult?.confidence === "NONE"
-                                  ? "GSTIN Verified (Admin Approved)"
-                                  : "GSTIN Auto-Verified"
-                              : doc.verificationSource === "PAN_API"
-                                ? "Corporate PAN Needs Admin Review"
-                                : "GSTIN Needs Admin Review"}
-                          </span>
-                          {doc.verificationResult?.confidence && doc.verificationResult.confidence !== "NONE" && (
-                            <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] uppercase">
-                              {doc.verificationResult.confidence}
-                            </span>
-                          )}
-                          {doc.verificationResult?.entityType && (
-                            <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] text-navy">
-                              {doc.verificationResult.entityType}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 grid sm:grid-cols-2 gap-x-3 gap-y-1">
-                          <span>
-                            Legal / Registered:{" "}
-                            <strong>
-                              {doc.verificationResult?.legalName ||
-                                doc.verificationResult?.registeredName ||
-                                "Not provided"}
-                            </strong>
-                          </span>
-                          <span>
-                            Trade / Brand:{" "}
-                            <strong>
-                              {doc.verificationResult?.tradeName ||
-                                "Not provided"}
-                            </strong>
-                          </span>
-                          {doc.verificationResult?.gstinStatus ? (
-                            <span>
-                              GST Status:{" "}
-                              <strong>
-                                {doc.verificationResult.gstinStatus}
-                              </strong>
-                            </span>
-                          ) : null}
-                          {doc.verificationResult?.panStatus ? (
-                            <span>
-                              PAN Status:{" "}
-                              <strong>
-                                {doc.verificationResult.panStatus}
-                              </strong>
-                            </span>
-                          ) : null}
-                          <span>
-                            Type:{" "}
-                            <strong>
-                              {doc.verificationResult?.taxpayerType ||
-                                doc.verificationResult?.entityType ||
-                                "Unknown"}
-                            </strong>
-                          </span>
-                        </div>
-                        {doc.verificationResult?.error && (
-                          <div className="mt-2 rounded-xl border border-amber-200 bg-white/70 p-2 text-amber-900">
-                            <div className="font-extrabold">
-                              {getVerificationIssue(doc.verificationResult)?.title}
-                            </div>
-                            <div className="mt-0.5 leading-snug">
-                              {getVerificationIssue(doc.verificationResult)?.detail}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-                  <span
-                    className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                      doc.status === "VERIFIED"
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        : doc.status === "REJECTED"
-                          ? "bg-rose-50 text-rose-700 border border-rose-200"
-                          : "bg-amber-50 text-amber-800 border border-amber-200"
-                    }`}
-                  >
-                    {doc.status === "VERIFIED"
-                      ? "✓ Verified by Core"
-                      : doc.status === "REJECTED"
-                        ? "Action Required"
-                        : "● Submitted · Verification Pending"}
-                  </span>
-                  <button
-                    onClick={() => setSelectedDocForPreview(doc)}
-                    className="text-xs font-bold text-primary hover:underline cursor-pointer"
-                  >
-                    View Details
-                  </button>
-                  <button
-                    onClick={() => handleDelete(doc._id)}
-                    className="text-xs font-semibold text-rose-500 hover:text-rose-700 cursor-pointer"
-                    title="Delete document"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : !loading ? (
-        <Card className="py-6 px-4 sm:px-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-primary-soft text-primary grid place-items-center shrink-0">
-            <Icon name="documents" size={22} />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-sm text-navy">
-                  No supporting documents yet
-                </h3>
-                <p className="text-xs text-muted max-w-xl mt-1 leading-relaxed">
-                  This is okay if PAN and bank verification are complete. Upload GST certificate, firm PAN, address proof, or business registration only when available or requested by admin.
-                </p>
-              </div>
+      {/* MODULE 4: ADDITIONAL SUPPORTING DOCUMENTS */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-extrabold text-xs grid place-items-center">4</span>
+              <h3 className="font-extrabold text-sm text-navy dark:text-gray-100">Additional Supporting KYC Documents</h3>
             </div>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition cursor-pointer shrink-0"
-            >
-              <Icon name="plus" size={14} />
-              <span>Upload document</span>
-            </button>
+            <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
+              Upload business license, shop establishment proof, or address documents for STARVNT admin review.
+            </p>
           </div>
-        </Card>
-      ) : (
-        <Card className="space-y-3">
-          <SkeletonLine className="h-5 w-48" />
-          <SkeletonLine className="h-16 w-full rounded-2xl" />
-          <SkeletonLine className="h-16 w-full rounded-2xl" />
-        </Card>
-      )}
 
-      {/* Upload Document Modal */}
-      {showUploadModal && (
-        <div
-          className="vendor-modal-backdrop"
-          onClick={() => setShowUploadModal(false)}
-        >
-          <div
-            className="vendor-modal-panel max-w-md p-4 sm:p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div>
-                <h3 className="font-extrabold text-base text-navy">
-                  Upload KYC / Business Document
-                </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Enter GSTIN or Corporate PAN to auto-verify business name via
-                  API.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setApiCheckResult(null);
-                }}
-                className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUpload} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Document Category / Type
-                </label>
-                <select
-                  value={docForm.type}
-                  onChange={(e) => {
-                    const t = e.target.value;
-                    const defaultTitles = {
-                      GST: "GST Registration Certificate",
-                      PAN: "Corporate / Firm PAN Card",
-                    };
-                    setDocForm({
-                      ...docForm,
-                      type: t,
-                      title: defaultTitles[t] || docForm.title,
-                      fileName: `${t.toLowerCase()}_proof.pdf`,
-                    });
-                    setApiCheckResult(null);
-                  }}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="GST">
-                    GST Registration Certificate (API Checked)
-                  </option>
-                  <option value="PAN">
-                    Corporate / Firm PAN Card (API Checked)
-                  </option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Document Title
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={docForm.title}
-                  onChange={(e) =>
-                    setDocForm({ ...docForm, title: e.target.value })
-                  }
-                  placeholder={docForm.type === "PAN" ? "e.g. Corporate PAN Card" : "GST Registration Certificate"}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-muted font-semibold">
-                    {docForm.type === "PAN"
-                      ? "PAN Number"
-                      : "GSTIN Number"}
-                  </label>
-                  {(docForm.type === "PAN" || docForm.type === "GST") &&
-                    docForm.documentNumber.trim().length >= 10 && (
-                      <button
-                        type="button"
-                        disabled={checkingApi}
-                        onClick={handleQuickCheck}
-                        className="text-[10px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-50"
-                      >
-                        {checkingApi
-                          ? "Verifying with API…"
-                          : "⚡ Check with API"}
-                      </button>
-                    )}
-                </div>
-                <input
-                  type="text"
-                  value={docForm.documentNumber}
-                  onChange={(e) => {
-                    setDocForm({ ...docForm, documentNumber: e.target.value });
-                    setApiCheckResult(null);
-                  }}
-                  placeholder={
-                    docForm.type === "PAN"
-                      ? "e.g. AABCC1234D or PAN number"
-                      : "e.g. 27AABCU9603R1ZM or PAN number"
-                  }
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20 font-mono"
-                />
-                {docForm.type === "GST" && (
-                  <span className="text-[10px] text-muted mt-1 block">
-                    If GST legal/trade name matches your business profile,
-                    STARVNT verifies KYC automatically. If not, it goes to admin
-                    review.
-                  </span>
-                )}
-                {docForm.type === "PAN" && (
-                  <span className="text-[10px] text-muted mt-1 block">
-                    If PAN legal/trade name matches your business profile,
-                    STARVNT verifies KYC automatically. If not, it goes to admin
-                    review.
-                  </span>
-                )}
-
-                {apiCheckResult && (
-                  <div
-                    className={`mt-2 p-2.5 rounded-xl border text-[11px] ${
-                      apiCheckResult.matched
-                        ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                          : "bg-amber-50 border-amber-200 text-amber-900"
-                    }`}
-                  >
-                    <div className="font-bold flex items-center gap-1">
-                      <span>
-                        {apiCheckResult.matched
-                          ? "✓ Ready to Auto-Verify"
-                          : apiCheckResult.ok
-                            ? "⚠ Name Review Required"
-                            : getVerificationIssue(apiCheckResult)?.title || "⚠ Manual Review Required"}
-                      </span>
-                      {apiCheckResult.entityType && (
-                        <span className="text-[10px] text-muted font-normal">
-                          ({apiCheckResult.entityType})
-                        </span>
-                      )}
-                    </div>
-                    {apiCheckResult.legalName ||
-                    apiCheckResult.registeredName ? (
-                      <div className="mt-0.5">
-                        Found Name:{" "}
-                        <strong>
-                          {apiCheckResult.legalName ||
-                            apiCheckResult.registeredName}
-                        </strong>
-                      </div>
-                    ) : null}
-                    {apiCheckResult.tradeName ? (
-                      <div>
-                        Trade: <strong>{apiCheckResult.tradeName}</strong>
-                      </div>
-                    ) : null}
-                    {apiCheckResult.error && (
-                      <div className="mt-1 font-medium leading-snug">
-                        {getVerificationIssue(apiCheckResult)?.detail}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Attach File (PDF, PNG, JPG)
-                </label>
-                <div className="border border-dashed border-gray-300 rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-lavender/30 transition">
-                  <input
-                    type="file"
-                    id="docFileInput"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setDocForm({
-                          ...docForm,
-                          fileName: file.name,
-                          fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-                        });
-                      }
-                    }}
-                  />
-                  <label
-                    htmlFor="docFileInput"
-                    className="cursor-pointer block"
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-primary-soft text-primary grid place-items-center mx-auto mb-1.5">
-                      <Icon name="plus" size={16} />
-                    </div>
-                    <span className="font-bold text-primary text-xs hover:underline block">
-                      Choose document file
-                    </span>
-                    <span className="text-[10px] text-muted mt-0.5 block">
-                      Selected: <strong>{docForm.fileName}</strong> (
-                      {docForm.fileSize})
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Additional Notes / Validity (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={docForm.notes}
-                  onChange={(e) =>
-                    setDocForm({ ...docForm, notes: e.target.value })
-                  }
-                  placeholder="e.g. Primary verified business bank account"
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div className="pt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    setApiCheckResult(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:bg-gray-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading}
-                  className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition disabled:opacity-60 cursor-pointer"
-                >
-                  {uploading ? "Uploading…" : "Submit for Verification"}
-                </button>
-              </div>
-            </form>
-          </div>
+          <label className="px-3.5 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-2xs hover:bg-primary-dark transition flex items-center gap-1.5 cursor-pointer self-start sm:self-center">
+            <Icon name="plus" size={13} />
+            <span>{uploadingDocType === "OTHER" ? "Uploading..." : "Upload Additional Document"}</span>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              disabled={uploadingDocType === "OTHER"}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) triggerFileUpload(f, "OTHER", f.name);
+              }}
+            />
+          </label>
         </div>
-      )}
 
-      {/* Document Details Modal */}
-      {selectedDocForPreview && (
-        <div
-          className="vendor-modal-backdrop"
-          onClick={() => setSelectedDocForPreview(null)}
-        >
-          <div
-            className="vendor-modal-panel max-w-sm p-4 sm:p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="font-extrabold text-base text-navy">
-                {selectedDocForPreview.title}
-              </h3>
+        {otherDocs.length > 0 ? (
+          <div className="space-y-2">
+            {otherDocs.map((doc) => (
+              <ModuleDocumentCard key={doc._id} doc={doc} onPreview={setSelectedPreviewDoc} onDelete={handleDeleteDoc} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-muted dark:text-gray-400 italic p-3 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-center">
+            No additional documents attached. Inline uploads for PAN, GST, and Bank above fulfill core onboarding.
+          </div>
+        )}
+      </div>
+
+      {/* DOCUMENT PREVIEW MODAL */}
+      {selectedPreviewDoc && (
+        <div className="vendor-modal-backdrop" onClick={() => setSelectedPreviewDoc(null)}>
+          <div className="vendor-modal-panel max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="font-extrabold text-base text-navy dark:text-gray-100">{selectedPreviewDoc.title}</h3>
               <button
                 type="button"
-                onClick={() => setSelectedDocForPreview(null)}
-                className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition cursor-pointer"
+                onClick={() => setSelectedPreviewDoc(null)}
+                className="w-7 h-7 rounded-full bg-lavender dark:bg-gray-800 text-ink/70 dark:text-gray-300 hover:text-ink grid place-items-center cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Category:</span>
-                <span className="font-bold text-navy">
-                  {selectedDocForPreview.type}
-                </span>
+            {selectedPreviewDoc.fileUrl?.startsWith("data:image/") ? (
+              <img src={selectedPreviewDoc.fileUrl} alt={selectedPreviewDoc.title} className="w-full max-h-60 object-contain rounded-xl border border-gray-200 dark:border-gray-700" />
+            ) : (
+              <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center text-xs text-muted dark:text-gray-300">
+                📄 Document file attached: <strong>{selectedPreviewDoc.fileName}</strong> ({selectedPreviewDoc.fileSize || "PDF"})
               </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Document ID:</span>
-                <span className="font-mono font-bold text-navy">
-                  {selectedDocForPreview.documentNumber || "N/A"}
-                </span>
+            )}
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-muted">Document Type:</span>
+                <span className="font-bold text-navy dark:text-gray-200">{selectedPreviewDoc.type}</span>
               </div>
-              {selectedDocForPreview.verificationSource && (
-                <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">
-                    Verification Engine:
-                  </span>
-                  <span className="font-bold text-navy">
-                    {selectedDocForPreview.verificationSource}
-                  </span>
+              {selectedPreviewDoc.documentNumber && (
+                <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-muted">Document Number:</span>
+                  <span className="font-mono font-bold text-navy dark:text-gray-200">{selectedPreviewDoc.documentNumber}</span>
                 </div>
               )}
-              {selectedDocForPreview.verificationResult?.legalName && (
-                <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">
-                    Verified Legal Name:
-                  </span>
-                  <span className="font-bold text-navy text-right max-w-[180px] truncate">
-                    {selectedDocForPreview.verificationResult.legalName}
-                  </span>
-                </div>
-              )}
-              {selectedDocForPreview.verificationResult?.entityType && (
-                <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">
-                    Entity Classification:
-                  </span>
-                  <span className="font-semibold text-navy">
-                    {selectedDocForPreview.verificationResult.entityType}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Attached File:</span>
-                <span className="font-semibold text-navy">
-                  {selectedDocForPreview.fileName}
+              <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-muted">Verification Status:</span>
+                <span className={`font-bold ${selectedPreviewDoc.status === "VERIFIED" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                  {selectedPreviewDoc.status}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Status:</span>
-                <span className="font-bold text-amber-700">
-                  {selectedDocForPreview.status}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Submitted On:</span>
-                <span className="text-navy">
-                  {new Date(
-                    selectedDocForPreview.createdAt,
-                  ).toLocaleDateString()}
-                </span>
-              </div>
-              {selectedDocForPreview.notes && (
-                <div className="pt-1">
-                  <span className="text-muted font-medium block">Notes:</span>
-                  <p className="text-navy mt-0.5 italic">
-                    {selectedDocForPreview.notes}
-                  </p>
+              {selectedPreviewDoc.notes && (
+                <div className="pt-1 text-muted italic">
+                  Notes: {selectedPreviewDoc.notes}
                 </div>
               )}
             </div>
 
             <button
               type="button"
-              onClick={() => setSelectedDocForPreview(null)}
+              onClick={() => setSelectedPreviewDoc(null)}
               className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark transition cursor-pointer"
             >
               Close
@@ -4031,22 +3452,15 @@ export function DocumentsManager({ isTab = false }) {
           </div>
         </div>
       )}
-    </div>
-  );
-
-  if (isTab) {
-    return content;
-  }
-
-  return (
-    <Page
-      title="Documents & Verification"
-      sub="KYC, tax registration and banking — secure, controlled storage for platform trust."
-    >
-      {content}
-    </Page>
+    </Card>
   );
 }
+
+/* ── Working Documents Manager (KYC & Verification Hub Wrapper) ─────────────── */
+export function DocumentsManager({ isTab = false }) {
+  return <VendorFinancialOnboardingCard />;
+}
+
 
 /* ── Working Settings Manager ────────────────────────────────────────────── */
 export function SettingsManager({ isTab = false }) {
