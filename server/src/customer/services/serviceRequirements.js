@@ -22,6 +22,9 @@ export const VENDOR_CATEGORY = {
   entertainment: 'DJ_Production',
   transport: 'Transport',
   accommodation: 'Hotel',
+  ceremony: 'Religious_Services',
+  corporate_production: 'Corporate_Production',
+  anchor: 'Anchor_Host',
 };
 
 const styles = (category) => CATEGORY_DEFINITIONS[VENDOR_CATEGORY[category]]?.defaultStyles || [];
@@ -71,6 +74,14 @@ function definitions(category, eventType) {
         { key: 'parking', label: 'Parking needed', type: 'select', options: YES_NO },
         { key: 'accessibility', label: 'Wheelchair access needed', type: 'select', options: YES_NO },
       ];
+    case 'ceremony':
+      return [
+        { key: 'ceremonyType', label: 'Ceremony type', type: 'select', options: ['Wedding', 'Engagement', 'Puja / Havan', 'Nikah', 'Church ceremony', 'Anand Karaj', 'Interfaith ceremony', 'Other ritual'] },
+        { key: 'faithTradition', label: 'Faith / tradition', type: 'select', options: ['Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Interfaith', 'Spiritual / non-denominational'] },
+        { key: 'officiantRole', label: 'Officiant role', type: 'select', options: styles('ceremony') },
+        { key: 'language', label: 'Preferred language', type: 'select', options: ['Hindi', 'Bengali', 'English', 'Urdu', 'Punjabi', 'Marathi', 'Tamil', 'Telugu', 'Other'] },
+        { key: 'samagriProvided', label: 'Ritual items / samagri provided?', type: 'select', options: ['Vendor provides', 'Customer provides', 'Need guidance'] },
+      ];
     case 'transport':
       return [
         { key: 'vehicleType', label: 'Vehicle type', type: 'select', options: styles('transport').filter((s) => wedding || s !== 'Vintage Bridal Car') },
@@ -88,6 +99,21 @@ function definitions(category, eventType) {
       return [
         { key: 'genres', label: 'Music', type: 'multiselect', options: styles(category) },
         { key: 'durationHours', label: 'Duration (hours)', type: 'number', min: 1, max: 24 },
+      ];
+    case 'anchor':
+      return [
+        { key: 'eventFormat', label: 'Event format', type: 'select', options: styles('anchor') },
+        { key: 'languages', label: 'Languages', type: 'multiselect', options: ['English', 'Hindi', 'Bengali', 'Hinglish', 'Urdu', 'Punjabi', 'Marathi', 'Other'] },
+        { key: 'durationHours', label: 'Hosting duration (hours)', type: 'number', min: 1, max: 24 },
+        { key: 'scriptWriting', label: 'Script writing needed?', type: 'select', options: YES_NO },
+        { key: 'rehearsal', label: 'Rehearsal needed?', type: 'select', options: YES_NO },
+      ];
+    case 'corporate_production':
+      return [
+        { key: 'productionType', label: 'Production type', type: 'select', options: styles('corporate_production') },
+        { key: 'avScope', label: 'AV / production scope', type: 'multiselect', options: ['Stage', 'LED screen', 'Sound', 'Lighting', 'Branding', 'Registration desk', 'Live streaming', 'Translation'] },
+        { key: 'attendees', label: 'Attendees', type: 'number', min: 1, max: 100000 },
+        { key: 'setupHours', label: 'Setup hours required', type: 'number', min: 1, max: 168 },
       ];
     default:
       return [];

@@ -43,6 +43,20 @@ export function createApp() {
   app.get('/api/health', (req, res) =>
     res.json({ ok: true, domains: ['EXTERNAL', 'ADMIN'] })
   );
+
+  if (config.enableDevTools) {
+    app.all('/api/test/echo', (req, res) => {
+      res.json({
+        ok: true,
+        timestamp: Date.now(),
+        method: req.method,
+        query: req.query,
+        body: req.body,
+        serverTime: new Date().toISOString()
+      });
+    });
+  }
+
   app.get('/metrics', (req, res) => {
     if (!config.metricsEnabled) return res.status(404).json({ error: 'NOT_FOUND' });
     res.type('text/plain; version=0.0.4').send(renderPrometheusMetrics());

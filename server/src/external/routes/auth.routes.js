@@ -56,6 +56,53 @@ function clearRefreshCookie(res) {
 }
 
 // ── Reseed Real Vendors Trigger (Testing & QA Playground) ───────────────────
+
+// ── Dev Single-Click Auth Endpoint (Testing & QA Playground) ────────────────
+router.post("/dev-auth", async (req, res, next) => {
+  try {
+    if (!config.enableDevTools) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+    const { accountType = "VENDOR" } = req.body || {};
+    const targetType = String(accountType).toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "VENDOR";
+    const email = targetType === "VENDOR" ? "vendor@starvnt.com" : "customer@starvnt.com";
+
+    let user = await ExternalUser.findOne({ email });
+    if (!user) {
+      user = await ExternalUser.create({
+        email,
+        phone: targetType === "VENDOR" ? "+919876543210" : "+919876543211",
+        fullName: targetType === "VENDOR" ? "Dev Test Vendor" : "Dev Test Customer",
+        accountType: targetType,
+        roles: [targetType],
+        passwordHash: await hashPassword("Password123!"),
+      });
+    }
+
+    if (targetType === "VENDOR") {
+      await ensureVendorOrganization(user, {
+        businessName: "Dev StarVnt Studio",
+        category: "Photography",
+        city: "Mumbai"
+      });
+    }
+
+    const { session, refreshToken } = await createSession(user, req, targetType);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+
+    const tokens = issueTokens(user, session);
+    res.json({
+      ok: true,
+      accessToken: tokens.accessToken,
+      user: user.toSafeJSON(),
+      accountType: targetType,
+      redirectTo: targetType === "VENDOR" ? "/vendor" : "/customer"
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/reseed", async (req, res, next) => {
   try {
     const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");

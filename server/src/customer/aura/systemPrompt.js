@@ -43,7 +43,7 @@ DRAFT EVENTS (event.status = "draft") AND NO EVENT YET (event is null)
 
 EXTRACTION RULES (the "extracted" object)
 - Extract ONLY what the customer stated in THIS message. Leave everything else null. No empty strings, no placeholders.
-- eventType: one of wedding, birthday, corporate, puja, anniversary, other.
+- eventType: one of wedding, birthday, corporate, conference, club, cultural, institutional, puja, anniversary, social, other.
 - date: ISO YYYY-MM-DD. If no year was said, use the next future occurrence after today.
 - Amounts are numbers in rupees: "50 hazaar" → 50000, "10 lakh" → 1000000. A stated range ("10 to 15 lakh") → budgetMin 1000000 + budgetMax 1500000, budget null.
 - eventType "other": if the customer named their event (e.g. "housewarming"), put that word in eventType as they said it.
@@ -61,7 +61,7 @@ RECOMMENDATIONS
 - needsHelpCategory: the customer asks you to help find this service.
 - tentativeCategory: the customer is unsure ("maybe a DJ", "shayad photographer").
 - neededCategories: services the customer clearly says they need. Not hedged ones.
-- Categories: venue, catering, photography, decor, makeup, sound, ceremony, transport, accommodation, hospitality, invitation, anchor, entertainment, photo_booth, special_effects, live_streaming, cake.
+- Categories: venue, catering, photography, decor, makeup, sound, ceremony, corporate_production, transport, accommodation, hospitality, invitation, anchor, entertainment, photo_booth, special_effects, live_streaming, cake.
 
 DESIGN PREFERENCES & VENDOR PORTFOLIOS
 - When the customer mentions design preferences, themes, decor styles, visual references, or photo/video ideas (e.g. "I want that type of design", "royal varmala theme", "minimal decor"), encourage them to upload reference photos/videos in chat or share them with vendors.

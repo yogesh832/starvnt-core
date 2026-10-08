@@ -9,8 +9,13 @@ const EVENT_TYPES = [
   ['wedding', 'Wedding'],
   ['birthday', 'Birthday'],
   ['corporate', 'Corporate event'],
+  ['conference', 'Conference / MICE'],
+  ['club', 'Club / community event'],
+  ['cultural', 'Cultural event'],
+  ['institutional', 'Institutional event'],
   ['puja', 'Puja / religious'],
   ['anniversary', 'Anniversary'],
+  ['social', 'Social gathering'],
   ['other', 'Something else'],
 ];
 

@@ -9,6 +9,10 @@ import CustomerPortal from './pages/customer/CustomerPortal.jsx';
 import VendorPortal from './pages/vendor/VendorPortal.jsx';
 import AdminLogin from './pages/admin/AdminLogin.jsx';
 import AdminShell from './pages/admin/AdminShell.jsx';
+import DevApiTest from './pages/DevApiTest.jsx';
+import DevSingleClickAuth from './pages/DevSingleClickAuth.jsx';
+
+const DEV_TOOLS_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_TOOLS === 'true';
 
 function FullScreenLoader() {
   return (
@@ -125,6 +129,16 @@ export default function App() {
         }
       />
 
+      {DEV_TOOLS_ENABLED && (
+        <>
+          <Route path="/testAuth" element={<DevSingleClickAuth />} />
+          <Route path="/test-auth" element={<DevSingleClickAuth />} />
+          <Route path="/auth-test" element={<DevSingleClickAuth />} />
+          <Route path="/api/test" element={<DevApiTest />} />
+          <Route path="/api-test" element={<DevApiTest />} />
+          <Route path="/test" element={<DevApiTest />} />
+        </>
+      )}
       <Route path="*" element={<RootRedirect />} />
     </Routes>
   );

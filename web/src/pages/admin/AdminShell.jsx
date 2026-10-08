@@ -9,6 +9,9 @@ import Dashboard from './Dashboard.jsx';
 import ModuleTable from './ModuleTable.jsx';
 import UsersAccess from './UsersAccess.jsx';
 import AuditLogs from './AuditLogs.jsx';
+import DevApiTest from '../DevApiTest.jsx';
+
+const DEV_TOOLS_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_TOOLS === 'true';
 
 /**
  * Core Admin shell — light theme per the Complete Screen Set.
@@ -28,6 +31,7 @@ const MODULES = [
   { path: 'coupons', label: 'Coupons', icon: 'payments', anyOf: ['settings.read'] },
   { path: 'users', label: 'Users & Access', icon: 'access', superOnly: true },
   { path: 'audit', label: 'Audit Logs', icon: 'audit', anyOf: ['audit.read'] },
+  ...(DEV_TOOLS_ENABLED ? [{ path: 'load-testing', label: 'API Load Test', icon: 'bolt', anyOf: ['automation.read'] }] : []),
   { path: 'settings', label: 'Settings', icon: 'settings', anyOf: ['settings.read'] },
 ];
 
@@ -361,6 +365,7 @@ export default function AdminShell() {
               <Route path="coupons" element={<ModuleTable kind="coupons" />} />
               <Route path="users" element={<UsersAccess />} />
               <Route path="audit" element={<AuditLogs />} />
+              {DEV_TOOLS_ENABLED && <Route path="load-testing" element={<DevApiTest />} />}
               <Route path="settings" element={<ModuleTable kind="settings" />} />
             </Routes>
           </div>

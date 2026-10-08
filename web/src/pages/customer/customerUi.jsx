@@ -156,7 +156,7 @@ export function Empty({ title, children, action }) {
 const CATEGORY_ICON = {
   venue: 'vendors', catering: 'services', photography: 'camera', decor: 'star', makeup: 'profile', sound: 'play',
   ceremony: 'events', transport: 'truck', accommodation: 'vendors', hospitality: 'customers', invitation: 'documents',
-  anchor: 'mic', entertainment: 'play', photo_booth: 'camera', special_effects: 'bolt', live_streaming: 'video', cake: 'star',
+  corporate_production: 'bolt', anchor: 'mic', entertainment: 'play', photo_booth: 'camera', special_effects: 'bolt', live_streaming: 'video', cake: 'star',
 };
 export const categoryIcon = (c) => CATEGORY_ICON[c] || 'services';
 
