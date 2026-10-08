@@ -76,6 +76,16 @@ export async function evaluateVendorActivation(vendorId) {
     Boolean(hasVerifiedDoc);
   const hasVerifiedBank = finProfile?.bankAccount?.verificationStatus === 'VERIFIED';
   const isFinancialVerified = hasVerifiedIdentity && hasVerifiedBank;
+  const identityVerificationSource = finProfile?.pan?.verificationStatus === 'VERIFIED'
+    ? 'PAN_VERIFICATION'
+    : finProfile?.gst?.verificationStatus === 'VERIFIED'
+    ? 'GST_VERIFICATION'
+    : finProfile?.gst?.isRegistered === false
+    ? 'GST_NOT_REGISTERED_DECLARATION'
+    : hasVerifiedDoc
+    ? 'ADMIN_APPROVED_DOCUMENT'
+    : 'NOT_VERIFIED';
+  const bankVerificationSource = hasVerifiedBank ? 'BANK_VERIFICATION' : 'NOT_VERIFIED';
 
   if (!hasVerifiedIdentity) {
     reasonCodes.add('KYC_PENDING');
@@ -228,7 +238,11 @@ export async function evaluateVendorActivation(vendorId) {
       profileCompletion: completionPercentage,
       onboardingStatus: completionPercentage === 100 ? 'COMPLETE' : 'INCOMPLETE',
       verificationStatus: isFinancialVerified ? 'VERIFIED' : hasVerifiedIdentity || hasVerifiedBank ? 'UNDER_REVIEW' : 'NOT_SUBMITTED',
+      identityVerificationSource,
+      bankVerificationSource,
       availabilityStatus: hasAvailability ? 'CONFIGURED' : 'NOT_CONFIGURED',
+      operationalResourceSource: hasOperationalResources ? 'VENDOR_DECLARED' : 'MISSING',
+      operationalResourceVerificationStatus: 'SELF_DECLARED',
       commercialReadiness: commercialReadiness ? 'READY' : 'INCOMPLETE',
       matchingEligibility: matchingEligible ? 'ELIGIBLE' : 'LOCKED',
       leadActivationStatus,

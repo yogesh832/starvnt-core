@@ -163,6 +163,24 @@ function resolveExistingAccountType(user) {
   return user.accountType || userRoles(user)[0] || "CUSTOMER";
 }
 
+function resolveExistingSignInSurface(user, requestedSurface) {
+  const primarySurface = resolveExistingAccountType(user);
+  if (!requestedSurface || requestedSurface === primarySurface) {
+    return { signInAs: primarySurface };
+  }
+  const roles = userRoles(user);
+  if (roles.includes(requestedSurface)) {
+    return { signInAs: requestedSurface };
+  }
+  return {
+    error: "ACCOUNT_SURFACE_COLLISION",
+    message:
+      "This Google identity is already linked to a different STARVNT account surface. Sign in to the existing surface first, then explicitly switch or link the vendor/customer surface.",
+    existingAccountType: primarySurface,
+    requestedAccountType: requestedSurface,
+  };
+}
+
 function grantRole(user, role) {
   const roles = userRoles(user);
   if (!roles.includes(role)) roles.push(role);
@@ -406,9 +424,11 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
       const requestedSurface = accountType === "VENDOR" ? "VENDOR" : accountType === "CUSTOMER" ? "CUSTOMER" : null;
-      signInAs = requestedSurface || resolveExistingAccountType(user);
-      grantRole(user, signInAs);
-      user.accountType = signInAs;
+      const surfaceResolution = resolveExistingSignInSurface(user, requestedSurface);
+      if (surfaceResolution.error) {
+        return res.status(409).json(surfaceResolution);
+      }
+      signInAs = surfaceResolution.signInAs;
       await prepareAccountType(user, signInAs, {
         businessName,
         brandName,
@@ -476,7 +496,9 @@ router.post("/google", authLimiter, async (req, res, next) => {
   } catch (err) {
     if (
       err.message === "INVALID_GOOGLE_TOKEN" ||
-      err.message === "MISSING_GOOGLE_CREDENTIAL"
+      err.message === "MISSING_GOOGLE_CREDENTIAL" ||
+      err.message === "GOOGLE_AUDIENCE_MISMATCH" ||
+      err.message === "GOOGLE_EMAIL_NOT_VERIFIED"
     ) {
       return res.status(400).json({ error: err.message });
     }
@@ -940,7 +962,7 @@ router.post("/refresh", async (req, res, next) => {
     // If the session had a specific accountType, respect it so user stays on their active portal.
     session.revokedAt = new Date();
     await session.save();
-    const fresh = await createSession(user, req, resolveExistingAccountType(user));
+    const fresh = await createSession(user, req, session.accountType || resolveExistingAccountType(user));
     res.cookie(
       config.refreshCookieName,
       fresh.refreshToken,

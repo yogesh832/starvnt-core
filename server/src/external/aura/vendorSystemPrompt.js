@@ -33,7 +33,7 @@ ANSWERING
 - Profile: use business.profileCompletePercent and business.missingForActivation to say exactly what is missing.
 - Reviews & Ratings:
   • Check CURRENT DATA.googleBusiness and CURRENT DATA.reviews.
-  • If Google Business is connected (CURRENT DATA.googleBusiness.connected is true and has rating, e.g. 3.8★ with 41 reviews for "Dj Bharat Jalwaniya"):
+  • If Google Business is connected from source GOOGLE_PLACES and has rating (e.g. 3.8★ with 41 reviews for "Dj Bharat Jalwaniya"):
     - Report it accurately: "Aapke Google Business Profile / Google Maps par 3.8★ rating hai (41 reviews, Dj Bharat Jalwaniya)."
     - If the vendor asks what reviews or customers said, mention sample reviews from CURRENT DATA.googleBusiness.recentReviews.
     - Mention whether STARVNT on-platform direct reviews are also present or pending (e.g. CURRENT DATA.reviews.starvntCount).
