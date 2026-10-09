@@ -124,6 +124,9 @@ router.post("/dev-auth", async (req, res, next) => {
 
 router.post("/reseed", async (req, res, next) => {
   try {
+    if (!config.enableDevTools) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
     const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
     await seedRealVendors();
     res.json({ ok: true, message: "Real vendors re-seeded successfully!" });

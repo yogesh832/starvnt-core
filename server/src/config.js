@@ -12,6 +12,10 @@ const cookieSecure =
   process.env.COOKIE_SECURE === undefined
     ? isProduction
     : String(process.env.COOKIE_SECURE).toLowerCase() === "true";
+const enableDevTools =
+  process.env.ENABLE_DEV_TOOLS === undefined
+    ? !isProduction
+    : String(process.env.ENABLE_DEV_TOOLS).toLowerCase() === "true";
 
 /**
  * ONE server, TWO identity domains.
@@ -122,7 +126,7 @@ export const config = {
   reservationExpiryWorkerEnabled: process.env.RESERVATION_EXPIRY_WORKER_ENABLED !== "false",
   reservationExpiryIntervalMs: Number(process.env.RESERVATION_EXPIRY_INTERVAL_MS || 60000),
   metricsEnabled: process.env.METRICS_ENABLED !== "false",
-  enableDevTools: process.env.ENABLE_DEV_TOOLS !== "false" && !isProduction,
+  enableDevTools,
 
   // ── Settlement math ──
   platformCommissionPercent: Number(process.env.PLATFORM_COMMISSION_PERCENT || 10),
