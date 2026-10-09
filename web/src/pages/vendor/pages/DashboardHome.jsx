@@ -251,9 +251,9 @@ export function Performance({ enquiries = [], quotes = [], bookings = [] }) {
   const quoteCount = quotes.length;
   const bookingCount = bookings.length;
 
-  const quoteRate = leadCount > 0 ? Math.min(100, Math.round((quoteCount / leadCount) * 100)) : 0;
-  const bookingRate = quoteCount > 0 ? Math.min(100, Math.round((bookingCount / quoteCount) * 100)) : 0;
-  const overallConversion = leadCount > 0 ? Math.min(100, Math.round((bookingCount / leadCount) * 100)) : 0;
+  const quoteRate = leadCount > 0 ? `${Math.min(100, Math.round((quoteCount / leadCount) * 100))}%` : '—';
+  const bookingRate = quoteCount > 0 ? `${Math.min(100, Math.round((bookingCount / quoteCount) * 100))}%` : '—';
+  const overallConversion = leadCount > 0 ? `${Math.min(100, Math.round((bookingCount / leadCount) * 100))}%` : '—';
 
   return (
     <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
@@ -277,12 +277,12 @@ export function Performance({ enquiries = [], quotes = [], bookings = [] }) {
         </div>
         <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
           <div className="text-[10px] text-muted font-semibold truncate">Lead → Quote</div>
-          <div className="font-extrabold text-base text-navy mt-0.5">{quoteRate}%</div>
+          <div className="font-extrabold text-base text-navy mt-0.5">{quoteRate}</div>
           <div className="text-[9px] text-emerald-600 font-bold mt-0.5 truncate">{quoteCount} sent</div>
         </div>
         <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
           <div className="text-[10px] text-muted font-semibold truncate">Quote → Booked</div>
-          <div className="font-extrabold text-base text-navy mt-0.5">{bookingRate}%</div>
+          <div className="font-extrabold text-base text-navy mt-0.5">{bookingRate}</div>
           <div className="text-[9px] text-emerald-600 font-bold mt-0.5 truncate">{bookingCount} locked</div>
         </div>
       </div>
@@ -302,29 +302,29 @@ export function Performance({ enquiries = [], quotes = [], bookings = [] }) {
           <div className="space-y-1">
             <div className="flex justify-between text-[11px]">
               <span className="font-semibold text-muted">Proposal Response Rate</span>
-              <span className="font-extrabold text-navy">{quoteRate}%</span>
+              <span className="font-extrabold text-navy">{quoteRate}</span>
             </div>
             <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
               <div
                 className="bg-primary h-full rounded-full transition-all duration-500"
-                style={{ width: `${quoteRate}%` }}
+                style={{ width: quoteRate === '—' ? '0%' : quoteRate }}
               />
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex justify-between text-[11px]">
               <span className="font-semibold text-muted">Escrow Booking Close Rate</span>
-              <span className="font-extrabold text-navy">{bookingRate}%</span>
+              <span className="font-extrabold text-navy">{bookingRate}</span>
             </div>
             <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
               <div
                 className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                style={{ width: `${bookingRate}%` }}
+                style={{ width: bookingRate === '—' ? '0%' : bookingRate }}
               />
             </div>
           </div>
           <div className="pt-1 flex items-center justify-between text-[10px] text-muted">
-            <span>Overall Win Rate: <strong className="text-navy">{overallConversion}%</strong></span>
+            <span>Overall Win Rate: <strong className="text-navy">{overallConversion}</strong></span>
             <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
               <Icon name="shieldCheck" size={12} />
               <span>Escrow Protected</span>
@@ -1207,6 +1207,11 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
                     Live & Matchable
+                  </span>
+                ) : completionPercentage === 100 ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Profile Setup 100% | KYC Pending (Matching Locked)
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">

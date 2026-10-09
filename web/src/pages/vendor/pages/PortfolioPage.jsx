@@ -1345,27 +1345,33 @@ export default function PortfolioPage() {
                 <Icon name="image" size={28} />
               </div>
               <div className="space-y-1">
-                <div className="font-extrabold text-base text-navy">No Media Uploaded Yet</div>
+                <div className="font-extrabold text-base text-navy">
+                  {items.length > 0 ? 'No media found for this filter.' : 'No Media Uploaded Yet'}
+                </div>
                 <p className="text-xs text-muted max-w-md mx-auto leading-relaxed">
-                  Your media library is empty. Upload multiple photos or videos via STARVNT Media, or paste YouTube/Vimeo links.
+                  {items.length > 0
+                    ? `No ${filter.toLowerCase()} items found in your media library. Switch filters to view your uploaded items.`
+                    : 'Your media library is empty. Upload multiple photos or videos via STARVNT Media, or paste YouTube/Vimeo links.'}
                 </p>
               </div>
-              <div className="pt-2 flex justify-center gap-2">
-                <button
-                  onClick={() => standaloneFileInputRef.current?.click()}
-                  className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-5 py-2.5 shadow-md shadow-primary/25 transition transform active:scale-95 flex items-center gap-1.5"
-                >
-                  <Icon name="upload" size={14} />
-                  <span>Upload Multiple Photos/Videos</span>
-                </button>
-                <button
-                  onClick={() => setShowStandaloneUrlModal(true)}
-                  className="rounded-xl bg-lavender text-navy text-xs font-bold px-4 py-2.5 border border-gray-200 hover:bg-lavender/80 transition flex items-center gap-1.5"
-                >
-                  <Icon name="link" size={14} />
-                  <span>Add Media via URL</span>
-                </button>
-              </div>
+              {items.length === 0 && (
+                <div className="pt-2 flex justify-center gap-2">
+                  <button
+                    onClick={() => standaloneFileInputRef.current?.click()}
+                    className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-5 py-2.5 shadow-md shadow-primary/25 transition transform active:scale-95 flex items-center gap-1.5"
+                  >
+                    <Icon name="upload" size={14} />
+                    <span>Upload Multiple Photos/Videos</span>
+                  </button>
+                  <button
+                    onClick={() => setShowStandaloneUrlModal(true)}
+                    className="rounded-xl bg-lavender text-navy text-xs font-bold px-4 py-2.5 border border-gray-200 hover:bg-lavender/80 transition flex items-center gap-1.5"
+                  >
+                    <Icon name="link" size={14} />
+                    <span>Add Media via URL</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

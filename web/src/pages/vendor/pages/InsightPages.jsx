@@ -10,6 +10,13 @@ const advanceDue = (booking) => Number(booking?.paymentSummary?.advanceAmount ||
 const balanceDue = (booking) => Number(
   booking?.paymentSummary?.balanceAmount ?? Math.max(0, Number(booking?.totalAmount || 0) - paidAdvance(booking))
 );
+const vendorPayable = (booking) => Number(
+  booking?.settlementDetails?.vendorPayable ||
+  booking?.settlementMath?.vendorPayable ||
+  booking?.vendorPayable ||
+  booking?.totalAmount ||
+  0
+);
 
 /* ── Payments ─────────────────────────────────────────────────────────────── */
 export function PaymentsPage() {
@@ -40,7 +47,7 @@ export function PaymentsPage() {
 
   const releasedAmount = bookings
     .filter((b) => b.settlementStatus === 'SETTLED')
-    .reduce((sum, b) => sum + (b.settlementDetails?.amount || b.totalAmount || 0), 0);
+    .reduce((sum, b) => sum + vendorPayable(b), 0);
 
   const nextPayout = bookings
     .filter((b) => b.executionStatus === 'SERVICE_STARTED' || b.executionStatus === 'COMPLETION_SUBMITTED' || b.executionStatus === 'COMPLETION_VERIFIED')
@@ -57,7 +64,7 @@ export function PaymentsPage() {
     {
       label: 'Released & Settled',
       value: `₹${releasedAmount.toLocaleString()}`,
-      foot: `${bookings.filter((b) => b.settlementStatus === 'SETTLED').length} verified releases`,
+      foot: `${bookings.filter((b) => b.settlementStatus === 'SETTLED').length} verified releases (Vendor Payable)`,
       iconBg: 'bg-emerald-50 text-emerald-600',
       icon: 'trend',
     },
@@ -91,7 +98,7 @@ export function PaymentsPage() {
         <table className="w-full text-[13px] min-w-[620px]">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100">
-              {['Booking Reference', 'Customer', 'Service', 'Quote Total', 'Advance Paid', 'Balance', 'Payment Truth', 'Settlement Status', 'Event Date'].map((h) => (
+              {['Booking Reference', 'Customer', 'Service', 'Quote Total', 'Vendor Payable', 'Advance Paid', 'Balance', 'Payment Truth', 'Settlement Status', 'Event Date'].map((h) => (
                 <th key={h} className="px-5 py-3 font-semibold">{h}</th>
               ))}
             </tr>
@@ -103,6 +110,7 @@ export function PaymentsPage() {
                 <td className="px-5 py-3 font-medium text-navy">{b.customerName || 'Customer'}</td>
                 <td className="px-5 py-3 text-muted">{b.serviceName}</td>
                 <td className="px-5 py-3 font-bold text-navy">₹{(b.totalAmount || 0).toLocaleString()}</td>
+                <td className="px-5 py-3 font-bold text-emerald-700">₹{vendorPayable(b).toLocaleString()}</td>
                 <td className="px-5 py-3 font-bold text-emerald-700">₹{paidAdvance(b).toLocaleString()}</td>
                 <td className="px-5 py-3 font-semibold text-muted">₹{balanceDue(b).toLocaleString()}</td>
                 <td className="px-5 py-3"><StatusChip status={b.paymentStatus || 'Verified'} /></td>
@@ -119,6 +127,7 @@ export function PaymentsPage() {
                   <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
                   <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
                   <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
+                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
                   <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
                   <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
                   <td className="px-5 py-4"><div className="h-3.5 w-20 bg-slate-200/70 animate-pulse rounded-full" /></td>
@@ -127,7 +136,7 @@ export function PaymentsPage() {
             )}
             {bookings.length === 0 && !loading && (
               <tr>
-                <td colSpan="9" className="py-8 text-center text-xs text-muted">
+                <td colSpan="10" className="py-8 text-center text-xs text-muted">
                   No payment transactions recorded yet.
                 </td>
               </tr>
@@ -209,7 +218,7 @@ export function ReviewsPage() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-2">
         <Card className="text-center">
           <div className="text-2xl font-extrabold text-navy">
-            {stats.totalReviews > 0 ? stats.averageRating : '0.0'}
+            {stats.totalReviews > 0 ? stats.averageRating : googleRating?.rating ? googleRating.rating : 'New'}
           </div>
           <div className="text-xs text-muted mt-1">STARVNT Rating</div>
         </Card>
@@ -238,7 +247,7 @@ export function ReviewsPage() {
         </Card>
         <Card className="text-center">
           <div className="text-2xl font-extrabold text-navy">
-            {stats.totalReviews > 0 ? stats.recommendPercentage : '0%'}
+            {stats.totalReviews > 0 ? stats.recommendPercentage : '—'}
           </div>
           <div className="text-xs text-muted mt-1">Would recommend</div>
         </Card>
@@ -607,14 +616,14 @@ export function AnalyticsPage() {
   }, []);
 
   const { enquiriesCount, quotesCount, bookingsCount, advanceReceived, quoteValue } = counts;
-  const enqToQuoteRate = enquiriesCount > 0 ? `${Math.round((quotesCount / enquiriesCount) * 100)}%` : '0%';
-  const quoteToBookingRate = quotesCount > 0 ? `${Math.round((bookingsCount / quotesCount) * 100)}%` : '0%';
+  const enqToQuoteRate = enquiriesCount > 0 ? `${Math.round((quotesCount / enquiriesCount) * 100)}%` : '—';
+  const quoteToBookingRate = quotesCount > 0 ? `${Math.round((bookingsCount / quotesCount) * 100)}%` : '—';
 
   const rows = [
     ['Total Enquiries Received', String(enquiriesCount), enquiriesCount > 0 ? 'Active' : 'Awaiting Leads'],
-    ['Enquiry → Quote Conversion', enqToQuoteRate, 'Live Funnel'],
+    ['Enquiry → Quote Conversion', enqToQuoteRate, enquiriesCount > 0 ? 'Live Funnel' : 'No Data Yet'],
     ['Total Quotes Generated', String(quotesCount), quotesCount > 0 ? 'In Progress' : '0 Quotes'],
-    ['Quote → Booking Conversion', quoteToBookingRate, 'Core Escrow'],
+    ['Quote → Booking Conversion', quoteToBookingRate, quotesCount > 0 ? 'Core Escrow' : 'No Data Yet'],
     ['Confirmed Bookings', String(bookingsCount), bookingsCount > 0 ? 'Verified' : '0 Bookings'],
     ['Advance Received', `₹${advanceReceived.toLocaleString()}`, advanceReceived > 0 ? 'Payment Verified' : '₹0'],
     ['Confirmed Quote Value', `₹${quoteValue.toLocaleString()}`, quoteValue > 0 ? 'Booked Value' : '₹0'],
@@ -641,7 +650,7 @@ export function AnalyticsPage() {
                 <span className="text-navy font-bold">{quotesCount} ({enqToQuoteRate})</span>
               </div>
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-purple-500" style={{ width: enqToQuoteRate }} />
+                <div className="h-full bg-purple-500" style={{ width: enqToQuoteRate === '—' ? '0%' : enqToQuoteRate }} />
               </div>
             </div>
 
@@ -651,7 +660,7 @@ export function AnalyticsPage() {
                 <span className="text-navy font-bold">{bookingsCount} ({quoteToBookingRate})</span>
               </div>
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500" style={{ width: quoteToBookingRate }} />
+                <div className="h-full bg-emerald-500" style={{ width: quoteToBookingRate === '—' ? '0%' : quoteToBookingRate }} />
               </div>
             </div>
           </div>

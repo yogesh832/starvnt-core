@@ -178,7 +178,7 @@ export async function evaluateVendorActivation(vendorId) {
     reasonCodes.add('PORTFOLIO_MISSING');
   }
 
-  // Calculate profile completion percentage (0 - 100%)
+  // 6 Operational Profile Setup Steps for Profile Completion (0 - 100%)
   const steps = [
     hasProfile,
     hasActiveService,
@@ -186,13 +186,18 @@ export async function evaluateVendorActivation(vendorId) {
     hasLocation && hasCoverage,
     hasAvailability,
     hasPortfolio,
-    isFinancialVerified,
   ];
   const completedCount = steps.filter(Boolean).length;
   const completionPercentage = Math.round((completedCount / steps.length) * 100);
 
+  const hasSubmittedDoc = await VendorDocument.exists({ vendor: vendorId, status: { $in: ['SUBMITTED', 'PENDING'] } });
+  const verificationStatus = isFinancialVerified
+    ? 'VERIFIED'
+    : (hasVerifiedIdentity || hasVerifiedBank || Boolean(hasSubmittedDoc))
+    ? 'UNDER_REVIEW'
+    : 'NOT_SUBMITTED';
+
   // Determine state transitions
-  let targetState = vendor.activationState || 'REGISTERED';
   const isModelComplete =
     hasProfile &&
     hasActiveService &&
@@ -202,20 +207,21 @@ export async function evaluateVendorActivation(vendorId) {
     hasLocation &&
     hasCoverage &&
     hasAvailability;
-  const commercialReadiness = isModelComplete && hasPortfolio;
+  const commercialReadiness = isModelComplete && hasPortfolio && completionPercentage === 100;
   const matchingEligible = isFinancialVerified && commercialReadiness;
   const leadActivationStatus = matchingEligible ? 'ACTIVE' : 'INACTIVE';
 
+  let targetState = vendor.activationState || 'REGISTERED';
   if (!hasProfile) {
     targetState = 'PROFILE_INCOMPLETE';
   } else if (!isFinancialVerified) {
-    targetState = commercialReadiness ? 'ELIGIBLE' : 'VERIFICATION_PENDING';
+    targetState = 'VERIFICATION_PENDING';
   } else if (isFinancialVerified && !isModelComplete) {
     targetState = 'VERIFIED';
-  } else if (isFinancialVerified && !hasPortfolio) {
-    targetState = 'ELIGIBLE';
   } else if (matchingEligible) {
     targetState = 'ACTIVE';
+  } else {
+    targetState = 'ELIGIBLE';
   }
 
   const isCommerciallyActive = matchingEligible;
@@ -237,7 +243,7 @@ export async function evaluateVendorActivation(vendorId) {
     readiness: {
       profileCompletion: completionPercentage,
       onboardingStatus: completionPercentage === 100 ? 'COMPLETE' : 'INCOMPLETE',
-      verificationStatus: isFinancialVerified ? 'VERIFIED' : hasVerifiedIdentity || hasVerifiedBank ? 'UNDER_REVIEW' : 'NOT_SUBMITTED',
+      verificationStatus,
       identityVerificationSource,
       bankVerificationSource,
       availabilityStatus: hasAvailability ? 'CONFIGURED' : 'NOT_CONFIGURED',
