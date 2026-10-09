@@ -152,7 +152,7 @@ const DEFAULT_ROUTES = [
 
 const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL.replace(/\/$/, '');
-  return window.location.origin;
+  return import.meta.env.MODE === 'production' ? 'https://app.starvnt.com' : 'http://localhost:4000';
 };
 
 // Latency Sparkline Graph SVG Component

@@ -8,7 +8,7 @@ import { externalApi, adminApi } from '../lib/api.js';
 
 const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL.replace(/\/$/, '');
-  return '';
+  return import.meta.env.MODE === 'production' ? 'https://app.starvnt.com' : 'http://localhost:4000';
 };
 
 // ── 15 Pre-Seeded Vendors Across Categories & States ────────────────────────
