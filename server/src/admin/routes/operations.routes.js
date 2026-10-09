@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAdminAuth } from '../middleware/requireAdminAuth.js';
+import { requireAdminAuth, requirePermission } from '../middleware/requireAdminAuth.js';
 import { CoreBooking } from '../models/CoreBooking.js';
 import {
   verifyPaymentFromCore,
@@ -21,7 +21,7 @@ router.use(requireAdminAuth);
  * List authoritative Core bookings with multi-field search, vendor filtering,
  * category, city, and status tabs.
  */
-router.get('/bookings', async (req, res, next) => {
+router.get('/bookings', requirePermission('operations.read'), async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
     const skip = parseInt(req.query.skip) || 0;
@@ -166,7 +166,7 @@ router.get('/bookings', async (req, res, next) => {
 /**
  * Get booking details.
  */
-router.get('/bookings/:id', async (req, res, next) => {
+router.get('/bookings/:id', requirePermission('operations.read'), async (req, res, next) => {
   try {
     const booking = await CoreBooking.findById(req.params.id);
     if (!booking) {
@@ -181,7 +181,7 @@ router.get('/bookings/:id', async (req, res, next) => {
 /**
  * Authoritative Payment Verification from Core (Golden Test I).
  */
-router.post('/bookings/:id/verify-payment', async (req, res) => {
+router.post('/bookings/:id/verify-payment', requirePermission('operations.manage'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
     const booking = await verifyPaymentFromCore(req.params.id, req.body, coreActor);
@@ -194,7 +194,7 @@ router.post('/bookings/:id/verify-payment', async (req, res) => {
 /**
  * Authoritative Completion Validation from Core (Golden Test K).
  */
-router.post('/bookings/:id/validate-completion', async (req, res) => {
+router.post(['/bookings/:id/validate-completion', '/bookings/:id/verify-completion'], requirePermission('operations.manage'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
     const { approved = true, notes } = req.body || {};
@@ -208,7 +208,7 @@ router.post('/bookings/:id/validate-completion', async (req, res) => {
 /**
  * Authoritative Settlement Execution from Core (Golden Test K).
  */
-router.post('/bookings/:id/settle', async (req, res) => {
+router.post('/bookings/:id/settle', requirePermission('operations.manage'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_FINANCE';
     const booking = await settleBooking(req.params.id, req.body, coreActor);
@@ -221,7 +221,7 @@ router.post('/bookings/:id/settle', async (req, res) => {
 /**
  * Handle vendor failure and discover alternatives on the same requirement/location (Golden Test L).
  */
-router.post('/bookings/:id/fail-and-reassign', async (req, res) => {
+router.post('/bookings/:id/fail-and-reassign', requirePermission('operations.manage'), async (req, res) => {
   try {
     const { reason, failedBy } = req.body || {};
     const result = await handleVendorFailureAndDiscoverAlternatives(req.params.id, {

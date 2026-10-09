@@ -63,6 +63,10 @@ const outboxEventSchema = new Schema(
       type: Date,
       default: null,
     },
+    processingStartedAt: {
+      type: Date,
+      default: null,
+    },
     history: [
       {
         attempt: Number,

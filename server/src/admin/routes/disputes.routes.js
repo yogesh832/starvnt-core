@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAdminAuth } from '../middleware/requireAdminAuth.js';
+import { requireAdminAuth, requirePermission } from '../middleware/requireAdminAuth.js';
 import { CoreBooking } from '../models/CoreBooking.js';
 import { reportIssue, resolveDispute } from '../services/disputes.service.js';
 
@@ -11,7 +11,7 @@ router.use(requireAdminAuth);
 /**
  * Get all disputes across all bookings (useful for Admin Dashboard)
  */
-router.get('/', async (req, res, next) => {
+router.get('/', requirePermission('operations.read'), async (req, res, next) => {
   try {
     // Find any booking that has disputes
     const bookingsWithDisputes = await CoreBooking.find({ 'disputes.0': { $exists: true } });
@@ -45,7 +45,7 @@ router.get('/', async (req, res, next) => {
 /**
  * Report a new issue on a booking, putting settlement on HOLD.
  */
-router.post('/booking/:id/report', async (req, res) => {
+router.post('/booking/:id/report', requirePermission('operations.manage'), async (req, res) => {
   try {
     const { reportedBy, issueType, description } = req.body;
     
@@ -63,7 +63,7 @@ router.post('/booking/:id/report', async (req, res) => {
 /**
  * Resolve an ongoing dispute on a booking.
  */
-router.post('/booking/:id/resolve/:disputeId', async (req, res) => {
+router.post('/booking/:id/resolve/:disputeId', requirePermission('operations.manage'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
     const { decision, notes, refundAmount, settlementAmount } = req.body;

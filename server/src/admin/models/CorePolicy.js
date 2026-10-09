@@ -23,6 +23,10 @@ const corePolicySchema = new Schema(
       type: Number,
       default: 10,
     },
+    defaultRadiusKm: {
+      type: Number,
+      default: 25,
+    },
     vendorCancellationPenaltyPercent: {
       type: Number,
       default: 0,

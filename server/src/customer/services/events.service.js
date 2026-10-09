@@ -4,6 +4,7 @@ import * as auraRepo from '../repositories/aura.repo.js';
 import * as quotesRepo from '../repositories/quotes.repo.js';
 import * as commerceRepo from '../repositories/commerce.repo.js';
 import * as circleRepo from '../repositories/circle.repo.js';
+import { countUnreadTotal } from './circle.service.js';
 import { serializeBooking, serializePayment } from './commerce.service.js';
 import { badRequest, notFound, conflict } from '../utils/http.js';
 import { CLOSED_EVENT_STATUSES, LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
@@ -34,7 +35,7 @@ import {
   serializeRequirement,
 } from './understanding.js';
 import * as catalog from './catalog.service.js';
-import { serviceFields, validateDetails, validateServiceLocation, LOCATION_SENSITIVE, ROUTE_CATEGORIES } from './serviceRequirements.js';
+import { serviceDetailsJsonSchema, serviceFields, validateDetails, validateServiceLocation, LOCATION_SENSITIVE, ROUTE_CATEGORIES } from './serviceRequirements.js';
 import { computeEventSummary, eventSteps, attentionFor } from './summary.js';
 import { customerHistory } from './history.service.js';
 
@@ -563,7 +564,7 @@ export async function home(customerId) {
     byEvent.get(k).push(r);
   }
   const active = events.filter((e) => !CLOSED_EVENT_STATUSES.includes(e.status));
-  const [signals, unread] = await Promise.all([attentionSignals(active.map((e) => e._id)), circleRepo.countUnread(customerId)]);
+  const [signals, unread] = await Promise.all([attentionSignals(active.map((e) => e._id)), countUnreadTotal(customerId)]);
   return {
     activeEvents: active.map((e) => {
       const rows = byEvent.get(String(e._id)) || [];
@@ -801,6 +802,7 @@ export function planOptions(eventType) {
     budgetRanges: t ? budgetRangesFor(t) : { wedding: budgetRangesFor('wedding'), other: budgetRangesFor('other') },
     // Event Type + Service Category → relevant requirement fields (options from the Vendor OS taxonomy).
     serviceFields: Object.fromEntries(Object.keys(CATEGORY_LABELS).map((c) => [c, serviceFields(c, t || 'other')])),
+    serviceSchemas: Object.fromEntries(Object.keys(CATEGORY_LABELS).map((c) => [c, serviceDetailsJsonSchema(c, t || 'other')])),
     locationSensitive: LOCATION_SENSITIVE,
     routeCategories: ROUTE_CATEGORIES,
   };

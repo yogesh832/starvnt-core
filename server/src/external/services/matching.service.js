@@ -5,9 +5,13 @@ import { ServiceCoverage } from '../models/ServiceCoverage.js';
 import { checkTrueAvailability } from './availability.service.js';
 import { calculateValidatedTotalCost } from './totalCost.service.js';
 import { estimateDistanceKm } from '../utils/geo.js';
+import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
+import { evaluateVendorActivation } from './vendorActivation.service.js';
+
+const EXTENDED_FALLBACK_RADIUS_KM = 150;
 
 /**
- * Opportunity Qualification & Lowest Validated Total Cost Matching Engine (Spec §8, §9).
+ * Opportunity Qualification & Lowest Validated Total Cost Matching Engine (Spec §8, §9, §18, §19).
  *
  * Golden Acceptance Test E:
  * "STARVNT must not optimize for nearest vendor or lowest visible quote.
@@ -23,7 +27,10 @@ export async function matchVendorsForRequirement({
   guestCount = 500,
   durationHours = 8,
   requiredStyles = [],
+  overrideRadiusKm = null,
 }) {
+  const policy = await getCommercialPolicyForCategory(category);
+  const effectivePolicyRadius = overrideRadiusKm || policy.defaultRadiusKm || 25;
   // 1. Find services matching category
   const services = await VendorService.find({
     category,
@@ -31,24 +38,32 @@ export async function matchVendorsForRequirement({
   }).populate('vendor');
 
   const eligibleCandidates = [];
+  const extendedServiceCandidates = [];
   const excludedCandidates = [];
+  const readinessByVendor = new Map();
 
   for (const svc of services) {
     const vendor = svc.vendor;
     if (!vendor) continue;
 
-    // Hard Gate 1: Vendor commercial eligibility
-    // Must be verified or commercially active
-    const isReady =
-      vendor.isCommerciallyActive ||
-      ['ACTIVE', 'ELIGIBLE', 'VERIFIED'].includes(vendor.activationState || vendor.status);
+    // Hard Gate 1: Vendor commercial eligibility.
+    // Core readiness is authoritative; profile completion alone is not enough.
+    const vendorKey = String(vendor._id);
+    let readiness = readinessByVendor.get(vendorKey);
+    if (!readinessByVendor.has(vendorKey)) {
+      readiness = await evaluateVendorActivation(vendor._id).catch(() => null);
+      readinessByVendor.set(vendorKey, readiness);
+    }
+    const isReady = Boolean(readiness?.matchingEligible);
 
     if (!isReady) {
       excludedCandidates.push({
         vendorId: vendor._id,
         businessName: vendor.businessName,
         serviceId: svc._id,
-        ineligibleReason: `Vendor is not commercially eligible (Status: ${vendor.activationState || vendor.status})`,
+        ineligibleReason: readiness?.missingRequirements?.join(', ') || `Vendor is not commercially eligible (Status: ${vendor.activationState || vendor.status})`,
+        reasonCodes: readiness?.reasonCodes || ['COMMERCIAL_PROFILE_INCOMPLETE'],
+        readiness: readiness?.readiness || null,
         gate: 'VENDOR_ACTIVATION_GATE',
       });
       continue;
@@ -61,10 +76,43 @@ export async function matchVendorsForRequirement({
     });
 
     let coversTargetLocation = false;
+    let extendedService = null;
     const reqLocality = (serviceLocation?.locality || '').toLowerCase().trim();
     const reqCity = (serviceLocation?.city || '').toLowerCase().trim();
 
     for (const cov of coverages) {
+      if (cov.coverageType === 'RADIUS' && cov.radiusKm) {
+        const dist = estimateDistanceKm(
+          { locality: cov.localities?.[0] || cov.city, city: cov.city },
+          serviceLocation
+        );
+        if (dist <= cov.radiusKm) {
+          coversTargetLocation = true;
+          break;
+        }
+        const fallbackLimit = cov.outstationAllowed ? Math.max(EXTENDED_FALLBACK_RADIUS_KM, cov.radiusKm * 3) : EXTENDED_FALLBACK_RADIUS_KM;
+        if (dist <= fallbackLimit && (!extendedService || dist < extendedService.distanceKm)) {
+          extendedService = {
+            label: `Extended Service — ${Math.round(dist)} km away`,
+            distanceKm: Math.round(dist * 10) / 10,
+            configuredRadiusKm: cov.radiusKm,
+            fallbackLimitKm: fallbackLimit,
+            requiresVendorConfirmation: true,
+            note: 'Outside configured service coverage. Vendor must confirm travel/logistics and final cost before this can become a valid quote.',
+            fallbackFlow: [
+              'coverage',
+              'availability',
+              'capacity',
+              'operational_feasibility',
+              'travel_logistics',
+              'validated_total_cost',
+              'vendor_confirmation',
+            ],
+          };
+        }
+        continue;
+      }
+
       // Check specific locality
       if (
         reqLocality &&
@@ -78,25 +126,10 @@ export async function matchVendorsForRequirement({
         coversTargetLocation = true;
         break;
       }
-      // Check radius
-      if (cov.coverageType === 'RADIUS' && cov.radiusKm) {
-        const dist = estimateDistanceKm(
-          {
-            locality: cov.baseLocality || cov.localities?.[0] || cov.city,
-            city: cov.city,
-            coordinates: cov.baseCoordinates?.lat && cov.baseCoordinates?.lng ? cov.baseCoordinates : undefined,
-          },
-          serviceLocation
-        );
-        if (dist <= cov.radiusKm) {
-          coversTargetLocation = true;
-          break;
-        }
-      }
     }
 
     // If coverage records exist and none matched, exclude
-    if (coverages.length > 0 && !coversTargetLocation) {
+    if (coverages.length > 0 && !coversTargetLocation && !extendedService) {
       excludedCandidates.push({
         vendorId: vendor._id,
         businessName: vendor.businessName,
@@ -156,19 +189,47 @@ export async function matchVendorsForRequirement({
     }
     matchScore = Math.min(98, matchScore);
 
-    eligibleCandidates.push({
+    const candidatePayload = {
       vendorId: vendor._id,
       businessName: vendor.businessName,
       serviceId: svc._id,
       serviceName: svc.name,
-      rating: vendor.rating?.average || 4.8,
-      reviewsCount: vendor.rating?.count || 120,
+      rating: vendor.rating?.count ? vendor.rating.average : null,
+      reviewsCount: vendor.rating?.count || 0,
       matchPercentage: matchScore,
       cost: costBreakdown,
       validatedTotalCost: costBreakdown.validatedTotalCost,
       capability: capability || null,
       recommended: false,
-    });
+      explainability: {
+        coverage: coversTargetLocation ? 'standard_coverage' : 'extended_service_fallback',
+        availability: 'feasible',
+        capacity: availability.capacity || 'not_reported',
+        cost: {
+          validatedTotalCost: costBreakdown.validatedTotalCost,
+          travelCost: costBreakdown.travelCost || 0,
+        },
+        capabilityScore: matchScore,
+        factors: [
+          'configured coverage evaluated before proximity',
+          'availability and travel buffer checked',
+          'validated total cost calculated before ranking',
+          requiredStyles.length ? 'requested styles compared with vendor capability' : 'no style-specific preference supplied',
+        ],
+      },
+    };
+
+    if (coversTargetLocation || coverages.length === 0) {
+      eligibleCandidates.push(candidatePayload);
+    } else {
+      extendedServiceCandidates.push({
+        ...candidatePayload,
+        recommended: false,
+        coverageStatus: 'EXTENDED_SERVICE_REQUIRED',
+        extendedService,
+        whyCallout: 'Fallback only: outside normal coverage and requires explicit vendor confirmation.',
+      });
+    }
   }
 
   // Soft Ranking: Deterministic sort primarily by Lowest Validated Total Cost
@@ -181,6 +242,12 @@ export async function matchVendorsForRequirement({
       'Lowest validated total cost among vendors meeting your requirements with confirmed availability.';
   }
 
+  // Spec §22: Up to 4 validated options max. Never manufacture fake options.
+  const topValidatedOptions = eligibleCandidates.slice(0, 4);
+  const fallbackExtendedOptions = eligibleCandidates.length === 0
+    ? extendedServiceCandidates.sort((a, b) => a.validatedTotalCost - b.validatedTotalCost).slice(0, 4)
+    : [];
+
   return {
     category,
     date,
@@ -188,7 +255,43 @@ export async function matchVendorsForRequirement({
     totalEvaluated: services.length,
     eligibleCount: eligibleCandidates.length,
     excludedCount: excludedCandidates.length,
-    eligibleCandidates,
+    eligibleCandidates: topValidatedOptions, // Top 4 max capped
+    topValidatedOptions,
+    extendedServiceCandidates: fallbackExtendedOptions,
     excludedCandidates,
   };
+}
+
+/**
+ * Search Waves Engine (Spec §19).
+ * Wave 1: Initial policy radius.
+ * Wave 2: Broader fallback discovery only; configured vendor coverage is not rewritten.
+ * Wave 3: Specialist/long-distance search.
+ * Aura+ explains expansion; never silently expands geography.
+ */
+export async function matchVendorsWithSearchWaves(params) {
+  const waveLevel = params.waveLevel || 1;
+  const policy = await getCommercialPolicyForCategory(params.category);
+  const baseRadius = policy.defaultRadiusKm || 25;
+  const multiplier = waveLevel === 1 ? 1 : waveLevel === 2 ? 2 : 4;
+  const searchRadiusKm = baseRadius * multiplier;
+
+  const result = await matchVendorsForRequirement({
+    ...params,
+    overrideRadiusKm: searchRadiusKm,
+  });
+
+  result.waveInfo = {
+    waveLevel,
+    policyRadiusKm: baseRadius,
+    searchRadiusKm,
+    explanation:
+      waveLevel === 1
+        ? `Search conducted within policy radius of ${baseRadius} km.`
+        : waveLevel === 2
+        ? `Wave 2 search expanded to ${searchRadiusKm} km to locate available qualified options.`
+        : `Wave 3 specialist search expanded to ${searchRadiusKm} km for specialized vendor coverage.`,
+  };
+
+  return result;
 }

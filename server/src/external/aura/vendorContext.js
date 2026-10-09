@@ -73,8 +73,9 @@ async function fetchGoogleRating(googlePlaceId, businessName) {
       const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(googlePlaceId)}?fields=id,displayName,rating,userRatingCount,reviews,googleMapsUri,formattedAddress&key=${key}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
       const gData = await res.json();
-      if (gData && !gData.error) {
+      if (gData && !gData.error && typeof gData.rating === 'number') {
         return {
+          source: 'GOOGLE_PLACES',
           rating: gData.rating,
           reviewCount: gData.userRatingCount,
           googleMapsUrl: gData.googleMapsUri,
@@ -88,15 +89,6 @@ async function fetchGoogleRating(googlePlaceId, businessName) {
           })),
         };
       }
-    } else if (googlePlaceId.startsWith('place_') || googlePlaceId.startsWith('osm_')) {
-      return {
-        rating: 4.8,
-        reviewCount: 36,
-        googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(businessName || 'Business')}`,
-        address: '',
-        displayName: businessName,
-        reviews: [],
-      };
     }
   } catch (err) {
     console.warn('[vendorContext] Google Places fetch failed:', err?.message || err);
@@ -137,6 +129,10 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       status: vendor.status,
       profileCompletePercent: activation?.completionPercentage ?? null,
       missingForActivation: activation?.missingRequirements ?? [],
+      reasonCodes: activation?.reasonCodes ?? [],
+      readiness: activation?.readiness ?? null,
+      matchingEligible: Boolean(activation?.matchingEligible),
+      leadActivationStatus: activation?.leadActivationStatus || 'INACTIVE',
       rating: vendor.rating?.count ? { average: vendor.rating.average, count: vendor.rating.count } : null,
       workingHours: vendor.workingHours || null,
     },
@@ -211,6 +207,7 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
     })),
     googleBusiness: googleRating ? {
       connected: true,
+      source: googleRating.source,
       name: googleRating.displayName,
       rating: googleRating.rating,
       reviewCount: googleRating.reviewCount,
@@ -226,6 +223,7 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       starvntCount: reviews.length,
       starvntAverage: ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null,
       googleRating: googleRating ? {
+        source: googleRating.source,
         rating: googleRating.rating,
         reviewCount: googleRating.reviewCount,
         displayName: googleRating.displayName,

@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from '../../config.js';
 import { AdminUser } from '../models/AdminUser.js';
 import { AdminSession } from '../models/AdminSession.js';
-import { verifyPassword } from '../../external/utils/password.js';
+import { hashPassword, verifyPassword } from '../../external/utils/password.js';
 import {
   signAdminAccessToken,
   generateRefreshToken,
@@ -45,6 +45,47 @@ async function createSession(admin, req) {
   });
   return { session, refreshToken };
 }
+
+
+// ── Admin Dev Single-Click Auth Endpoint ────────────────────────────────────
+router.post('/dev-auth', async (req, res, next) => {
+  try {
+    if (!config.enableDevTools) {
+      return res.status(404).json({ error: 'NOT_FOUND' });
+    }
+    const { email: requestedEmail, role = 'SUPER_ADMIN' } = req.body || {};
+    const email = requestedEmail ? String(requestedEmail).toLowerCase() : 'admin@starvnt.com';
+
+    let admin = await AdminUser.findOne({ email });
+    if (!admin) {
+      admin = await AdminUser.create({
+        email,
+        fullName: email.startsWith('admin')
+          ? 'Dev Super Admin'
+          : email.startsWith('ops')
+          ? 'Ops Operations Lead'
+          : email.startsWith('finance')
+          ? 'Finance & Ledger Head'
+          : 'Support & Audit Officer',
+        role: role || (email.startsWith('ops') ? 'OPERATIONS' : email.startsWith('finance') ? 'FINANCE' : email.startsWith('support') ? 'SUPPORT' : 'SUPER_ADMIN'),
+        passwordHash: await hashPassword('Password123!'),
+      });
+    }
+
+    const { session, refreshToken } = await createSession(admin, req);
+    res.cookie(config.adminRefreshCookieName, refreshToken, refreshCookieOptions());
+
+    const accessToken = signAdminAccessToken(admin, session._id);
+    res.json({
+      ok: true,
+      accessToken,
+      admin: admin.toSafeJSON(),
+      redirectTo: '/admin/dashboard'
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ── Admin Login ──────────────────────────────────────────────────────────────
 router.post('/login', adminAuthLimiter, async (req, res, next) => {

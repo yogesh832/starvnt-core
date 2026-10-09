@@ -3,14 +3,19 @@
  * Code constants: templates are suggestions (RECOMMENDED), never business state.
  */
 
-export const EVENT_TYPES = ['wedding', 'birthday', 'corporate', 'puja', 'anniversary', 'other'];
+export const EVENT_TYPES = ['wedding', 'birthday', 'corporate', 'conference', 'club', 'cultural', 'institutional', 'puja', 'anniversary', 'social', 'other'];
 
 export const EVENT_TYPE_LABELS = {
   wedding: 'Wedding',
   birthday: 'Birthday',
   corporate: 'Corporate event',
+  conference: 'Conference / MICE',
+  club: 'Club / community event',
+  cultural: 'Cultural event',
+  institutional: 'Institutional event',
   puja: 'Puja',
   anniversary: 'Anniversary',
+  social: 'Social gathering',
   other: 'Event',
 };
 
@@ -26,14 +31,39 @@ export const EVENT_PLAN_TEMPLATES = {
     optional: ['photo_booth', 'special_effects'],
   },
   corporate: {
-    essential: ['venue', 'catering', 'sound'],
+    essential: ['venue', 'catering', 'sound', 'corporate_production'],
     recommended: ['photography', 'anchor', 'accommodation', 'transport'],
-    optional: ['live_streaming', 'special_effects'],
+    optional: ['live_streaming', 'special_effects', 'invitation'],
+  },
+  conference: {
+    essential: ['venue', 'sound', 'corporate_production'],
+    recommended: ['catering', 'photography', 'anchor', 'live_streaming', 'transport', 'accommodation'],
+    optional: ['invitation', 'hospitality'],
+  },
+  club: {
+    essential: ['venue', 'catering', 'sound'],
+    recommended: ['decor', 'photography', 'anchor', 'entertainment'],
+    optional: ['special_effects', 'live_streaming'],
+  },
+  cultural: {
+    essential: ['venue', 'sound', 'decor'],
+    recommended: ['photography', 'anchor', 'catering', 'entertainment'],
+    optional: ['live_streaming', 'transport'],
+  },
+  institutional: {
+    essential: ['venue', 'sound', 'corporate_production'],
+    recommended: ['photography', 'anchor', 'catering', 'transport'],
+    optional: ['live_streaming', 'invitation'],
   },
   puja: {
     essential: ['venue', 'catering', 'ceremony', 'decor'],
     recommended: ['photography', 'sound'],
     optional: ['live_streaming'],
+  },
+  social: {
+    essential: ['venue', 'catering'],
+    recommended: ['decor', 'photography', 'sound', 'entertainment'],
+    optional: ['anchor', 'cake', 'transport'],
   },
   other: {
     essential: ['venue', 'catering'],
@@ -49,7 +79,8 @@ export const CATEGORY_LABELS = {
   decor: 'Decoration',
   makeup: 'Makeup',
   sound: 'Sound',
-  ceremony: 'Ceremony / Purohit',
+  ceremony: 'Religious ceremony officiant',
+  corporate_production: 'Corporate production',
   transport: 'Transport',
   accommodation: 'Accommodation',
   hospitality: 'Hospitality',
@@ -72,7 +103,8 @@ const CATEGORY_SYNONYMS = {
   decor: ['decor', 'decoration', 'decorations', 'decorator', 'decorators', 'sajawat'],
   makeup: ['makeup', 'make-up', 'make up', 'makeup artist', 'bridal makeup', 'mua'],
   sound: ['sound', 'sound system', 'audio', 'speakers'],
-  ceremony: ['ceremony', 'purohit', 'pandit', 'priest', 'pujari'],
+  ceremony: ['ceremony', 'religious ceremony', 'officiant', 'purohit', 'pandit', 'priest', 'pastor', 'imam', 'nikah', 'granthi', 'monk', 'jain priest', 'interfaith officiant', 'pujari'],
+  corporate_production: ['corporate production', 'production', 'conference production', 'av', 'audio visual', 'stage production', 'mice', 'exhibition'],
   transport: ['transport', 'transportation', 'cab', 'cabs', 'car', 'cars', 'shuttle', 'bus'],
   accommodation: ['accommodation', 'hotel', 'hotels', 'stay', 'rooms'],
   hospitality: ['hospitality', 'guest management'],
@@ -116,9 +148,14 @@ export function normalizeEventType(value) {
   if (EVENT_TYPES.includes(v)) return v;
   if (/(wedding|marriage|shaadi|shadi|biye|vivah|reception|engagement|sangeet|mehendi)/.test(v)) return 'wedding';
   if (/(birthday|bday|janmdin)/.test(v)) return 'birthday';
-  if (/(corporate|office|conference|seminar|offsite|company)/.test(v)) return 'corporate';
+  if (/(conference|seminar|mice|exhibition|trade show|expo|summit)/.test(v)) return 'conference';
+  if (/(corporate|office|offsite|company|product launch)/.test(v)) return 'corporate';
+  if (/(club|community|association|society|annual programme|annual program)/.test(v)) return 'club';
+  if (/(cultural|festival|concert|performance|award)/.test(v)) return 'cultural';
+  if (/(school|college|institution|institutional|convocation|farewell|freshers|sports day)/.test(v)) return 'institutional';
   if (/(puja|pooja|havan|griha pravesh|satyanarayan)/.test(v)) return 'puja';
   if (/anniversary/.test(v)) return 'anniversary';
+  if (/(house party|social|gathering|reunion|engagement|reception)/.test(v)) return 'social';
   return 'other';
 }
 

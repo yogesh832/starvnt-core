@@ -48,20 +48,40 @@ function addressOf(data) {
 }
 
 export function compareBusinessNames(vendorName, gstLegalName, gstTradeName = '') {
-  const vendor = normalizeName(vendorName);
+  const names = (Array.isArray(vendorName) ? vendorName : [vendorName]).filter(Boolean);
+  if (!names.length || (!gstLegalName && !gstTradeName)) return { matched: false, confidence: 'NONE' };
+
   const legal = normalizeName(gstLegalName);
   const trade = normalizeName(gstTradeName);
-  if (!vendor || (!legal && !trade)) return { matched: false, confidence: 'NONE' };
-  if (vendor === legal || vendor === trade) return { matched: true, confidence: 'EXACT' };
-  if ((legal && (legal.includes(vendor) || vendor.includes(legal))) || (trade && (trade.includes(vendor) || vendor.includes(trade)))) {
-    return { matched: true, confidence: 'HIGH' };
+
+  const confidenceRank = (c) => ({ EXACT: 4, HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0 }[c] || 0);
+  let bestResult = { matched: false, confidence: 'NONE' };
+
+  for (const rawName of names) {
+    const vendor = normalizeName(rawName);
+    if (!vendor) continue;
+
+    let res = { matched: false, confidence: 'NONE' };
+    if ((legal && vendor === legal) || (trade && vendor === trade)) {
+      res = { matched: true, confidence: 'EXACT' };
+    } else if ((legal && (legal.includes(vendor) || vendor.includes(legal))) || (trade && (trade.includes(vendor) || vendor.includes(trade)))) {
+      res = { matched: true, confidence: 'HIGH' };
+    } else {
+      const vendorTokens = new Set(tokens(vendor));
+      const candidateTokens = new Set([...tokens(legal), ...tokens(trade)]);
+      const overlap = [...vendorTokens].filter((part) => candidateTokens.has(part)).length;
+      const ratio = vendorTokens.size ? overlap / vendorTokens.size : 0;
+      if (ratio >= 0.75 && overlap >= 2) res = { matched: true, confidence: 'MEDIUM' };
+      else if (ratio >= 0.4) res = { matched: false, confidence: 'LOW' };
+    }
+
+    if (res.matched) return res;
+    if (confidenceRank(res.confidence) > confidenceRank(bestResult.confidence)) {
+      bestResult = res;
+    }
   }
-  const vendorTokens = new Set(tokens(vendor));
-  const candidateTokens = new Set([...tokens(legal), ...tokens(trade)]);
-  const overlap = [...vendorTokens].filter((part) => candidateTokens.has(part)).length;
-  const ratio = vendorTokens.size ? overlap / vendorTokens.size : 0;
-  if (ratio >= 0.75 && overlap >= 2) return { matched: true, confidence: 'MEDIUM' };
-  return { matched: false, confidence: ratio >= 0.4 ? 'LOW' : 'NONE' };
+
+  return bestResult;
 }
 
 export async function verifyGstin(gstin, vendorName) {
