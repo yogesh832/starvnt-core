@@ -20,6 +20,7 @@ const CATALOG = {
   execution: ['read', 'update', 'manage'],
   issues: ['read', 'update', 'manage', 'assign'],
   protection: ['read', 'manage'],
+  operations: ['read', 'manage'],
   revenue: ['read', 'manage'],
   leads: ['read', 'assign', 'update'],
   automation: ['read', 'manage'],

@@ -86,8 +86,8 @@ function recommendationFor(option, event, route) {
   const fit = budgetFit(option, event);
   const inRadius = route?.distanceKm != null && option.serviceRadiusKm ? route.distanceKm <= option.serviceRadiusKm : null;
   const distanceScore =
-    route?.distanceKm == null ? 10 : inRadius ? 24 : route.distanceKm <= (option.serviceRadiusKm || 25) * 1.4 ? 12 : 4;
-  const availabilityScore = option.availability === 'booked' || option.availability === 'blocked' ? 0 : 18;
+    option.requiresVendorConfirmation ? 6 : route?.distanceKm == null ? 10 : inRadius ? 24 : route.distanceKm <= (option.serviceRadiusKm || 25) * 1.4 ? 12 : 4;
+  const availabilityScore = option.availability === 'booked' || option.availability === 'blocked' || option.availability === 'requires_vendor_confirmation' ? 0 : 18;
   const priceScore = option.price == null ? 8 : 16;
   const score = Math.max(1, Math.min(100, 20 + distanceScore + fit.score + availabilityScore + priceScore));
   const positives = [
@@ -97,6 +97,9 @@ function recommendationFor(option, event, route) {
     ...(option.strengths || []).slice(0, 2),
   ].filter(Boolean);
   const cautions = [
+    ...(option.requiresVendorConfirmation
+      ? ['Extended-service fallback: vendor must confirm distance, logistics, and final travel charges before this can become a valid quote']
+      : []),
     ...(inRadius === false ? ['Outside the usual service radius; travel cost or timing should be confirmed'] : []),
     ...(option.limitations || []).slice(0, 2),
   ];
@@ -127,9 +130,11 @@ export function listedTotal(pricing, guestCount) {
   return null;
 }
 
-function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { guestCount } = {}) {
+function fromVendor({ service, vendor, matchedLocation, matchedCoverage, portfolio, isRegionalMatch, extendedService, coverageStatus }, { guestCount } = {}) {
   const reviewCount = vendor?.rating?.count || 0;
-  const price = listedTotal(service.pricing, guestCount);
+  const requiresVendorConfirmation = Boolean(extendedService?.requiresVendorConfirmation);
+  const listedPrice = listedTotal(service.pricing, guestCount);
+  const price = requiresVendorConfirmation ? null : listedPrice;
   const resolvedLocation = matchedLocation || null;
   const locationLabel = [
     resolvedLocation?.locality,
@@ -137,6 +142,8 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { gue
     resolvedLocation?.state,
   ].filter(Boolean).join(', ');
   const vendorLocation = locationLabel || vendor.location || '';
+  const portfolioImages = (portfolio || []).map((p) => p.thumbnailUrl || p.url).filter(Boolean);
+  const images = [...(vendor.profilePicUrl ? [vendor.profilePicUrl] : []), ...portfolioImages];
   return {
     id: vsId(service._id),
     source: 'vendor',
@@ -154,7 +161,8 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { gue
     unit: service.pricing?.unit || null,
     mayApply: (service.pricing?.conditionalCharges || []).map((c) => ({ name: c.name, amount: c.amount, condition: c.condition || '' })),
     includes: service.deliverables || [],
-    images: vendor.profilePicUrl ? [vendor.profilePicUrl] : [],
+    images,
+    portfolioImages: portfolioImages.slice(0, 5),
     rating: reviewCount > 0 ? vendor.rating.average : null,
     reviewCount,
     cancellationPolicy: service.cancellationPolicy || null,
@@ -165,9 +173,31 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage }, { gue
       coordinates: resolvedLocation?.coordinates || null,
     },
     serviceRadiusKm: matchedCoverage?.radiusKm || null,
+    isRegionalMatch: Boolean(isRegionalMatch),
+    coverageStatus: coverageStatus || (requiresVendorConfirmation ? 'extended_fallback' : 'normal'),
+    requiresVendorConfirmation,
+    extendedService: extendedService
+      ? {
+          ...extendedService,
+          normalEligibilityRule: matchedCoverage?.radiusKm
+            ? `Configured service radius: ${matchedCoverage.radiusKm} km`
+            : 'Configured service coverage must be confirmed by vendor',
+          fallbackFlow: [
+            'coverage',
+            'availability',
+            'capacity',
+            'operational_feasibility',
+            'travel_logistics',
+            'validated_total_cost',
+            'vendor_confirmation',
+          ],
+        }
+      : null,
     strengths: [],
-    limitations: [],
-    negotiable: [],
+    limitations: requiresVendorConfirmation
+      ? ['Vendor confirmation required for extended distance', 'Additional travel/logistics charges may apply']
+      : [],
+    negotiable: requiresVendorConfirmation ? ['extended travel cost', 'setup timing', 'logistics confirmation'] : [],
     isDemo: false,
   };
 }
@@ -243,14 +273,17 @@ async function withAvailability(options, event) {
   // Booked through STARVNT by another event on this date.
   const bookedByOthers = new Set(ours.filter((r) => String(r.event) !== String(event._id)).map((r) => r.optionId));
   return options.map((o) => {
-    let availability = 'unconfirmed';
+    let availability = o.requiresVendorConfirmation ? 'requires_vendor_confirmation' : 'unconfirmed';
     if (o.vendorId && blocked.has(o.vendorId)) availability = 'blocked';
     else if ((o.vendorId && booked.has(o.vendorId)) || bookedByOthers.has(o.id)) availability = 'booked';
     return { ...o, availability };
   });
 }
 
-export const isBookable = (o) => o.availability !== 'blocked' && o.availability !== 'booked';
+export const isBookable = (o) => !o.requiresVendorConfirmation && o.availability !== 'blocked' && o.availability !== 'booked';
+export const canRequestVendorConfirmation = (o) =>
+  Boolean(o?.requiresVendorConfirmation && o.vendorId && !o.isDemo && o.availability !== 'blocked' && o.availability !== 'booked');
+export const canSelectForEnquiry = (o) => isBookable(o) || canRequestVendorConfirmation(o);
 
 /** Lowest validated total among bookable options. */
 function bestValueId(options) {
@@ -286,6 +319,7 @@ export async function optionsForCategory(event, categoryParam) {
   options.sort(
     (a, b) =>
       Number(isBookable(b)) - Number(isBookable(a)) ||
+      Number(canRequestVendorConfirmation(b)) - Number(canRequestVendorConfirmation(a)) ||
       (b.recommendation?.auraScore || 0) - (a.recommendation?.auraScore || 0) ||
       (a.price ?? Infinity) - (b.price ?? Infinity)
   );
@@ -322,7 +356,9 @@ export async function compareOptions(event, ids) {
     options: options.map((o) => ({
       ...o,
       summary: !isBookable(o)
-        ? 'Not available'
+        ? o.requiresVendorConfirmation
+          ? 'Extended service - vendor confirmation required'
+          : 'Not available'
         : o.id === best
           ? 'Best value'
           : o.price != null && bestPrice != null
@@ -340,7 +376,7 @@ export async function compactOptionsFor(event, categories) {
   for (const c of categories) {
     options
       .filter((o) => o.category === c)
-      .sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity))
+      .sort((a, b) => Number(a.isDemo) - Number(b.isDemo) || (a.price ?? Infinity) - (b.price ?? Infinity))
       .slice(0, 3)
       .forEach((o) =>
         out.push({
@@ -350,8 +386,11 @@ export async function compactOptionsFor(event, categories) {
           package: o.packageName,
           price: o.price,
           availability: o.availability,
+          requiresVendorConfirmation: Boolean(o.requiresVendorConfirmation),
+          extendedService: o.extendedService || null,
           isDemo: o.isDemo,
           rating: o.rating,
+          portfolioImages: o.portfolioImages || o.images || [],
         })
       );
   }

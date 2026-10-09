@@ -27,8 +27,13 @@ export async function checkTrueAvailability({
   requestedResources = [], // array of Resource IDs
 }) {
   const conflicts = [];
-  const reqStartMins = parseTimeToMinutes(startTime);
-  const reqEndMins = parseTimeToMinutes(endTime);
+  let reqStartMins = parseTimeToMinutes(startTime);
+  let reqEndMins = parseTimeToMinutes(endTime);
+
+  // Handle overnight requested event (e.g. 22:00 -> 02:00)
+  if (reqEndMins < reqStartMins) {
+    reqEndMins += 1440;
+  }
 
   // 1. Check explicit blockouts
   const blockout = await VendorBlockout.findOne({ vendor: vendorId, date });
@@ -40,8 +45,10 @@ export async function checkTrueAvailability({
         conflicts: [{ type: 'BLOCKOUT', detail: blockout.reason }],
       };
     }
-    const bStart = parseTimeToMinutes(blockout.startTime);
-    const bEnd = parseTimeToMinutes(blockout.endTime);
+    let bStart = parseTimeToMinutes(blockout.startTime);
+    let bEnd = parseTimeToMinutes(blockout.endTime);
+    if (bEnd < bStart) bEnd += 1440; // overnight blockout
+
     if (!(reqEndMins <= bStart || reqStartMins >= bEnd)) {
       return {
         feasible: false,
@@ -69,8 +76,10 @@ export async function checkTrueAvailability({
 
   // 3. Find concurrent bookings that directly overlap with requested time window
   const concurrentBookings = existingBookings.filter((bk) => {
-    const bkStartMins = parseTimeToMinutes(bk.startTime);
-    const bkEndMins = parseTimeToMinutes(bk.endTime);
+    let bkStartMins = parseTimeToMinutes(bk.startTime);
+    let bkEndMins = parseTimeToMinutes(bk.endTime);
+    if (bkEndMins < bkStartMins) bkEndMins += 1440; // overnight booking
+
     return !(reqEndMins <= bkStartMins || reqStartMins >= bkEndMins);
   });
 
@@ -85,8 +94,9 @@ export async function checkTrueAvailability({
   // 4. Operational Geographic & Travel Feasibility Buffer
   // Check every existing booking on the same day for travel feasibility
   for (const bk of existingBookings) {
-    const bkStartMins = parseTimeToMinutes(bk.startTime);
-    const bkEndMins = parseTimeToMinutes(bk.endTime);
+    let bkStartMins = parseTimeToMinutes(bk.startTime);
+    let bkEndMins = parseTimeToMinutes(bk.endTime);
+    if (bkEndMins < bkStartMins) bkEndMins += 1440;
 
     // If time overlaps directly
     const directOverlap = !(reqEndMins <= bkStartMins || reqStartMins >= bkEndMins);

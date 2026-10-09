@@ -11,6 +11,9 @@ import { VendorBlockout } from '../models/VendorBlockout.js';
 import { VendorBookingSlot } from '../models/VendorBookingSlot.js';
 import { Notification } from '../models/Notification.js';
 import { Opportunity } from '../models/Opportunity.js';
+import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.js';
+import { Quote } from '../models/Quote.js';
+import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
 import { VendorDocument } from '../models/VendorDocument.js';
@@ -25,6 +28,21 @@ import vendorAuraRoutes from './vendorAura.routes.js';
 import financialRoutes from './financial.routes.js';
 
 const router = Router();
+
+function googleRatingFromPlaces(placeData, fallbackName) {
+  if (!placeData || placeData.error || typeof placeData.rating !== 'number') return null;
+  return {
+    source: 'GOOGLE_PLACES',
+    rating: placeData.rating,
+    reviewCount: placeData.userRatingCount || 0,
+    googleMapsUrl: placeData.googleMapsUri || '',
+    reviews: placeData.reviews || [],
+    address: placeData.formattedAddress || '',
+    name: placeData.displayName?.text || fallbackName || '',
+    lat: placeData.location?.latitude || null,
+    lng: placeData.location?.longitude || null,
+  };
+}
 
 // Middleware: Authenticate and resolve vendor organization context
 router.use(requireExternalAuth, requireAccountType('VENDOR'));
@@ -70,18 +88,7 @@ router.get('/profile', async (req, res) => {
         const url = `https://places.googleapis.com/v1/places/${req.vendor.googlePlaceId}?fields=id,displayName,rating,userRatingCount,reviews,googleMapsUri,formattedAddress,location&key=${key}`;
         const gRes = await fetch(url);
         const gData = await gRes.json();
-        if (gData && !gData.error) {
-          googleRating = {
-            rating: gData.rating,
-            reviewCount: gData.userRatingCount,
-            googleMapsUrl: gData.googleMapsUri,
-            reviews: gData.reviews || [],
-            address: gData.formattedAddress,
-            name: gData.displayName?.text || req.vendor.businessName,
-            lat: gData.location?.latitude || null,
-            lng: gData.location?.longitude || null,
-          };
-        }
+        googleRating = googleRatingFromPlaces(gData, req.vendor.businessName);
       }
     } catch (err) {
       console.warn('[vendor/profile] Google Places fetch failed:', err.message);
@@ -123,6 +130,7 @@ router.get('/google-places/search', async (req, res, next) => {
             googleMapsUrl: p.googleMapsUri || '',
             lat: p.location?.latitude || null,
             lng: p.location?.longitude || null,
+            source: 'GOOGLE_PLACES',
           }));
         }
       } catch (err) {
@@ -143,11 +151,12 @@ router.get('/google-places/search', async (req, res, next) => {
             id: `place_${item.place_id}`,
             name: item.name || item.display_name.split(',')[0],
             address: item.display_name,
-            rating: 4.8,
-            reviewCount: 36,
+            rating: null,
+            reviewCount: 0,
             googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.display_name)}`,
             lat: Number(item.lat),
             lng: Number(item.lon),
+            source: 'OPENSTREETMAP_UNRATED',
           }));
         }
       } catch (nomErr) {
@@ -163,8 +172,9 @@ router.get('/google-places/search', async (req, res, next) => {
 
 router.put('/profile', async (req, res, next) => {
   try {
-    const { businessName, category, location, city, phone, website, bio, googlePlaceId } = req.body || {};
+    const { businessName, brandName, category, location, city, phone, website, bio, googlePlaceId } = req.body || {};
     if (businessName) req.vendor.businessName = businessName.trim();
+    if (brandName !== undefined) req.vendor.brandName = brandName.trim();
     const categoryResult = normalizePrimaryCategory(category);
     if (categoryResult.error) {
       return res.status(400).json({ error: categoryResult.error });
@@ -415,28 +425,6 @@ router.post('/locations', async (req, res, next) => {
       await req.vendor.save();
     }
 
-    // Auto-sync default ServiceCoverage for active services if vendor has no coverage defined yet
-    const existingCoverageCount = await ServiceCoverage.countDocuments({ vendor: req.vendorId });
-    if (existingCoverageCount === 0) {
-      const activeServices = await VendorService.find({ vendor: req.vendorId, status: 'ACTIVE' });
-      for (const svc of activeServices) {
-        await ServiceCoverage.create({
-          vendor: req.vendorId,
-          vendorService: svc._id,
-          coverageType: 'RADIUS',
-          city: location.city,
-          state: location.state || '',
-          baseAddress: location.address || '',
-          baseLocality: location.locality || '',
-          basePostalCode: location.postalCode || '',
-          baseCoordinates: location.coordinates || { lat: 0, lng: 0 },
-          radiusKm: 40,
-          confidence: 'SELF_DECLARED',
-          outstationAllowed: false,
-        });
-      }
-    }
-
     const activation = await evaluateVendorActivation(req.vendorId);
     res.status(201).json({ ok: true, location, activation });
   } catch (err) {
@@ -552,29 +540,11 @@ router.get('/coverage', async (req, res, next) => {
 
 router.post('/coverage', async (req, res, next) => {
   try {
-    const {
-      vendorServiceId,
-      coverageType,
-      localities,
-      city,
-      state,
-      radiusKm,
-      outstationAllowed,
-      baseAddress,
-      baseLocality,
-      basePostalCode,
-      baseCoordinates,
-    } = req.body || {};
+    const { vendorServiceId, coverageType, localities, city, state, radiusKm, outstationAllowed } = req.body || {};
     const service = await VendorService.findOne({ _id: vendorServiceId, vendor: req.vendorId });
     if (!service) {
       return res.status(404).json({ error: 'SERVICE_NOT_FOUND' });
     }
-    const cleanCoordinates =
-      baseCoordinates &&
-      Number.isFinite(Number(baseCoordinates.lat)) &&
-      Number.isFinite(Number(baseCoordinates.lng))
-        ? { lat: Number(baseCoordinates.lat), lng: Number(baseCoordinates.lng) }
-        : undefined;
 
     let coverage = await ServiceCoverage.findOne({ vendor: req.vendorId, vendorService: service._id });
     if (coverage) {
@@ -582,10 +552,6 @@ router.post('/coverage', async (req, res, next) => {
       if (localities !== undefined) coverage.localities = localities;
       if (city !== undefined) coverage.city = city.trim();
       if (state !== undefined) coverage.state = state.trim();
-      if (baseAddress !== undefined) coverage.baseAddress = String(baseAddress || '').trim();
-      if (baseLocality !== undefined) coverage.baseLocality = String(baseLocality || '').trim();
-      if (basePostalCode !== undefined) coverage.basePostalCode = String(basePostalCode || '').trim();
-      if (cleanCoordinates) coverage.baseCoordinates = cleanCoordinates;
       if (radiusKm !== undefined) coverage.radiusKm = Number(radiusKm);
       if (outstationAllowed !== undefined) coverage.outstationAllowed = Boolean(outstationAllowed);
       await coverage.save();
@@ -597,44 +563,10 @@ router.post('/coverage', async (req, res, next) => {
         localities: localities || [],
         city: city ? city.trim() : '',
         state: state ? state.trim() : '',
-        baseAddress: baseAddress ? String(baseAddress).trim() : '',
-        baseLocality: baseLocality ? String(baseLocality).trim() : '',
-        basePostalCode: basePostalCode ? String(basePostalCode).trim() : '',
-        baseCoordinates: cleanCoordinates || undefined,
         radiusKm: radiusKm !== undefined ? Number(radiusKm) : 40,
         confidence: 'SELF_DECLARED',
         outstationAllowed: Boolean(outstationAllowed),
       });
-    }
-
-    // Auto-sync OperatingLocation if vendor has no location record defined yet
-    const existingLocCount = await OperatingLocation.countDocuments({ vendor: req.vendorId });
-    if (existingLocCount === 0) {
-      const targetCity = city ? String(city).trim() : req.vendor.location?.split(',').pop()?.trim() || 'Main City';
-      const targetState = state ? String(state).trim() : '';
-      const targetLocality = baseLocality ? String(baseLocality).trim() : localities?.[0] || '';
-      const targetAddress = baseAddress ? String(baseAddress).trim() : [targetLocality, targetCity].filter(Boolean).join(', ') || targetCity;
-      
-      const loc = await OperatingLocation.create({
-        vendor: req.vendorId,
-        label: `${req.vendor.businessName || 'Main'} Studio / Office`,
-        type: 'HEAD_OFFICE',
-        address: targetAddress,
-        locality: targetLocality,
-        city: targetCity,
-        state: targetState || 'West Bengal',
-        postalCode: basePostalCode ? String(basePostalCode).trim() : '',
-        coordinates: cleanCoordinates || { lat: 0, lng: 0 },
-        isPrimary: true,
-      });
-
-      if (!req.vendor.location) {
-        req.vendor.location = `${loc.locality ? `${loc.locality}, ` : ''}${loc.city}`;
-        if (req.vendor.businessName && req.vendor.category) {
-          req.vendor.isProfileCompleted = true;
-        }
-        await req.vendor.save();
-      }
     }
 
     const activation = await evaluateVendorActivation(req.vendorId);
@@ -855,15 +787,30 @@ router.post('/availability/bookings', async (req, res, next) => {
     if (!date || !vendorServiceId) {
       return res.status(400).json({ error: 'DATE_AND_SERVICE_REQUIRED' });
     }
+    const service = await VendorService.findOne({ _id: vendorServiceId, vendor: req.vendorId });
+    if (!service) {
+      return res.status(404).json({ error: 'SERVICE_NOT_FOUND' });
+    }
+    const resourceIds = Array.isArray(assignedResources) ? assignedResources.filter(Boolean) : [];
+    if (resourceIds.length) {
+      const ownedResourceCount = await VendorResource.countDocuments({
+        _id: { $in: resourceIds },
+        vendor: req.vendorId,
+        status: { $ne: 'RETIRED' },
+      });
+      if (ownedResourceCount !== new Set(resourceIds.map(String)).size) {
+        return res.status(403).json({ error: 'RESOURCE_NOT_OWNED_BY_VENDOR' });
+      }
+    }
 
     const slot = await VendorBookingSlot.create({
       vendor: req.vendorId,
-      vendorService: vendorServiceId,
+      vendorService: service._id,
       date,
       startTime: startTime || '09:00',
       endTime: endTime || '18:00',
       serviceLocation: serviceLocation || {},
-      assignedResources: assignedResources || [],
+      assignedResources: resourceIds,
       status: 'CONFIRMED',
     });
 
@@ -922,21 +869,9 @@ router.put('/notifications/read-all', async (req, res, next) => {
 router.get('/badge-counts', async (req, res, next) => {
   try {
     const [enquiriesCount, quotesCount, bookingsCount, messagesCount, unreadNotificationsCount] = await Promise.all([
-      Notification.countDocuments({ vendor: req.vendorId, isRead: false, type: 'ENQUIRY' }),
-      Notification.countDocuments({
-        vendor: req.vendorId,
-        isRead: false,
-        type: 'QUOTE',
-        link: { $regex: /^\/vendor\/quotes(?:$|[/?#])/ },
-      }),
-      Notification.countDocuments({
-        vendor: req.vendorId,
-        isRead: false,
-        $or: [
-          { type: { $in: ['BOOKING', 'PAYMENT'] } },
-          { link: { $regex: /^\/vendor\/bookings(?:$|[/?#])/ } },
-        ],
-      }),
+      Opportunity.countDocuments({ vendor: req.vendorId, status: 'NEW' }),
+      Quote.countDocuments({ vendor: req.vendorId, status: { $in: ['DRAFT', 'SUBMITTED'] } }),
+      CoreBooking.countDocuments({ vendorId: req.vendorId, bookingStatus: 'CONFIRMED' }),
       VendorMessageThread.countDocuments({
         vendor: req.vendorId,
         status: { $ne: 'BLOCKED' },
@@ -947,6 +882,14 @@ router.get('/badge-counts', async (req, res, next) => {
 
     res.json({
       ok: true,
+      source: 'CORE_VENDOR_OS',
+      metricSource: {
+        enquiriesCount: 'Opportunity.status=NEW',
+        quotesCount: 'Quote.status in DRAFT,SUBMITTED',
+        bookingsCount: 'CoreBooking.bookingStatus=CONFIRMED',
+        messagesCount: 'VendorMessageThread.unreadVendorCount',
+        unreadNotificationsCount: 'Notification.isRead=false',
+      },
       enquiriesCount,
       quotesCount,
       bookingsCount,
@@ -994,15 +937,7 @@ router.get('/reviews', async (req, res, next) => {
         const url = `https://places.googleapis.com/v1/places/${vendorOrg.googlePlaceId}?fields=id,displayName,rating,userRatingCount,reviews,googleMapsUri,formattedAddress&key=${key}`;
         const gRes = await fetch(url);
         const gData = await gRes.json();
-        if (gData && !gData.error) {
-          googleRating = {
-            rating: gData.rating,
-            reviewCount: gData.userRatingCount,
-            googleMapsUrl: gData.googleMapsUri,
-            reviews: gData.reviews || [],
-            address: gData.formattedAddress,
-          };
-        }
+        googleRating = googleRatingFromPlaces(gData, vendorOrg.businessName);
       } catch (err) {
         console.warn('[vendor/reviews] Google Places fetch failed:', err.message);
       }
@@ -1026,47 +961,10 @@ router.get('/reviews', async (req, res, next) => {
 
 router.post('/reviews', async (req, res, next) => {
   try {
-    const {
-      customerName,
-      customerEmail,
-      bookingReference,
-      serviceName,
-      eventType,
-      eventDate,
-      rating,
-      reviewText,
-      wouldRecommend,
-    } = req.body || {};
-
-    if (!customerName || !rating || !reviewText) {
-      return res.status(400).json({ error: 'MISSING_REQUIRED_REVIEW_FIELDS' });
-    }
-
-    const review = await VendorReview.create({
-      vendor: req.vendorId,
-      customerName: customerName.trim(),
-      customerEmail: (customerEmail || '').trim(),
-      bookingReference: (bookingReference || '').trim(),
-      serviceName: (serviceName || 'Photography & Production').trim(),
-      eventType: (eventType || 'Wedding').trim(),
-      eventDate: eventDate || new Date().toISOString().slice(0, 10),
-      rating: Number(rating),
-      reviewText: reviewText.trim(),
-      wouldRecommend: wouldRecommend !== false,
-      isVerified: true,
-      status: 'PUBLISHED',
+    return res.status(403).json({
+      error: 'REVIEW_CREATION_CORE_ONLY',
+      message: 'Vendor OS cannot create verified ratings. Reviews must come from completed customer bookings or admin-moderated Core workflows.',
     });
-
-    // Keep VendorOrganization rating in sync
-    const allReviews = await VendorReview.find({ vendor: req.vendorId, status: 'PUBLISHED' });
-    const count = allReviews.length;
-    const avg = count > 0 ? allReviews.reduce((acc, r) => acc + r.rating, 0) / count : 0;
-    await VendorOrganization.findByIdAndUpdate(req.vendorId, {
-      'rating.average': Number(avg.toFixed(1)),
-      'rating.count': count,
-    });
-
-    res.status(201).json({ ok: true, review });
   } catch (err) {
     next(err);
   }
@@ -1111,7 +1009,8 @@ router.get('/messages/threads', async (req, res, next) => {
         .limit(5);
 
       if (opportunities.length > 0) {
-        for (const opp of opportunities) {
+        for (const rawOpp of opportunities) {
+          const opp = maskOpportunityCustomer(rawOpp);
           const clientName = opp.customer?.fullName || 'Prospective Client';
           await VendorMessageThread.create({
             vendor: req.vendorId,

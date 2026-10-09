@@ -9,7 +9,6 @@ import rateLimit from "express-rate-limit";
 import { config } from "../../config.js";
 import { ExternalUser, userRoles } from "../models/ExternalUser.js";
 import { VendorOrganization } from "../models/VendorOrganization.js";
-import { OperatingLocation } from "../models/OperatingLocation.js";
 import { ExternalSession } from "../models/ExternalSession.js";
 import {
   hashPassword,
@@ -56,60 +55,73 @@ function clearRefreshCookie(res) {
   res.clearCookie(config.refreshCookieName, options);
 }
 
-// ── Demo Accounts for Testing & Quick Login ────────────────────────────────
-router.get("/demo-accounts", async (req, res, next) => {
+// ── Reseed Real Vendors Trigger (Testing & QA Playground) ───────────────────
+
+// ── Dev Single-Click Auth Endpoint (Testing & QA Playground) ────────────────
+router.post("/dev-auth", async (req, res, next) => {
   try {
-    const [vendors, customers] = await Promise.all([
-      ExternalUser.find({ accountType: "VENDOR", status: "ACTIVE" })
-        .populate("vendorOrganization")
-        .lean(),
-      ExternalUser.find({ accountType: "CUSTOMER", status: "ACTIVE" }).lean(),
-    ]);
+    if (!config.enableDevTools) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+    const { accountType = "VENDOR", email: requestedEmail } = req.body || {};
+    const targetType = String(accountType).toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "VENDOR";
+    const email = requestedEmail
+      ? String(requestedEmail).toLowerCase()
+      : targetType === "VENDOR"
+      ? "vendor@starvnt.com"
+      : "customer@starvnt.com";
 
-    const formattedVendors = vendors.map((u) => {
-      const org = u.vendorOrganization || {};
-      return {
-        id: u._id,
-        fullName: u.fullName,
-        email: u.email,
-        phone: u.phone,
-        businessName: org.businessName || u.fullName,
-        category: org.category || "Vendor",
-        location: org.location || "",
-        rating: org.rating || { average: 4.9, count: 50 },
-        profilePicUrl: org.profilePicUrl || u.avatarUrl || "",
-        googlePlaceId: org.googlePlaceId || null,
-        bio: org.bio || "",
-        type: "VENDOR",
-      };
-    });
+    let user = await ExternalUser.findOne({ email });
+    if (!user) {
+      // Auto-trigger seed script if test data is missing
+      try {
+        const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
+        await seedRealVendors();
+      } catch (seedErr) {
+        console.warn("Auto-seed error in dev-auth:", seedErr.message);
+      }
+      user = await ExternalUser.findOne({ email });
+    }
 
-    const formattedCustomers = customers.map((c) => ({
-      id: c._id,
-      fullName: c.fullName,
-      email: c.email,
-      phone: c.phone,
-      type: "CUSTOMER",
-    }));
+    if (!user) {
+      user = await ExternalUser.create({
+        email,
+        phone: targetType === "VENDOR" ? "+919876543210" : "+919876543211",
+        fullName: targetType === "VENDOR" ? "Dev Test Vendor" : "Dev Test Customer",
+        accountType: targetType,
+        roles: [targetType],
+        passwordHash: await hashPassword("Password123!"),
+      });
+    }
 
-    return res.json({
+    grantRole(user, targetType);
+    user.accountType = targetType;
+    await user.save();
+
+    if (targetType === "VENDOR") {
+      await ensureVendorOrganization(user, {
+        businessName: "Dev StarVnt Studio",
+        category: "Photography",
+        city: "Kapkote"
+      });
+    }
+
+    const { session, refreshToken } = await createSession(user, req, targetType);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+
+    const tokens = issueTokens(user, session);
+    res.json({
       ok: true,
-      defaultPassword: "Password123",
-      vendors: formattedVendors,
-      customers: formattedCustomers,
-      admin: {
-        email: "admin@starvnt.com",
-        fullName: "Chief Systems Architect",
-        role: "SUPER_ADMIN",
-        type: "ADMIN",
-      },
+      accessToken: tokens.accessToken,
+      user: user.toSafeJSON(),
+      accountType: targetType,
+      redirectTo: targetType === "VENDOR" ? "/vendor" : "/customer"
     });
   } catch (err) {
     next(err);
   }
 });
 
-// ── Reseed Real Vendors Trigger (Testing & QA Playground) ───────────────────
 router.post("/reseed", async (req, res, next) => {
   try {
     const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
@@ -168,6 +180,24 @@ function issueTokens(user, session) {
 
 function resolveExistingAccountType(user) {
   return user.accountType || userRoles(user)[0] || "CUSTOMER";
+}
+
+function resolveExistingSignInSurface(user, requestedSurface) {
+  const primarySurface = resolveExistingAccountType(user);
+  if (!requestedSurface || requestedSurface === primarySurface) {
+    return { signInAs: primarySurface };
+  }
+  const roles = userRoles(user);
+  if (roles.includes(requestedSurface)) {
+    return { signInAs: requestedSurface };
+  }
+  return {
+    error: "ACCOUNT_SURFACE_COLLISION",
+    message:
+      "This Google identity is already linked to a different STARVNT account surface. Sign in to the existing surface first, then explicitly switch or link the vendor/customer surface.",
+    existingAccountType: primarySurface,
+    requestedAccountType: requestedSurface,
+  };
 }
 
 function grantRole(user, role) {
@@ -412,10 +442,19 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
-      // Existing identities always keep their DB-owned surface. A wrong
-      // Customer/Vendor tab selection must never mutate the account or create
-      // vendor/customer records for the same email.
-      signInAs = resolveExistingAccountType(user);
+      const requestedSurface = accountType === "VENDOR" ? "VENDOR" : accountType === "CUSTOMER" ? "CUSTOMER" : null;
+      const surfaceResolution = resolveExistingSignInSurface(user, requestedSurface);
+      if (surfaceResolution.error) {
+        return res.status(409).json(surfaceResolution);
+      }
+      signInAs = surfaceResolution.signInAs;
+      await prepareAccountType(user, signInAs, {
+        businessName,
+        brandName,
+        category: normalizedCategory.value,
+        city,
+        location,
+      });
       user.lastLoginAt = new Date();
       await user.save();
     } else {
@@ -476,7 +515,9 @@ router.post("/google", authLimiter, async (req, res, next) => {
   } catch (err) {
     if (
       err.message === "INVALID_GOOGLE_TOKEN" ||
-      err.message === "MISSING_GOOGLE_CREDENTIAL"
+      err.message === "MISSING_GOOGLE_CREDENTIAL" ||
+      err.message === "GOOGLE_AUDIENCE_MISMATCH" ||
+      err.message === "GOOGLE_EMAIL_NOT_VERIFIED"
     ) {
       return res.status(400).json({ error: err.message });
     }
@@ -940,7 +981,7 @@ router.post("/refresh", async (req, res, next) => {
     // If the session had a specific accountType, respect it so user stays on their active portal.
     session.revokedAt = new Date();
     await session.save();
-    const fresh = await createSession(user, req, resolveExistingAccountType(user));
+    const fresh = await createSession(user, req, session.accountType || resolveExistingAccountType(user));
     res.cookie(
       config.refreshCookieName,
       fresh.refreshToken,
@@ -963,16 +1004,12 @@ router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
       return res.status(400).json({ error: "INVALID_SURFACE" });
     }
     const user = req.externalUser;
-    const primarySurface = resolveExistingAccountType(user);
-    if (targetSurface !== primarySurface) {
-      return res.status(403).json({
-        error: "ACCOUNT_TYPE_MISMATCH",
-        accountType: primarySurface,
-        message: `This email is registered as ${primarySurface.toLowerCase()}. Please use the ${primarySurface.toLowerCase()} dashboard.`,
-      });
-    }
+    grantRole(user, targetSurface);
+    await prepareAccountType(user, targetSurface);
+    user.accountType = targetSurface;
+    await user.save();
 
-    const { session, refreshToken } = await createSession(user, req, primarySurface);
+    const { session, refreshToken } = await createSession(user, req, targetSurface);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {

@@ -54,7 +54,7 @@ const coreBookingSchema = new Schema(
     },
     category: {
       type: String,
-      default: 'Photography',
+      default: '',
     },
     eventDate: {
       type: String,
@@ -74,6 +74,17 @@ const coreBookingSchema = new Schema(
       setupFee: { type: Number, default: 0 },
       additionalFee: { type: Number, default: 0 },
       totalAmount: { type: Number, default: 0 },
+    },
+    taxSummary: {
+      taxableValue: { type: Number, default: 0 },
+      platformFee: { type: Number, default: 0 },
+      gstPercent: { type: Number, default: 0 },
+      gstAmount: { type: Number, default: 0 },
+      tdsPercent: { type: Number, default: 0 },
+      tdsAmount: { type: Number, default: 0 },
+      vendorPayable: { type: Number, default: 0 },
+      invoiceNumber: { type: String, default: '' },
+      invoiceIssuedAt: { type: Date, default: null },
     },
     totalAmount: {
       type: Number,
@@ -113,6 +124,20 @@ const coreBookingSchema = new Schema(
         'COMPLETION_VERIFIED',
       ],
       default: 'NOT_STARTED',
+      index: true,
+    },
+    protectionStatus: {
+      type: String,
+      enum: [
+        'NONE',
+        'AT_RISK',
+        'PROTECTED',
+        'ISSUE_REPORTED',
+        'UNDER_REVIEW',
+        'RESOLUTION_PROPOSED',
+        'RESOLVED',
+      ],
+      default: 'NONE',
       index: true,
     },
     settlementStatus: {
@@ -156,6 +181,11 @@ const coreBookingSchema = new Schema(
       settledBy: { type: String, default: null },
       settledAt: { type: Date, default: null },
       amount: { type: Number, default: 0 },
+      grossAmount: { type: Number, default: 0 },
+      platformFee: { type: Number, default: 0 },
+      gstAmount: { type: Number, default: 0 },
+      tdsAmount: { type: Number, default: 0 },
+      vendorPayable: { type: Number, default: 0 },
       transactionReference: { type: String, default: '' },
     },
     failureAudit: {

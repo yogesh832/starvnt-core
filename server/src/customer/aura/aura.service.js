@@ -18,6 +18,19 @@ const MAX_MESSAGE = 2000;
 
 const FALLBACK_REPLY =
   "Sorry, I'm having trouble thinking right now. I've kept what you told me — please check the card, or try again in a moment.";
+const WEAK_REPLY_RE = /^(pata nahi|i don't know|not sure|main abhi|sorry,? i('| a)m having trouble|sorry,? i can('|no)t|please check the (card|plan))/i;
+const CATEGORY_LABELS = {
+  venue: 'venue',
+  catering: 'catering',
+  decor: 'decor',
+  photography: 'photography',
+  sound: 'sound',
+  cake: 'cake',
+  entertainment: 'entertainment',
+  anchor: 'anchor',
+  photo_booth: 'photo booth',
+  special_effects: 'special effects',
+};
 
 async function ownedSession(customerId, sessionId) {
   if (!SESSION_ID_RE.test(sessionId || '')) throw badRequest('INVALID_SESSION', 'Invalid session id');
@@ -92,6 +105,35 @@ function composeReply(reply, { event, nextQuestion: q, assumedDate }) {
   }
   const asking = !event || event.status === 'draft';
   if (asking && q?.question && !reply.includes(q.question)) parts.push(q.question);
+  return parts.join('\n\n');
+}
+
+function isWeakReply(reply = '') {
+  const text = String(reply || '').trim();
+  return !text || WEAK_REPLY_RE.test(text) || text.length < 30;
+}
+
+function deterministicReply({ activeEvent, extracted = {}, text = '' }) {
+  const eventType = activeEvent?.eventType || extracted.eventType || extracted.newEventType || 'event';
+  const city = activeEvent?.city || extracted.city || extracted.newEventCity;
+  const guestCount = activeEvent?.guestCount || extracted.guestCount || extracted.newEventGuestCount;
+  const wantedCategories = Object.entries(CATEGORY_LABELS)
+    .filter(([key, label]) => new RegExp(`\\b${label.replace(' ', '\\s+')}\\b`, 'i').test(text) || extracted.neededCategories?.includes?.(key))
+    .map(([, label]) => label);
+
+  const context = [
+    eventType ? `a ${String(eventType).replace(/_/g, ' ')}` : null,
+    city ? `in ${city}` : null,
+    guestCount ? `for ${guestCount} guests` : null,
+  ].filter(Boolean).join(' ');
+
+  const parts = [`Got it. I have started planning ${context || 'your event'} and saved the details I could read from your message.`];
+  if (wantedCategories.length) {
+    parts.push(`For vendors, I would handle ${wantedCategories.slice(0, 6).join(', ')} first, then compare availability, travel fit, package total, and review quality before you request quotes.`);
+  } else {
+    parts.push('Next, confirm the date, guest count, city, budget, and the services you want so I can shortlist vendors cleanly.');
+  }
+  parts.push('Nothing is booked until you approve it.');
   return parts.join('\n\n');
 }
 
@@ -190,7 +232,7 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
     rawExtracted = out.extracted || {};
   } catch (err) {
     console.warn('[aura] LLM unavailable:', err?.message || err);
-    reply = FALLBACK_REPLY;
+    reply = '';
   }
   tracker.markGenerationEnd();
 
@@ -263,7 +305,10 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
 
   // 11. State AFTER this turn's writes; the one next question comes from it
   const after = await stateFor(customerId, event?._id || null);
-  reply = composeReply(reply || FALLBACK_REPLY, {
+  if (isWeakReply(reply)) {
+    reply = deterministicReply({ activeEvent: after.activeEvent, extracted: x, text });
+  }
+  reply = composeReply(reply || deterministicReply({ activeEvent: after.activeEvent, extracted: x, text }), {
     event: after.activeEvent,
     nextQuestion: after.nextQuestion,
     assumedDate: writes.written.includes('eventDate') && !yearStated ? after.understanding?.facts.date.value : null,

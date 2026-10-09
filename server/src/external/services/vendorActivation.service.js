@@ -6,6 +6,45 @@ import { ServiceCoverage } from '../models/ServiceCoverage.js';
 import { PortfolioItem } from '../models/PortfolioItem.js';
 import { VendorFinancialProfile } from '../models/VendorFinancialProfile.js';
 import { VendorDocument } from '../models/VendorDocument.js';
+import { VendorResource } from '../models/VendorResource.js';
+
+const REASON_LABELS = {
+  PROFILE_INCOMPLETE: 'Brand profile details are incomplete',
+  KYC_PENDING: 'PAN/GST/KYC identity verification is pending',
+  BANK_VERIFICATION_PENDING: 'Bank account verification is pending',
+  SERVICE_INCOMPLETE: 'At least one active service with valid pricing is required',
+  CAPACITY_NOT_CONFIGURED: 'Capability, team size or capacity is not configured',
+  OPERATIONAL_RESOURCES_MISSING: 'Operational team/equipment/resources are not declared',
+  AVAILABILITY_NOT_CONFIGURED: 'Operational availability is not configured',
+  COVERAGE_MISSING: 'Service coverage area is missing',
+  OPERATING_LOCATION_MISSING: 'Operating location is missing',
+  PORTFOLIO_MISSING: 'Portfolio project or media showcase is missing',
+  COMMERCIAL_PROFILE_INCOMPLETE: 'Commercial profile is incomplete',
+};
+
+const RESOURCE_REQUIRED_CATEGORIES = new Set([
+  'Photography',
+  'Videography',
+  'Cinematic Production',
+  'Catering',
+  'Decoration',
+  'Decor & Styling',
+  'DJ_Production',
+  'DJ & Music',
+  'Transport',
+  'Venue',
+  'Corporate_Production',
+  'Anchor_Host',
+]);
+
+function hasOpenWorkingHours(workingHours) {
+  if (!workingHours || typeof workingHours !== 'object') return false;
+  return Object.values(workingHours).some((day) => day?.isOpen === true || /open|full|am|pm|\d/i.test(String(day?.hours || '')));
+}
+
+function reasonLabels(codes) {
+  return codes.map((code) => REASON_LABELS[code] || code);
+}
 
 /**
  * Vendor Activation State Machine & Readiness Evaluator.
@@ -24,20 +63,44 @@ export async function evaluateVendorActivation(vendorId) {
     throw new Error(`Vendor not found: ${vendorId}`);
   }
 
-  const missingRequirements = [];
+  const reasonCodes = new Set();
 
-  // Check if financial profile or verified documents exist to auto-pass verification
+  // Check if financial profile or verified documents exist to auto-pass identity.
+  // Bank verification is mandatory for vendor verification/commercial matching.
   const finProfile = await VendorFinancialProfile.findOne({ vendor: vendorId });
   const hasVerifiedDoc = await VendorDocument.exists({ vendor: vendorId, status: 'VERIFIED' });
-  const isFinancialVerified =
-    finProfile?.pan?.verificationStatus === 'VERIFIED' || Boolean(hasVerifiedDoc);
+  const hasVerifiedIdentity =
+    finProfile?.pan?.verificationStatus === 'VERIFIED' ||
+    finProfile?.gst?.verificationStatus === 'VERIFIED' ||
+    finProfile?.gst?.isRegistered === false ||
+    Boolean(hasVerifiedDoc);
+  const hasVerifiedBank = finProfile?.bankAccount?.verificationStatus === 'VERIFIED';
+  const isFinancialVerified = hasVerifiedIdentity && hasVerifiedBank;
+  const identityVerificationSource = finProfile?.pan?.verificationStatus === 'VERIFIED'
+    ? 'PAN_VERIFICATION'
+    : finProfile?.gst?.verificationStatus === 'VERIFIED'
+    ? 'GST_VERIFICATION'
+    : finProfile?.gst?.isRegistered === false
+    ? 'GST_NOT_REGISTERED_DECLARATION'
+    : hasVerifiedDoc
+    ? 'ADMIN_APPROVED_DOCUMENT'
+    : 'NOT_VERIFIED';
+  const bankVerificationSource = hasVerifiedBank ? 'BANK_VERIFICATION' : 'NOT_VERIFIED';
+
+  if (!hasVerifiedIdentity) {
+    reasonCodes.add('KYC_PENDING');
+  }
+
+  if (!hasVerifiedBank) {
+    reasonCodes.add('BANK_VERIFICATION_PENDING');
+  }
 
   if (isFinancialVerified && !vendor.verification?.isVerified) {
     vendor.verification = {
       ...(vendor.verification?.toObject?.() || vendor.verification || {}),
       isVerified: true,
       verifiedAt: vendor.verification?.verifiedAt || new Date(),
-      notes: 'Auto-verified via PAN / Financial Identity Verification',
+      notes: 'Auto-verified via financial identity and bank verification',
     };
   }
 
@@ -58,7 +121,7 @@ export async function evaluateVendorActivation(vendorId) {
   }
 
   if (!hasProfile) {
-    missingRequirements.push('Brand profile details (brand name, primary category, base city)');
+    reasonCodes.add('PROFILE_INCOMPLETE');
   }
 
   // 2. Services check (must have at least one service with valid pricing)
@@ -67,65 +130,101 @@ export async function evaluateVendorActivation(vendorId) {
     (s) => s.status === 'ACTIVE' && s.pricing && s.pricing.basePrice > 0
   );
   if (!hasActiveService) {
-    missingRequirements.push('At least one ACTIVE service with valid base pricing');
+    reasonCodes.add('SERVICE_INCOMPLETE');
   }
 
   // 3. Capabilities check (at least one capability record)
   const capabilities = await VendorCapability.find({ vendor: vendorId });
   const hasCapability = capabilities.length > 0;
-  if (!hasCapability) {
-    missingRequirements.push('Category capability & team/format specifications');
+  const hasCapacity = capabilities.some((c) => Number(c.teamSize || 0) > 0 && Number(c.simultaneousEventLimit || 0) > 0);
+  if (!hasCapability || !hasCapacity) {
+    reasonCodes.add('CAPACITY_NOT_CONFIGURED');
+  }
+
+  const resources = await VendorResource.find({ vendor: vendorId, status: { $ne: 'RETIRED' } }).lean();
+  const activeCategories = new Set(services.filter((s) => s.status === 'ACTIVE').map((s) => s.category));
+  const resourcesRequired = [...activeCategories].some((category) => RESOURCE_REQUIRED_CATEGORIES.has(category));
+  const hasOperationalResources =
+    !resourcesRequired ||
+    resources.length > 0 ||
+    capabilities.some((c) => Number(c.teamSize || 0) > 0 || (c.equipment || []).length > 0);
+  if (!hasOperationalResources) {
+    reasonCodes.add('OPERATIONAL_RESOURCES_MISSING');
   }
 
   // 4. Operating origin check
   const locations = await OperatingLocation.find({ vendor: vendorId });
   const hasLocation = locations.length > 0;
   if (!hasLocation) {
-    missingRequirements.push('At least one Operating Location (studio/office/warehouse)');
+    reasonCodes.add('OPERATING_LOCATION_MISSING');
   }
 
   // 5. Service coverage check
   const coverages = await ServiceCoverage.find({ vendor: vendorId });
   const hasCoverage = coverages.length > 0;
   if (!hasCoverage) {
-    missingRequirements.push('Service coverage area defined');
+    reasonCodes.add('COVERAGE_MISSING');
+  }
+
+  const hasAvailability = hasOpenWorkingHours(vendor.workingHours);
+  if (!hasAvailability) {
+    reasonCodes.add('AVAILABILITY_NOT_CONFIGURED');
   }
 
   // 6. Portfolio projects check
   const portfolioCount = await PortfolioItem.countDocuments({ vendor: vendorId });
   const hasPortfolio = portfolioCount > 0;
   if (!hasPortfolio) {
-    missingRequirements.push('At least one Portfolio project or media showcase');
+    reasonCodes.add('PORTFOLIO_MISSING');
   }
 
-  // Calculate profile completion percentage (0 - 100%)
+  // 6 Operational Profile Setup Steps for Profile Completion (0 - 100%)
   const steps = [
     hasProfile,
     hasActiveService,
-    hasCapability,
+    hasCapability && hasCapacity && hasOperationalResources,
     hasLocation && hasCoverage,
+    hasAvailability,
     hasPortfolio,
   ];
   const completedCount = steps.filter(Boolean).length;
   const completionPercentage = Math.round((completedCount / steps.length) * 100);
 
-  // Determine state transitions
-  let targetState = vendor.activationState || 'REGISTERED';
-  const isModelComplete =
-    hasProfile && hasActiveService && hasCapability && hasLocation && hasCoverage;
+  const hasSubmittedDoc = await VendorDocument.exists({ vendor: vendorId, status: { $in: ['SUBMITTED', 'PENDING'] } });
+  const verificationStatus = isFinancialVerified
+    ? 'VERIFIED'
+    : (hasVerifiedIdentity || hasVerifiedBank || Boolean(hasSubmittedDoc))
+    ? 'UNDER_REVIEW'
+    : 'NOT_SUBMITTED';
 
+  // Determine state transitions
+  const isModelComplete =
+    hasProfile &&
+    hasActiveService &&
+    hasCapability &&
+    hasCapacity &&
+    hasOperationalResources &&
+    hasLocation &&
+    hasCoverage &&
+    hasAvailability;
+  const commercialReadiness = isModelComplete && hasPortfolio && completionPercentage === 100;
+  const matchingEligible = isFinancialVerified && commercialReadiness;
+  const leadActivationStatus = matchingEligible ? 'ACTIVE' : 'INACTIVE';
+
+  let targetState = vendor.activationState || 'REGISTERED';
   if (!hasProfile) {
     targetState = 'PROFILE_INCOMPLETE';
-  } else if (!vendor.verification?.isVerified) {
-    // If profile is ready but admin has not marked verified
-    targetState = isModelComplete ? 'ELIGIBLE' : 'VERIFICATION_PENDING';
-  } else if (vendor.verification?.isVerified && !isModelComplete) {
+  } else if (!isFinancialVerified) {
+    targetState = 'VERIFICATION_PENDING';
+  } else if (isFinancialVerified && !isModelComplete) {
     targetState = 'VERIFIED';
-  } else if (vendor.verification?.isVerified && isModelComplete) {
+  } else if (matchingEligible) {
     targetState = 'ACTIVE';
+  } else {
+    targetState = 'ELIGIBLE';
   }
 
-  const isCommerciallyActive = targetState === 'ACTIVE';
+  const isCommerciallyActive = matchingEligible;
 
   vendor.activationState = targetState;
   vendor.status = targetState;
@@ -138,17 +237,39 @@ export async function evaluateVendorActivation(vendorId) {
     activationState: targetState,
     isCommerciallyActive,
     isModelComplete,
+    commercialReadiness,
+    matchingEligible,
+    leadActivationStatus,
+    readiness: {
+      profileCompletion: completionPercentage,
+      onboardingStatus: completionPercentage === 100 ? 'COMPLETE' : 'INCOMPLETE',
+      verificationStatus,
+      identityVerificationSource,
+      bankVerificationSource,
+      availabilityStatus: hasAvailability ? 'CONFIGURED' : 'NOT_CONFIGURED',
+      operationalResourceSource: hasOperationalResources ? 'VENDOR_DECLARED' : 'MISSING',
+      operationalResourceVerificationStatus: 'SELF_DECLARED',
+      commercialReadiness: commercialReadiness ? 'READY' : 'INCOMPLETE',
+      matchingEligibility: matchingEligible ? 'ELIGIBLE' : 'LOCKED',
+      leadActivationStatus,
+    },
     completionPercentage,
-    is100Percent: completionPercentage === 100 && targetState === 'ACTIVE',
+    is100Percent: completionPercentage === 100,
     checklist: {
       profile: hasProfile,
       services: hasActiveService,
       capabilities: hasCapability,
+      capacity: hasCapacity,
+      resources: hasOperationalResources,
       locations: hasLocation,
       coverage: hasCoverage,
+      availability: hasAvailability,
       portfolio: hasPortfolio,
-      verified: Boolean(vendor.verification?.isVerified),
+      verified: isFinancialVerified,
+      identityVerified: hasVerifiedIdentity,
+      bankVerified: hasVerifiedBank,
     },
-    missingRequirements,
+    reasonCodes: [...reasonCodes],
+    missingRequirements: reasonLabels([...reasonCodes]),
   };
 }

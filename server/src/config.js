@@ -97,14 +97,35 @@ export const config = {
   panApiBaseUrl: process.env.PAN_API_BASE_URL || process.env.GSTIN_API_BASE_URL || "https://www.gstinapi.in/v1",
   panMockEnabled: process.env.PAN_MOCK_ENABLED === "true" || process.env.NODE_ENV === "test",
 
+  // ── Bank account verification ──
+  bankVerificationProvider: process.env.BANK_VERIFICATION_PROVIDER || "CASHFREE",
+  bankVerificationMockEnabled: process.env.BANK_VERIFICATION_MOCK_ENABLED === "true" || process.env.NODE_ENV === "test",
+  cashfreeClientId: process.env.CASHFREE_CLIENT_ID || "",
+  cashfreeClientSecret: process.env.CASHFREE_CLIENT_SECRET || "",
+  cashfreeBavBaseUrl: process.env.CASHFREE_BAV_BASE_URL || "https://sandbox.cashfree.com",
+
   // ── Gemini & Aura+ Dual-Path Architecture ──
   geminiApiKey: process.env.GEMINI_API_KEY || "",
   geminiModel: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   geminiThinkingLevel: process.env.GEMINI_THINKING_LEVEL || "minimal",
 
-  auraReasoningModel: process.env.AURA_REASONING_MODEL || "gemini-3.8-flash",
+  auraReasoningModel: process.env.AURA_REASONING_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   auraReasoningLevel: process.env.AURA_REASONING_LEVEL || "low",
 
   chatThinkingStatusDelayMs: Number(process.env.CHAT_THINKING_STATUS_DELAY_MS || 1200),
   chatStatusRotationMs: Number(process.env.CHAT_STATUS_ROTATION_MS || 2500),
+
+  // ── Core workers / safety gates ──
+  enableQaPaymentBypass: process.env.ENABLE_QA_PAYMENT_BYPASS === "true",
+  outboxWorkerEnabled: process.env.OUTBOX_WORKER_ENABLED !== "false",
+  outboxWorkerIntervalMs: Number(process.env.OUTBOX_WORKER_INTERVAL_MS || 15000),
+  reservationExpiryWorkerEnabled: process.env.RESERVATION_EXPIRY_WORKER_ENABLED !== "false",
+  reservationExpiryIntervalMs: Number(process.env.RESERVATION_EXPIRY_INTERVAL_MS || 60000),
+  metricsEnabled: process.env.METRICS_ENABLED !== "false",
+  enableDevTools: process.env.ENABLE_DEV_TOOLS !== "false" && !isProduction,
+
+  // ── Settlement math ──
+  platformCommissionPercent: Number(process.env.PLATFORM_COMMISSION_PERCENT || 10),
+  tdsPercent: Number(process.env.TDS_PERCENT || 1),
+  gstPercent: Number(process.env.GST_PERCENT || 18),
 };

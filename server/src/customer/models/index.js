@@ -49,7 +49,20 @@ const customerEventSchema = new Schema(
   { timestamps: true, collection: 'customer_events' }
 );
 
-export const REQUIREMENT_STATUSES = ['missing', 'pending', 'customer_provided', 'confirmed', 'booked', 'completed'];
+export const REQUIREMENT_STATUSES = [
+  'KNOWN',
+  'CONFIRMED',
+  'INFERRED',
+  'MISSING',
+  'AMBIGUOUS',
+  'RECOMMENDED',
+  'missing',
+  'pending',
+  'customer_provided',
+  'confirmed',
+  'booked',
+  'completed',
+];
 export const LOCKED_REQUIREMENT_STATUSES = ['confirmed', 'booked', 'completed'];
 
 const eventRequirementSchema = new Schema(
@@ -178,7 +191,7 @@ const reservationSchema = new Schema(
     vendorName: { type: String, required: true },
     packageName: { type: String, required: true },
     packageTotal: { type: Number, default: null, min: 0 },
-    advancePercent: { type: Number, default: 30, min: 0, max: 100 },
+    advancePercent: { type: Number, default: null, min: 0, max: 100 },
     amount: { type: Number, required: true, min: 0 }, // advance payable now
     balanceAmount: { type: Number, default: null, min: 0 },
     isDemo: { type: Boolean, default: false },
@@ -280,6 +293,7 @@ const eventMessageSchema = new Schema(
     senderCustomer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', default: null },
     senderName: { type: String, default: null },
     body: { type: String, required: true, maxlength: 4000 },
+    payload: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: { createdAt: true, updatedAt: false }, collection: 'customer_event_messages' }
 );

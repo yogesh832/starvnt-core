@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAdminAuth } from '../middleware/requireAdminAuth.js';
+import { requireAdminAuth, requirePermission } from '../middleware/requireAdminAuth.js';
 import { CorePolicy } from '../models/CorePolicy.js';
 
 const router = express.Router();
@@ -10,7 +10,7 @@ router.use(requireAdminAuth);
 /**
  * Get all policies
  */
-router.get('/', async (req, res, next) => {
+router.get('/', requirePermission('settings.read'), async (req, res, next) => {
   try {
     const policies = await CorePolicy.find().sort({ category: 1 });
     res.json({ ok: true, count: policies.length, policies });
@@ -22,7 +22,7 @@ router.get('/', async (req, res, next) => {
 /**
  * Get policy by category
  */
-router.get('/:category', async (req, res, next) => {
+router.get('/:category', requirePermission('settings.read'), async (req, res, next) => {
   try {
     const policy = await CorePolicy.findOne({ category: req.params.category });
     if (!policy) {
@@ -37,7 +37,7 @@ router.get('/:category', async (req, res, next) => {
 /**
  * Create or Update a policy
  */
-router.put('/:category', async (req, res, next) => {
+router.put('/:category', requirePermission('settings.update'), async (req, res, next) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
     const payload = req.body;

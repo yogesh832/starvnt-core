@@ -2,8 +2,11 @@ import { Router } from 'express';
 import { checkTrueAvailability } from '../services/availability.service.js';
 import { calculateValidatedTotalCost } from '../services/totalCost.service.js';
 import { matchVendorsForRequirement } from '../services/matching.service.js';
+import { requireExternalAuth } from '../middleware/requireExternalAuth.js';
 
 const router = Router();
+
+router.use(requireExternalAuth);
 
 // ── Check Operational Feasibility / True Availability (Spec §5, §6) ────────
 router.post('/check-availability', async (req, res, next) => {
