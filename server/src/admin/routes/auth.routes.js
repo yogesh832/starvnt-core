@@ -53,13 +53,21 @@ router.post('/dev-auth', async (req, res, next) => {
     if (!config.enableDevTools) {
       return res.status(404).json({ error: 'NOT_FOUND' });
     }
-    const email = 'admin@starvnt.com';
+    const { email: requestedEmail, role = 'SUPER_ADMIN' } = req.body || {};
+    const email = requestedEmail ? String(requestedEmail).toLowerCase() : 'admin@starvnt.com';
+
     let admin = await AdminUser.findOne({ email });
     if (!admin) {
       admin = await AdminUser.create({
         email,
-        fullName: 'Dev Super Admin',
-        role: 'SUPER_ADMIN',
+        fullName: email.startsWith('admin')
+          ? 'Dev Super Admin'
+          : email.startsWith('ops')
+          ? 'Ops Operations Lead'
+          : email.startsWith('finance')
+          ? 'Finance & Ledger Head'
+          : 'Support & Audit Officer',
+        role: role || (email.startsWith('ops') ? 'OPERATIONS' : email.startsWith('finance') ? 'FINANCE' : email.startsWith('support') ? 'SUPPORT' : 'SUPER_ADMIN'),
         passwordHash: await hashPassword('Password123!'),
       });
     }

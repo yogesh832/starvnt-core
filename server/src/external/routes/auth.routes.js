@@ -63,11 +63,26 @@ router.post("/dev-auth", async (req, res, next) => {
     if (!config.enableDevTools) {
       return res.status(404).json({ error: "NOT_FOUND" });
     }
-    const { accountType = "VENDOR" } = req.body || {};
+    const { accountType = "VENDOR", email: requestedEmail } = req.body || {};
     const targetType = String(accountType).toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "VENDOR";
-    const email = targetType === "VENDOR" ? "vendor@starvnt.com" : "customer@starvnt.com";
+    const email = requestedEmail
+      ? String(requestedEmail).toLowerCase()
+      : targetType === "VENDOR"
+      ? "vendor@starvnt.com"
+      : "customer@starvnt.com";
 
     let user = await ExternalUser.findOne({ email });
+    if (!user) {
+      // Auto-trigger seed script if test data is missing
+      try {
+        const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
+        await seedRealVendors();
+      } catch (seedErr) {
+        console.warn("Auto-seed error in dev-auth:", seedErr.message);
+      }
+      user = await ExternalUser.findOne({ email });
+    }
+
     if (!user) {
       user = await ExternalUser.create({
         email,
@@ -79,11 +94,15 @@ router.post("/dev-auth", async (req, res, next) => {
       });
     }
 
+    grantRole(user, targetType);
+    user.accountType = targetType;
+    await user.save();
+
     if (targetType === "VENDOR") {
       await ensureVendorOrganization(user, {
         businessName: "Dev StarVnt Studio",
         category: "Photography",
-        city: "Mumbai"
+        city: "Kapkote"
       });
     }
 

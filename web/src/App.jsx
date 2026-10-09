@@ -129,16 +129,42 @@ export default function App() {
         }
       />
 
-      {DEV_TOOLS_ENABLED && (
-        <>
-          <Route path="/testAuth" element={<DevSingleClickAuth />} />
-          <Route path="/test-auth" element={<DevSingleClickAuth />} />
-          <Route path="/auth-test" element={<DevSingleClickAuth />} />
-          <Route path="/api/test" element={<DevApiTest />} />
-          <Route path="/api-test" element={<DevApiTest />} />
-          <Route path="/test" element={<DevApiTest />} />
-        </>
-      )}
+      {/* Developer POV Test Authentication Routes (/auth-test) */}
+      <Route
+        path="/auth-test"
+        element={
+          <AdminAuthProvider>
+            <DevSingleClickAuth />
+          </AdminAuthProvider>
+        }
+      />
+      <Route
+        path="/testAuth"
+        element={
+          <AdminAuthProvider>
+            <DevSingleClickAuth />
+          </AdminAuthProvider>
+        }
+      />
+      <Route
+        path="/test-auth"
+        element={
+          <AdminAuthProvider>
+            <DevSingleClickAuth />
+          </AdminAuthProvider>
+        }
+      />
+      <Route
+        path="/auth/test"
+        element={
+          <AdminAuthProvider>
+            <DevSingleClickAuth />
+          </AdminAuthProvider>
+        }
+      />
+      <Route path="/api/test" element={<DevApiTest />} />
+      <Route path="/api-test" element={<DevApiTest />} />
+      <Route path="/test" element={<DevApiTest />} />
       <Route path="*" element={<RootRedirect />} />
     </Routes>
   );

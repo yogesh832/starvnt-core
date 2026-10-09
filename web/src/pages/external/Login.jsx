@@ -633,6 +633,29 @@ export default function ExternalLogin() {
           {/* Right: Auth Form Panel */}
           <main className="p-6 sm:p-10 flex flex-col justify-center bg-white">
             <div className="w-full">
+              {/* Developer POV Test Login Workbench Banner Button */}
+              <div className="mb-5 p-3.5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 border border-purple-500/40 text-white flex items-center justify-between gap-3 shadow-lg shadow-purple-950/30">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 grid place-items-center font-bold text-sm shrink-0 border border-purple-400/30">
+                    ⚡
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-black text-white flex items-center gap-1.5 flex-wrap">
+                      <span>Dev POV 1-Click Test Login</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/30 text-emerald-300 font-mono font-bold">15 Vendors + 4 Admins</span>
+                    </div>
+                    <div className="text-[10px] text-slate-300 truncate">Bypass login for testing & QA</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/auth-test')}
+                  className="px-3.5 py-1.5 rounded-xl bg-purple-500 hover:bg-purple-400 text-slate-950 font-black text-xs transition shrink-0 cursor-pointer shadow-sm flex items-center gap-1"
+                >
+                  <span>Open /auth-test</span>
+                  <span>→</span>
+                </button>
+              </div>
               {/* Persona Switcher: Customer vs Vendor */}
               <div className="flex items-center justify-between pb-4 border-b border-gray-100 gap-4">
                 <div>

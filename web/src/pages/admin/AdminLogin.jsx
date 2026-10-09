@@ -148,6 +148,30 @@ export default function AdminLogin() {
                 </button>
               </div>
 
+              {/* Developer POV Test Login Workbench Link */}
+              <div className="mt-3.5 p-3 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 border border-purple-500/40 text-white flex items-center justify-between gap-3 shadow-md shadow-purple-950/20">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-300 grid place-items-center font-bold text-xs shrink-0 border border-purple-400/30">
+                    ⚡
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-black text-white flex items-center gap-1">
+                      <span>Dev 1-Click Test Auth</span>
+                      <span className="text-[9px] px-1 rounded bg-purple-500/30 text-purple-200 font-mono font-bold">/auth-test</span>
+                    </div>
+                    <div className="text-[10px] text-slate-300 truncate">4 Admins + 15 Vendors + 4 Customers</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/auth-test')}
+                  className="px-2.5 py-1.5 rounded-lg bg-purple-500 hover:bg-purple-400 text-slate-950 font-black text-[11px] transition shrink-0 cursor-pointer shadow-xs flex items-center gap-1"
+                >
+                  <span>Open Workbench</span>
+                  <span>→</span>
+                </button>
+              </div>
+
               <form onSubmit={submit} className="mt-5 space-y-4">
                 <div>
                   <label className="text-xs font-bold text-ink/80 dark:text-gray-200 block mb-1.5">

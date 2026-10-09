@@ -122,7 +122,7 @@ export const config = {
   reservationExpiryWorkerEnabled: process.env.RESERVATION_EXPIRY_WORKER_ENABLED !== "false",
   reservationExpiryIntervalMs: Number(process.env.RESERVATION_EXPIRY_INTERVAL_MS || 60000),
   metricsEnabled: process.env.METRICS_ENABLED !== "false",
-  enableDevTools: process.env.ENABLE_DEV_TOOLS === "true" && !isProduction,
+  enableDevTools: process.env.ENABLE_DEV_TOOLS !== "false" && !isProduction,
 
   // ── Settlement math ──
   platformCommissionPercent: Number(process.env.PLATFORM_COMMISSION_PERCENT || 10),
