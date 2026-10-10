@@ -24,6 +24,7 @@ customerRouter.get('/events/:id', h(c.getEvent));
 customerRouter.patch('/events/:id', h(c.patchEvent));
 customerRouter.post('/events/:id/confirm', h(c.confirmEvent));
 customerRouter.get('/events/:id/dashboard', h(c.dashboard));
+customerRouter.get('/events/:id/financial-truth', h(c.financialTruth));
 customerRouter.get('/events/:id/history', h(c.history));
 
 customerRouter.get('/events/:id/requirements', h(c.listRequirements));

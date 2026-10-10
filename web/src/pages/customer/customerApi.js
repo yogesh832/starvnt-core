@@ -10,6 +10,7 @@ export const customerApi = {
   confirmEvent: (id) => externalApi.call(`/customer/events/${id}/confirm`, { method: 'POST' }),
   home: () => externalApi.call('/customer/home'),
   dashboard: (id) => externalApi.call(`/customer/events/${id}/dashboard`),
+  financialTruth: (id) => externalApi.call(`/customer/events/${id}/financial-truth`),
   history: (id) => externalApi.call(`/customer/events/${id}/history`),
   requirements: (id) => externalApi.call(`/customer/events/${id}/requirements`),
   setRequirement: (id, category, body) =>

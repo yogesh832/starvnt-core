@@ -21,14 +21,21 @@ const vendorPayable = (booking) => Number(
 /* ── Payments ─────────────────────────────────────────────────────────────── */
 export function PaymentsPage() {
   const [bookings, setBookings] = useState([]);
+  const [financialTruth, setFinancialTruth] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const loadPayments = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await externalApi.call('/vendor/bookings');
+      const [res, truthRes] = await Promise.all([
+        externalApi.call('/vendor/bookings'),
+        externalApi.call('/vendor/financial-truth').catch(() => null),
+      ]);
       if (res.ok && res.bookings) {
         setBookings(res.bookings);
+      }
+      if (truthRes?.ok && truthRes.financialTruth) {
+        setFinancialTruth(truthRes.financialTruth);
       }
     } catch (err) {
       console.warn('[PaymentsPage] Failed to fetch payments data:', err.message);
@@ -53,6 +60,17 @@ export function PaymentsPage() {
     .filter((b) => b.executionStatus === 'SERVICE_STARTED' || b.executionStatus === 'COMPLETION_SUBMITTED' || b.executionStatus === 'COMPLETION_VERIFIED')
     .reduce((sum, b) => sum + balanceDue(b), 0);
 
+  const truthMetrics = financialTruth?.metrics || {};
+  const aging = financialTruth?.agingBreakdown || {};
+  const overdueBookings = financialTruth?.overdueBookings || [];
+  const agingRows = [
+    ['Due today', aging.dueToday],
+    ['1-7 days', aging.dueIn1To7Days],
+    ['8-30 overdue', aging.overdue8To30Days],
+    ['31-60 overdue', aging.overdue31To60Days],
+    ['60+ overdue', aging.overdue60PlusDays],
+  ];
+
   const stats = [
     {
       label: 'In Escrow',
@@ -70,7 +88,7 @@ export function PaymentsPage() {
     },
     {
       label: 'Pending Settlement Validation',
-      value: `₹${nextPayout.toLocaleString()}`,
+      value: `₹${(truthMetrics.expectedSettlements ?? nextPayout).toLocaleString()}`,
       foot: 'Remaining balance after advance',
       iconBg: 'bg-primary-soft text-primary',
       icon: 'payments',
@@ -92,6 +110,42 @@ export function PaymentsPage() {
             </div>
           </Card>
         ))}
+      </div>
+
+      <div className="grid lg:grid-cols-[1.1fr_1fr] gap-3.5">
+        <Card title="Receivables aging">
+          <div className="grid sm:grid-cols-5 gap-2">
+            {agingRows.map(([label, row]) => (
+              <div key={label} className="rounded-lg border border-gray-100 bg-white p-3">
+                <div className="text-[10px] font-bold uppercase text-muted">{label}</div>
+                <div className="mt-1 text-lg font-extrabold text-navy">₹{Number(row?.amount || 0).toLocaleString()}</div>
+                <div className="text-[10px] text-muted">{Number(row?.count || 0)} booking{Number(row?.count || 0) === 1 ? '' : 's'}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-[11px] text-muted">
+            Expected receivables: <strong className="text-navy">₹{Number(truthMetrics.expectedReceivables || 0).toLocaleString()}</strong>
+            {' '}· Due this week: <strong className="text-navy">₹{Number(truthMetrics.dueThisWeek || 0).toLocaleString()}</strong>
+          </div>
+        </Card>
+
+        <Card title="Overdue follow-ups">
+          {overdueBookings.length === 0 ? (
+            <p className="text-xs text-muted">No overdue receivables found in Core Booking truth.</p>
+          ) : (
+            <div className="space-y-2">
+              {overdueBookings.slice(0, 4).map((b) => (
+                <div key={b.bookingId} className="flex items-center justify-between gap-3 rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-navy truncate">{b.bookingReference || b.serviceName}</div>
+                    <div className="text-[10px] text-muted truncate">{b.customerName || 'Customer'} · {b.daysOverdue}d overdue</div>
+                  </div>
+                  <div className="text-xs font-extrabold text-rose-700 shrink-0">₹{Number(b.amount || 0).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
 
       <Card className="!p-0 overflow-x-auto" title="Payment history & Core Escrow">

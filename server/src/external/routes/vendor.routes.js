@@ -26,6 +26,7 @@ import { verifyPan } from '../services/panVerification.service.js';
 import { v2 as cloudinary } from 'cloudinary';
 import vendorAuraRoutes from './vendorAura.routes.js';
 import financialRoutes from './financial.routes.js';
+import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
 
 const router = Router();
 
@@ -241,6 +242,14 @@ router.get('/activation-status', async (req, res, next) => {
   try {
     const status = await evaluateVendorActivation(req.vendorId);
     res.json({ ok: true, status });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/financial-truth', async (req, res, next) => {
+  try {
+    res.json({ ok: true, financialTruth: await vendorFinancialTruth(req.vendorId) });
   } catch (err) {
     next(err);
   }

@@ -38,6 +38,7 @@ import * as catalog from './catalog.service.js';
 import { serviceDetailsJsonSchema, serviceFields, validateDetails, validateServiceLocation, LOCATION_SENSITIVE, ROUTE_CATEGORIES } from './serviceRequirements.js';
 import { computeEventSummary, eventSteps, attentionFor } from './summary.js';
 import { customerHistory } from './history.service.js';
+import { customerFinancialTruth } from '../../common/financialTruth.service.js';
 
 const EDITABLE_STATUSES = ['draft', 'planning'];
 // Arranged elsewhere or reset: an earlier option choice no longer applies.
@@ -522,7 +523,7 @@ export async function requirementsDetail(customerId, eventId) {
 
 export async function dashboard(customerId, eventId) {
   const event = await getOwnedEventOr404(customerId, eventId);
-  const [requirements, contextRows, stats, recent, signals, allBookings, payments] = await Promise.all([
+  const [requirements, contextRows, stats, recent, signals, allBookings, payments, financialTruth] = await Promise.all([
     reqRepo.listRequirements(event._id),
     auraRepo.listContext(event._id),
     event.status === 'draft' ? new Map() : catalog.optionStats(event),
@@ -530,6 +531,7 @@ export async function dashboard(customerId, eventId) {
     attentionSignals([event._id]),
     commerceRepo.listBookings(event._id),
     commerceRepo.listPayments(event._id),
+    customerFinancialTruth(customerId, event._id),
   ]);
   const summary = computeEventSummary(event, requirements, stats, allBookings.filter((b) => b.status === 'confirmed'));
   const attention = attentionFor(event, signals(event._id));
@@ -548,6 +550,7 @@ export async function dashboard(customerId, eventId) {
     payments: payments.map(serializePayment),
     attention,
     attentionCount: attention.length,
+    financialTruth,
     steps: eventSteps(event, requirements),
     understanding: event.status === 'draft' ? buildUnderstanding(event, requirements, contextRows) : null,
     recentHistory: recent,

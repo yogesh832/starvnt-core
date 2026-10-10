@@ -21,6 +21,57 @@ import { attentionLink, formatINR, planStatus } from './format.js';
 
 const TONE = { amber: 'text-amber-600', emerald: 'text-emerald-600', primary: 'text-primary', muted: 'text-muted' };
 
+function FinancialPicture({ truth, eventId }) {
+  const m = truth?.metrics || {};
+  const attention = Array.isArray(truth?.attentionItems) ? truth.attentionItems : [];
+  const tiles = [
+    ['Budget', m.totalBudget ? formatINR(m.totalBudget) : 'Not set'],
+    ['Committed', formatINR(m.committedAmount || 0)],
+    ['Paid', formatINR(m.paidAmount || 0)],
+    ['Upcoming', formatINR(m.upcomingAmount || 0)],
+    ['Remaining', m.totalBudget ? formatINR(m.remainingAmount || 0) : '—'],
+    ['Overdue', formatINR(m.overdueAmount || 0)],
+    ['Projected', formatINR(m.projectedTotal || 0)],
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-extrabold text-navy">My event financial picture</div>
+          <div className="text-[11px] text-muted mt-0.5">Calculated from bookings, payments and Core escrow truth.</div>
+        </div>
+        <Link to={`/customer/events/${eventId}/budget`} className="text-xs font-bold text-primary shrink-0">Budget →</Link>
+      </div>
+      <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        {tiles.map(([label, value]) => (
+          <div key={label} className="rounded-xl bg-lavender/50 border border-gray-100 px-3 py-2">
+            <div className="text-[10px] font-semibold text-muted">{label}</div>
+            <div className={`text-xs font-extrabold mt-0.5 ${label === 'Overdue' && m.overdueAmount > 0 ? 'text-rose-600' : 'text-navy'}`}>{value}</div>
+          </div>
+        ))}
+      </div>
+      {attention.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {attention.slice(0, 2).map((item, index) => (
+            <Link
+              key={`${item.type}-${index}`}
+              to={item.actionUrl || `/customer/events/${eventId}/bookings`}
+              className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs"
+            >
+              <span className="min-w-0">
+                <span className="block font-bold text-navy truncate">{item.title}</span>
+                <span className="block text-[10px] text-muted truncate">{item.detail}</span>
+              </span>
+              <span className="font-extrabold text-amber-700 shrink-0">{item.amount ? formatINR(item.amount) : 'Open'}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Cover({ event, onEdit, editable }) {
   return (
     <section className="rounded-3xl p-5 bg-gradient-to-br from-primary to-[#9b6dff] text-white shadow-lg shadow-primary/20">
@@ -166,7 +217,7 @@ export default function EventPage() {
       </div>
     );
   }
-  const { event, summary, attention, attentionCount, steps, understanding, recentHistory, bookings = [], payments = [] } = data;
+  const { event, summary, attention, attentionCount, financialTruth, steps, understanding, recentHistory, bookings = [], payments = [] } = data;
 
   if (event.status === 'draft') {
     return (
@@ -231,6 +282,8 @@ export default function EventPage() {
             </div>
             <div className="mt-4"><StepTracker steps={steps} /></div>
           </div>
+
+          <FinancialPicture truth={financialTruth} eventId={event.id} />
 
           <Tabs
             value={tab}

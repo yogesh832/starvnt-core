@@ -3,6 +3,7 @@ import * as profile from '../services/profile.service.js';
 import * as decision from '../services/decision.service.js';
 import * as commerce from '../services/commerce.service.js';
 import * as circleSvc from '../services/circle.service.js';
+import { customerFinancialTruth } from '../../common/financialTruth.service.js';
 
 const me = (req) => req.externalUser._id;
 
@@ -21,6 +22,7 @@ export const confirmEvent = async (req, res) => res.json(await events.confirmEve
 
 export const home = async (req, res) => res.json(await events.home(me(req)));
 export const dashboard = async (req, res) => res.json(await events.dashboard(me(req), req.params.id));
+export const financialTruth = async (req, res) => res.json({ ok: true, financialTruth: await customerFinancialTruth(me(req), req.params.id) });
 export const history = async (req, res) => res.json(await events.eventHistory(me(req), req.params.id));
 export const services = async (req, res) =>
   res.json(

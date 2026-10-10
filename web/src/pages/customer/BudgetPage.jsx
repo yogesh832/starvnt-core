@@ -15,8 +15,9 @@ export default function BudgetPage() {
   const { data, error, loading } = useLoad(() => customerApi.dashboard(id), [id]);
   if (loading) return <PageSkeleton title="Budget" count={4} type="list" />;
   if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
-  const { event, summary } = data;
+  const { event, summary, financialTruth } = data;
   const b = summary.budget;
+  const truth = financialTruth?.metrics || {};
   const total = b.committedCost + b.estimatedCost;
   const pct = b.target ? Math.min(100, Math.round((total / b.target) * 100)) : 0;
   const rows = summary.items.filter((i) => i.tier === 'essential' || i.status !== 'missing');
@@ -51,6 +52,10 @@ export default function BudgetPage() {
         <div className="grid grid-cols-2 gap-2 mt-3 text-[11px]">
           <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Booked</div><div className="font-bold text-navy">{formatINR(b.committedCost)}</div></div>
           <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Est. still to arrange</div><div className="font-bold text-navy">{formatINR(b.estimatedCost)}</div></div>
+          <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Paid</div><div className="font-bold text-navy">{formatINR(truth.paidAmount || 0)}</div></div>
+          <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Upcoming</div><div className="font-bold text-navy">{formatINR(truth.upcomingAmount || 0)}</div></div>
+          <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Overdue</div><div className={`font-bold ${truth.overdueAmount > 0 ? 'text-rose-600' : 'text-navy'}`}>{formatINR(truth.overdueAmount || 0)}</div></div>
+          <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Projected total</div><div className="font-bold text-navy">{formatINR(truth.projectedTotal || total)}</div></div>
         </div>
         {b.estimateUsesDemoData && <p className="text-[10px] text-amber-700 mt-2">Some estimates use demo listings, not real vendor prices.</p>}
         {b.servicesWithoutEstimate.length > 0 && <p className="text-[10px] text-muted mt-1">No price listed yet for: {b.servicesWithoutEstimate.join(', ')}</p>}
