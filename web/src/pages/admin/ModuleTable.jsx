@@ -61,7 +61,7 @@ const MODULE_DATA = {
       { label: 'Held in Escrow', value: '₹0', foot: '0% of collected', iconBg: 'bg-orange-50 text-orange-500', icon: 'wallet' },
       { label: 'Released to Vendors', value: '₹0', foot: '0% this month', iconBg: 'bg-emerald-50 text-emerald-600', icon: 'trend' },
     ],
-    columns: ['Event', 'Customer', 'Amount', 'Status', 'Date'],
+    columns: ['Reference', 'Party', 'Amount', 'Status', 'Date'],
     rows: [],
     total: 0, pages: 1,
   },
@@ -154,6 +154,7 @@ export default function ModuleTable({ kind, embedded = false }) {
     citiesList: [],
     stats: null,
   });
+  const [paymentMeta, setPaymentMeta] = useState({ stats: null, definitions: null });
 
   const [apiData, setApiData] = useState({ rows: [], total: 0, pages: 1, raw: [] });
   const [loading, setLoading] = useState(false);
@@ -252,6 +253,8 @@ export default function ModuleTable({ kind, embedded = false }) {
         ? `&status=${encodeURIComponent(tab === 'Dead Letter' ? 'DEAD_LETTER' : tab.toUpperCase().replace(/\s+/g, '_'))}`
         : '';
       endpoint = `/automation/outbox?limit=${limit}${statusParam}`;
+    } else if (kind === 'payments') {
+      endpoint = `/operations/finance-summary?limit=${limit}&skip=${skip}${tabParam}`;
     }
 
     if (endpoint) {
@@ -280,6 +283,17 @@ export default function ModuleTable({ kind, embedded = false }) {
               evt.status || 'PENDING',
               String(evt.attempts ?? 0),
               evt.nextRunAt ? new Date(evt.nextRunAt).toLocaleString() : '—',
+            ]);
+          }
+          if (kind === 'payments' && res.rows) {
+            setPaymentMeta({ stats: res.stats || null, definitions: res.definitions || null });
+            totalItems = res.total ?? res.count ?? res.rows.length;
+            mappedRows = res.rows.map((row) => [
+              row.reference || row.id || '—',
+              row.party || '—',
+              `₹${Number(row.amount || 0).toLocaleString('en-IN')}`,
+              row.status || '—',
+              row.date ? new Date(row.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—',
             ]);
           }
           if (kind === 'bookings' && res.bookings) {
@@ -352,7 +366,7 @@ export default function ModuleTable({ kind, embedded = false }) {
           }
           setApiData({
             rows: mappedRows,
-            raw: res.organizations || res.coupons || res.bookings || res.events || res.customers || res.users || [],
+            raw: res.organizations || res.coupons || res.bookings || res.events || res.customers || res.users || res.rows || [],
             total: totalItems,
             pages: Math.ceil(totalItems / limit) || 1,
           });
@@ -383,7 +397,7 @@ export default function ModuleTable({ kind, embedded = false }) {
     return <EventWorkspace onBack={() => setSelectedEventWorkspace(null)} />;
   }
 
-  const isServerFiltered = ['vendors', 'customers', 'coupons', 'bookings'].includes(kind);
+  const isServerFiltered = ['vendors', 'customers', 'coupons', 'bookings', 'payments'].includes(kind);
   const filteredRows = (!isServerFiltered && debouncedSearch.trim())
     ? apiData.rows.filter((row) =>
         row.some((cell) => String(cell).toLowerCase().includes(debouncedSearch.trim().toLowerCase()))
@@ -431,7 +445,22 @@ export default function ModuleTable({ kind, embedded = false }) {
       )}
 
       {/* Payments-style stat row */}
-      {m.stats && (
+      {kind === 'payments' && paymentMeta.stats ? (
+        <div className="space-y-3">
+          <div className="grid sm:grid-cols-3 xl:grid-cols-5 gap-3.5">
+            <AdminStatCard icon="payments" value={`₹${Number(paymentMeta.stats.totalCollected || 0).toLocaleString('en-IN')}`} label="Total Collected" foot={`${paymentMeta.stats.totalCollectedCount || 0} verified payments`} />
+            <AdminStatCard icon="wallet" value={`₹${Number(paymentMeta.stats.heldBalance || 0).toLocaleString('en-IN')}`} label="Held Balance" foot={`${paymentMeta.stats.heldBookingCount || 0} confirmed bookings`} />
+            <AdminStatCard icon="trend" value={`₹${Number(paymentMeta.stats.releasedToVendors || 0).toLocaleString('en-IN')}`} label="Released to Vendors" foot={`${paymentMeta.stats.releasedSettlementCount || 0} ledger releases`} />
+            <AdminStatCard icon="payments" value={`₹${Number(paymentMeta.stats.refunds || 0).toLocaleString('en-IN')}`} label="Refunds" foot={`${paymentMeta.stats.refundCount || 0} ledger refunds`} />
+            <AdminStatCard icon="wallet" value={`₹${Number(paymentMeta.stats.bookingGmv || 0).toLocaleString('en-IN')}`} label="Booking GMV" foot={`${paymentMeta.stats.bookingCount || 0} confirmed bookings`} />
+          </div>
+          {paymentMeta.definitions && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-[11px] text-amber-900">
+              GMV, collections, held balance, refunds and settlement releases are separate sources. Failed APIs are shown as errors, not zero values.
+            </div>
+          )}
+        </div>
+      ) : m.stats && (
         <div className="grid sm:grid-cols-3 gap-3.5">
           {m.stats.map((s) => (
             <AdminStatCard key={s.label} icon={s.icon} value={s.value} label={s.label} foot={s.foot} />
