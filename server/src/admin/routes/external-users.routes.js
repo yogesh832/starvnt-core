@@ -285,6 +285,8 @@ router.get('/organizations', requirePermission('vendors.read'), async (req, res,
       } else if (lower === 'pending') {
         query['verification.isVerified'] = { $ne: true };
         query.status = { $ne: 'REJECTED' };
+      } else if (lower === 'manual review' || lower === 'review') {
+        query['manualReview.status'] = { $in: ['NEEDS_REVIEW', 'IN_REVIEW'] };
       } else if (lower === 'rejected') {
         query.status = 'REJECTED';
       } else if (lower === 'flagged') {
@@ -340,7 +342,7 @@ router.get('/organizations', requirePermission('vendors.read'), async (req, res,
         pendingDocumentCount,
         adminActions: {
           canApproveVerification: pendingDocumentCount > 0 && org.verification?.isVerified !== true,
-          kycActionLabel: org.verification?.isVerified ? 'View KYC' : pendingDocumentCount > 0 ? 'Review KYC' : 'KYC Pending',
+          kycActionLabel: org.verification?.isVerified ? 'View KYC' : org.manualReview?.status && org.manualReview.status !== 'NONE' ? 'Manual Review' : pendingDocumentCount > 0 ? 'Review KYC' : 'KYC Pending',
         },
       };
     });
@@ -594,6 +596,13 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
       document.status = 'VERIFIED';
       document.verifiedAt = new Date();
       document.notes = [document.notes, notes || 'Approved by Core admin.'].filter(Boolean).join(' ');
+      document.manualReview = {
+        ...(document.manualReview?.toObject?.() || document.manualReview || {}),
+        required: false,
+        status: 'APPROVED',
+        reviewedBy: req.admin?._id || null,
+        reviewedAt: new Date(),
+      };
       await document.save();
 
       organization.verification = {
@@ -605,10 +614,24 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
         documentRef: document?._id || organization.verification?.documentRef || null,
         notes: notes || 'Approved from Core admin verification panel.',
       };
+      organization.manualReview = {
+        ...(organization.manualReview?.toObject?.() || organization.manualReview || {}),
+        status: 'APPROVED',
+        reviewedBy: req.admin?._id || null,
+        reviewedAt: new Date(),
+        notes: notes || 'Approved from Core admin verification panel.',
+      };
     } else {
       if (document) {
         document.status = 'REJECTED';
         document.notes = [document.notes, notes || 'Rejected by Core admin.'].filter(Boolean).join(' ');
+        document.manualReview = {
+          ...(document.manualReview?.toObject?.() || document.manualReview || {}),
+          required: false,
+          status: 'REJECTED',
+          reviewedBy: req.admin?._id || null,
+          reviewedAt: new Date(),
+        };
         await document.save();
       }
 
@@ -625,6 +648,13 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
           isVerified: false,
           notes: notes || 'Rejected by Core admin.',
         };
+        organization.manualReview = {
+          ...(organization.manualReview?.toObject?.() || organization.manualReview || {}),
+          status: 'REJECTED',
+          reviewedBy: req.admin?._id || null,
+          reviewedAt: new Date(),
+          notes: notes || 'Rejected by Core admin.',
+        };
       } else {
         organization.verification = {
           ...(organization.verification?.toObject?.() || organization.verification || {}),
@@ -636,6 +666,56 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
     await organization.save();
     const activation = await evaluateVendorActivation(organization._id);
     res.json({ ok: true, organization, document, activation });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/organizations/:id/manual-review', requirePermission('vendors.approve'), async (req, res, next) => {
+  try {
+    const { status = 'IN_REVIEW', reason = '', documentId = null, notes = '' } = req.body || {};
+    const allowed = new Set(['NEEDS_REVIEW', 'IN_REVIEW', 'APPROVED', 'REJECTED']);
+    if (!allowed.has(status)) return res.status(400).json({ error: 'INVALID_REVIEW_STATUS' });
+    const organization = await VendorOrganization.findById(req.params.id);
+    if (!organization) return res.status(404).json({ error: 'VENDOR_ORGANIZATION_NOT_FOUND' });
+
+    let document = null;
+    if (documentId) {
+      document = await VendorDocument.findOne({ _id: documentId, vendor: organization._id });
+      if (!document) return res.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
+      document.manualReview = {
+        ...(document.manualReview?.toObject?.() || document.manualReview || {}),
+        required: ['NEEDS_REVIEW', 'IN_REVIEW'].includes(status),
+        status,
+        reason: reason || document.manualReview?.reason || '',
+        reviewedBy: ['APPROVED', 'REJECTED'].includes(status) ? req.admin?._id || null : document.manualReview?.reviewedBy || null,
+        reviewedAt: ['APPROVED', 'REJECTED'].includes(status) ? new Date() : document.manualReview?.reviewedAt || null,
+      };
+      await document.save();
+    }
+
+    organization.manualReview = {
+      ...(organization.manualReview?.toObject?.() || organization.manualReview || {}),
+      status,
+      reason: reason || organization.manualReview?.reason || 'Manual KYC review',
+      documentRef: document?._id || organization.manualReview?.documentRef || null,
+      requestedAt: organization.manualReview?.requestedAt || new Date(),
+      assignedTo: ['NEEDS_REVIEW', 'IN_REVIEW'].includes(status) ? req.admin?._id || null : organization.manualReview?.assignedTo || null,
+      reviewedBy: ['APPROVED', 'REJECTED'].includes(status) ? req.admin?._id || null : organization.manualReview?.reviewedBy || null,
+      reviewedAt: ['APPROVED', 'REJECTED'].includes(status) ? new Date() : organization.manualReview?.reviewedAt || null,
+      notes,
+    };
+    await organization.save();
+    await recordAudit({
+      ...auditContext(req),
+      action: 'VENDOR_KYC_MANUAL_REVIEW_UPDATED',
+      targetType: 'VendorOrganization',
+      targetId: String(organization._id),
+      reason,
+      toState: { manualReview: organization.manualReview },
+    });
+
+    res.json({ ok: true, organization, document, activation: await evaluateVendorActivation(organization._id) });
   } catch (err) {
     next(err);
   }

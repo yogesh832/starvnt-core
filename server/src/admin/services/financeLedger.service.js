@@ -117,6 +117,64 @@ export async function recordSettlementRelease(booking, actor = 'CORE_FINANCE') {
   return tax;
 }
 
+export async function recordRefund(booking, { amount, reference, reason = 'Customer refund' } = {}, actor = 'CORE_FINANCE') {
+  const refundAmount = money(amount);
+  if (refundAmount <= 0) {
+    const err = new Error('REFUND_AMOUNT_REQUIRED: Refund amount must be greater than zero.');
+    err.statusCode = 400;
+    err.code = 'REFUND_AMOUNT_REQUIRED';
+    throw err;
+  }
+  const paidAmount = money(booking.paymentSummary?.paidAmount || booking.totalAmount || 0);
+  if (refundAmount > paidAmount) {
+    const err = new Error('REFUND_EXCEEDS_PAID_AMOUNT: Refund cannot exceed the paid amount.');
+    err.statusCode = 400;
+    err.code = 'REFUND_EXCEEDS_PAID_AMOUNT';
+    throw err;
+  }
+  const cleanRef = String(reference || '').trim();
+  if (!cleanRef) {
+    const err = new Error('REFUND_REFERENCE_REQUIRED: A real refund/payment provider reference is required.');
+    err.statusCode = 400;
+    err.code = 'REFUND_REFERENCE_REQUIRED';
+    throw err;
+  }
+
+  await FinanceLedgerEntry.findOneAndUpdate(
+    { idempotencyKey: `refund_${booking._id}_${cleanRef}` },
+    {
+      $setOnInsert: {
+        booking: booking._id,
+        vendorId: booking.vendorId,
+        customerId: booking.customerId,
+        eventId: booking.customerEvent || null,
+        type: 'REFUND',
+        debitAccount: 'Refund Expense',
+        creditAccount: 'Customer Refund Clearing',
+        amount: refundAmount,
+        reference: cleanRef,
+        description: reason,
+        idempotencyKey: `refund_${booking._id}_${cleanRef}`,
+      },
+    },
+    { upsert: true, new: true }
+  );
+
+  await recordBusinessAudit({
+    who: actor,
+    actorType: 'SYSTEM',
+    action: 'REFUND_LEDGER_POSTED',
+    resourceType: 'CoreBooking',
+    resourceId: String(booking._id),
+    referenceId: cleanRef,
+    toState: { paymentStatus: booking.paymentStatus, refundAmount },
+    why: reason,
+    source: 'FINANCE_LEDGER',
+    authority: 'CORE_FINANCE',
+    idempotencyKey: `refund_ledger_posted_${booking._id}_${cleanRef}`,
+  });
+}
+
 export async function recordDisputeHold(booking, reason = 'Dispute under review') {
   const amount = settlementMath(booking.totalAmount).vendorPayable;
   await FinanceLedgerEntry.findOneAndUpdate(

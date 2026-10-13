@@ -17,6 +17,12 @@ customerRouter.get('/updates', h(c.updates));
 customerRouter.get('/notifications', h(c.notifications));
 customerRouter.post('/notifications/read-all', h(c.readAll));
 customerRouter.post('/notifications/:id/read', h(c.readOne));
+customerRouter.get('/documents', h(c.documents));
+customerRouter.post('/documents/contracts', h(c.createContractDocument));
+customerRouter.get('/documents/:documentId/download', h(c.downloadDocument));
+customerRouter.get('/favorites', h(c.favorites));
+customerRouter.post('/favorites', h(c.saveFavorite));
+customerRouter.delete('/favorites/:favoriteId', h(c.removeFavorite));
 
 customerRouter.get('/events', h(c.listEvents));
 customerRouter.post('/events', h(c.createEvent));

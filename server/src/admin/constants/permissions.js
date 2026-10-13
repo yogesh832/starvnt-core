@@ -87,6 +87,8 @@ export const ADMIN_ROLE_PRESETS = {
       'payments.approve',
       'payments.refund',
       'settlements.read',
+      'settlements.create',
+      'settlements.approve',
       'settlements.hold',
       'settlements.release',
       'revenue.read',

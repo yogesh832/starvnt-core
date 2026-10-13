@@ -36,17 +36,36 @@ export function createApp() {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: config.clientOrigins, credentials: true }));
-  // Payment webhooks need the raw body for signature checks: before express.json().
-  app.use('/api/webhooks', webhookRouter);
-  app.use(express.json({ limit: '100mb' }));
-  app.use(express.urlencoded({ limit: '100mb', extended: true }));
-  app.use(cookieParser());
   app.use((req, res, next) => {
     const incoming = req.headers['x-request-id'] || req.headers['x-correlation-id'];
     req.requestId = String(incoming || crypto.randomUUID()).slice(0, 120);
     res.setHeader('X-Request-Id', req.requestId);
     next();
   });
+  if (config.requestLoggingEnabled) {
+    app.use((req, res, next) => {
+      const started = Date.now();
+      res.on('finish', () => {
+        const ms = Date.now() - started;
+        console.log(JSON.stringify({
+          level: res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info',
+          type: 'http_request',
+          requestId: req.requestId,
+          method: req.method,
+          path: req.originalUrl,
+          status: res.statusCode,
+          durationMs: ms,
+          ip: req.ip,
+        }));
+      });
+      next();
+    });
+  }
+  // Payment webhooks need the raw body for signature checks: before express.json().
+  app.use('/api/webhooks', webhookRouter);
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ limit: '100mb', extended: true }));
+  app.use(cookieParser());
   if (config.metricsEnabled) app.use(metricsMiddleware);
 
   app.get('/api/health', (req, res) =>

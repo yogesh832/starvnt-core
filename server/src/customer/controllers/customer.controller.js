@@ -3,6 +3,7 @@ import * as profile from '../services/profile.service.js';
 import * as decision from '../services/decision.service.js';
 import * as commerce from '../services/commerce.service.js';
 import * as circleSvc from '../services/circle.service.js';
+import * as library from '../services/library.service.js';
 import { customerFinancialTruth } from '../../common/financialTruth.service.js';
 
 const me = (req) => req.externalUser._id;
@@ -75,6 +76,18 @@ export const notifications = async (req, res) => {
 };
 export const readAll = async (req, res) => res.json(await circleSvc.readAll(me(req)));
 export const readOne = async (req, res) => res.json(await circleSvc.readOne(me(req), req.params.id));
+export const documents = async (req, res) => res.json(await library.listDocuments(me(req)));
+export const downloadDocument = async (req, res) => {
+  const doc = await library.documentPdf(me(req), req.params.documentId);
+  if (doc.redirectUrl) return res.redirect(302, doc.redirectUrl);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${doc.filename.replace(/"/g, '')}"`);
+  res.send(doc.buffer);
+};
+export const createContractDocument = async (req, res) => res.status(201).json(await library.createContract(me(req), req.body));
+export const favorites = async (req, res) => res.json(await library.listFavorites(me(req)));
+export const saveFavorite = async (req, res) => res.status(201).json(await library.saveFavorite(me(req), req.body));
+export const removeFavorite = async (req, res) => res.json(await library.removeFavorite(me(req), req.params.favoriteId));
 export const listRequirements = async (req, res) => res.json(await events.requirementsDetail(me(req), req.params.id));
 export const patchRequirement = async (req, res) => {
   const requirement = await events.setRequirement(me(req), req.params.id, req.params.category, req.body);

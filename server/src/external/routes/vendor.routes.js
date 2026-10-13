@@ -1304,6 +1304,7 @@ router.post('/documents', async (req, res, next) => {
     let verificationSource = 'MANUAL';
     let verificationResult = undefined;
     let resolvedNotes = notes ? notes.trim() : '';
+    let manualReview = { required: false, status: 'NONE' };
 
     if (normalizedType === 'GST') {
       verificationSource = 'GSTIN_API';
@@ -1331,6 +1332,7 @@ router.post('/documents', async (req, res, next) => {
           ? `GSTIN found, but name did not confidently match "${req.vendor.businessName}".`
           : providerReviewReason(result, 'GSTIN');
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
+        manualReview = { required: true, reason, status: 'NEEDS_REVIEW', requestedAt: new Date() };
       }
     } else if (normalizedType === 'PAN') {
       verificationSource = 'PAN_API';
@@ -1361,6 +1363,7 @@ router.post('/documents', async (req, res, next) => {
           ? `Corporate PAN found, but registered name did not confidently match "${req.vendor.businessName}".`
           : providerReviewReason(result, 'Corporate PAN');
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
+        manualReview = { required: true, reason, status: 'NEEDS_REVIEW', requestedAt: new Date() };
       }
     }
 
@@ -1377,6 +1380,7 @@ router.post('/documents', async (req, res, next) => {
       expiryDate: expiryDate || '',
       verificationSource,
       verificationResult,
+      manualReview,
       verifiedAt: status === 'VERIFIED' ? new Date() : null,
     });
 
@@ -1395,6 +1399,16 @@ router.post('/documents', async (req, res, next) => {
       };
       await req.vendor.save();
       activation = await evaluateVendorActivation(req.vendorId);
+    } else if (manualReview.required) {
+      req.vendor.manualReview = {
+        status: 'NEEDS_REVIEW',
+        reason: manualReview.reason,
+        provider: verificationSource,
+        documentRef: doc._id,
+        requestedAt: manualReview.requestedAt,
+        notes: resolvedNotes,
+      };
+      await req.vendor.save();
     }
 
     res.status(201).json({ ok: true, document: doc, activation });

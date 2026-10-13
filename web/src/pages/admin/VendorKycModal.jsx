@@ -75,6 +75,7 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
   if (!vendor) return null;
 
   const isOverallVerified = Boolean(organization?.verification?.isVerified);
+  const manualReview = organization?.manualReview || {};
   const owner = organization?.owner || {};
 
   return (
@@ -166,6 +167,20 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
               </div>
             )}
           </div>
+
+          {manualReview.status && manualReview.status !== 'NONE' && (
+            <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/70 text-amber-950">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="font-extrabold text-sm flex items-center gap-2">
+                  <Icon name="help" size={17} />
+                  <span>Manual Review Fallback</span>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wide bg-white/80 rounded px-2 py-0.5">{manualReview.status}</span>
+              </div>
+              <p className="text-xs mt-1 leading-relaxed">{manualReview.reason || manualReview.notes || 'Automatic provider verification could not safely approve this vendor.'}</p>
+              {manualReview.provider && <div className="text-[10px] font-semibold mt-1 opacity-80">Source: {manualReview.provider}</div>}
+            </div>
+          )}
 
           {/* Uploaded Documents List */}
           <div>
@@ -292,6 +307,11 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
                             <p className="text-[11px] text-muted italic mt-1 bg-white/60 p-2 rounded-lg border border-gray-100">
                               {doc.notes}
                             </p>
+                          )}
+                          {doc.manualReview?.required && (
+                            <div className="text-[11px] text-amber-800 bg-amber-100/70 border border-amber-200 rounded-lg p-2 mt-2 font-semibold">
+                              Manual review required: {doc.manualReview.reason || 'Automatic verification did not produce a safe approval.'}
+                            </div>
                           )}
                         </div>
 

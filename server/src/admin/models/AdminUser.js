@@ -41,6 +41,8 @@ const adminUserSchema = new Schema(
     // MFA scaffolding — enforcement layers on top of these flags later.
     mfaEnabled: { type: Boolean, default: false },
     mfaRequired: { type: Boolean, default: false },
+    mfaSecretEncrypted: { type: String, default: '', select: false },
+    mfaConfiguredAt: { type: Date, default: null },
     lastLoginAt: { type: Date, default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: 'AdminUser', default: null },
   },
@@ -61,6 +63,7 @@ adminUserSchema.methods.toSafeJSON = function toSafeJSON() {
     status: this.status,
     mfaEnabled: this.mfaEnabled,
     mfaRequired: this.mfaRequired,
+    mfaConfiguredAt: this.mfaConfiguredAt,
     createdAt: this.createdAt,
     lastLoginAt: this.lastLoginAt,
   };

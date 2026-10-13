@@ -47,6 +47,10 @@ export const config = {
   adminRefreshTtlDays: Number(process.env.ADMIN_REFRESH_TOKEN_TTL_DAYS || 7),
   adminRefreshCookieName: "starvnt_admin_rt",
   adminAuthRateLimit: Number(process.env.ADMIN_AUTH_RATE_LIMIT || 10),
+  adminMfaRequiredForSuperAdmin: process.env.ADMIN_MFA_REQUIRED_FOR_SUPER_ADMIN === undefined
+    ? isProduction
+    : String(process.env.ADMIN_MFA_REQUIRED_FOR_SUPER_ADMIN).toLowerCase() === "true",
+  adminMfaIssuer: process.env.ADMIN_MFA_ISSUER || "STARVNT Core",
 
   // ── Super admin bootstrap ──
   superAdminName: process.env.SUPER_ADMIN_NAME || "STARVNT Super Admin",
@@ -122,6 +126,9 @@ export const config = {
   reservationExpiryWorkerEnabled: process.env.RESERVATION_EXPIRY_WORKER_ENABLED !== "false",
   reservationExpiryIntervalMs: Number(process.env.RESERVATION_EXPIRY_INTERVAL_MS || 60000),
   metricsEnabled: process.env.METRICS_ENABLED !== "false",
+  requestLoggingEnabled: process.env.REQUEST_LOGGING_ENABLED === undefined
+    ? isProduction
+    : String(process.env.REQUEST_LOGGING_ENABLED).toLowerCase() === "true",
   enableDevTools: process.env.ENABLE_DEV_TOOLS !== "false" && !isProduction,
 
   // ── Settlement math ──

@@ -7,10 +7,12 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
+    "test": "node --test",
     "seed": "node scripts/seed-super-admin.js",
     "seed:vendor": "node scripts/seed-vendor.js",
     "seed:vendors": "node scripts/seed-real-vendors.js",
-    "seed:customer-demo": "node scripts/seed-customer-demo.js"
+    "seed:customer-demo": "node scripts/seed-customer-demo.js",
+    "backup:db": "node scripts/backup-db.js"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",

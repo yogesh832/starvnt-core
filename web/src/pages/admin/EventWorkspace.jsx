@@ -80,7 +80,11 @@ export default function EventWorkspace({ event = {}, onBack }) {
     const reference = window.prompt('Enter the real bank/transfer settlement reference');
     if (!reference?.trim()) return;
     try {
-      await adminApi.call(`/operations/bookings/${id}/settle`, { method: 'POST', body: { transactionReference: reference.trim() } });
+      const res = await adminApi.call(`/operations/bookings/${id}/settle`, { method: 'POST', body: { transactionReference: reference.trim() } });
+      if (res.pendingApproval) {
+        setAdminFeedback('Settlement release request created. A different finance admin must approve it before payout release.');
+        return;
+      }
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, settlementStatus: 'SETTLED' } : b))
       );

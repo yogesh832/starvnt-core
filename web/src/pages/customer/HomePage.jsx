@@ -177,6 +177,25 @@ function Section({ title, action, children, className = '' }) {
   );
 }
 
+function ShopComingSoonCard() {
+  return (
+    <section className={`${card} p-5 overflow-hidden`}>
+      <div className="flex items-start gap-3">
+        <span className="w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 grid place-items-center shrink-0">
+          <Icon name="services" size={18} />
+        </span>
+        <div className="min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Coming soon</div>
+          <h2 className="text-sm font-extrabold text-navy dark:text-white mt-0.5">StarVnt Shop</h2>
+          <p className="text-[11px] text-muted dark:text-slate-400 mt-1 leading-relaxed">
+            Curated event essentials and gifting will appear here after the shop catalog is live. Checkout is not enabled yet.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── No event yet ─────────────────────────────────────────────────────── */
 function Welcome({ firstName, onEventChanged }) {
   return (
@@ -208,6 +227,7 @@ function Welcome({ firstName, onEventChanged }) {
             <div className="text-sm font-extrabold text-navy dark:text-white mt-1">Plan with Aura+</div>
             <div className="text-[11px] text-muted dark:text-slate-400 mt-0.5">Describe it in your own words; Aura+ asks only what's missing.</div>
           </Link>
+          <ShopComingSoonCard />
         </div>
       </div>
     </div>
@@ -543,6 +563,7 @@ function Workspace({ firstName, event }) {
           <ActionRail event={ev} />
         </div>
         <div className="xl:col-span-4 space-y-5">
+          <ShopComingSoonCard />
           <Section title="Upcoming actions">
             {attention.length > 0 ? (
               <ul className="space-y-2">

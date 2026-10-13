@@ -34,7 +34,7 @@ const MODULE_DATA = {
   },
   vendors: {
     title: 'Vendors', add: null,
-    tabs: ['All', 'Verified', 'Pending', 'Flagged', 'Suspended', 'Rejected'], filters: ['Category', 'Location'],
+    tabs: ['All', 'Verified', 'Pending', 'Manual Review', 'Flagged', 'Suspended', 'Rejected'], filters: ['Category', 'Location'],
     columns: ['Business', 'Contact', 'Category', 'Location', 'KYC', 'Status'],
     rows: [],
     total: 0, pages: 1,
@@ -55,7 +55,7 @@ const MODULE_DATA = {
   },
   payments: {
     title: 'Payments & Settlements', add: null,
-    tabs: ['Customer Payments', 'Vendor Settlements', 'Refunds'], filters: [],
+    tabs: ['Customer Payments', 'Vendor Settlements', 'Refunds', 'Pending Approvals'], filters: [],
     stats: [
       { label: 'Total Collected', value: '₹0', foot: '0% this month', iconBg: 'bg-primary-soft text-primary', icon: 'payments' },
       { label: 'Held Balance', value: '₹0', foot: 'Awaiting settlement', iconBg: 'bg-orange-50 text-orange-500', icon: 'wallet' },
@@ -291,6 +291,25 @@ export default function ModuleTable({ kind, embedded = false }) {
     }
   }
 
+  async function handleApprovalAction(approval, action) {
+    if (!approval?.id) return;
+    const label = action === 'approve' ? 'approve' : 'reject';
+    const reason = window.prompt(`${label === 'approve' ? 'Approve' : 'Reject'} this settlement approval request? Add a note:`);
+    if (reason == null) return;
+    try {
+      setLoading(true);
+      await adminApi.call(`/operations/approvals/${approval.id}/${label}`, {
+        method: 'POST',
+        body: { reason: reason.trim() || `${label}d from Payments panel` },
+      });
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      setError(e.message || `Failed to ${label} approval`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleReportExport() {
     try {
       const res = await adminApi.raw('/reports/summary/export.csv', { method: 'GET' });
@@ -337,7 +356,9 @@ export default function ModuleTable({ kind, embedded = false }) {
         : '';
       endpoint = `/automation/outbox?limit=${limit}${statusParam}`;
     } else if (kind === 'payments') {
-      endpoint = `/operations/finance-summary?limit=${limit}&skip=${skip}${tabParam}`;
+      endpoint = tab === 'Pending Approvals'
+        ? `/operations/approvals?status=PENDING&limit=${limit}`
+        : `/operations/finance-summary?limit=${limit}&skip=${skip}${tabParam}`;
     } else if (kind === 'settings') {
       endpoint = '/settings';
     } else if (kind === 'reports') {
@@ -375,6 +396,16 @@ export default function ModuleTable({ kind, embedded = false }) {
               evt.status || 'PENDING',
               String(evt.attempts ?? 0),
               evt.nextRunAt ? new Date(evt.nextRunAt).toLocaleString() : '—',
+            ]);
+          }
+          if (kind === 'payments' && res.approvals) {
+            totalItems = res.approvals.length;
+            mappedRows = res.approvals.map((approval) => [
+              `${approval.type === 'REFUND' ? 'Refund' : 'Settlement'} ${approval.id.slice(-8).toUpperCase()}`,
+              approval.requestedByEmail || 'Admin',
+              approval.payload?.transactionReference || approval.payload?.reference || '—',
+              approval.status || 'PENDING',
+              approval.createdAt ? new Date(approval.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—',
             ]);
           }
           if (kind === 'payments' && res.rows) {
@@ -476,7 +507,7 @@ export default function ModuleTable({ kind, embedded = false }) {
           }
           setApiData({
             rows: mappedRows,
-            raw: res.organizations || res.coupons || res.bookings || res.events || res.customers || res.settings || res.users || res.rows || [],
+            raw: res.organizations || res.coupons || res.bookings || res.events || res.customers || res.settings || res.users || res.approvals || res.rows || [],
             total: totalItems,
             pages: Math.ceil(totalItems / limit) || 1,
           });
@@ -945,6 +976,29 @@ export default function ModuleTable({ kind, embedded = false }) {
                             <Icon name="edit" size={13} />
                             <span>Edit</span>
                           </button>
+                        ) : kind === 'payments' && tab === 'Pending Approvals' && apiData.raw?.[i] ? (
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApprovalAction(apiData.raw[i], 'approve');
+                              }}
+                              className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApprovalAction(apiData.raw[i], 'reject');
+                              }}
+                              className="rounded-lg bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </div>
                         ) : (
                           <button className="p-1 rounded-lg hover:bg-lavender text-muted hover:text-navy inline-flex items-center justify-center cursor-pointer" aria-label="More actions">
                             <Icon name="dotsVertical" size={15} strokeWidth={2.5} />

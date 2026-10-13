@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "npm run dev -w server",
     "dev:web": "npm run dev -w web",
+    "test": "npm run test -w server",
+    "backup:db": "npm run backup:db -w server",
     "seed:super-admin": "npm run seed -w server",
     "seed:vendor": "npm run seed:vendor -w server",
     "seed:customer-demo": "npm run seed:customer-demo -w server"
