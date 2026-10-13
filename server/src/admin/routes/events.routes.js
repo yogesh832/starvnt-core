@@ -21,6 +21,18 @@ function eventTypeLabel(event) {
     : 'Event';
 }
 
+function statusForTab(tab) {
+  const status = String(tab || '').toLowerCase().replace(/\s+/g, '_');
+  const aliases = {
+    confirmed: 'booked',
+    in_progress: 'in_progress',
+    inprogress: 'in_progress',
+    cancelled: 'cancelled',
+    canceled: 'cancelled',
+  };
+  return aliases[status] || status;
+}
+
 router.use(requireAdminAuth, requirePermission('events.read'));
 
 router.get('/', async (req, res, next) => {
@@ -31,9 +43,7 @@ router.get('/', async (req, res, next) => {
 
     const tab = req.query.tab || req.query.status;
     if (tab && tab !== 'All') {
-      const status = String(tab).toLowerCase().replace(/\s+/g, '_');
-      if (status === 'in_progress') filter.status = 'in_progress';
-      else filter.status = status;
+      filter.status = statusForTab(tab);
     }
 
     if (req.query.search && req.query.search.trim()) {

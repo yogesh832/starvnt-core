@@ -217,7 +217,7 @@ router.get('/finance-summary', requireAnyPermission('payments.read', 'settlement
       Payment.aggregate([
         { $match: { status: 'verified' } },
         { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
-      ]).catch(() => []),
+      ]),
       CoreBooking.aggregate([
         {
           $match: {
@@ -284,8 +284,8 @@ router.get('/finance-summary', requireAnyPermission('payments.read', 'settlement
       }));
     } else {
       [rows, total] = await Promise.all([
-        Payment.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean().catch(() => []),
-        Payment.countDocuments().catch(() => 0),
+        Payment.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Payment.countDocuments(),
       ]);
       rows = rows.map((row) => ({
         id: String(row._id),
@@ -336,7 +336,11 @@ router.get('/finance-summary', requireAnyPermission('payments.read', 'settlement
 router.post('/bookings/:id/verify-payment', requirePermission('payments.approve'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
-    const booking = await verifyPaymentFromCore(req.params.id, req.body, coreActor);
+    const booking = await verifyPaymentFromCore(
+      req.params.id,
+      { ...(req.body || {}), traceContext: { requestId: req.requestId } },
+      coreActor
+    );
     res.json({ ok: true, booking });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'PAYMENT_VERIFICATION_ERROR', message: err.message });

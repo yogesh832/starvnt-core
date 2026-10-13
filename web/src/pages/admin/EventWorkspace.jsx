@@ -7,7 +7,7 @@ import { adminApi } from '../../lib/api.js';
  * Screen 6: Event Details (Workspace) - Core Platform
  * Matches Screen 6 of the Complete Screen Set for Internal Admin.
  */
-export default function EventWorkspace({ onBack }) {
+export default function EventWorkspace({ event = {}, onBack }) {
   const [activeTab, setActiveTab] = useState('Overview');
   const [checklist, setChecklist] = useState([
     { id: 1, text: 'Review catering quotes', done: false },
@@ -28,69 +28,39 @@ export default function EventWorkspace({ onBack }) {
     { name: 'AV / DJ', vendor: 'DJ NightPro', amount: '₹1,20,000', status: 'Pending' },
   ];
 
-  const [adminBookings, setAdminBookings] = useState([
-    {
-      _id: 'sample-bk-1',
-      bookingReference: 'BK-2210',
-      serviceName: 'Wedding Photography & Cinematic Video',
-      vendorName: 'Premium Moments',
-      eventDate: '26 Nov 2026',
-      serviceLocation: { locality: 'New Town, Kolkata', address: 'Kisan Palace' },
-      totalAmount: 50000,
-      bookingStatus: 'CONFIRMED',
-      paymentStatus: 'PAYMENT_VERIFIED',
-      executionStatus: 'COMPLETION_SUBMITTED',
-      settlementStatus: 'NOT_ELIGIBLE',
-      completionEvidence: [
-        {
-          deliverablesUrl: 'https://drive.google.com/drive/folders/starvnt-kisan-palace-deliverables',
-          notes: '8 hours of full coverage completed. Client signed off on album review.',
-        },
-      ],
-    },
-    {
-      _id: 'sample-bk-2',
-      bookingReference: 'BK-2214',
-      serviceName: 'Corporate Event Coverage',
-      vendorName: 'Premium Moments',
-      eventDate: '10 Jan 2027',
-      serviceLocation: { locality: 'EM Bypass, Kolkata', address: 'ITC Royal Bengal' },
-      totalAmount: 52000,
-      bookingStatus: 'CONFIRMED',
-      paymentStatus: 'PAYMENT_VERIFIED',
-      executionStatus: 'SERVICE_STARTED',
-      settlementStatus: 'NOT_ELIGIBLE',
-      completionEvidence: [],
-    },
-  ]);
+  const [adminBookings, setAdminBookings] = useState([]);
   const [adminFeedback, setAdminFeedback] = useState(null);
 
   useEffect(() => {
     async function loadAdminBookings() {
       try {
         const res = await adminApi.call('/operations/bookings');
-        if (res.ok && res.bookings?.length) {
-          setAdminBookings(res.bookings);
+        if (res.ok) {
+          const eventId = String(event._id || event.id || '');
+          setAdminBookings(
+            eventId
+              ? (res.bookings || []).filter((booking) => String(booking.customerEvent || booking.eventId || '') === eventId)
+              : (res.bookings || [])
+          );
         }
       } catch (err) {
-        // Keeps sample bookings if unauthenticated
+        setAdminFeedback(err.message || 'Failed to load bookings for this event.');
       }
     }
     loadAdminBookings();
   }, []);
 
   async function handleVerifyPayment(id) {
+    const reference = window.prompt('Enter the verified customer payment/order reference');
+    if (!reference?.trim()) return;
     try {
-      await adminApi.call(`/operations/bookings/${id}/verify-payment`, { method: 'POST' });
+      await adminApi.call(`/operations/bookings/${id}/verify-payment`, { method: 'POST', body: { transactionReference: reference.trim() } });
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, paymentStatus: 'PAYMENT_VERIFIED', executionStatus: 'SERVICE_SCHEDULED' } : b))
       );
       setAdminFeedback('Payment verified by Core Platform.');
     } catch (err) {
-      setAdminBookings((prev) =>
-        prev.map((b) => (b._id === id ? { ...b, paymentStatus: 'PAYMENT_VERIFIED', executionStatus: 'SERVICE_SCHEDULED' } : b))
-      );
-      setAdminFeedback('Payment verified locally.');
+      setAdminFeedback(err.message || 'Payment verification failed.');
     }
   }
 
@@ -102,25 +72,21 @@ export default function EventWorkspace({ onBack }) {
       );
       setAdminFeedback('Completion validated! Settlement unlocked.');
     } catch (err) {
-      setAdminBookings((prev) =>
-        prev.map((b) => (b._id === id ? { ...b, executionStatus: 'COMPLETION_VERIFIED', settlementStatus: 'SETTLEMENT_ELIGIBLE' } : b))
-      );
-      setAdminFeedback('Completion validated locally! Settlement unlocked.');
+      setAdminFeedback(err.message || 'Completion validation failed.');
     }
   }
 
   async function handleSettle(id) {
+    const reference = window.prompt('Enter the real bank/transfer settlement reference');
+    if (!reference?.trim()) return;
     try {
-      await adminApi.call(`/operations/bookings/${id}/settle`, { method: 'POST' });
+      await adminApi.call(`/operations/bookings/${id}/settle`, { method: 'POST', body: { transactionReference: reference.trim() } });
       setAdminBookings((prev) =>
         prev.map((b) => (b._id === id ? { ...b, settlementStatus: 'SETTLED' } : b))
       );
       setAdminFeedback('Settlement released to vendor.');
     } catch (err) {
-      setAdminBookings((prev) =>
-        prev.map((b) => (b._id === id ? { ...b, settlementStatus: 'SETTLED' } : b))
-      );
-      setAdminFeedback('Settlement released locally.');
+      setAdminFeedback(err.message || 'Settlement release failed.');
     }
   }
 
@@ -142,11 +108,11 @@ export default function EventWorkspace({ onBack }) {
             ← Back to Events
           </button>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-extrabold text-navy">Riya & Arjun Wedding</h1>
-            <StatusChip status="Planning" />
+            <h1 className="text-2xl font-extrabold text-navy">{event.displayTitle || event.title || 'Event Workspace'}</h1>
+            <StatusChip status={event.status || 'Draft'} />
           </div>
           <p className="text-xs text-muted mt-1">
-            26 November 2025 · New Town, Kolkata · 500 guests
+            {event.eventDate || 'Date TBD'} · {event.locationLabel || event.city || 'Location not set'} · {event.guestCount ? `${event.guestCount} guests` : 'Guest count not set'}
           </p>
         </div>
         <button className="inline-flex items-center gap-2 rounded-xl bg-white border border-gray-200 hover:bg-lavender text-navy font-bold text-xs px-4 py-2.5 transition shadow-2xs self-start sm:self-auto">

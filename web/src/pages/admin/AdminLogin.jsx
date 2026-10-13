@@ -102,7 +102,7 @@ export default function AdminLogin() {
                 Welcome to Core Platform
               </h2>
               <p className="mt-2 text-white/80 text-xs sm:text-sm leading-relaxed">
-                Platform control center for event execution, verified vendor governance, settlement escrow, and matching intelligence.
+                Platform control center for event execution, verified vendor governance, settlement controls, and matching intelligence.
               </p>
               <p className="mt-6 text-white/70 italic text-xs leading-relaxed font-serif border-l-2 border-primary/60 pl-3">
                 "People, events and possibilities — coordinated seamlessly."

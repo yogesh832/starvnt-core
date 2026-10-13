@@ -43,15 +43,18 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
 
   async function handleVerifyPayment(e) {
     e.preventDefault();
+    if (!paymentRef.trim()) {
+      setMessage({ type: 'error', text: 'Enter a verified payment/order reference from the customer payment ledger.' });
+      return;
+    }
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
       const res = await adminApi.call(`/operations/bookings/${_id}/verify-payment`, {
         method: 'POST',
         body: {
-          transactionReference: paymentRef || `MANUAL-${Date.now()}`,
-          notes: paymentNotes || 'Authoritatively verified by Super Admin',
-          paidAmount: paymentSummary.balanceAmount || totalAmount,
+          transactionReference: paymentRef.trim(),
+          notes: paymentNotes || 'Matched against authoritative customer payment ledger',
         },
       });
       if (res.ok) {
@@ -96,6 +99,10 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
 
   async function handleSettle(e) {
     e.preventDefault();
+    if (!settlementRef.trim()) {
+      setMessage({ type: 'error', text: 'Enter the real bank or transfer reference before releasing settlement.' });
+      return;
+    }
     if (!window.confirm('Execute vendor payout and release settlement?')) return;
     setLoading(true);
     setMessage({ type: '', text: '' });
@@ -103,7 +110,7 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
       const res = await adminApi.call(`/operations/bookings/${_id}/settle`, {
         method: 'POST',
         body: {
-          settlementReference: settlementRef || `BANK-UTR-${Date.now()}`,
+          transactionReference: settlementRef.trim(),
           notes: 'Settled by StarVnt Core Operations',
         },
       });
@@ -242,7 +249,7 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
         <div className="flex items-center gap-2 px-6 pt-3 border-b border-gray-100 bg-white">
           {[
             { id: 'overview', label: 'Overview & Stakeholders', icon: 'bookings' },
-            { id: 'financials', label: 'Pricing & Escrow', icon: 'wallet' },
+            { id: 'financials', label: 'Pricing & Funds', icon: 'wallet' },
             { id: 'evidence', label: 'Proof & Evidence', icon: 'image' },
             { id: 'actions', label: 'Admin Operations', icon: 'operations' },
           ].map((tab) => (
@@ -399,7 +406,7 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
               {/* Vendor Settlement details */}
               <div className="bg-slate-50 border border-gray-100 rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-bold text-navy uppercase tracking-wider">Vendor Settlement Escrow</div>
+                  <div className="text-xs font-bold text-navy uppercase tracking-wider">Vendor Settlement Hold</div>
                   <StatusChip status={settlementStatus} />
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-xs">
@@ -496,14 +503,14 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
           {activeTab === 'actions' && (
             <div className="space-y-6">
               {/* Payment Verification */}
-              {paymentStatus !== 'PAID' && (
+              {paymentStatus !== 'PAYMENT_VERIFIED' && (
                 <form onSubmit={handleVerifyPayment} className="bg-slate-50 border border-gray-100 rounded-2xl p-5 space-y-3">
                   <div className="flex items-center gap-2 text-xs font-bold text-navy uppercase tracking-wider">
                     <Icon name="wallet" size={15} className="text-primary" />
                     <span>Authoritatively Verify Customer Payment</span>
                   </div>
                   <p className="text-xs text-muted">
-                    Confirm that payment has been received in escrow account to enable vendor execution.
+                    Match this booking against an authoritative verified customer payment before execution continues.
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <input

@@ -44,6 +44,19 @@ const EDITABLE_STATUSES = ['draft', 'planning'];
 // Arranged elsewhere or reset: an earlier option choice no longer applies.
 const NO_SELECTION = { selectedOptionId: null, selectedOption: { vendorName: null, packageName: null, price: null, isDemo: false } };
 const FACT_KEYS = ['eventType', 'title', 'eventDate', 'city', 'guestCount', 'budget', 'budgetRange', 'budgetMin', 'budgetMax', 'customType', 'location', 'specialRequirements', 'notes'];
+const IDEMPOTENCY_KEYS = ['idempotencyKey', 'clientRequestId'];
+
+function splitIdempotency(input = {}, fallback = null) {
+  const source = input && typeof input === 'object' ? input : {};
+  const factInput = { ...source };
+  let key = fallback;
+  for (const field of IDEMPOTENCY_KEYS) {
+    if (!key && source[field] != null) key = source[field];
+    delete factInput[field];
+  }
+  const idempotencyKey = key == null ? null : String(key).trim().slice(0, 160) || null;
+  return { factInput, idempotencyKey };
+}
 
 // Event location keys (area is accepted as an alias of locality; city maps to the top-level city).
 const LOCATION_TEXT = { country: 60, state: 60, locality: 80, venueName: 120, address: 300, pincode: 12, landmark: 120, notes: 500 };
@@ -268,15 +281,23 @@ export async function listEvents(customerId) {
 }
 
 export async function createDraftEvent(customerId, facts, { actorType = 'customer', actorId = null } = {}) {
-  const clean = validateFacts(facts);
+  const { factInput, idempotencyKey } = splitIdempotency(facts);
+  const clean = validateFacts(factInput);
   if (!clean.eventType) throw badRequest('VALIDATION_FAILED', 'Event type is required', { fields: { eventType: 'Required' } });
-  const event = await eventsRepo.createEvent({
+  if (idempotencyKey) {
+    const existing = await eventsRepo.findEventByIdempotencyKey(customerId, idempotencyKey);
+    if (existing) return existing;
+  }
+  const { event, created } = await eventsRepo.createEventOnce({
     ...nest(clean),
     title: clean.title || defaultTitle(clean.eventType, clean.customType),
     customer: customerId,
     status: 'draft',
+    idempotencyKey,
   });
-  await eventsRepo.appendHistory({ eventId: event._id, actorType, actorId, action: 'event_draft_created', details: { eventType: event.eventType } });
+  if (created) {
+    await eventsRepo.appendHistory({ eventId: event._id, actorType, actorId, action: 'event_draft_created', details: { eventType: event.eventType } });
+  }
   return event;
 }
 
@@ -595,14 +616,19 @@ export async function eventDay(customerId, eventId) {
  * so an invalid service never leaves a half-created event behind. The
  * customer typed the facts, so the event starts in planning (no draft).
  */
-export async function createManualEvent(customerId, body = {}) {
-  const { services = [], ...factInput } = body || {};
+export async function createManualEvent(customerId, body = {}, { idempotencyKey: headerIdempotencyKey = null } = {}) {
+  const { services = [], ...rawFactInput } = body || {};
+  const { factInput, idempotencyKey } = splitIdempotency(rawFactInput, headerIdempotencyKey);
   const facts = validateFacts(factInput);
   const missing = [];
   if (!facts.eventType) missing.push({ field: 'eventType', label: 'Event type' });
   if (!facts.eventDate) missing.push({ field: 'eventDate', label: 'Date' });
   if (!facts.city) missing.push({ field: 'city', label: 'Location' });
   if (missing.length) throw badRequest('MISSING_DETAILS', `Please add: ${missing.map((m) => m.label).join(', ')}`, { missing });
+  if (idempotencyKey) {
+    const existing = await eventsRepo.findEventByIdempotencyKey(customerId, idempotencyKey);
+    if (existing) return eventDetail(customerId, existing._id);
+  }
 
   if (!Array.isArray(services) || services.length > 40) throw badRequest('VALIDATION_FAILED', 'services must be a list');
   const statements = [];
@@ -636,12 +662,14 @@ export async function createManualEvent(customerId, body = {}) {
     });
   }
 
-  const event = await eventsRepo.createEvent({
+  const { event, created } = await eventsRepo.createEventOnce({
     ...nest(facts),
     title: facts.title || defaultTitle(facts.eventType, facts.customType),
     customer: customerId,
     status: 'planning',
+    idempotencyKey,
   });
+  if (!created) return eventDetail(customerId, event._id);
   const t = templateFor(event.eventType);
   await reqRepo.insertMissingRequirements(event._id, [...t.essential, ...t.recommended, ...t.optional]);
   for (const st of statements) {

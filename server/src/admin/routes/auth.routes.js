@@ -4,6 +4,7 @@ import { config } from '../../config.js';
 import { AdminUser } from '../models/AdminUser.js';
 import { AdminSession } from '../models/AdminSession.js';
 import { hashPassword, verifyPassword } from '../../external/utils/password.js';
+import { ALL_PERMISSIONS } from '../constants/permissions.js';
 import {
   signAdminAccessToken,
   generateRefreshToken,
@@ -46,6 +47,25 @@ async function createSession(admin, req) {
   return { session, refreshToken };
 }
 
+const DEV_ADMIN_PROFILES = {
+  'admin@starvnt.com': { role: 'SUPER_ADMIN', permissions: [] },
+  'ops@starvnt.com': {
+    role: 'ADMIN',
+    roleKey: 'OPERATIONS_ADMIN',
+    permissions: ['operations.read', 'operations.manage', 'vendors.read', 'customers.read', 'events.read', 'bookings.read', 'automation.read'],
+  },
+  'finance@starvnt.com': {
+    role: 'ADMIN',
+    roleKey: 'FINANCE_ADMIN',
+    permissions: ['payments.read', 'payments.approve', 'payments.refund', 'settlements.read', 'settlements.release', 'bookings.read', 'audit.read'],
+  },
+  'support@starvnt.com': {
+    role: 'ADMIN',
+    roleKey: 'SUPPORT_ADMIN',
+    permissions: ['customers.read', 'vendors.read', 'events.read', 'bookings.read', 'audit.read'],
+  },
+};
+
 
 // ── Admin Dev Single-Click Auth Endpoint ────────────────────────────────────
 router.post('/dev-auth', async (req, res, next) => {
@@ -53,8 +73,13 @@ router.post('/dev-auth', async (req, res, next) => {
     if (!config.enableDevTools) {
       return res.status(404).json({ error: 'NOT_FOUND' });
     }
-    const { email: requestedEmail, role = 'SUPER_ADMIN' } = req.body || {};
+    const { email: requestedEmail, role } = req.body || {};
     const email = requestedEmail ? String(requestedEmail).toLowerCase() : 'admin@starvnt.com';
+    const profile = DEV_ADMIN_PROFILES[email] || {
+      role: role === 'SUPER_ADMIN' && email === 'admin@starvnt.com' ? 'SUPER_ADMIN' : 'ADMIN',
+      roleKey: '',
+      permissions: role === 'SUPER_ADMIN' && email === 'admin@starvnt.com' ? [] : ALL_PERMISSIONS.filter((p) => p !== 'roles.delete' && p !== 'permissions.manage'),
+    };
 
     let admin = await AdminUser.findOne({ email });
     if (!admin) {
@@ -67,9 +92,16 @@ router.post('/dev-auth', async (req, res, next) => {
           : email.startsWith('finance')
           ? 'Finance & Ledger Head'
           : 'Support & Audit Officer',
-        role: role || (email.startsWith('ops') ? 'OPERATIONS' : email.startsWith('finance') ? 'FINANCE' : email.startsWith('support') ? 'SUPPORT' : 'SUPER_ADMIN'),
+        role: profile.role,
+        roleKey: profile.roleKey || '',
+        permissions: profile.permissions,
         passwordHash: await hashPassword('Password123!'),
       });
+    } else if (config.enableDevTools && admin.email !== 'admin@starvnt.com' && admin.role === 'SUPER_ADMIN') {
+      admin.role = 'ADMIN';
+      admin.roleKey = profile.roleKey || '';
+      admin.permissions = profile.permissions;
+      await admin.save();
     }
 
     const { session, refreshToken } = await createSession(admin, req);
@@ -107,6 +139,7 @@ router.post('/login', adminAuthLimiter, async (req, res, next) => {
         reason: 'INVALID_CREDENTIALS',
         ip: req.ip,
         userAgent: req.headers['user-agent'] || '',
+        requestId: req.requestId || '',
       });
       return res.status(401).json({ error: 'INVALID_CREDENTIALS' });
     }
@@ -121,6 +154,7 @@ router.post('/login', adminAuthLimiter, async (req, res, next) => {
         reason: 'ACCOUNT_DISABLED',
         ip: req.ip,
         userAgent: req.headers['user-agent'] || '',
+        requestId: req.requestId || '',
       });
       return res.status(401).json({ error: 'ACCOUNT_DISABLED' });
     }
@@ -137,6 +171,7 @@ router.post('/login', adminAuthLimiter, async (req, res, next) => {
       targetId: String(admin._id),
       ip: req.ip,
       userAgent: req.headers['user-agent'] || '',
+      requestId: req.requestId || '',
     });
 
     res.cookie(config.adminRefreshCookieName, refreshToken, refreshCookieOptions());

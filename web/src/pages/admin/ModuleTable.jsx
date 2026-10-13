@@ -41,7 +41,7 @@ const MODULE_DATA = {
   },
   events: {
     title: 'Events', add: '+ Create Event',
-    tabs: ['All', 'Planning', 'Confirmed', 'In Progress', 'Completed'], filters: ['Event Type'],
+    tabs: ['All', 'Draft', 'Planning', 'Confirmed', 'In Progress', 'Completed', 'Cancelled'], filters: ['Event Type'],
     columns: ['Event Name', 'Customer', 'Date', 'Location', 'Status'],
     rows: [],
     total: 0, pages: 1,
@@ -58,7 +58,7 @@ const MODULE_DATA = {
     tabs: ['Customer Payments', 'Vendor Settlements', 'Refunds'], filters: [],
     stats: [
       { label: 'Total Collected', value: '₹0', foot: '0% this month', iconBg: 'bg-primary-soft text-primary', icon: 'payments' },
-      { label: 'Held in Escrow', value: '₹0', foot: '0% of collected', iconBg: 'bg-orange-50 text-orange-500', icon: 'wallet' },
+      { label: 'Held Balance', value: '₹0', foot: 'Awaiting settlement', iconBg: 'bg-orange-50 text-orange-500', icon: 'wallet' },
       { label: 'Released to Vendors', value: '₹0', foot: '0% this month', iconBg: 'bg-emerald-50 text-emerald-600', icon: 'trend' },
     ],
     columns: ['Reference', 'Party', 'Amount', 'Status', 'Date'],
@@ -101,13 +101,8 @@ const MODULE_DATA = {
   settings: {
     title: 'Settings', add: null, tabs: [], filters: [],
     columns: ['Setting', 'Value', 'Updated'],
-    rows: [
-      ['Platform Name', 'STARVNT', '—'],
-      ['Support Email', 'support@starvnt.com', '—'],
-      ['Timezone', 'Asia/Kolkata', '—'],
-      ['Default Currency', 'INR — Indian Rupee', '—'],
-    ],
-    total: 4, pages: 1,
+    rows: [],
+    total: 0, pages: 1,
   },
 };
 
@@ -121,6 +116,74 @@ function adminEventStatusLabel(status) {
     cancelled: 'Cancelled',
   };
   return labels[status] || status || 'Draft';
+}
+
+function SettingEditModal({ setting, onClose, onSaved }) {
+  const [value, setValue] = useState(setting?.value || '');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await adminApi.call(`/settings/${encodeURIComponent(setting.key)}`, {
+        method: 'PUT',
+        body: { value, reason },
+      });
+      onSaved?.();
+    } catch (err) {
+      setError(err.data?.error || err.message || 'Could not update setting.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!setting) return null;
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-navy/40 px-4">
+      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-extrabold text-navy">Edit Setting</h3>
+            <p className="text-xs text-muted">{setting.label || setting.key}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-muted hover:bg-lavender hover:text-navy">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+        {error && <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{error}</div>}
+        <label className="block text-xs font-extrabold text-muted">
+          Value
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-semibold text-navy outline-none focus:border-primary"
+            autoFocus
+          />
+        </label>
+        <label className="mt-3 block text-xs font-extrabold text-muted">
+          Reason
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="mt-1.5 min-h-[82px] w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-navy outline-none focus:border-primary"
+            placeholder="Why is this setting changing?"
+          />
+        </label>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold text-muted hover:bg-lavender">
+            Cancel
+          </button>
+          <button disabled={saving} className="rounded-xl bg-primary px-4 py-2 text-sm font-extrabold text-white hover:bg-primary-dark disabled:opacity-60">
+            {saving ? 'Saving...' : 'Save Setting'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 export default function ModuleTable({ kind, embedded = false }) {
@@ -155,6 +218,9 @@ export default function ModuleTable({ kind, embedded = false }) {
     stats: null,
   });
   const [paymentMeta, setPaymentMeta] = useState({ stats: null, definitions: null });
+  const [reportMeta, setReportMeta] = useState({ metrics: null, definitions: null });
+  const [automationMeta, setAutomationMeta] = useState({ stats: null });
+  const [settingEditTarget, setSettingEditTarget] = useState(null);
 
   const [apiData, setApiData] = useState({ rows: [], total: 0, pages: 1, raw: [] });
   const [loading, setLoading] = useState(false);
@@ -225,6 +291,23 @@ export default function ModuleTable({ kind, embedded = false }) {
     }
   }
 
+  async function handleReportExport() {
+    try {
+      const res = await adminApi.raw('/reports/summary/export.csv', { method: 'GET' });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'starvnt-report-summary.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.data?.error || err.message || 'Failed to export report.');
+    }
+  }
+
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
@@ -255,6 +338,10 @@ export default function ModuleTable({ kind, embedded = false }) {
       endpoint = `/automation/outbox?limit=${limit}${statusParam}`;
     } else if (kind === 'payments') {
       endpoint = `/operations/finance-summary?limit=${limit}&skip=${skip}${tabParam}`;
+    } else if (kind === 'settings') {
+      endpoint = '/settings';
+    } else if (kind === 'reports') {
+      endpoint = '/reports/summary';
     }
 
     if (endpoint) {
@@ -276,6 +363,11 @@ export default function ModuleTable({ kind, embedded = false }) {
             ]);
           }
           if (kind === 'automation' && res.events) {
+            adminApi.call('/automation/stats').then((statsRes) => {
+              if (isMounted) setAutomationMeta({ stats: statsRes.stats || null });
+            }).catch(() => {
+              if (isMounted) setAutomationMeta({ stats: null });
+            });
             totalItems = res.total ?? res.count ?? res.events.length;
             mappedRows = res.events.map((evt) => [
               evt.eventType || evt.type || 'Outbox Event',
@@ -294,6 +386,24 @@ export default function ModuleTable({ kind, embedded = false }) {
               `₹${Number(row.amount || 0).toLocaleString('en-IN')}`,
               row.status || '—',
               row.date ? new Date(row.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—',
+            ]);
+          }
+          if (kind === 'settings' && res.settings) {
+            totalItems = res.settings.length;
+            mappedRows = res.settings.map((setting) => [
+              setting.label || setting.key,
+              setting.value || '—',
+              setting.updatedAt ? new Date(setting.updatedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—',
+            ]);
+          }
+          if (kind === 'reports' && res.metrics) {
+            setReportMeta({ metrics: res.metrics, definitions: res.definitions || null });
+            totalItems = res.rows?.length || 0;
+            mappedRows = (res.rows || []).map((row) => [
+              row.report,
+              row.period,
+              row.generatedAt ? new Date(row.generatedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—',
+              row.status,
             ]);
           }
           if (kind === 'bookings' && res.bookings) {
@@ -366,7 +476,7 @@ export default function ModuleTable({ kind, embedded = false }) {
           }
           setApiData({
             rows: mappedRows,
-            raw: res.organizations || res.coupons || res.bookings || res.events || res.customers || res.users || res.rows || [],
+            raw: res.organizations || res.coupons || res.bookings || res.events || res.customers || res.settings || res.users || res.rows || [],
             total: totalItems,
             pages: Math.ceil(totalItems / limit) || 1,
           });
@@ -394,10 +504,10 @@ export default function ModuleTable({ kind, embedded = false }) {
   }, [kind, page, tab, debouncedSearch, bookingVendorFilter, bookingCategoryFilter, bookingCityFilter, reloadKey]);
 
   if (kind === 'events' && selectedEventWorkspace) {
-    return <EventWorkspace onBack={() => setSelectedEventWorkspace(null)} />;
+    return <EventWorkspace event={selectedEventWorkspace} onBack={() => setSelectedEventWorkspace(null)} />;
   }
 
-  const isServerFiltered = ['vendors', 'customers', 'coupons', 'bookings', 'payments'].includes(kind);
+  const isServerFiltered = ['vendors', 'customers', 'coupons', 'bookings', 'payments', 'settings'].includes(kind);
   const filteredRows = (!isServerFiltered && debouncedSearch.trim())
     ? apiData.rows.filter((row) =>
         row.some((cell) => String(cell).toLowerCase().includes(debouncedSearch.trim().toLowerCase()))
@@ -425,7 +535,10 @@ export default function ModuleTable({ kind, embedded = false }) {
         searchPlaceholder={`Search ${m.title.toLowerCase()}...`}
         action={m.add ? (
           <button
-            onClick={() => { if (kind === 'coupons') setShowAddModal(true); }}
+            onClick={() => {
+              if (kind === 'coupons') setShowAddModal(true);
+              if (kind === 'reports') handleReportExport();
+            }}
             className="rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-extrabold px-4 py-2.5 transition whitespace-nowrap"
           >
             {m.add}
@@ -441,6 +554,16 @@ export default function ModuleTable({ kind, embedded = false }) {
           <AdminStatCard icon="operations" value={bookingMeta.stats.inProgressCount || 0} label="In Progress" tone="violet" />
           <AdminStatCard icon="check" value={bookingMeta.stats.completedCount || 0} label="Completed" tone="emerald" />
           <AdminStatCard icon="payments" value={bookingMeta.stats.pendingPaymentCount || 0} label="Pending Payment" tone="amber" />
+        </div>
+      )}
+
+      {kind === 'automation' && automationMeta.stats && (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+          <AdminStatCard icon="automation" value={automationMeta.stats.pending || 0} label="Pending" foot={automationMeta.stats.oldestPending?.nextRunAt ? `Oldest: ${new Date(automationMeta.stats.oldestPending.nextRunAt).toLocaleString('en-IN')}` : 'No pending jobs'} tone="amber" />
+          <AdminStatCard icon="operations" value={automationMeta.stats.processing || 0} label="Processing" foot="Currently locked" tone="blue" />
+          <AdminStatCard icon="check" value={automationMeta.stats.completed || 0} label="Completed" foot="Outbox history" tone="emerald" />
+          <AdminStatCard icon="flag" value={(automationMeta.stats.failed || 0) + (automationMeta.stats.deadLetter || 0)} label="Failures" foot={`${automationMeta.stats.deadLetter || 0} dead letter`} tone="rose" />
+          <AdminStatCard icon="settings" value={(automationMeta.stats.workers || []).filter((w) => w.healthy).length} label="Healthy Workers" foot={`${(automationMeta.stats.workers || []).length} configured`} tone="violet" />
         </div>
       )}
 
@@ -469,7 +592,12 @@ export default function ModuleTable({ kind, embedded = false }) {
       )}
       {m.statRow && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {m.statRow.map(([v, l, d]) => (
+          {(kind === 'reports' && reportMeta.metrics ? [
+            [reportMeta.metrics.newCustomers, 'New Customers', 'Last 30 Days'],
+            [reportMeta.metrics.bookings, 'Bookings', 'Last 30 Days'],
+            [`₹${Number(reportMeta.metrics.revenue || 0).toLocaleString('en-IN')}`, 'Revenue', `${reportMeta.metrics.revenueEntries || 0} ledger entries`],
+            [reportMeta.metrics.averageRating === null ? 'No reviews yet' : `${Number(reportMeta.metrics.averageRating).toFixed(1)}/5`, 'Avg Rating', `${reportMeta.metrics.ratingCount || 0} reviews`],
+          ] : m.statRow).map(([v, l, d]) => (
             <div key={l} className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="text-xl font-extrabold">{v}</div>
               <div className="text-xs text-muted">{l}</div>
@@ -625,7 +753,7 @@ export default function ModuleTable({ kind, embedded = false }) {
                     <tr
                       key={i}
                       onClick={() => {
-                        if (kind === 'events') setSelectedEventWorkspace(row[0]);
+                        if (kind === 'events') setSelectedEventWorkspace(apiData.raw?.[i] || { displayTitle: row[0] });
                         if (kind === 'bookings' && apiData.raw?.[i]) setSelectedBookingForDetail(apiData.raw[i]);
                         if (kind === 'vendors' && apiData.raw?.[i]) setSelectedVendorForKyc(apiData.raw[i]);
                       }}
@@ -660,11 +788,11 @@ export default function ModuleTable({ kind, embedded = false }) {
                                 setSelectedVendorForKyc(apiData.raw[i]);
                               }}
                               className="rounded-lg bg-primary-soft px-2.5 py-1 text-[11px] font-extrabold text-primary hover:bg-primary hover:text-white transition cursor-pointer"
-                              title="Review KYC Documents"
+                              title={apiData.raw[i].adminActions?.kycActionLabel || 'Review KYC Documents'}
                             >
-                              Review KYC
+                              {apiData.raw[i].adminActions?.kycActionLabel || 'Review KYC'}
                             </button>
-                            {!apiData.raw[i].verification?.isVerified && (
+                            {apiData.raw[i].adminActions?.canApproveVerification && (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -805,6 +933,18 @@ export default function ModuleTable({ kind, embedded = false }) {
                             <Icon name="eye" size={13} />
                             <span>View</span>
                           </button>
+                        ) : kind === 'settings' && apiData.raw?.[i] ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSettingEditTarget(apiData.raw[i]);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-primary-soft text-primary hover:bg-primary hover:text-white transition cursor-pointer"
+                          >
+                            <Icon name="edit" size={13} />
+                            <span>Edit</span>
+                          </button>
                         ) : (
                           <button className="p-1 rounded-lg hover:bg-lavender text-muted hover:text-navy inline-flex items-center justify-center cursor-pointer" aria-label="More actions">
                             <Icon name="dotsVertical" size={15} strokeWidth={2.5} />
@@ -935,6 +1075,17 @@ export default function ModuleTable({ kind, embedded = false }) {
           onClose={() => setDeleteModalTarget(null)}
           onDeleted={() => {
             setDeleteModalTarget(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {settingEditTarget && (
+        <SettingEditModal
+          setting={settingEditTarget}
+          onClose={() => setSettingEditTarget(null)}
+          onSaved={() => {
+            setSettingEditTarget(null);
             setReloadKey((k) => k + 1);
           }}
         />

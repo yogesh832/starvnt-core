@@ -20,9 +20,10 @@ export default function UsersAccess() {
 
   const [admins, setAdmins] = useState([]);
   const [catalog, setCatalog] = useState({});
+  const [rolePresets, setRolePresets] = useState({});
   const [error, setError] = useState('');
   const [editor, setEditor] = useState(null); // null | {mode:'create'} | {mode:'edit', admin}
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', permissions: [] });
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', roleKey: 'OPERATIONS_ADMIN', permissions: [] });
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -36,6 +37,7 @@ export default function UsersAccess() {
       ]);
       setAdmins(u.admins || []);
       setCatalog(c.catalog || {});
+      setRolePresets(c.rolePresets || {});
     } catch (e) {
       setError(e.data?.error || 'Failed to load internal admins');
     } finally {
@@ -58,12 +60,13 @@ export default function UsersAccess() {
   }
 
   function openCreate() {
-    setForm({ fullName: '', email: '', password: '', permissions: [] });
+    const firstRole = Object.keys(rolePresets)[0] || 'OPERATIONS_ADMIN';
+    setForm({ fullName: '', email: '', password: '', roleKey: firstRole, permissions: [] });
     setEditor({ mode: 'create' });
   }
 
   function openEdit(admin) {
-    setForm({ ...admin, password: '', permissions: [...admin.permissions] });
+    setForm({ ...admin, password: '', roleKey: admin.roleKey || '', permissions: [...admin.permissions] });
     setEditor({ mode: 'edit', admin });
   }
 
@@ -86,7 +89,7 @@ export default function UsersAccess() {
       } else {
         await adminApi.call(`/users/${editor.admin.id}/permissions`, {
           method: 'PATCH',
-          body: { permissions: form.permissions },
+          body: { roleKey: form.roleKey, permissions: form.permissions },
         });
       }
       setEditor(null);
@@ -104,6 +107,8 @@ export default function UsersAccess() {
   }
 
   const catalogGroups = useMemo(() => Object.entries(catalog), [catalog]);
+  const rolePresetEntries = useMemo(() => Object.entries(rolePresets), [rolePresets]);
+  const selectedPreset = form.roleKey ? rolePresets[form.roleKey] : null;
 
   return (
     <div className="space-y-5">
@@ -220,6 +225,7 @@ export default function UsersAccess() {
                       <tr className="text-left text-xs uppercase tracking-wider text-muted border-b border-gray-100 bg-slate-50/80">
                         <th className="px-5 py-3 font-extrabold">Admin</th>
                         <th className="px-5 py-3 font-extrabold">Role</th>
+                        <th className="px-5 py-3 font-extrabold">Assigned Role</th>
                         <th className="px-5 py-3 font-extrabold">Permissions</th>
                         <th className="px-5 py-3 font-extrabold">Status</th>
                         <th className="px-5 py-3 text-right font-extrabold">Actions</th>
@@ -242,6 +248,9 @@ export default function UsersAccess() {
                             </span>
                           </td>
                           <td className="px-5 py-3 text-xs text-muted">
+                            {a.role === 'SUPER_ADMIN' ? 'Platform Owner' : rolePresets[a.roleKey]?.label || 'Custom Permissions'}
+                          </td>
+                          <td className="px-5 py-3 text-xs text-muted">
                             {a.role === 'SUPER_ADMIN' ? 'ALL_PERMISSIONS' : `${a.permissions.length} granted`}
                           </td>
                           <td className="px-5 py-3">
@@ -260,7 +269,7 @@ export default function UsersAccess() {
                                   onClick={() => openEdit(a)}
                                   className="text-xs font-semibold text-primary hover:underline cursor-pointer"
                                 >
-                                  Permissions
+                                  Role / Permissions
                                 </button>
                                 {a.status === 'ACTIVE' ? (
                                   <button
@@ -302,7 +311,7 @@ export default function UsersAccess() {
               >
                 <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                   <h2 className="text-lg font-bold text-navy">
-                    {editor.mode === 'create' ? 'Create Admin' : `Permissions — ${editor.admin.fullName}`}
+                    {editor.mode === 'create' ? 'Create Admin' : `Role & Permissions — ${editor.admin.fullName}`}
                   </h2>
                   <button
                     type="button"
@@ -342,7 +351,35 @@ export default function UsersAccess() {
                 )}
 
                 <div className="mt-5 space-y-4">
-                  {catalogGroups.map(([resource, actions]) => (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-muted">Assigned Role</div>
+                    <select
+                      value={form.roleKey || ''}
+                      onChange={(e) => setForm({ ...form, roleKey: e.target.value })}
+                      className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-navy"
+                    >
+                      {rolePresetEntries.map(([key, role]) => (
+                        <option key={key} value={key}>{role.label}</option>
+                      ))}
+                      <option value="">Custom Permissions</option>
+                    </select>
+                    {selectedPreset && (
+                      <p className="mt-1.5 text-xs text-muted">{selectedPreset.description}</p>
+                    )}
+                  </div>
+
+                  {form.roleKey ? (
+                    <div className="rounded-2xl border border-primary/15 bg-primary-soft/40 p-4">
+                      <div className="text-xs font-bold uppercase tracking-wider text-primary">Role Grants</div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {(selectedPreset?.permissions || []).map((perm) => (
+                          <span key={perm} className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-navy border border-primary/10">
+                            {perm}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : catalogGroups.map(([resource, actions]) => (
                     <div key={resource}>
                       <div className="text-xs font-bold uppercase tracking-wider text-muted">
                         {resource}

@@ -26,6 +26,7 @@ const adminUserSchema = new Schema(
     passwordHash: { type: String, required: true, select: false },
     avatarUrl: { type: String, trim: true, default: '' },
     role: { type: String, enum: ADMIN_ROLES, default: 'ADMIN', index: true },
+    roleKey: { type: String, default: '', trim: true, uppercase: true, index: true },
     permissions: {
       type: [String],
       default: [],
@@ -53,6 +54,7 @@ adminUserSchema.methods.toSafeJSON = function toSafeJSON() {
     email: this.email,
     avatarUrl: this.avatarUrl,
     role: this.role,
+    roleKey: this.roleKey || '',
     permissions: this.permissions,
     // SUPER_ADMIN effectively holds every permission.
     effectivePermissions: this.role === 'SUPER_ADMIN' ? ['*'] : this.permissions,

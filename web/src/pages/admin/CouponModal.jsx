@@ -31,7 +31,7 @@ export default function CouponModal({ onClose, onSaved }) {
           discountValue: Number(form.discountValue),
           minOrderAmount: Number(form.minOrderAmount),
           maxDiscountAmount: form.maxDiscountAmount ? Number(form.maxDiscountAmount) : undefined,
-          validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
+          validUntil: form.validUntil || undefined,
           usageLimit: form.usageLimit ? Number(form.usageLimit) : undefined,
           isActive: form.isActive,
         }

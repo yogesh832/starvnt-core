@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import crypto from 'crypto';
 import { config } from './config.js';
 
 import externalAuthRoutes from './external/routes/auth.routes.js';
@@ -22,6 +23,8 @@ import adminOperationsRoutes from './admin/routes/operations.routes.js';
 import adminEventsRoutes from './admin/routes/events.routes.js';
 import adminDisputesRoutes from './admin/routes/disputes.routes.js';
 import adminPolicyRoutes from './admin/routes/policy.routes.js';
+import adminSettingsRoutes from './admin/routes/settings.routes.js';
+import adminReportsRoutes from './admin/routes/reports.routes.js';
 import adminExternalUsersRoutes from './admin/routes/external-users.routes.js';
 import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
@@ -38,6 +41,12 @@ export function createApp() {
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use(cookieParser());
+  app.use((req, res, next) => {
+    const incoming = req.headers['x-request-id'] || req.headers['x-correlation-id'];
+    req.requestId = String(incoming || crypto.randomUUID()).slice(0, 120);
+    res.setHeader('X-Request-Id', req.requestId);
+    next();
+  });
   if (config.metricsEnabled) app.use(metricsMiddleware);
 
   app.get('/api/health', (req, res) =>
@@ -93,6 +102,8 @@ export function createApp() {
   app.use('/api/admin/events', adminEventsRoutes);
   app.use('/api/admin/disputes', adminDisputesRoutes);
   app.use('/api/admin/policy', adminPolicyRoutes);
+  app.use('/api/admin/settings', adminSettingsRoutes);
+  app.use('/api/admin/reports', adminReportsRoutes);
   app.use('/api/admin/external-users', adminExternalUsersRoutes);
   app.use('/api/admin/coupons', requireAdminAuth, adminCouponsRoutes);
 

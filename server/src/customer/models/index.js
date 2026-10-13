@@ -45,8 +45,14 @@ const customerEventSchema = new Schema(
     },
     specialRequirements: { type: String, trim: true, maxlength: 1000, default: null },
     notes: { type: String, trim: true, maxlength: 1000, default: null },
+    idempotencyKey: { type: String, trim: true, maxlength: 160, default: null },
   },
   { timestamps: true, collection: 'customer_events' }
+);
+
+customerEventSchema.index(
+  { customer: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
 
 export const REQUIREMENT_STATUSES = [

@@ -90,7 +90,7 @@ export default function AdminShell() {
         items.push({
           id: 'pending-payments',
           title: `${bookingStats.pendingPaymentCount} payment verification${bookingStats.pendingPaymentCount === 1 ? '' : 's'} pending`,
-          body: 'Review escrow/payment status before execution continues.',
+          body: 'Review verified payment status before execution continues.',
           to: '/admin/bookings?tab=Pending',
           tone: 'rose',
         });
@@ -105,13 +105,14 @@ export default function AdminShell() {
         });
       }
       const automationStats = automation?.stats || {};
-      if (Number(automationStats.deadLetter || 0) > 0 || Number(automationStats.pending || 0) > 0) {
+      const automationFailures = Number(automationStats.failed || 0) + Number(automationStats.deadLetter || 0);
+      if (automationFailures > 0 || Number(automationStats.pending || 0) > 0) {
         items.push({
           id: 'automation',
-          title: `${automationStats.deadLetter || 0} failed · ${automationStats.pending || 0} queued automation`,
+          title: `${automationFailures} failed · ${automationStats.pending || 0} queued automation`,
           body: 'Inspect outbox health and retry failed events if needed.',
           to: '/admin/automation',
-          tone: Number(automationStats.deadLetter || 0) > 0 ? 'rose' : 'violet',
+          tone: automationFailures > 0 ? 'rose' : 'violet',
         });
       }
       for (const log of audit?.logs || []) {

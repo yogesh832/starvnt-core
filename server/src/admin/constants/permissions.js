@@ -42,6 +42,93 @@ export const PERMISSION_CATALOG = CATALOG;
 
 const VALID = new Set(ALL_PERMISSIONS);
 
+export const ADMIN_ROLE_PRESETS = {
+  OPERATIONS_ADMIN: {
+    label: 'Operations Admin',
+    description: 'Runs event, booking, vendor, customer and automation operations without finance release power.',
+    permissions: [
+      'customers.read',
+      'customers.update',
+      'vendors.read',
+      'vendors.update',
+      'events.read',
+      'events.update',
+      'bookings.read',
+      'bookings.update',
+      'execution.read',
+      'execution.update',
+      'execution.manage',
+      'operations.read',
+      'operations.manage',
+      'automation.read',
+      'automation.manage',
+      'audit.read',
+    ],
+  },
+  VENDOR_VERIFICATION_ADMIN: {
+    label: 'Vendor Verification Admin',
+    description: 'Reviews vendor onboarding, KYC documents, status restrictions and vendor quality flags.',
+    permissions: [
+      'vendors.read',
+      'vendors.update',
+      'vendors.approve',
+      'vendors.disable',
+      'customers.read',
+      'operations.read',
+      'audit.read',
+    ],
+  },
+  FINANCE_ADMIN: {
+    label: 'Finance Admin',
+    description: 'Handles payment verification, refunds, settlement holds and settlement release workflows.',
+    permissions: [
+      'bookings.read',
+      'payments.read',
+      'payments.approve',
+      'payments.refund',
+      'settlements.read',
+      'settlements.hold',
+      'settlements.release',
+      'revenue.read',
+      'audit.read',
+    ],
+  },
+  SUPPORT_ADMIN: {
+    label: 'Support Admin',
+    description: 'Reads and assists customers, vendors, bookings and protection issues without financial release authority.',
+    permissions: [
+      'customers.read',
+      'customers.update',
+      'vendors.read',
+      'events.read',
+      'bookings.read',
+      'issues.read',
+      'issues.update',
+      'protection.read',
+      'audit.read',
+    ],
+  },
+  ANALYTICS_AUDIT_ADMIN: {
+    label: 'Analytics & Audit Admin',
+    description: 'Read-only analytics, reports, audit logs and platform metrics.',
+    permissions: [
+      'customers.read',
+      'vendors.read',
+      'events.read',
+      'bookings.read',
+      'payments.read',
+      'settlements.read',
+      'analytics.read',
+      'reports.read',
+      'reports.export',
+      'audit.read',
+      'settings.read',
+    ],
+  },
+};
+
+const VALID_ROLE_PRESETS = new Set(Object.keys(ADMIN_ROLE_PRESETS));
+
 export function isValidPermission(permission) {
   return VALID.has(permission);
 }
@@ -49,6 +136,14 @@ export function isValidPermission(permission) {
 /** Returns the subset of `permissions` that are NOT in the catalog. */
 export function invalidPermissions(permissions = []) {
   return permissions.filter((p) => !VALID.has(p));
+}
+
+export function rolePresetPermissions(roleKey) {
+  return ADMIN_ROLE_PRESETS[roleKey]?.permissions || [];
+}
+
+export function isValidRolePreset(roleKey) {
+  return VALID_ROLE_PRESETS.has(roleKey);
 }
 
 export const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];

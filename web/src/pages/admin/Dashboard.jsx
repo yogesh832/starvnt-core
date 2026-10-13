@@ -4,15 +4,41 @@ import { adminApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { AdminEmptyState, AdminPageHeader, AdminStatCard } from './adminUi.jsx';
 
-const DONUT = [
-  { label: 'Planning', pct: 0, color: '#5a4bd1' },
-  { label: 'Confirmed', pct: 0, color: '#22c55e' },
-  { label: 'In Progress', pct: 0, color: '#f59e0b' },
-  { label: 'Completed', pct: 0, color: '#0ea5e9' },
-  { label: 'Cancelled', pct: 0, color: '#ef4444' },
+const EVENT_STATUS_META = [
+  { key: 'draft', label: 'Draft', color: '#64748b' },
+  { key: 'planning', label: 'Planning', color: '#5a4bd1' },
+  { key: 'booked', label: 'Booked', color: '#22c55e' },
+  { key: 'in_progress', label: 'In Progress', color: '#f59e0b' },
+  { key: 'completed', label: 'Completed', color: '#0ea5e9' },
+  { key: 'cancelled', label: 'Cancelled', color: '#ef4444' },
 ];
 
-function BookingsTrend() {
+function BookingsTrend({ bookings = [] }) {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(start.getDate() - 29);
+  start.setHours(0, 0, 0, 0);
+  const buckets = Array.from({ length: 4 }, (_, i) => {
+    const from = new Date(start);
+    from.setDate(start.getDate() + i * 7);
+    const to = new Date(from);
+    to.setDate(from.getDate() + 6);
+    return { from, to, count: 0 };
+  });
+  for (const booking of bookings) {
+    const d = new Date(booking.createdAt || booking.updatedAt || booking.eventDate);
+    if (Number.isNaN(d.getTime()) || d < start || d > now) continue;
+    const idx = Math.min(3, Math.floor((d - start) / (7 * 24 * 60 * 60 * 1000)));
+    buckets[idx].count += 1;
+  }
+  const max = Math.max(1, ...buckets.map((b) => b.count));
+  const points = buckets.map((b, i) => {
+    const x = i * (400 / (buckets.length - 1));
+    const y = 120 - (b.count / max) * 90;
+    return `${x},${y}`;
+  }).join(' ');
+  const labels = buckets.map((b) => b.from.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }));
+
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-white/80">
       <div className="flex items-center justify-between">
@@ -24,11 +50,11 @@ function BookingsTrend() {
           <line key={y} x1="0" y1={y} x2="400" y2={y} stroke="#eef0f8" strokeWidth="1" />
         ))}
         <polyline
-          points="0,110 40,95 80,100 120,80 160,88 200,65 240,72 280,50 320,58 360,38 400,45"
+          points={points}
           fill="none" stroke="#5a4bd1" strokeWidth="2.5" strokeLinecap="round"
         />
         <polyline
-          points="0,110 40,95 80,100 120,80 160,88 200,65 240,72 280,50 320,58 360,38 400,45 400,140 0,140"
+          points={`${points} 400,140 0,140`}
           fill="url(#trend)" stroke="none"
         />
         <defs>
@@ -39,24 +65,29 @@ function BookingsTrend() {
         </defs>
       </svg>
       <div className="flex justify-between text-[10px] text-muted mt-1">
-        <span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span>
+        {labels.map((label) => <span key={label}>{label}</span>)}
       </div>
     </div>
   );
 }
 
-function EventsDonut() {
+function EventsDonut({ stats = {} }) {
   // Build donut segments with stroke-dasharray on circles.
   const R = 52;
   const C = 2 * Math.PI * R;
   let offset = 0;
+  const total = Number(stats.total || 0);
+  const segments = EVENT_STATUS_META.map((s) => {
+    const count = Number(stats[s.key] || 0);
+    return { ...s, count, pct: total ? Math.round((count / total) * 100) : 0 };
+  });
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-white/80">
       <h2 className="font-bold text-[15px]">Events by Status</h2>
       <div className="flex items-center gap-6 mt-4">
         <div className="relative w-32 h-32 shrink-0">
           <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
-            {DONUT.map((s) => {
+            {segments.map((s) => {
               const dash = (s.pct / 100) * C;
               const el = (
                 <circle
@@ -73,17 +104,17 @@ function EventsDonut() {
           </svg>
           <div className="absolute inset-0 grid place-items-center text-center">
             <div>
-              <div className="text-xl font-extrabold">0</div>
+              <div className="text-xl font-extrabold">{total}</div>
               <div className="text-[9px] text-muted">Events</div>
             </div>
           </div>
         </div>
         <ul className="space-y-1.5 text-xs flex-1">
-          {DONUT.map((s) => (
+          {segments.map((s) => (
             <li key={s.label} className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
               <span className="text-ink/80">{s.label}</span>
-              <span className="ml-auto font-semibold">{s.pct}%</span>
+              <span className="ml-auto font-semibold">{s.count} · {s.pct}%</span>
             </li>
           ))}
         </ul>
@@ -103,6 +134,8 @@ export default function Dashboard() {
     ],
     activities: [],
     attention: [],
+    eventStats: { total: 0 },
+    bookings: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -117,7 +150,7 @@ export default function Dashboard() {
       adminApi.call('/external-users/customers?limit=1'),
       adminApi.call('/external-users/organizations?limit=1'),
       adminApi.call('/events?limit=50'),
-      adminApi.call('/operations/bookings?limit=1'),
+      adminApi.call('/operations/bookings?limit=100'),
       adminApi.call('/audit?limit=5'),
     ])
       .then((results) => {
@@ -125,9 +158,11 @@ export default function Dashboard() {
         const [customers, vendors, events, bookings, audit] = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
         const customerCount = customers?.total ?? customers?.count ?? customers?.customers?.length ?? 0;
         const vendorCount = vendors?.total ?? vendors?.count ?? vendors?.organizations?.length ?? 0;
+        const eventStats = events?.stats || { total: 0 };
         const eventRows = events?.events || [];
-        const eventCount = events?.total ?? events?.count ?? eventRows.length;
-        const activeEventCount = eventRows.filter((e) => ['planning', 'booked', 'in_progress'].includes(e.status)).length || eventCount;
+        const eventCount = events?.total ?? eventStats.total ?? events?.count ?? eventRows.length;
+        const activeEventCount =
+          Number(eventStats.planning || 0) + Number(eventStats.booked || 0) + Number(eventStats.in_progress || 0);
         const bookingStats = bookings?.stats || {};
         const gmv = Number(bookingStats.totalGmv || 0);
         const pendingVendors = vendors?.organizations?.filter?.((v) => !v.verification?.isVerified)?.length || 0;
@@ -149,6 +184,8 @@ export default function Dashboard() {
           ],
           activities: audit?.logs || [],
           attention,
+          eventStats,
+          bookings: bookings?.bookings || [],
         });
 
         if (results.some((r) => r.status === 'rejected')) {
@@ -186,8 +223,8 @@ export default function Dashboard() {
       )}
 
       <div className="grid lg:grid-cols-2 gap-5">
-        <BookingsTrend />
-        <EventsDonut />
+        <BookingsTrend bookings={summary.bookings} />
+        <EventsDonut stats={summary.eventStats} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">

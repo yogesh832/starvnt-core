@@ -614,6 +614,7 @@ export async function confirmBookingFor(payment) {
   const resId = reservation ? reservation._id : payment.reservation;
   const existing = await commerceRepo.findBookingForReservation(resId);
   if (existing) {
+    if (String(existing.payment) === String(payment._id)) return existing;
     const newPaid = (existing.paidAmount || 0) + payment.amount;
     const newBalance = Math.max(0, (existing.amount || 0) - newPaid);
     const updated = await commerceRepo.updateBooking(existing._id, {}, { paidAmount: newPaid, balanceAmount: newBalance });
@@ -624,7 +625,7 @@ export async function confirmBookingFor(payment) {
           $set: {
             'paymentSummary.paidAmount': newPaid,
             'paymentSummary.balanceAmount': newBalance,
-            settlementStatus: newBalance === 0 ? 'ELIGIBLE' : 'NOT_ELIGIBLE',
+            settlementStatus: 'NOT_ELIGIBLE',
           },
         }
       ).catch(() => null);
@@ -807,6 +808,10 @@ export async function verifyPayment(paymentId, { actorType, actorId }) {
       },
       idempotencyKey: `payment_confirmed_${payment._id}`
     });
+  }
+  if (!moved && payment.status === 'verified') {
+    const booking = await commerceRepo.findBookingForReservation(payment.reservation);
+    return { payment, booking };
   }
   const booking = await confirmBookingFor(moved || payment);
   return { payment: moved || (await commerceRepo.getPayment(paymentId)), booking };

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { AdminUser } from '../models/AdminUser.js';
 import { AdminSession } from '../models/AdminSession.js';
-import { invalidPermissions } from '../constants/permissions.js';
+import { invalidPermissions, isValidRolePreset, rolePresetPermissions } from '../constants/permissions.js';
 import { hashPassword, passwordIssues } from '../../external/utils/password.js';
 import { requireAdminAuth, requireRole } from '../middleware/requireAdminAuth.js';
 import { recordAudit, auditContext } from '../utils/audit.js';
@@ -25,7 +25,7 @@ router.get('/', async (req, res, next) => {
 // ── Create admin (role is forced to ADMIN — sole SUPER_ADMIN is seeded) ─────
 router.post('/', async (req, res, next) => {
   try {
-    const { fullName, email, password, permissions = [], reason = '', idempotencyKey } =
+    const { fullName, email, password, roleKey = '', permissions = [], reason = '', idempotencyKey } =
       req.body || {};
     if (!fullName || !email || !password) {
       return res.status(400).json({ error: 'MISSING_FIELDS' });
@@ -33,7 +33,13 @@ router.post('/', async (req, res, next) => {
     const issues = passwordIssues(password);
     if (issues.length) return res.status(400).json({ error: 'WEAK_PASSWORD', issues });
 
-    const invalid = invalidPermissions(permissions);
+    const normalizedRoleKey = String(roleKey || '').trim().toUpperCase();
+    const assignedPermissions = normalizedRoleKey ? rolePresetPermissions(normalizedRoleKey) : permissions;
+    if (normalizedRoleKey && !isValidRolePreset(normalizedRoleKey)) {
+      return res.status(400).json({ error: 'INVALID_ROLE_PRESET' });
+    }
+
+    const invalid = invalidPermissions(assignedPermissions);
     if (invalid.length) return res.status(400).json({ error: 'INVALID_PERMISSIONS', invalid });
 
     const normalized = String(email).toLowerCase();
@@ -46,7 +52,8 @@ router.post('/', async (req, res, next) => {
       email: normalized,
       passwordHash: await hashPassword(password),
       role: 'ADMIN',
-      permissions,
+      roleKey: normalizedRoleKey,
+      permissions: assignedPermissions,
       createdBy: req.admin._id,
     });
 
@@ -55,7 +62,7 @@ router.post('/', async (req, res, next) => {
       action: 'ADMIN_CREATE',
       targetType: 'AdminUser',
       targetId: String(admin._id),
-      toState: { email: admin.email, role: 'ADMIN', permissions },
+      toState: { email: admin.email, role: 'ADMIN', roleKey: normalizedRoleKey, permissions: assignedPermissions },
       reason,
       idempotencyKey,
     });
@@ -66,14 +73,19 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// ── Update an admin's permissions (from → to recorded) ───────────────────────
+// ── Update an admin's assigned role/permissions (from → to recorded) ─────────
 router.patch('/:id/permissions', async (req, res, next) => {
   try {
-    const { permissions, reason = '', idempotencyKey } = req.body || {};
-    if (!Array.isArray(permissions)) {
+    const { roleKey = '', permissions = [], reason = '', idempotencyKey } = req.body || {};
+    const normalizedRoleKey = String(roleKey || '').trim().toUpperCase();
+    if (normalizedRoleKey && !isValidRolePreset(normalizedRoleKey)) {
+      return res.status(400).json({ error: 'INVALID_ROLE_PRESET' });
+    }
+    const assignedPermissions = normalizedRoleKey ? rolePresetPermissions(normalizedRoleKey) : permissions;
+    if (!Array.isArray(assignedPermissions)) {
       return res.status(400).json({ error: 'PERMISSIONS_MUST_BE_ARRAY' });
     }
-    const invalid = invalidPermissions(permissions);
+    const invalid = invalidPermissions(assignedPermissions);
     if (invalid.length) return res.status(400).json({ error: 'INVALID_PERMISSIONS', invalid });
 
     const admin = await AdminUser.findById(req.params.id);
@@ -82,8 +94,9 @@ router.patch('/:id/permissions', async (req, res, next) => {
       return res.status(400).json({ error: 'CANNOT_EDIT_SUPER_ADMIN' });
     }
 
-    const fromState = [...admin.permissions];
-    admin.permissions = permissions;
+    const fromState = { roleKey: admin.roleKey || '', permissions: [...admin.permissions] };
+    admin.roleKey = normalizedRoleKey;
+    admin.permissions = assignedPermissions;
     await admin.save();
 
     await recordAudit({
@@ -91,8 +104,8 @@ router.patch('/:id/permissions', async (req, res, next) => {
       action: 'PERMISSIONS_UPDATED',
       targetType: 'AdminUser',
       targetId: String(admin._id),
-      fromState: { permissions: fromState },
-      toState: { permissions },
+      fromState,
+      toState: { roleKey: normalizedRoleKey, permissions: assignedPermissions },
       reason,
       idempotencyKey,
     });
