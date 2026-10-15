@@ -1,10 +1,27 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Page, Card } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import VendorMessageField from '../VendorMessageField.jsx';
 
 export default function Enquiries() {
+  const navigate = useNavigate();
+  const [openingChat, setOpeningChat] = useState(false);
+  async function openEnquiryChat(opportunity) {
+    if (openingChat) return;
+    setOpeningChat(true);
+    try {
+      const result = await externalApi.call(`/vendor/messages/context/opportunity/${opportunity.dbId}`, { method: 'POST' });
+      if (!result.ok || !result.thread?._id) throw new Error('Could not open this enquiry’s conversation.');
+      navigate(`/vendor/updates?tab=messages&thread=${result.thread._id}`);
+    } catch (error) {
+      setFeedback(`Notice: ${error.message}`);
+    } finally {
+      setOpeningChat(false);
+    }
+  }
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
@@ -64,7 +81,7 @@ export default function Enquiries() {
     setEquipmentFee(0);
     setSetupFee(0);
     setAdditionalFee(0);
-    setNotes(`Offer includes ${opp.service} for ${opp.guests} guests on ${opp.date}. Please reply here if you want any change in timing, package, or price.`);
+    setNotes('');
   }
 
   async function handleSendQuote() {
@@ -205,13 +222,13 @@ export default function Enquiries() {
                       >
                         Revise / Update Offer
                       </button>
-                      <a
-                        href="/vendor/messages"
+                      <button
+                        type="button" onClick={() => openEnquiryChat(o)} disabled={openingChat}
                         className="rounded-xl border border-gray-200 text-xs font-semibold px-4 py-2.5 hover:bg-lavender transition flex items-center gap-1.5 text-navy"
                       >
                         <Icon name="message" size={13} className="text-primary" />
                         <span>Vendor Chat</span>
-                      </a>
+                      </button>
                     </>
                   ) : (
                     <>
@@ -221,7 +238,7 @@ export default function Enquiries() {
                       >
                         Respond & Quote
                       </button>
-                      <button className="rounded-xl border border-gray-200 text-xs font-semibold px-5 py-2.5 hover:bg-lavender transition cursor-pointer">
+                      <button type="button" onClick={() => openEnquiryChat(o)} disabled={openingChat} className="rounded-xl border border-gray-200 text-xs font-semibold px-5 py-2.5 hover:bg-lavender transition cursor-pointer disabled:opacity-50">
                         Ask a question
                       </button>
                       <button
@@ -344,14 +361,7 @@ export default function Enquiries() {
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Message shown to customer with this quote</label>
-                <textarea
-                  rows={4}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl p-3 text-navy outline-none focus:border-primary resize-none"
-                />
-                <p className="text-[10px] text-muted mt-1">Mention what is included, any condition, and what can be negotiated.</p>
+                <VendorMessageField value={notes} onChange={setNotes} context={{ type: 'opportunity', id: quoteModalOpp.dbId }} label="Message with this quote (optional)" placeholder={`e.g. Offer includes ${quoteModalOpp.service}. Add your inclusions, timing and any conditions.`} disabled={submitting} />
               </div>
             </div>
 

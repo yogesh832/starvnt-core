@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, PageSkeleton, useLoad } from './customerUi.jsx';
+import { isQuoteMessage, quoteReviewLink } from './quoteMessageActions.js';
 
 function parseTextLinks(text) {
   if (typeof text !== 'string') return { cleanText: '', images: [], videos: [], pdfs: [], driveLinks: [], otherLinks: [] };
@@ -248,6 +249,11 @@ export default function CirclePage() {
                   </div>
                 )}
 
+                {!mine && isQuoteMessage(m) && (
+                  <Link to={quoteReviewLink({ ...m, eventId: id })} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-primary text-white px-3 py-2 text-xs font-bold hover:bg-primary-dark transition">
+                    Review quote <Icon name="chevronRight" size={14} />
+                  </Link>
+                )}
                 {Boolean(m.payload?.type === 'EVIDENCE_SUBMITTED' || m.body?.includes('Evidence Uploaded') || m.body?.includes('Completion Evidence') || m.body?.includes('Work Marked Done')) && (
                   <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 space-y-2 text-navy dark:text-slate-100">
                     <div className="flex items-center gap-1.5 font-extrabold text-xs text-emerald-800 dark:text-emerald-300">

@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Page, Card } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import VendorMessageField from '../VendorMessageField.jsx';
 
 function readFileAsDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -38,6 +40,8 @@ function executionChecklistFor(status, checklist = []) {
 }
 
 export default function Bookings() {
+  const navigate = useNavigate();
+  const [openingConversation, setOpeningConversation] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(null);
@@ -116,6 +120,20 @@ export default function Bookings() {
       setFeedback(`Service started for ${booking.title}. Status updated to In Progress.`);
     } catch (err) {
       setFeedback(`Notice: ${err.message}`);
+    }
+  }
+
+  async function openConversation(booking) {
+    if (!booking.dbId || openingConversation) return;
+    setOpeningConversation(booking.dbId);
+    try {
+      const result = await externalApi.call(`/vendor/bookings/${booking.dbId}/message-thread`, { method: 'POST' });
+      if (!result.ok || !result.thread?._id) throw new Error('Could not open this booking’s conversation.');
+      navigate(`/vendor/updates?tab=messages&thread=${encodeURIComponent(result.thread._id)}`);
+    } catch (error) {
+      setFeedback(`Notice: ${error.message}`);
+    } finally {
+      setOpeningConversation(null);
     }
   }
 
@@ -308,6 +326,9 @@ export default function Bookings() {
                     ))}
                   </ul>
                   <div className="flex flex-wrap gap-2 mt-4">
+                    <button type="button" onClick={() => openConversation(b)} disabled={Boolean(openingConversation)} className="rounded-xl border border-primary/30 text-primary text-xs font-bold px-4 py-2.5 inline-flex items-center gap-1.5 hover:bg-primary-soft disabled:opacity-50">
+                      <Icon name="message" size={14} />{openingConversation === b.dbId ? 'Opening…' : 'Write customer update'}
+                    </button>
                     {b.executionStatus === 'SERVICE_STARTED' ? (
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-2 flex items-center gap-1.5">
                         <Icon name="check" size={14} />
@@ -590,14 +611,7 @@ export default function Bookings() {
 
               {/* Notes & Summary */}
               <div>
-                <label className="block text-navy dark:text-white font-bold mb-1">Completion Notes & Deliverable Summary</label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. All 8 hours completed. Client signed off on ceremony coverage. High-res files and teaser uploaded to CDN."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-[#101321] border border-gray-200 dark:border-white/10 rounded-xl p-3 text-navy dark:text-white dark:placeholder-slate-500 outline-none focus:border-primary resize-none font-medium"
-                />
+                <VendorMessageField value={notes} onChange={setNotes} context={{ type: 'booking', id: evidenceModalBooking.dbId }} label="Completion notes & message (optional)" placeholder="e.g. Describe the work completed, deliverables and any details the customer should review." disabled={submitting} />
               </div>
 
               {/* Optional External Archive Link */}

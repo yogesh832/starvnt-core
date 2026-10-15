@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Icon from '../../../components/Icon.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import { externalApi } from '../../../lib/api.js';
+import VendorMessageField from '../VendorMessageField.jsx';
 import { useExternalAuth } from '../../../auth/ExternalAuthContext.jsx';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -422,6 +423,7 @@ function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
 function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
   const initialBase = enquiry?.budgetNumber || enquiry?.basePrice || 0;
   const [basePrice, setBasePrice] = useState(initialBase);
+  const [quoteMessage, setQuoteMessage] = useState('');
   const [travelFee, setTravelFee] = useState(0);
   const total = (Number(basePrice) || 0) + (Number(travelFee) || 0);
 
@@ -474,10 +476,11 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
           </div>
         </div>
 
+        <VendorMessageField value={quoteMessage} onChange={setQuoteMessage} context={{ type: 'opportunity', id: enquiry?.opportunityId }} label="Message with quote (optional)" placeholder="e.g. Describe package inclusions, timing or any conditions for this offer." />
         <div className="vendor-modal-actions pt-2 flex gap-3">
           <button
             onClick={() => {
-              onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, status: 'DRAFT' });
+              onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, notes: quoteMessage, status: 'DRAFT' });
               onClose();
             }}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:text-navy transition"
@@ -486,7 +489,7 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
           </button>
           <button
             onClick={() => {
-              onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, status: 'SUBMITTED' });
+              onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, notes: quoteMessage, status: 'SUBMITTED' });
               onClose();
             }}
             className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark shadow-md shadow-primary/25 transition"
@@ -854,7 +857,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
               totalAmount: Number(q.total),
             },
             status: q.status || 'SUBMITTED',
-            notes: 'Official quote proposal submitted via Vendor Command Center',
+            notes: q.notes?.trim() || '',
           },
         });
       }

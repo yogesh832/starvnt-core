@@ -25,7 +25,7 @@ export const CATEGORIES = [
 
 export const PAGES = [
   'dashboard', 'enquiries', 'quotes', 'bookings', 'calendar', 'portfolio', 'services', 'availability',
-  'payments', 'reviews', 'analytics', 'messages', 'documents', 'profile', 'settings',
+  'payments', 'reviews', 'analytics', 'messages', 'updates', 'documents', 'profile', 'settings',
 ];
 
 /**

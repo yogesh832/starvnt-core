@@ -14,6 +14,8 @@ customerRouter.patch('/profile', h(c.patchProfile));
 customerRouter.get('/home', h(c.home));
 customerRouter.get('/plan-options', h(c.planOptions));
 customerRouter.get('/updates', h(c.updates));
+customerRouter.get('/messages/threads/:threadId', h(c.readThreadMessages));
+customerRouter.post('/messages/threads/:threadId', h(c.postThreadMessage));
 customerRouter.get('/notifications', h(c.notifications));
 customerRouter.post('/notifications/read-all', h(c.readAll));
 customerRouter.post('/notifications/:id/read', h(c.readOne));

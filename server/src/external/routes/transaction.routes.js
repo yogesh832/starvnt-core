@@ -1018,7 +1018,7 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
       actor: req.externalUser.fullName || req.externalUser.email,
     });
 
-    if (opportunityId) {
+    if (opportunityId && quote.status === 'SUBMITTED') {
       await Opportunity.findOneAndUpdate(
         { _id: opportunityId, vendor: resolvedVendorId },
         { status: 'RESPONDED', action: 'Quote Sent' }
@@ -1030,14 +1030,15 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
     const totalAmount = Number(quote.pricingBreakdown?.totalAmount || 0);
     const advanceAmount = Number(quote.advanceAmount || Math.ceil((totalAmount * ADVANCE_PERCENTAGE) / 100));
 
-    await recordLifecycleEventMessage({
+    if (quote.status === 'SUBMITTED') await recordLifecycleEventMessage({
       vendorId: resolvedVendorId,
       customerId: quote.customer,
       eventId: quote.event,
       opportunityId: quote.opportunity,
       quoteId: quote._id,
-      sender: 'VENDOR',
-      senderName: vendorName,
+      sender: 'SYSTEM',
+      senderName: 'STARVNT',
+      serviceName: quote.serviceName,
       text: `📄 Quote Received: ${vendorName} sent a quote offer for ${quote.serviceName || 'Service Package'} — Total ₹${totalAmount.toLocaleString('en-IN')} (Advance: ₹${advanceAmount.toLocaleString('en-IN')}). Review proposal and accept in quotes.`,
       type: 'quote',
     }).catch(() => null);
@@ -1081,7 +1082,7 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
 
     const previousStatus = quote.status;
     quote.pricingBreakdown = pricing;
-    quote.notes = cleanMessage || reasonText;
+    quote.notes = cleanMessage;
     quote.status = 'SUBMITTED';
     quote.validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     quote.advancePayment = {
@@ -1118,12 +1119,13 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
       const thread = await VendorMessageThread.findOne({
         vendor: quote.vendor,
         customer: quote.customer,
+        ...(quote.opportunity ? { opportunity: quote.opportunity } : { quote: quote._id }),
       });
       if (thread) {
         const text = `📄 Vendor Revised Quotation:\nTotal: ₹${pricing.totalAmount.toLocaleString('en-IN')}${cleanMessage ? '\nNotes: ' + cleanMessage : ''}`;
         thread.messages.push({
-          sender: 'VENDOR',
-          senderName: req.externalUser.fullName || 'Vendor',
+          sender: 'SYSTEM',
+          senderName: 'STARVNT',
           text,
           isRead: false,
           metadata: {
@@ -1291,7 +1293,7 @@ router.get('/vendor/bookings', requireExternalAuth, requireAccountType('VENDOR')
   }
 });
 
-async function resolveCustomerEventAndBooking(coreBooking) {
+async function resolveCustomerEventAndBooking(coreBooking, { strict = false } = {}) {
   let eventId = coreBooking?.customerEvent || null;
   let custBooking = null;
   let customerId = coreBooking?.customerId || null;
@@ -1301,12 +1303,12 @@ async function resolveCustomerEventAndBooking(coreBooking) {
       $or: [
         { _id: coreBooking.quoteId },
         { reservation: coreBooking.quoteId },
-        { customer: coreBooking.customerId, category: coreBooking.category },
+        ...(!strict ? [{ customer: coreBooking.customerId, category: coreBooking.category }] : []),
       ],
     }).lean().catch(() => null);
   }
 
-  if (!custBooking && coreBooking?.customerId && coreBooking?.category) {
+  if (!strict && !custBooking && coreBooking?.customerId && coreBooking?.category) {
     custBooking = await Booking.findOne({
       customer: coreBooking.customerId,
       category: coreBooking.category,
@@ -1335,7 +1337,7 @@ async function resolveCustomerEventAndBooking(coreBooking) {
     if (opp?.customer) customerId = customerId || opp.customer;
   }
 
-  if (!eventId && customerId) {
+  if (!strict && !eventId && customerId) {
     const latestEvent = await CustomerEvent.findOne({ customer: customerId, status: { $ne: 'cancelled' } })
       .sort({ createdAt: -1 })
       .lean()
@@ -1364,9 +1366,9 @@ router.post('/vendor/bookings/:id/start', requireExternalAuth, requireAccountTyp
       const vendorOrg = await VendorOrganization.findById(vendorId).lean();
       const vendorName = vendorOrg?.businessName || booking.vendorName || 'Vendor';
       const serviceName = booking.serviceName || 'Event Service';
-      const text = `🚀 Service Commenced (Check-in Done): We have started working on your service (${serviceName}).`;
+      const text = `Service status: In progress · ${serviceName}.`;
 
-      const { eventId, custBooking, customerId } = await resolveCustomerEventAndBooking(booking);
+      const { eventId, custBooking, customerId } = await resolveCustomerEventAndBooking(booking, { strict: true });
       const targetCustomerId = customerId || booking.customerId;
 
       // Save resolved eventId back onto core booking if missing
@@ -1381,73 +1383,21 @@ router.post('/vendor/bookings/:id/start', requireExternalAuth, requireAccountTyp
           { _id: custBooking._id },
           { $set: { executionStatus: 'SERVICE_STARTED', startedAt: new Date() } }
         ).catch(() => null);
-      } else if (targetCustomerId && booking.category) {
-        await Booking.updateMany(
-          { customer: targetCustomerId, category: booking.category },
-          { $set: { executionStatus: 'SERVICE_STARTED', startedAt: new Date() } }
-        ).catch(() => null);
       }
 
-      // 1. Post to VendorMessageThread
-      if (targetCustomerId) {
-        await VendorMessageThread.findOneAndUpdate(
-          {
-            $or: [
-              { customerBooking: booking._id },
-              { vendor: vendorId, customer: targetCustomerId },
-            ],
-          },
-          {
-            $set: {
-              lastMessageText: text,
-              lastMessageAt: new Date(),
-              status: 'ACTIVE',
-            },
-            $push: {
-              messages: {
-                sender: 'VENDOR',
-                senderName: vendorName,
-                text,
-                isRead: false,
-                createdAt: new Date(),
-              },
-            },
-            $inc: { unreadClientCount: 1 },
-          }
-        ).catch(() => null);
-      }
-
-      // 2. Post to EventMessage (Circle chat) with structured payload
-      if (eventId) {
-        await EventMessage.create({
-          event: eventId,
-          booking: custBooking?._id || booking._id,
-          senderType: 'vendor',
-          senderName: vendorName,
-          body: text,
-          payload: {
-            type: 'SERVICE_STARTED',
-            bookingId: booking._id,
-            eventId,
-            vendorName,
-            serviceName,
-            actionUrl: `/customer/events/${eventId}/bookings`,
-            actionLabel: 'View Booking',
-          },
-        }).catch((e) => console.warn('[startService EventMessage err]:', e.message));
-      }
-
+      // Check-in updates booking state only. A vendor-authored chat message
+      // is composed separately in this booking's conversation.
       // 3. Send HIGH priority Notification to Customer
       if (targetCustomerId) {
         await notifyCustomer({
           customerId: targetCustomerId,
           eventId,
           bookingId: custBooking?._id || booking._id,
-          type: 'message',
+          type: 'booking',
           priority: 'HIGH',
           title: `🚀 Service Started - ${vendorName}`,
           body: text,
-          actionUrl: eventId ? `/customer/events/${eventId}/bookings` : `/customer/bookings`,
+          actionUrl: eventId ? `/customer/events/${eventId}/bookings` : '/customer/updates',
           idempotencyKey: `start-work-${booking._id}-${Date.now()}`,
           payload: {
             bookingId: custBooking?._id || booking._id,
@@ -1502,7 +1452,7 @@ router.post(
         ];
         const text = textParts.filter(Boolean).join('\n');
 
-        const { eventId, custBooking, customerId } = await resolveCustomerEventAndBooking(booking);
+        const { eventId, custBooking, customerId } = await resolveCustomerEventAndBooking(booking, { strict: true });
         const targetCustomerId = customerId || booking.customerId;
 
         // Save resolved eventId back onto core booking if missing
@@ -1517,22 +1467,12 @@ router.post(
             { _id: custBooking._id },
             { $set: { executionStatus: 'COMPLETION_SUBMITTED', completedAt: new Date(), completionEvidence: booking.completionEvidence } }
           ).catch(() => null);
-        } else if (targetCustomerId && booking.category) {
-          await Booking.updateMany(
-            { customer: targetCustomerId, category: booking.category },
-            { $set: { executionStatus: 'COMPLETION_SUBMITTED', completedAt: new Date(), completionEvidence: booking.completionEvidence } }
-          ).catch(() => null);
         }
 
         // 2. Post to VendorMessageThread
         if (targetCustomerId) {
           await VendorMessageThread.findOneAndUpdate(
-            {
-              $or: [
-                { customerBooking: booking._id },
-                { vendor: vendorId, customer: targetCustomerId },
-              ],
-            },
+            { vendor: vendorId, customer: targetCustomerId, booking: booking._id },
             {
               $set: {
                 lastMessageText: `Work marked done for ${refName}. Evidence uploaded!`,
@@ -1541,8 +1481,8 @@ router.post(
               },
               $push: {
                 messages: {
-                  sender: 'VENDOR',
-                  senderName: vendorName,
+                  sender: 'SYSTEM',
+                  senderName: 'STARVNT',
                   text,
                   isRead: false,
                   createdAt: new Date(),
@@ -1558,8 +1498,8 @@ router.post(
           await EventMessage.create({
             event: eventId,
             booking: custBooking?._id || booking._id,
-            senderType: 'vendor',
-            senderName: vendorName,
+            senderType: 'system',
+            senderName: 'STARVNT',
             body: text,
             payload: {
               type: 'EVIDENCE_SUBMITTED',

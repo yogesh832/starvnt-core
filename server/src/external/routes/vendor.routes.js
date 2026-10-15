@@ -27,8 +27,11 @@ import { v2 as cloudinary } from 'cloudinary';
 import vendorAuraRoutes from './vendorAura.routes.js';
 import financialRoutes from './financial.routes.js';
 import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
+import rateLimit from 'express-rate-limit';
+import { openBookingThread, openServiceThread, draftThreadMessage, draftVendorMessage } from '../services/vendorMessaging.service.js';
 
 const router = Router();
+const draftLimiter = rateLimit({ windowMs: 60000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false });
 
 function googleRatingFromPlaces(placeData, fallbackName) {
   if (!placeData || placeData.error || typeof placeData.rating !== 'number') return null;
@@ -1032,25 +1035,12 @@ router.get('/messages/threads', async (req, res, next) => {
             eventType: opp.requiredCapability || 'Enquiry',
             eventDate: opp.eventDate || '',
             venueLocation: opp.serviceLocation?.address || opp.serviceLocation?.locality || opp.serviceLocation?.city || '',
-            lastMessageText: `Hi! We sent an enquiry regarding ${opp.serviceName} on ${opp.eventDate}.`,
+            lastMessageText: '',
             lastMessageAt: opp.createdAt || new Date(),
-            unreadVendorCount: 1,
-            messages: [
-              {
-                sender: 'SYSTEM',
-                senderName: 'STARVNT Core',
-                text: `Opportunity matched for ${opp.serviceName} at ${opp.serviceLocation?.locality || opp.serviceLocation?.city || 'Venue'}.`,
-                createdAt: opp.createdAt || new Date(),
-                isRead: true,
-              },
-              {
-                sender: 'CLIENT',
-                senderName: clientName,
-                text: `Hi! We sent an enquiry regarding ${opp.serviceName} on ${opp.eventDate}. Could you share your availability and a formal quote?`,
-                createdAt: opp.createdAt || new Date(),
-                isRead: false,
-              },
-            ],
+            unreadVendorCount: 0,
+            customerEvent: opp.customerEvent || null,
+            customerRequirement: opp.customerRequirement || null,
+            messages: [],
           });
         }
         threads = await VendorMessageThread.find({ vendor: req.vendorId, status: { $ne: 'BLOCKED' } })
@@ -1111,10 +1101,48 @@ router.get('/messages/threads/:id', async (req, res, next) => {
   }
 });
 
+router.post('/bookings/:id/message-thread', async (req, res, next) => {
+  try {
+    const thread = await openBookingThread({ vendorId: req.vendorId, bookingId: req.params.id });
+    res.json({ ok: true, thread });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.error });
+    next(err);
+  }
+});
+
+router.post('/messages/context/:type/:id', async (req, res, next) => {
+  try {
+    const thread = await openServiceThread({ vendorId: req.vendorId, type: req.params.type, id: req.params.id });
+    res.json({ ok: true, thread });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.error });
+    next(err);
+  }
+});
+
+router.post('/messages/threads/:id/draft', draftLimiter, async (req, res, next) => {
+  try {
+    res.json({ ok: true, ...(await draftThreadMessage({ vendorId: req.vendorId, threadId: req.params.id, instructions: req.body?.instructions })) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.error });
+    next(err);
+  }
+});
+
+router.post('/messages/draft', draftLimiter, async (req, res, next) => {
+  try {
+    res.json({ ok: true, ...(await draftVendorMessage({ vendorId: req.vendorId, context: req.body?.context, instructions: req.body?.instructions })) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.error });
+    next(err);
+  }
+});
+
 router.post('/messages/threads/:id', async (req, res, next) => {
   try {
     const { text } = req.body || {};
-    if (!text || !text.trim()) {
+    if (typeof text !== 'string' || !text.trim() || text.trim().length > 2000) {
       return res.status(400).json({ error: 'MESSAGE_TEXT_REQUIRED' });
     }
 
@@ -1127,17 +1155,20 @@ router.post('/messages/threads/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'THREAD_NOT_FOUND' });
     }
 
+    if (thread.status === 'BLOCKED') return res.status(409).json({ error: 'THREAD_BLOCKED' });
+
     const newMsg = {
       sender: 'VENDOR',
       senderName: req.vendor.businessName || 'Vendor',
       text: text.trim(),
-      isRead: true,
+      isRead: false,
       createdAt: new Date(),
     };
 
     thread.messages.push(newMsg);
     thread.lastMessageText = text.trim();
     thread.lastMessageAt = new Date();
+    thread.unreadClientCount = (thread.unreadClientCount || 0) + 1;
     await thread.save();
 
     if (thread.customerBooking) {
@@ -1157,6 +1188,7 @@ router.post('/messages/threads/:id', async (req, res, next) => {
             bookingId: booking._id,
             type: 'message',
             title: `${req.vendor.businessName || 'Vendor'} replied`,
+            payload: { threadId: String(thread._id) },
             body: text.trim().slice(0, 180),
             actionUrl: `/customer/events/${booking.event}/circle?booking=${booking._id}`,
             idempotencyKey: `customer.vendor-reply.booking.${thread._id}.${thread.messages.length}`,
@@ -1177,6 +1209,7 @@ router.post('/messages/threads/:id', async (req, res, next) => {
           eventId: thread.customerEvent,
           type: 'message',
           title: `${req.vendor.businessName || 'Vendor'} replied`,
+          payload: { threadId: String(thread._id) },
           body: text.trim().slice(0, 180),
           actionUrl: `/customer/events/${thread.customerEvent}/circle?service=${thread.customerRequirement}`,
           idempotencyKey: `customer.vendor-reply.requirement.${thread._id}.${thread.messages.length}`,
@@ -1184,6 +1217,15 @@ router.post('/messages/threads/:id', async (req, res, next) => {
       ]);
     }
 
+    if (thread.customer && !thread.customerBooking && !thread.customerRequirement) {
+      await notifyCustomer({
+        customerId: thread.customer, type: 'message',
+        title: `${req.vendor.businessName || 'Vendor'} replied`, body: text.trim().slice(0, 180),
+        payload: { threadId: String(thread._id) },
+        actionUrl: `/customer/updates?tab=messages&thread=${thread._id}`,
+        idempotencyKey: `customer.vendor-reply.thread.${thread._id}.${thread.messages.length}`,
+      });
+    }
     res.status(201).json({ ok: true, thread, message: newMsg });
   } catch (err) {
     next(err);

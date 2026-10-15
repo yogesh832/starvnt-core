@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { Empty, PageSkeleton, Tabs, useLoad } from './customerUi.jsx';
+import { isQuoteMessage, quoteReviewLink } from './quoteMessageActions.js';
 
 const when = (t) => {
   if (!t) return '';
@@ -77,6 +78,7 @@ const ICONS = {
 };
 
 function getSafeNotificationLink(n) {
+  if (isQuoteMessage(n)) return quoteReviewLink(n);
   const type = String(n.type || '').toLowerCase();
   const body = String(n.body || n.lastMessageText || n.text || '').toLowerCase();
   const title = String(n.title || n.senderName || '').toLowerCase();
@@ -120,6 +122,7 @@ function extractImageUrls(text) {
 
 /** Interactive live vendor chat modal overlay for instant messaging */
 function VendorChatModal({ thread, onClose, onSent }) {
+  const directThreadId = thread.lastMessageText !== undefined ? thread.id : thread.threadId;
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -132,7 +135,7 @@ function VendorChatModal({ thread, onClose, onSent }) {
   const fileInputRef = useRef(null);
 
   const ctx = {
-    threadId: thread.id,
+    threadId: directThreadId,
     bookingId: thread.bookingId,
     requirementId: thread.serviceId || thread.requirementId,
   };
@@ -141,32 +144,26 @@ function VendorChatModal({ thread, onClose, onSent }) {
     if (thread.eventId && thread.eventId !== 'null' && thread.eventId !== 'undefined') {
       return thread.eventId;
     }
-    try {
-      const res = await customerApi.events();
-      const list = res.events || [];
-      if (list.length > 0) return list[0]._id || list[0].id;
-    } catch {
-      // ignore
-    }
     return null;
   };
 
   const loadMessages = useCallback(async () => {
     setLoading(true);
     try {
-      const targetEventId = await getTargetEventId();
-      if (!targetEventId) {
+      const targetEventId = directThreadId ? null : await getTargetEventId();
+      if (!directThreadId && !targetEventId) {
+        setError('This message has no linked service conversation. Open the relevant conversation from Messages.');
         setLoading(false);
         return;
       }
-      const res = await customerApi.messages(targetEventId, ctx);
+      const res = directThreadId ? await customerApi.threadMessages(directThreadId) : await customerApi.messages(targetEventId, ctx);
       setMessages(res.messages || []);
     } catch (err) {
       setError(errorText(err, 'Could not load messages for this conversation.'));
     } finally {
       setLoading(false);
     }
-  }, [thread.eventId, thread.id, thread.bookingId, thread.serviceId, thread.requirementId]);
+  }, [thread.eventId, thread.id, thread.bookingId, thread.serviceId, thread.requirementId, directThreadId]);
 
   useEffect(() => {
     loadMessages();
@@ -215,8 +212,8 @@ function VendorChatModal({ thread, onClose, onSent }) {
     setText('');
     setAttachedUrl('');
 
-    const targetEventId = await getTargetEventId();
-    if (!targetEventId) {
+    const targetEventId = directThreadId ? null : await getTargetEventId();
+    if (!directThreadId && !targetEventId) {
       setSending(false);
       return;
     }
@@ -231,7 +228,8 @@ function VendorChatModal({ thread, onClose, onSent }) {
     setMessages((prev) => [...prev, tempMsg]);
 
     try {
-      await customerApi.postMessage(targetEventId, { body: msg, ...ctx });
+      if (directThreadId) await customerApi.postThreadMessage(directThreadId, msg);
+      else await customerApi.postMessage(targetEventId, { body: msg, ...ctx });
       await loadMessages();
       onSent?.();
     } catch (err) {
@@ -327,6 +325,11 @@ function VendorChatModal({ thread, onClose, onSent }) {
                 >
                   <div className={`text-[10px] font-bold mb-1 ${mine ? 'text-white/80' : 'text-primary dark:text-[#a5b4fc]'}`}>{senderLabel}</div>
                   {Boolean(parsed.cleanText) && <div className="whitespace-pre-wrap">{parsed.cleanText}</div>}
+                  {!mine && isQuoteMessage(m) && (
+                    <Link to={quoteReviewLink({ ...m, eventId: thread.eventId })} onClick={onClose} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-primary text-white px-3 py-2 text-xs font-bold hover:bg-primary-dark transition">
+                      Review quote <Icon name="chevronRight" size={14} />
+                    </Link>
+                  )}
 
                   {Boolean(parsed.images.length || parsed.videos.length || parsed.pdfs.length || parsed.driveLinks.length) && (
                     <div className={`space-y-2 ${parsed.cleanText ? 'mt-2 pt-1 border-t border-white/10 dark:border-gray-700/50' : ''}`}>
@@ -480,6 +483,18 @@ export default function UpdatesPage({ onRead }) {
   const [tab, setTab] = useState(initialTab);
   const [markingRead, setMarkingRead] = useState(false);
   const [activeThread, setActiveThread] = useState(null);
+  const openedQueryThread = useRef(null);
+
+  useEffect(() => {
+    const id = searchParams.get('thread');
+    if (!id) { openedQueryThread.current = null; return; }
+    if (openedQueryThread.current === id) return;
+    const match = data?.threads?.find((item) => item.id === id);
+    if (match) {
+      openedQueryThread.current = id;
+      setActiveThread(match);
+    }
+  }, [searchParams, data?.threads]);
 
   useEffect(() => {
     const queryTab = searchParams.get('tab');
@@ -547,7 +562,7 @@ export default function UpdatesPage({ onRead }) {
 
       return {
         id: `msg:${m.id}`,
-        type: isCompletionMsg ? 'completion' : 'message',
+        type: isQuoteMessage(m) ? 'quote' : isCompletionMsg ? 'completion' : 'message',
         title: m.senderType === 'customer' ? 'You sent a message' : `${m.senderName || 'Vendor'}`,
         body: m.body,
         eventId: m.eventId,
@@ -608,8 +623,8 @@ export default function UpdatesPage({ onRead }) {
     ) : (
       <div className="space-y-2.5">
         {items.map((n, idx) => {
-          const typeKey = String(n.type || 'system').toLowerCase();
-          const typeLabel = String(n.type || 'update').replace(/_/g, ' ');
+          const typeKey = isQuoteMessage(n) ? 'quote' : String(n.type || 'system').toLowerCase();
+          const typeLabel = isQuoteMessage(n) ? 'quote' : String(n.type || 'update').replace(/_/g, ' ');
           const targetUrl = getSafeNotificationLink(n);
 
           const isMsg = typeKey === 'message';
@@ -618,8 +633,9 @@ export default function UpdatesPage({ onRead }) {
             ? {
                 onClick: () => {
                   handleNotificationClick(n);
-                  openThread({
+                  openThread(threads.find((t) => t.id === n.threadId) || {
                     id: n.id,
+                    threadId: n.threadId,
                     eventId: n.eventId,
                     vendorName: n.title || 'Vendor Partner',
                     bookingId: n.bookingId,
@@ -659,8 +675,8 @@ export default function UpdatesPage({ onRead }) {
                 <span className="text-[11px] font-medium text-muted dark:text-slate-400 truncate">
                   {n.eventTitle ? `📍 ${n.eventTitle}` : 'STARVNT Core'}
                 </span>
-                <span className="text-xs font-bold text-primary dark:text-[#a5b4fc] group-hover:translate-x-0.5 transition flex items-center gap-0.5">
-                  <span>{isMsg ? 'Open Live Chat' : ['completion', 'booking', 'payment'].includes(typeKey) ? 'View Booking & Verify' : 'View'}</span>
+                <span className={`${isQuoteMessage(n) ? 'rounded-xl bg-primary text-white px-3 py-2' : 'text-primary dark:text-[#a5b4fc]'} text-xs font-bold group-hover:translate-x-0.5 transition flex items-center gap-0.5`}>
+                  <span>{isQuoteMessage(n) ? 'Review quote' : isMsg ? 'Open Live Chat' : ['completion', 'booking', 'payment'].includes(typeKey) ? 'View Booking & Verify' : 'View'}</span>
                   <Icon name="chevronRight" size={13} />
                 </span>
               </div>
@@ -756,6 +772,11 @@ export default function UpdatesPage({ onRead }) {
                             {t.lastMessageText}
                           </p>
                         )}
+                        {isQuoteMessage(t) && (
+                          <Link to={quoteReviewLink(t)} onClick={(e) => e.stopPropagation()} className="mt-2 inline-flex items-center gap-1 rounded-xl bg-primary text-white px-3 py-2 text-xs font-bold hover:bg-primary-dark transition">
+                            Review quote <Icon name="chevronRight" size={13} />
+                          </Link>
+                        )}
                         <div className="flex items-center gap-2 text-[10px] text-muted dark:text-slate-400 mt-2">
                           <span className="font-semibold">{t.eventName}</span>
                           <span>·</span>
@@ -793,6 +814,11 @@ export default function UpdatesPage({ onRead }) {
                     {m.senderType === 'customer' ? 'You' : m.senderName}
                   </div>
                   <p className="text-xs text-ink/80 dark:text-slate-300 mt-1">{m.body}</p>
+                  {isQuoteMessage(m) && (
+                    <Link to={quoteReviewLink(m)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-flex items-center gap-1 rounded-xl bg-primary text-white px-3 py-2 text-xs font-bold hover:bg-primary-dark transition">
+                      Review quote <Icon name="chevronRight" size={13} />
+                    </Link>
+                  )}
                 </div>
               ))}
             </div>

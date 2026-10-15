@@ -1,4 +1,10 @@
 import "dotenv/config";
+import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
+
+// Also load the server's env file when Node is launched from the repository
+// root. Existing process / working-directory settings keep their precedence.
+dotenv.config({ path: fileURLToPath(new URL("../.env", import.meta.url)) });
 
 function parseOrigins(value) {
   return (value || "http://localhost:5173")

@@ -4,6 +4,7 @@ import { Page } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import VendorMessageField from '../VendorMessageField.jsx';
 
 const PIPELINE = [
   { stage: 'All', hint: 'All quotations' },
@@ -26,6 +27,22 @@ export default function Quotes() {
   const [viewingQuote, setViewingQuote] = useState(null);
   const [editingQuote, setEditingQuote] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [openingChat, setOpeningChat] = useState(false);
+
+  async function openQuoteChat(quote) {
+    if (openingChat) return;
+    setOpeningChat(true);
+    try {
+      const result = await externalApi.call(`/vendor/messages/context/quote/${quote._id}`, { method: 'POST' });
+      if (!result.ok || !result.thread?._id) throw new Error('Could not open this quote’s conversation.');
+      navigate(`/vendor/updates?tab=messages&thread=${result.thread._id}`);
+      setViewingQuote(null);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setOpeningChat(false);
+    }
+  }
 
   // Revision form state
   const [form, setForm] = useState({
@@ -37,6 +54,7 @@ export default function Quotes() {
     notes: '',
   });
   const [saving, setSaving] = useState(false);
+  const [notePlaceholder, setNotePlaceholder] = useState('Explain package adjustments or what is included in this quote…');
 
   const loadQuotes = useCallback(async () => {
     try {
@@ -120,15 +138,14 @@ export default function Quotes() {
       customerNote = cleaned;
     }
 
+    setNotePlaceholder(customerNote ? `Reply to the customer’s request: ${customerNote}` : 'e.g. Explain package adjustments, inclusions or changes to the price.');
     setForm({
       basePrice: proposedPrice,
       travelFee: q.pricingBreakdown?.travelFee || 0,
       equipmentFee: q.pricingBreakdown?.equipmentFee || 0,
       setupFee: q.pricingBreakdown?.setupFee || 0,
       additionalFee: q.pricingBreakdown?.additionalFee || 0,
-      notes: customerNote
-        ? `Revised proposal: ${customerNote}`
-        : cleanNegotiationReason(q.notes) || 'Updated offer based on customer discussion.',
+      notes: '',
     });
   }
 
@@ -241,19 +258,21 @@ export default function Quotes() {
     const nonBase = travel + equip + setup + add;
 
     if (type === 'match' && customerBudget) {
+      setNotePlaceholder(`e.g. Confirm your revised proposal at ₹${customerBudget.toLocaleString('en-IN')}, including any conditions.`);
       const newBase = Math.max(0, customerBudget - nonBase);
       setForm((prev) => ({
         ...prev,
         basePrice: String(newBase),
-        notes: `Agreed to your proposed budget of ₹${customerBudget.toLocaleString('en-IN')}. Looking forward to your event!`,
+
       }));
     } else if (type === 'middle' && customerBudget && originalTotal) {
       const mid = Math.round((originalTotal + customerBudget) / 2);
+      setNotePlaceholder(`e.g. Explain your revised offer of ₹${mid.toLocaleString('en-IN')}.`);
       const newBase = Math.max(0, mid - nonBase);
       setForm((prev) => ({
         ...prev,
         basePrice: String(newBase),
-        notes: `Offering a special middle-ground discount of ₹${mid.toLocaleString('en-IN')} to confirm your date.`,
+
       }));
     } else if (type === 'minus1000') {
       const currentBase = Number(form.basePrice || 0);
@@ -662,10 +681,8 @@ export default function Quotes() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    navigate('/vendor/messages');
-                    setViewingQuote(null);
-                  }}
+                  onClick={() => openQuoteChat(viewingQuote)}
+                  disabled={openingChat}
                   className="rounded-xl bg-white border border-primary/30 text-primary text-xs font-bold px-3 py-1.5 hover:bg-primary hover:text-white transition cursor-pointer inline-flex items-center gap-1"
                 >
                   <Icon name="message" size={13} /> Chat with Client
@@ -1018,16 +1035,7 @@ export default function Quotes() {
               })()}
 
               <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Notes & Proposal Justification
-                </label>
-                <textarea
-                  rows={3}
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Explain package adjustments, confirm equipment inclusion, or accept proposed budget..."
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl p-3 text-navy outline-none focus:border-primary resize-none font-medium"
-                />
+                <VendorMessageField value={form.notes} onChange={(value) => setForm((prev) => ({ ...prev, notes: value }))} context={{ type: 'quote', id: editingQuote._id }} label="Message with revised quote (optional)" placeholder={notePlaceholder} disabled={saving} />
               </div>
             </div>
 

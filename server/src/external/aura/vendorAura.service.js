@@ -1,8 +1,8 @@
 import { VendorAuraSession, VendorAuraMessage } from '../models/VendorAura.js';
 import { VendorService } from '../models/VendorService.js';
 import { getLlmAdapter } from './llmAdapter.js';
-import { buildVendorContext, PAGES, CATEGORIES, setupSummary, isAutoBusinessName } from './vendorContext.js';
-import { applyProfileFromChat } from './profileWriter.js';
+import { buildVendorContext, PAGES, CATEGORIES, SETUP_STEPS, setupSummary, isAutoBusinessName } from './vendorContext.js';
+import { applyProfileFromChat, matchCategory } from './profileWriter.js';
 import { validateAction, describeAction, executeAction, readConfirmation, dateIn, reasonFrom, isMessageRelevantToPending } from './setupActions.js';
 import { buildVendorSystemPrompt } from './vendorSystemPrompt.js';
 import { classifyAuraRequest } from '../../common/auraRouter.js';
@@ -21,6 +21,27 @@ const SESSION_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const MAX_ACTIONS = 3;
 
 export const FALLBACK_REPLY = "Sorry, I can't answer right now. Please try again in a moment — your dashboard has the latest numbers.";
+
+/** Keep setup usable during a provider outage without inventing data or writes. */
+export function setupFallback(message, vendor, context, pending = null) {
+  if (pending) return {
+    reply: `I couldn't reach Aura's chat service. Your confirmation is still pending: ${describeAction(pending)}. Say “yes” to confirm or “no” to cancel.`,
+    actions: [],
+  };
+  const category = matchCategory('', message);
+  const setupRequest = category || /\b(profile|setup|brand|category|business|equipment|coverage|portfolio)\b/i.test(message);
+  if (!setupRequest) return { reply: FALLBACK_REPLY, actions: [{ label: 'Open dashboard', to: '/vendor/dashboard' }] };
+  const missing = missingBrand(vendor).length;
+  const nextKind = context?.profileSetup?.steps?.find((s) => !s.done)?.kind;
+  const next = missing ? null : SETUP_STEPS.find((s) => s.key === nextKind);
+  const question = missing
+    ? brandQuestion(vendor)
+    : next ? `Next: ${next.label}. Open the page below to complete it.` : 'You can review your brand details and continue setup from your Profile page.';
+  return {
+    reply: `${category ? `You mentioned ${category}. ` : ''}Aura's chat service is temporarily unavailable. ${question}`,
+    actions: [{ label: next?.short || 'Open profile', to: next?.to || '/vendor/profile' }],
+  };
+}
 
 const httpError = (status, error) => Object.assign(new Error(error), { status, error });
 
@@ -69,6 +90,33 @@ function serialize(m) {
 }
 
 const pendingView = (p) => (p ? { kind: p.kind, summary: describeAction(p), isUpdate: Boolean(p.isUpdate) } : null);
+
+/** Conversation summaries are scoped before joining any message content. */
+export async function listSessions({ vendor }) {
+  const sessions = await VendorAuraSession.aggregate([
+    { $match: { vendor: vendor._id } },
+    { $sort: { updatedAt: -1, _id: -1 } },
+    { $limit: 50 },
+    { $lookup: {
+      from: VendorAuraMessage.collection.name,
+      let: { sid: '$_id' },
+      pipeline: [
+        { $match: { $expr: { $eq: ['$session', '$$sid'] } } },
+        { $sort: { createdAt: 1, _id: 1 } },
+        { $group: { _id: null, title: { $first: '$content' }, preview: { $last: '$content' }, messageCount: { $sum: 1 } } },
+      ],
+      as: 'conversation',
+    } },
+    { $unwind: '$conversation' },
+    { $project: { _id: 0, sessionId: '$_id', updatedAt: 1,
+      title: { $substrCP: ['$conversation.title', 0, 120] },
+      preview: { $substrCP: ['$conversation.preview', 0, 240] },
+      messageCount: '$conversation.messageCount',
+      confirmationPending: { $ne: [{ $ifNull: ['$pending', null] }, null] },
+    } },
+  ]);
+  return { sessions };
+}
 
 export async function getSession({ vendor, sessionId }) {
   if (!isValidSessionId(sessionId)) throw httpError(400, 'INVALID_SESSION_ID');
@@ -230,6 +278,9 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
     console.warn('[vendor-aura] LLM failed, using fallback:', err?.code || err?.message || err);
   }
   tracker.markGenerationEnd();
+  if (fallback) {
+    ({ reply, actions } = setupFallback(text, vendor, context, session.pending));
+  }
 
   // Brand basics: save what the vendor stated, then say exactly what was saved
   // (the server writes this line, so the reply never claims a save that didn't happen).
@@ -266,7 +317,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   // When the app adds its own lines (saved / confirm / next question), the model's
   // questions and any "I saved it" claims are dropped — only the server reports saves.
   if (saved.length || proposal || missingForProposal) {
-    const head = withoutClaims(withoutQuestions(reply));
+    const head = fallback ? '' : withoutClaims(withoutQuestions(reply));
     const parts = [head || (proposal ? 'Great, here is what I will do:' : 'Got it!')];
     if (saved.length) parts.push(`\n✅ Saved to your profile — ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}.`);
     if (proposal) {

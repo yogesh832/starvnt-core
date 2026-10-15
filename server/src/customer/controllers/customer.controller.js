@@ -3,10 +3,13 @@ import * as profile from '../services/profile.service.js';
 import * as decision from '../services/decision.service.js';
 import * as commerce from '../services/commerce.service.js';
 import * as circleSvc from '../services/circle.service.js';
+import * as threadMessages from '../services/threadMessages.service.js';
 import * as library from '../services/library.service.js';
 import { customerFinancialTruth } from '../../common/financialTruth.service.js';
 
 const me = (req) => req.externalUser._id;
+export const readThreadMessages = async (req, res) => res.json(await threadMessages.readCustomerThread(me(req), req.params.threadId));
+export const postThreadMessage = async (req, res) => res.status(201).json(await threadMessages.postCustomerThreadMessage(me(req), req.params.threadId, req.body?.body));
 
 export const getProfile = async (req, res) => res.json({ profile: await profile.getProfile(me(req)) });
 export const patchProfile = async (req, res) => res.json({ profile: await profile.updateProfile(me(req), req.body) });

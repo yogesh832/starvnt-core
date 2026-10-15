@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Page, Card } from './shared.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import VendorMessageField from '../VendorMessageField.jsx';
 
 export function parseTextLinks(text) {
   if (typeof text !== 'string') return { cleanText: '', images: [], videos: [], pdfs: [], driveLinks: [], otherLinks: [] };
@@ -56,19 +57,33 @@ function formatMessageTime(dateStr) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export default function Messages({ onMessagesRead }) {
+export default function Messages({ onMessagesRead, embedded = false, initialThreadId = null }) {
   const [threads, setThreads] = useState([]);
-  const [activeThreadId, setActiveThreadId] = useState(null);
+  const [activeThreadId, setActiveThreadId] = useState(initialThreadId);
   const [activeThread, setActiveThread] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [msgText, setMsgText] = useState('');
+  const selectedThreadRef = useRef(activeThreadId);
+  selectedThreadRef.current = activeThreadId;
+  const draftsRef = useRef(new Map());
   const [attachedUrl, setAttachedUrl] = useState('');
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
-  const [showMobileChat, setShowMobileChat] = useState(false);
+  const [showMobileChat, setShowMobileChat] = useState(Boolean(initialThreadId));
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Keep unsent drafts within their own conversation when switching threads.
+  useEffect(() => {
+    setMsgText(draftsRef.current.get(activeThreadId) || '');
+    setAttachedUrl('');
+  }, [activeThreadId]);
+
+  function editDraft(value) {
+    draftsRef.current.set(activeThreadId, value);
+    setMsgText(value);
+  }
 
   const announceMessagesRead = useCallback(() => {
     if (typeof onMessagesRead === 'function') onMessagesRead();
@@ -79,7 +94,7 @@ export default function Messages({ onMessagesRead }) {
     try {
       const res = await externalApi.call(`/vendor/messages/threads/${thread._id}`);
       if (res.ok && res.thread) {
-        setActiveThread(res.thread);
+        if (selectedThreadRef.current === thread._id) setActiveThread(res.thread);
         setThreads((prev) =>
           prev.map((item) => (item._id === thread._id ? { ...res.thread, unreadVendorCount: 0 } : item))
         );
@@ -98,9 +113,9 @@ export default function Messages({ onMessagesRead }) {
       const res = await externalApi.call('/vendor/messages/threads');
       if (res.ok && Array.isArray(res.threads)) {
         setThreads(res.threads);
-        const targetId = selectId || activeThreadId || res.threads[0]?._id;
+        const targetId = selectedThreadRef.current || selectId || res.threads[0]?._id;
         if (targetId) {
-          const match = res.threads.find((t) => t._id === targetId) || res.threads[0];
+          const match = res.threads.find((t) => t._id === targetId);
           if (match) {
             setActiveThreadId(match._id);
             if (match.unreadVendorCount > 0) {
@@ -136,6 +151,8 @@ export default function Messages({ onMessagesRead }) {
 
   // Select thread and mark as read
   async function handleSelectThread(t) {
+    if (sending || uploadingMedia) return;
+    selectedThreadRef.current = t._id;
     setActiveThreadId(t._id);
     setActiveThread(t);
     setShowMobileChat(true);
@@ -149,6 +166,7 @@ export default function Messages({ onMessagesRead }) {
   async function handleMediaUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const uploadThreadId = activeThreadId;
     setUploadingMedia(true);
     try {
       const base64Data = await new Promise((resolve, reject) => {
@@ -169,7 +187,7 @@ export default function Messages({ onMessagesRead }) {
       });
 
       if (res?.url) {
-        setAttachedUrl(res.url);
+        if (selectedThreadRef.current === uploadThreadId) setAttachedUrl(res.url);
       } else {
         alert('Failed to upload file. Please try again.');
       }
@@ -198,6 +216,7 @@ export default function Messages({ onMessagesRead }) {
       });
 
       if (res.ok && res.message) {
+        draftsRef.current.delete(activeThread._id);
         setMsgText('');
         setAttachedUrl('');
         setActiveThread((prev) => ({
@@ -222,7 +241,7 @@ export default function Messages({ onMessagesRead }) {
   }
 
   return (
-    <Page
+    <MessageLayout embedded={embedded}
       title="Enquiries & Messages"
       sub="Direct, context-backed customer messaging. Respond to client opportunities and quote negotiations in real-time."
     >
@@ -595,7 +614,8 @@ export default function Messages({ onMessagesRead }) {
                   className="hidden"
                 />
 
-                <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                <VendorMessageField key={activeThreadId} value={msgText} onChange={editDraft} context={{ type: 'thread', id: activeThreadId }} label="Message for this service" placeholder="e.g. We have started working on your service. Add your specific update here." disabled={sending || uploadingMedia} rows={2} />
+                <form onSubmit={handleSendMessage} className="flex items-center justify-between gap-2 mt-2">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
@@ -609,14 +629,6 @@ export default function Messages({ onMessagesRead }) {
                       <Icon name="upload" size={17} />
                     )}
                   </button>
-                  <input
-                    type="text"
-                    value={msgText}
-                    onChange={(e) => setMsgText(e.target.value)}
-                    placeholder="Type a message to client..."
-                    disabled={sending || uploadingMedia}
-                    className="flex-1 bg-lavender/60 border border-gray-200/80 rounded-2xl px-4 py-2.5 text-xs font-medium text-navy placeholder:text-muted outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
-                  />
                   <button
                     type="submit"
                     disabled={(!msgText.trim() && !attachedUrl) || sending || uploadingMedia}
@@ -662,6 +674,10 @@ export default function Messages({ onMessagesRead }) {
           </div>
         </div>
       )}
-    </Page>
+    </MessageLayout>
   );
+}
+
+function MessageLayout({ embedded, children, ...props }) {
+  return embedded ? <div className="min-w-0">{children}</div> : <Page {...props}>{children}</Page>;
 }

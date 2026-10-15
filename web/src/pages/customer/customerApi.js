@@ -46,6 +46,8 @@ export const customerApi = {
   },
   postMessage: (id, body) => externalApi.call(`/customer/events/${id}/messages`, { method: 'POST', body }),
   updates: () => externalApi.call('/customer/updates'),
+  threadMessages: (id) => externalApi.call(`/customer/messages/threads/${encodeURIComponent(id)}`),
+  postThreadMessage: (id, body) => externalApi.call(`/customer/messages/threads/${encodeURIComponent(id)}`, { method: 'POST', body: { body } }),
   readAll: () => externalApi.call('/customer/notifications/read-all', { method: 'POST' }),
   readNotification: (id) => externalApi.call(`/customer/notifications/${id}/read`, { method: 'POST' }),
   documents: () => externalApi.call('/customer/documents'),

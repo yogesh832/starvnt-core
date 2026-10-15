@@ -56,6 +56,7 @@ const vendorMessageThreadSchema = new Schema(
       default: null,
       index: true,
     },
+    quote: { type: Schema.Types.ObjectId, ref: 'Quote', default: null, index: true },
     booking: {
       type: Schema.Types.ObjectId,
       ref: 'CoreBooking',
@@ -128,6 +129,7 @@ const vendorMessageThreadSchema = new Schema(
       type: Number,
       default: 0,
     },
+    unreadClientCount: { type: Number, default: 0 },
     messages: [messageItemSchema],
   },
   { timestamps: true }

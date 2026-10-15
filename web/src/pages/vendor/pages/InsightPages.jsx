@@ -4,6 +4,7 @@ import { Page, Card} from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import VendorMessageField from '../VendorMessageField.jsx';
 
 const paidAdvance = (booking) => Number(booking?.paymentSummary?.paidAmount || 0);
 const advanceDue = (booking) => Number(booking?.paymentSummary?.advanceAmount || Math.ceil((Number(booking?.totalAmount || 0) * 30) / 100));
@@ -431,14 +432,7 @@ export function ReviewsPage() {
                 {/* Inline Reply Form */}
                 {replyingId === r._id && (
                   <div className="mt-3 p-3 bg-gray-50 rounded-2xl border border-gray-200 space-y-2">
-                    <label className="text-xs font-bold text-navy block">Your response to {r.customerName}:</label>
-                    <textarea
-                      rows={2}
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="Thank the client for their feedback..."
-                      className="w-full text-xs p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:border-primary"
-                    />
+                    <VendorMessageField value={replyText} onChange={setReplyText} context={{ type: 'review', id: r._id }} label={`Your response to ${r.customerName}`} placeholder="e.g. Thank the customer and address the details in their feedback." disabled={submittingReply} rows={2} />
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={() => {

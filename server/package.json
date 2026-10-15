@@ -8,6 +8,7 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "test": "node --test",
+    "check:aura": "node scripts/check-aura.js",
     "seed": "node scripts/seed-super-admin.js",
     "seed:vendor": "node scripts/seed-vendor.js",
     "seed:vendors": "node scripts/seed-real-vendors.js",

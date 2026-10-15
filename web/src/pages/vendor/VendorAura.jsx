@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { externalApi } from '../../lib/api.js';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
+import { getAuraPrompts } from './vendorAuraPrompts.js';
 
 /**
  * Vendor Aura+: answers from the vendor's own data and links to the page
@@ -63,21 +64,6 @@ function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
     </div>
   );
 }
-
-const QUICK = ['What should I do today?', 'Show pending enquiries', "This week's bookings", "What's my payment status?", "What's missing in my profile?"];
-
-const PAGE_PROMPTS = {
-  enquiries: ['Which enquiries still need a reply?'],
-  quotes: ['Which quotes are pending?', 'How many draft quotes do I have?'],
-  bookings: ['When is my next booking?'],
-  calendar: ['Which days are busy in the next 2 weeks?'],
-  availability: ['Which dates are blocked?'],
-  payments: ['Which bookings have the advance pending?'],
-  reviews: ['Which reviews still need a reply?'],
-  services: ['Summarise my services'],
-  profile: ["What's missing for activation?"],
-  documents: ["What's pending in my KYC?"],
-};
 
 // "Ask manually": plain shortcuts for vendors who'd rather do it themselves — no AI.
 const MANUAL = [
@@ -181,10 +167,10 @@ function Bubble({ m, onAction }) {
           <Icon name="bolt" size={13} />
         </span>
       )}
-      <div className={`max-w-[85%] ${mine ? 'items-end' : 'items-start'} flex flex-col gap-1.5`}>
+      <div className={`min-w-0 max-w-[85%] ${mine ? 'items-end' : 'items-start'} flex flex-col gap-1.5 [overflow-wrap:anywhere]`}>
         <div
           className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
-            mine ? 'bg-primary text-white rounded-br-md' : 'bg-lavender/70 text-navy rounded-bl-md'
+            mine ? 'aura-user-message bg-primary text-white rounded-br-md' : 'aura-assistant-message bg-lavender/70 text-navy rounded-bl-md'
           }`}
         >
           {m.content}
@@ -244,7 +230,7 @@ function clampPanelPosition(pos, width, height) {
   };
 }
 
-export default function VendorAura({ open, onClose, page, userId, prompt, setup }) {
+export default function VendorAura({ open, onClose, page, userId, prompt, setup, conversationRequest }) {
   const navigate = useNavigate();
   const [sessionId, setSessionId] = useState(() => readSession(userId));
   const [messages, setMessages] = useState([]);
@@ -259,6 +245,23 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
   const setupIncomplete = Boolean(setup?.checklist) && setup.percent < 100;
   const listRef = useRef(null);
   const lastPromptId = useRef(null);
+  const lastConversationRequest = useRef(null);
+
+  useEffect(() => {
+    if (!conversationRequest || sending || lastConversationRequest.current === conversationRequest.id) return;
+    lastConversationRequest.current = conversationRequest.id;
+    setMode('aura');
+    if (conversationRequest.newChat) {
+      newChat();
+    } else if (/^[A-Za-z0-9_-]{8,80}$/.test(conversationRequest.sessionId || '')) {
+      writeSession(userId, conversationRequest.sessionId);
+      setSessionId(conversationRequest.sessionId);
+      setMessages([]);
+      setPending(null);
+      setError('');
+      setLoaded(false);
+    }
+  }, [conversationRequest, sending, userId]);
 
   function setMode(next) {
     setModeState(next);
@@ -370,7 +373,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
     setMessages((m) => [
       ...m,
-      { role: 'user', content: message, actions: [] },
+      { role: 'user', content: message, actions: [], page },
       { role: 'model', content: '', actions: [] },
     ]);
 
@@ -478,6 +481,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
       if (donePayload) {
         setPending(donePayload.pending || null);
+        window.dispatchEvent(new Event('vendorAuraUpdated'));
         if (donePayload.profileUpdated) window.dispatchEvent(new Event('vendorProfileUpdated'));
         if (spoken && canSpeak) {
           setSpeaking(true);
@@ -610,10 +614,10 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
   // When an explicit prompt arrives, ensure Aura is visible and not minimized
   useEffect(() => {
-    if (open && prompt?.text && dockMode === 'minimized') {
+    if (open && (prompt?.text || conversationRequest) && dockMode === 'minimized') {
       updateDockMode('docked');
     }
-  }, [open, prompt, dockMode]);
+  }, [open, prompt, conversationRequest, dockMode]);
 
   function updatePanelWidth(newWidth) {
     const clamped = Math.max(DESKTOP_MIN_W, Math.min(newWidth, Math.max(DESKTOP_MIN_W, window.innerWidth - 60)));
@@ -882,7 +886,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     );
   }
 
-  const chips = [...(setupIncomplete ? [START_SETUP] : []), ...(PAGE_PROMPTS[page] || []), ...QUICK].slice(0, 5);
+  const chips = getAuraPrompts({ page, setup, messages, pending, sending, steps: SETUP_STEPS });
   const setupCard = setupIncomplete && (
     <SetupCard
       setup={setup}
@@ -934,7 +938,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
       <aside
         id="vendor-aura-panel"
         style={panelStyle}
-        className={`fixed z-50 inset-0 w-screen h-[100dvh] max-h-[100dvh] rounded-none lg:w-auto lg:h-auto lg:max-h-none lg:rounded-3xl lg:inset-auto bg-white shadow-2xl border-0 lg:border lg:border-gray-100 flex flex-col overflow-hidden isolate transition-all duration-200 ease-out ${
+        className={`vendor-aura-panel fixed z-50 inset-0 w-screen h-[100dvh] max-h-[100dvh] rounded-none lg:w-auto lg:h-auto lg:max-h-none lg:rounded-3xl lg:inset-auto bg-white shadow-2xl border-0 lg:border lg:border-gray-100 flex flex-col overflow-hidden isolate transition-all duration-200 ease-out ${
           isDragging
             ? 'select-none transition-none shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] ring-2 ring-primary/40'
             : isResizing
@@ -977,7 +981,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         <button
           type="button"
           onMouseDown={(e) => handleResizeStart(e, 'top-left')}
-          className="hidden lg:block absolute left-1 top-1 z-40 w-5 h-5 cursor-nwse-resize rounded-md text-gray-200 hover:text-primary"
+          className="hidden lg:block absolute left-0 top-0 z-40 w-3 h-3 cursor-nwse-resize rounded-md text-transparent hover:text-primary"
           title="Drag corner to resize Aura"
           aria-label="Resize Aura"
         >
@@ -986,112 +990,54 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
         <header
           onMouseDown={handleDragStart}
-          className="flex items-center gap-2 px-3.5 py-3 border-b border-gray-100 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing group bg-white/95 backdrop-blur-sm"
-          title="Drag header to move Aura anywhere on your screen"
+          className="aura-header relative flex items-center gap-3 px-4 py-3 border-b border-gray-100 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing bg-white/95"
         >
-          <span className="hidden lg:flex items-center text-gray-300 group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing shrink-0" title="Drag to move Aura">
-            <Icon name="drag" size={15} />
-          </span>
-          <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-md shadow-primary/30 shrink-0">
-            <Icon name="bolt" size={15} />
+          <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-sm shrink-0">
+            <Icon name="bolt" size={18} />
           </span>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-extrabold text-navy flex items-center gap-1.5">
-              <span>Aura+</span>
-              <span className="hidden lg:inline text-[9px] font-semibold text-primary/80 bg-primary-soft px-1.5 py-0.5 rounded">
-                {isDocked ? 'Docked' : 'Floating'}
-              </span>
+            <div className="text-sm font-extrabold text-navy leading-tight">Aura+</div>
+            <div className="text-[11px] text-muted mt-1 truncate">
+              <span className="lg:hidden">Your business assistant</span>
+              <span className="hidden lg:inline">{isDocked ? 'Docked' : 'Floating'} · Business assistant</span>
             </div>
-            <div className="text-[10px] text-muted truncate">Your business assistant · answers from your data</div>
           </div>
-
-          {/* Width Preset Button */}
-          <button
-            type="button"
-            onClick={cycleWidth}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="hidden lg:inline-flex items-center text-[10px] font-bold text-muted hover:text-navy px-2 py-1 rounded-lg hover:bg-lavender transition cursor-pointer"
-            title={`Current width: ${panelWidth}px. Click to cycle (380px → 520px → 680px)`}
-          >
-            ↔ {panelWidth}px
-          </button>
-
-          <button
-            type="button"
-            onClick={cycleHeight}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="hidden xl:inline-flex items-center text-[10px] font-bold text-muted hover:text-navy px-2 py-1 rounded-lg hover:bg-lavender transition cursor-pointer"
-            title={`Current height: ${Math.round(panelHeight)}px. Click to cycle short, medium, full height.`}
-          >
-            ↕ {Math.round(panelHeight)}px
-          </button>
-
-          <div className="hidden xl:flex items-center gap-0.5 rounded-lg bg-lavender/70 p-0.5" onMouseDown={(e) => e.stopPropagation()} title="Snap Aura to screen edges">
-            {[
-              ['left', 'L'],
-              ['top', 'T'],
-              ['center', 'C'],
-              ['bottom', 'B'],
-              ['right', 'R'],
-            ].map(([place, label]) => (
-              <button
-                key={place}
-                type="button"
-                onClick={() => snapTo(place)}
-                className="w-5 h-5 rounded-md text-[9px] font-extrabold text-muted hover:bg-white hover:text-primary transition"
-                aria-label={`Snap Aura ${place}`}
-                title={`Snap ${place}`}
-              >
-                {label}
+          <div className="flex items-center gap-1 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+            {mode === 'aura' && (
+              <button type="button" onClick={newChat} className="aura-header-action aura-new-chat" title="Start a new chat" aria-label="New chat">
+                <Icon name="edit" size={16} />
+                <span className="aura-new-chat-label">New chat</span>
               </button>
-            ))}
+            )}
+            <details className="hidden lg:block" onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.removeAttribute('open'); }}>
+              <summary className="aura-header-action list-none cursor-pointer [&::-webkit-details-marker]:hidden" title="Panel layout" aria-label="Panel layout">
+                <Icon name="settings" size={16} />
+              </summary>
+              <div className="aura-layout-menu absolute right-4 top-[calc(100%-4px)] z-50 w-64 max-w-[calc(100%-2rem)] rounded-2xl border border-gray-200 bg-white shadow-xl p-3" onClick={(e) => { if (e.target.closest('button')) e.currentTarget.closest('details').removeAttribute('open'); }}>
+                <div className="text-xs font-bold text-navy mb-3">Panel layout</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={cycleWidth} className="aura-layout-option" title="Cycle panel width">Width <span>{panelWidth}px</span></button>
+                  <button type="button" onClick={cycleHeight} className="aura-layout-option" title="Cycle panel height">Height <span>{Math.round(panelHeight)}px</span></button>
+                </div>
+                <div className="text-[10px] font-semibold text-muted uppercase tracking-wide mt-4 mb-2">Position</div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {['left', 'center', 'right', 'top', 'bottom'].map((place) => (
+                    <button key={place} type="button" onClick={() => snapTo(place)} className="aura-layout-option capitalize" aria-label={`Snap Aura ${place}`}>{place}</button>
+                  ))}
+                </div>
+                <button type="button" onClick={isDocked ? switchToFloat : dockToRight} className="aura-layout-option flex items-center justify-center gap-2 w-full mt-3">
+                  <Icon name={isDocked ? 'float' : 'dockRight'} size={14} />
+                  {isDocked ? 'Float panel' : 'Dock to right'}
+                </button>
+              </div>
+            </details>
+            <button type="button" onClick={() => updateDockMode('minimized')} className="aura-header-action" title="Minimize Aura" aria-label="Minimize Aura">
+              <Icon name="minus" size={17} />
+            </button>
+            <button type="button" onClick={onClose} className="aura-header-action" title="Close Aura" aria-label="Close Aura+">
+              <Icon name="close" size={17} />
+            </button>
           </div>
-
-          {/* Dock / Float Toggle */}
-          {!isDocked ? (
-            <button
-              type="button"
-              onClick={dockToRight}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="hidden lg:grid w-7 h-7 place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
-              title="Dock to right side"
-              aria-label="Dock to right side"
-            >
-              <Icon name="dockRight" size={14} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={switchToFloat}
-              onMouseDown={(e) => e.stopPropagation()}
-              className="hidden lg:grid w-7 h-7 place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
-              title="Float and drag freely"
-              aria-label="Float and drag freely"
-            >
-              <Icon name="float" size={13} />
-            </button>
-          )}
-
-          {/* Minimize Button */}
-          <button
-            type="button"
-            onClick={() => updateDockMode('minimized')}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="w-7 h-7 grid place-items-center rounded-lg hover:bg-lavender text-muted hover:text-navy transition cursor-pointer"
-            title="Minimize Aura (keep active in corner)"
-            aria-label="Minimize"
-          >
-            <Icon name="minus" size={14} />
-          </button>
-
-          {mode === 'aura' && (
-            <button onClick={newChat} onMouseDown={(e) => e.stopPropagation()} className="text-[11px] font-bold text-primary rounded-lg px-2 py-1 hover:bg-primary-soft transition cursor-pointer" title="Start a new chat">
-              New chat
-            </button>
-          )}
-          <button onClick={onClose} onMouseDown={(e) => e.stopPropagation()} className="w-8 h-8 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer" aria-label="Close Aura+">
-            <Icon name="close" size={16} />
-          </button>
         </header>
 
         <div className="px-4 pt-3 shrink-0" role="tablist">
@@ -1241,15 +1187,15 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
             These shortcuts open the page directly — no AI involved.
           </div>
         ) : (
-        <div className="px-3 pb-3 pt-2 border-t border-gray-100 shrink-0 space-y-2">
+        <div className="min-w-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 border-t border-gray-100 shrink-0 space-y-2">
           {error && <div className="text-[11px] text-red-500 px-1">{error}</div>}
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pb-0.5" aria-label="Suggested questions">
             {chips.map((c) => (
               <button
                 key={c}
                 onClick={() => send(c)}
                 disabled={sending}
-                className="shrink-0 rounded-full bg-lavender text-navy text-[11px] font-semibold px-3 py-1.5 hover:bg-primary-soft disabled:opacity-50"
+                className="aura-suggestion min-w-0 max-w-full whitespace-normal break-words text-left rounded-full bg-lavender text-navy text-[11px] font-semibold px-3 py-1.5 hover:bg-primary-soft disabled:opacity-50"
               >
                 {c}
               </button>
@@ -1261,7 +1207,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               e.preventDefault();
               send(input);
             }}
-            className="flex items-center gap-1 rounded-full border border-gray-200 bg-white shadow-sm focus-within:border-primary/40 pl-1.5 pr-1.5 py-1.5 transition"
+            className="aura-composer flex items-center gap-1 rounded-full border border-gray-200 bg-white shadow-sm focus-within:border-primary/40 pl-1.5 pr-1.5 py-1.5 transition"
           >
             <button type="button" onClick={newChat} className="w-8 h-8 grid place-items-center rounded-full text-ink/70 hover:bg-lavender shrink-0" title="New chat" aria-label="New chat">
               <Icon name="plus" size={17} />
