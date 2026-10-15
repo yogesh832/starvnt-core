@@ -5,7 +5,7 @@ const PAGE_PROMPTS = {
   bookings: ['When is my next booking?', "Show this week's bookings", 'Which bookings need a work update?'],
   calendar: ['Which days are busy in the next 2 weeks?', 'When is my next booking?', 'Which dates are blocked?'],
   availability: ['Which dates are blocked?', 'Help me block a date', 'Show upcoming bookings before I block a date'],
-  payments: ['Which bookings have the advance pending?', "What's my payment status?", 'Show payments for upcoming bookings'],
+  payments: ['Mera settlement status kya hai?', 'Show my settled payouts and pending balance', 'How does settlement work?'],
   reviews: ['Which reviews still need a reply?', 'Summarise my customer reviews', "What's my current rating?"],
   services: ['Summarise my services', 'Help me add a service with a price', 'Help me update my team and equipment'],
   profile: ["What's missing in my profile?", "What's missing for activation?", 'Help me update my business details'],
@@ -19,7 +19,7 @@ const PAGE_PROMPTS = {
 
 const TOPICS = [
   ['quotes', /\b(quote|quotes|quotation|quotations|offer|offers)\b/i],
-  ['payments', /\b(payment|payments|advance|paid|payout|paisa|paise)\b/i],
+  ['payments', /\b(payment|payments|advance|paid|payout|payouts|settle|settlement|settlements|balance|receivable|paisa|paise)\b/i],
   ['availability', /\b(block|blocked|unavailable|availability)\b/i],
   ['calendar', /\b(calendar|busy dates)\b/i],
   ['bookings', /\b(booking|bookings|booked)\b/i],

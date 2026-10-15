@@ -22,12 +22,29 @@ const MAX_ACTIONS = 3;
 
 export const FALLBACK_REPLY = "Sorry, I can't answer right now. Please try again in a moment — your dashboard has the latest numbers.";
 
-/** Keep setup usable during a provider outage without inventing data or writes. */
+/** Keep setup and settlement queries usable during a provider outage without inventing data or writes. */
 export function setupFallback(message, vendor, context, pending = null) {
   if (pending) return {
     reply: `I couldn't reach Aura's chat service. Your confirmation is still pending: ${describeAction(pending)}. Say “yes” to confirm or “no” to cancel.`,
     actions: [],
   };
+
+  const isSettlement = /\b(settle|settlement|settlements|payout|payouts|earning|earnings|kamai|hisaab|hisab|escrow|receivable|payment|payments|balance)\b/i.test(message);
+  if (isSettlement) {
+    const s = context?.settlements;
+    const settled = s?.settledAmount != null ? `₹${Number(s.settledAmount).toLocaleString('en-IN')}` : null;
+    const pendingAmount = s?.pendingSettlementAmount != null ? `₹${Number(s.pendingSettlementAmount).toLocaleString('en-IN')}` : null;
+    let text = "Aura's chat service is temporarily unavailable. ";
+    if (settled !== null && pendingAmount !== null) {
+      text += `According to your verified records: Total Settled is ${settled} and Pending Settlement is ${pendingAmount}. `;
+    }
+    text += "You can track your complete escrow balances, payouts, and settlement ledger on the Payments page.";
+    return {
+      reply: text,
+      actions: [{ label: 'Payments & Settlements', to: '/vendor/payments' }],
+    };
+  }
+
   const category = matchCategory('', message);
   const setupRequest = category || /\b(profile|setup|brand|category|business|equipment|coverage|portfolio)\b/i.test(message);
   if (!setupRequest) return { reply: FALLBACK_REPLY, actions: [{ label: 'Open dashboard', to: '/vendor/dashboard' }] };

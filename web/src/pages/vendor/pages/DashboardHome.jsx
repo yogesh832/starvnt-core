@@ -604,7 +604,7 @@ function NotificationsCard({
   );
 }
 
-const AURA_CHIPS = ['Aaj kya karna hai?', 'Pending enquiries dikhao', 'Is hafte ki bookings'];
+const AURA_CHIPS = ['Aaj kya karna hai?', 'Pending enquiries dikhao', 'Mera settlement status kya hai?', 'Is hafte ki bookings'];
 
 /** Ask Aura+ from the dashboard: opens the Aura+ panel and sends the question. */
 function AskAuraCard({ onAsk }) {

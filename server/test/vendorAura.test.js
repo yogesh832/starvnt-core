@@ -44,7 +44,22 @@ test('setup guidance uses the actual next incomplete step without claiming activ
 test('provider outages retain pending confirmation and do not fabricate operational answers', () => {
   const pending = { kind: 'block_date', blockout: { date: '2026-10-20', reason: 'Holiday' } };
   assert.match(setupFallback('change this', {}, {}, pending).reply, /confirmation is still pending.*2026-10-20/);
-  assert.equal(setupFallback('How much have I earned?', {}, {}).reply, FALLBACK_REPLY);
+  assert.equal(setupFallback('What is my rating?', {}, {}).reply, FALLBACK_REPLY);
+});
+
+test('settlement queries during an outage return verified numbers from context and payment action', () => {
+  const context = {
+    settlements: {
+      settledAmount: 45000,
+      pendingSettlementAmount: 15000,
+      expectedReceivables: 20000,
+    },
+  };
+  const result = setupFallback('Mera settlement status kya hai?', {}, context);
+  assert.match(result.reply, /Total Settled is ₹45,000/);
+  assert.match(result.reply, /Pending Settlement is ₹15,000/);
+  assert.equal(result.actions[0].to, '/vendor/payments');
+  assert.equal(result.actions[0].label, 'Payments & Settlements');
 });
 
 test('a missing routed model tries the default model, while auth errors stop immediately', async () => {

@@ -7,6 +7,7 @@ import { VendorDocument } from '../models/VendorDocument.js';
 import { Notification } from '../models/Notification.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
+import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
 
 /**
  * CURRENT DATA for Vendor Aura+. Kept deliberately small: a large context
@@ -102,7 +103,7 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
   const today = isoDay(now);
   const in60 = isoDay(new Date(now.getTime() + 60 * 86400000));
 
-  const [activation, enquiries, newEnquiryCount, quotes, quoteCounts, bookings, blockouts, services, reviews, documents, unread, googleRating] =
+  const [activation, enquiries, newEnquiryCount, quotes, quoteCounts, bookings, allCoreBookings, financialTruth, blockouts, services, reviews, documents, unread, googleRating] =
     await Promise.all([
       safe(() => evaluateVendorActivation(vendorId), null),
       Opportunity.find({ vendor: vendorId, status: { $in: ['NEW', 'VIEWED'] } }).populate('customer', 'fullName email phone').sort({ createdAt: -1 }).limit(10).lean(),
@@ -110,6 +111,8 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       Quote.find({ vendor: vendorId }).populate('customer', 'fullName email phone').sort({ updatedAt: -1 }).limit(10).lean(),
       Quote.aggregate([{ $match: { vendor: vendorId } }, { $group: { _id: '$status', n: { $sum: 1 } } }]),
       CoreBooking.find({ vendorId, eventDate: { $gte: today } }).sort({ eventDate: 1 }).limit(10).lean(),
+      CoreBooking.find({ $or: [{ vendorId }, { vendorId: String(vendorId) }] }).sort({ eventDate: -1 }).limit(20).lean(),
+      safe(() => vendorFinancialTruth(vendorId), null),
       VendorBlockout.find({ vendor: vendorId, date: { $gte: today, $lte: in60 } }).sort({ date: 1 }).limit(20).lean(),
       VendorService.find({ vendor: vendorId }).lean(),
       VendorReview.find({ vendor: vendorId, status: 'PUBLISHED' }).sort({ createdAt: -1 }).limit(20).lean(),
@@ -193,10 +196,33 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       eventDate: b.eventDate,
       place: place(b.serviceLocation),
       total: b.totalAmount ?? b.pricing?.totalAmount ?? null,
+      vendorPayable: b.settlementDetails?.vendorPayable || b.taxSummary?.vendorPayable || b.totalAmount,
       booking: String(b.bookingStatus).toLowerCase(),
       payment: b.paymentStatus === 'PAYMENT_VERIFIED' ? 'advance verified' : String(b.paymentStatus).toLowerCase(),
       work: String(b.executionStatus).toLowerCase().replace(/_/g, ' '),
+      settlement: String(b.settlementStatus || 'not_eligible').toLowerCase(),
     })),
+    settlements: {
+      settledAmount: financialTruth?.metrics?.settledAmount ?? 0,
+      pendingSettlementAmount: financialTruth?.metrics?.expectedSettlements ?? 0,
+      expectedReceivables: financialTruth?.metrics?.expectedReceivables ?? 0,
+      dueThisWeek: financialTruth?.metrics?.dueThisWeek ?? 0,
+      overdueAmount: financialTruth?.metrics?.overdueAmount ?? 0,
+      settlementRule: 'STARVNT Escrow: customer advance is held safely in escrow. Once you complete the event and submit deliverables proof, Core verification unlocks settlement. STARVNT Finance then releases payout to your bank account.',
+      records: (allCoreBookings || []).map((b) => ({
+        ref: b.bookingReference,
+        customer: b.customerName || null,
+        service: b.serviceName,
+        eventDate: b.eventDate,
+        total: b.totalAmount ?? b.pricing?.totalAmount ?? null,
+        vendorPayable: b.settlementDetails?.vendorPayable || b.taxSummary?.vendorPayable || b.totalAmount,
+        paymentStatus: b.paymentStatus === 'PAYMENT_VERIFIED' ? 'advance verified' : String(b.paymentStatus).toLowerCase(),
+        work: String(b.executionStatus).toLowerCase().replace(/_/g, ' '),
+        settlement: String(b.settlementStatus || 'not_eligible').toLowerCase(),
+        payoutRef: b.settlementDetails?.transactionReference || null,
+      })),
+      pendingActions: financialTruth?.nextBestActions || [],
+    },
     blockedDates: blockouts.map((b) => ({ date: b.date, allDay: b.allDay, from: b.allDay ? null : b.startTime, to: b.allDay ? null : b.endTime, reason: b.reason })),
     services: services.map((s) => ({
       name: s.name,
