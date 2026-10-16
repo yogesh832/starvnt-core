@@ -11,10 +11,17 @@ const AI_CHAT_TIMEOUT_MS = Number(process.env.AI_CHAT_TIMEOUT_MS || 8000);
 const AI_FALLBACK_REPLY =
   "Sorry, I can't reach the planning assistant right now. Your chat is saved, and you can try again in a moment.";
 
-const openai = new OpenAI({ 
-  apiKey: process.env.GEMINI_API_KEY, 
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/" 
-});
+let openai;
+function getAIClient() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw Object.assign(new Error('GEMINI_API_KEY is not set'), { code: 'AI_NOT_CONFIGURED' });
+  }
+  openai ||= new OpenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+  });
+  return openai;
+}
 
 function cleanContent(value) {
   return String(value || '').trim();
@@ -189,10 +196,7 @@ Do not output the final JSON block until you have enough information.`;
     let aiMessage = AI_FALLBACK_REPLY;
     let fallback = false;
     try {
-      if (!process.env.GEMINI_API_KEY) {
-        throw Object.assign(new Error('GEMINI_API_KEY is not set'), { code: 'AI_NOT_CONFIGURED' });
-      }
-      const response = await withTimeout(openai.chat.completions.create({
+      const response = await withTimeout(getAIClient().chat.completions.create({
         model: "gemini-3.5-flash",
         messages: [
           { role: "system", content: systemPrompt },

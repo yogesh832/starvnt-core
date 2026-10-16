@@ -124,7 +124,8 @@ function EventsDonut({ stats = {} }) {
 }
 
 export default function Dashboard() {
-  const { admin } = useAdminAuth();
+  const { admin, can } = useAdminAuth();
+  const accessKey = JSON.stringify([admin?.id, admin?.role, admin?.permissions]);
   const [summary, setSummary] = useState({
     stats: [
       { label: 'Total Customers', value: '0', delta: 'Live count', icon: 'customers' },
@@ -147,15 +148,16 @@ export default function Dashboard() {
     setError('');
 
     Promise.allSettled([
-      adminApi.call('/external-users/customers?limit=1'),
-      adminApi.call('/external-users/organizations?limit=1'),
-      adminApi.call('/events?limit=50'),
-      adminApi.call('/operations/bookings?limit=100'),
-      adminApi.call('/audit?limit=5'),
+      can('customers.read') ? adminApi.call('/external-users/customers?limit=1') : Promise.resolve(null),
+      can('vendors.read') ? adminApi.call('/external-users/organizations?limit=1') : Promise.resolve(null),
+      can('events.read') ? adminApi.call('/events?limit=50') : Promise.resolve(null),
+      (can('bookings.read') || can('operations.read')) ? adminApi.call('/operations/bookings?limit=100') : Promise.resolve(null),
+      can('audit.read') ? adminApi.call('/audit?limit=5') : Promise.resolve(null),
+      can('vendors.read') ? adminApi.call('/external-users/organizations?limit=1&tab=Pending') : Promise.resolve(null),
     ])
       .then((results) => {
         if (!alive) return;
-        const [customers, vendors, events, bookings, audit] = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
+        const [customers, vendors, events, bookings, audit, pendingVendorQueue] = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
         const customerCount = customers?.total ?? customers?.count ?? customers?.customers?.length ?? 0;
         const vendorCount = vendors?.total ?? vendors?.count ?? vendors?.organizations?.length ?? 0;
         const eventStats = events?.stats || { total: 0 };
@@ -165,7 +167,7 @@ export default function Dashboard() {
           Number(eventStats.planning || 0) + Number(eventStats.booked || 0) + Number(eventStats.in_progress || 0);
         const bookingStats = bookings?.stats || {};
         const gmv = Number(bookingStats.totalGmv || 0);
-        const pendingVendors = vendors?.organizations?.filter?.((v) => !v.verification?.isVerified)?.length || 0;
+        const pendingVendors = pendingVendorQueue?.total || 0;
         const pendingPayments = Number(bookingStats.pendingPaymentCount || 0);
         const inProgress = Number(bookingStats.inProgressCount || 0);
 
@@ -177,10 +179,10 @@ export default function Dashboard() {
 
         setSummary({
           stats: [
-            { label: 'Total Customers', value: customerCount.toLocaleString('en-IN'), delta: 'Live count', icon: 'customers' },
-            { label: 'Total Vendors', value: vendorCount.toLocaleString('en-IN'), delta: 'Live count', icon: 'vendors' },
-            { label: 'Active Events', value: activeEventCount.toLocaleString('en-IN'), delta: `${eventCount.toLocaleString('en-IN')} total`, icon: 'events' },
-            { label: 'GMV (Total Bookings)', value: `₹${gmv.toLocaleString('en-IN')}`, delta: `${bookingStats.totalBookings || 0} bookings`, icon: 'wallet' },
+            { label: 'Total Customers', value: customers ? customerCount.toLocaleString('en-IN') : '—', delta: can('customers.read') ? customers ? 'Live count' : 'Unavailable' : 'Not available for this role', icon: 'customers' },
+            { label: 'Total Vendors', value: vendors ? vendorCount.toLocaleString('en-IN') : '—', delta: can('vendors.read') ? vendors ? 'Live count' : 'Unavailable' : 'Not available for this role', icon: 'vendors' },
+            { label: 'Active Events', value: events ? activeEventCount.toLocaleString('en-IN') : '—', delta: can('events.read') ? events ? `${eventCount.toLocaleString('en-IN')} total` : 'Unavailable' : 'Not available for this role', icon: 'events' },
+            { label: 'GMV (Total Bookings)', value: bookings ? `₹${gmv.toLocaleString('en-IN')}` : '—', delta: (can('bookings.read') || can('operations.read')) ? bookings ? `${bookingStats.totalBookings || 0} bookings` : 'Unavailable' : 'Not available for this role', icon: 'wallet' },
           ],
           activities: audit?.logs || [],
           attention,
@@ -200,7 +202,7 @@ export default function Dashboard() {
       });
 
     return () => { alive = false; };
-  }, []);
+  }, [accessKey]);
 
   return (
     <div className="space-y-5">
@@ -223,8 +225,8 @@ export default function Dashboard() {
       )}
 
       <div className="grid lg:grid-cols-2 gap-5">
-        <BookingsTrend bookings={summary.bookings} />
-        <EventsDonut stats={summary.eventStats} />
+        {(can('bookings.read') || can('operations.read')) ? <BookingsTrend bookings={summary.bookings} /> : <AdminEmptyState title="Booking access is restricted" message="This role does not include booking access." />}
+        {can('events.read') ? <EventsDonut stats={summary.eventStats} /> : <AdminEmptyState title="Event access is restricted" message="This role does not include event access." />}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">

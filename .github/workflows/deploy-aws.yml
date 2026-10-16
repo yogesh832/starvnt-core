@@ -1,0 +1,53 @@
+name: StarVnt CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Unit & Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Root & Server Dependencies
+        run: npm ci
+
+      - name: Run Backend Tests
+        run: npm test
+        working-directory: ./server
+
+      - name: Test Frontend Production Build
+        run: npm run build
+        working-directory: ./web
+
+  deploy:
+    name: Deploy to AWS Production
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Deploy via SSH to AWS EC2 / Lightsail
+      - name: Deploy to AWS Host
+        uses: appleboy/ssh-action@v1.0.3
+        if: env.AWS_HOST != ''
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USERNAME || 'ubuntu' }}
+          key: ${{ secrets.AWS_SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/starvnt
+            bash deploy/aws/deploy.sh

@@ -10,6 +10,13 @@
   "scripts": {
     "dev": "npm run dev -w server",
     "dev:web": "npm run dev -w web",
+    "dev:qa": "node server/scripts/run-test-environment.js",
+    "dev:qa:web": "node server/scripts/run-test-web.js",
+    "check:env": "node server/scripts/check-environment.js",
+    "check:qa-env": "node server/scripts/check-environment.js --qa",
+    "test:smoke": "node server/scripts/portal-smoke.js",
+    "test:smoke:dev": "node server/scripts/portal-smoke.js --dev-auth",
+    "test:smoke:qa": "node server/scripts/portal-smoke.js --dev-auth --base=http://localhost:4100 --web=http://localhost:5174 --report=tmp/qa/portal-smoke-qa.json",
     "test": "npm run test -w server",
     "backup:db": "npm run backup:db -w server",
     "seed:super-admin": "npm run seed -w server",

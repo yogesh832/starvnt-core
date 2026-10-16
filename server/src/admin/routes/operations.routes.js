@@ -63,7 +63,7 @@ router.use(requireAdminAuth);
  * List authoritative Core bookings with multi-field search, vendor filtering,
  * category, city, and status tabs.
  */
-router.get('/bookings', requirePermission('operations.read'), async (req, res, next) => {
+router.get('/bookings', requireAnyPermission('bookings.read', 'operations.read'), async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
     const skip = parseInt(req.query.skip) || 0;
@@ -208,7 +208,7 @@ router.get('/bookings', requirePermission('operations.read'), async (req, res, n
 /**
  * Get booking details.
  */
-router.get('/bookings/:id', requirePermission('operations.read'), async (req, res, next) => {
+router.get('/bookings/:id', requireAnyPermission('bookings.read', 'operations.read'), async (req, res, next) => {
   try {
     const booking = await CoreBooking.findById(req.params.id);
     if (!booking) {

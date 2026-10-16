@@ -1,10 +1,16 @@
-import "dotenv/config";
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 // Also load the server's env file when Node is launched from the repository
 // root. Existing process / working-directory settings keep their precedence.
-dotenv.config({ path: fileURLToPath(new URL("../.env", import.meta.url)) });
+if (process.env.STARVNT_ENV_FILE) {
+  // An explicit QA environment must not inherit credentials from server/.env.
+  dotenv.config({ path: resolve(process.cwd(), process.env.STARVNT_ENV_FILE) });
+} else {
+  dotenv.config();
+  dotenv.config({ path: fileURLToPath(new URL("../.env", import.meta.url)) });
+}
 
 function parseOrigins(value) {
   return (value || "http://localhost:5173")
@@ -43,7 +49,7 @@ export const config = {
   audience: "starvnt-external",
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL || "15m",
   refreshTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS || 30),
-  refreshCookieName: "starvnt_ext_rt",
+  refreshCookieName: process.env.REFRESH_COOKIE_NAME || "starvnt_ext_rt",
 
   // ── Internal admin domain ──
   mongoUriAdmin: process.env.MONGO_URI_ADMIN || "",
@@ -51,7 +57,7 @@ export const config = {
   adminAudience: "starvnt-admin",
   adminAccessTokenTtl: process.env.ADMIN_ACCESS_TOKEN_TTL || "15m",
   adminRefreshTtlDays: Number(process.env.ADMIN_REFRESH_TOKEN_TTL_DAYS || 7),
-  adminRefreshCookieName: "starvnt_admin_rt",
+  adminRefreshCookieName: process.env.ADMIN_REFRESH_COOKIE_NAME || "starvnt_admin_rt",
   adminAuthRateLimit: Number(process.env.ADMIN_AUTH_RATE_LIMIT || 10),
   adminMfaRequiredForSuperAdmin: process.env.ADMIN_MFA_REQUIRED_FOR_SUPER_ADMIN === undefined
     ? isProduction

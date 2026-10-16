@@ -43,6 +43,47 @@ export const PERMISSION_CATALOG = CATALOG;
 const VALID = new Set(ALL_PERMISSIONS);
 
 export const ADMIN_ROLE_PRESETS = {
+  SALES_EXECUTIVE: {
+    label: 'Sales Executive',
+    description: 'Creates and follows up customer enquiries and events, and views vendors, quotes and bookings.',
+    permissions: [
+      'customers.read',
+      'customers.create',
+      'customers.update',
+      'vendors.read',
+      'events.read',
+      'events.create',
+      'events.update',
+      'requirements.read',
+      'quotes.read',
+      'bookings.read',
+      'leads.read',
+      'leads.update',
+    ],
+  },
+  SALES_MANAGER: {
+    label: 'Sales Manager',
+    description: 'Manages customer and event follow-up, assigns leads and views sales analytics and reports.',
+    permissions: [
+      'customers.read',
+      'customers.create',
+      'customers.update',
+      'vendors.read',
+      'events.read',
+      'events.create',
+      'events.update',
+      'requirements.read',
+      'quotes.read',
+      'bookings.read',
+      'leads.read',
+      'leads.update',
+      'leads.assign',
+      'analytics.read',
+      'reports.read',
+      'reports.create',
+      'reports.export',
+    ],
+  },
   OPERATIONS_ADMIN: {
     label: 'Operations Admin',
     description: 'Runs event, booking, vendor, customer and automation operations without finance release power.',

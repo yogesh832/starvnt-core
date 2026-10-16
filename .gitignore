@@ -23,6 +23,8 @@ web/.env.*
 !*.env.example
 !server/.env.example
 !web/.env.example
+!server/.env.test.example
+!web/.env.test.example
 
 # Local generated/runtime files
 uploads/

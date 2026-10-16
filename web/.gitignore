@@ -15,6 +15,7 @@ server/.env
 server/.env.*
 web/.env
 web/.env.*
+!.env.test.example
 
 # Logs
 *.log

@@ -4,7 +4,7 @@ import { config } from '../../config.js';
 import { AdminUser } from '../models/AdminUser.js';
 import { AdminSession } from '../models/AdminSession.js';
 import { hashPassword, verifyPassword } from '../../external/utils/password.js';
-import { ALL_PERMISSIONS } from '../constants/permissions.js';
+import { ALL_PERMISSIONS, rolePresetPermissions } from '../constants/permissions.js';
 import {
   signAdminAccessToken,
   generateRefreshToken,
@@ -57,17 +57,17 @@ const DEV_ADMIN_PROFILES = {
   'ops@starvnt.com': {
     role: 'ADMIN',
     roleKey: 'OPERATIONS_ADMIN',
-    permissions: ['operations.read', 'operations.manage', 'vendors.read', 'customers.read', 'events.read', 'bookings.read', 'automation.read'],
+    permissions: rolePresetPermissions('OPERATIONS_ADMIN'),
   },
   'finance@starvnt.com': {
     role: 'ADMIN',
     roleKey: 'FINANCE_ADMIN',
-    permissions: ['payments.read', 'payments.approve', 'payments.refund', 'settlements.read', 'settlements.create', 'settlements.approve', 'settlements.release', 'bookings.read', 'audit.read'],
+    permissions: rolePresetPermissions('FINANCE_ADMIN'),
   },
   'support@starvnt.com': {
     role: 'ADMIN',
     roleKey: 'SUPPORT_ADMIN',
-    permissions: ['customers.read', 'vendors.read', 'events.read', 'bookings.read', 'audit.read'],
+    permissions: rolePresetPermissions('SUPPORT_ADMIN'),
   },
 };
 
@@ -102,8 +102,8 @@ router.post('/dev-auth', async (req, res, next) => {
         permissions: profile.permissions,
         passwordHash: await hashPassword('Password123!'),
       });
-    } else if (config.enableDevTools && admin.email !== 'admin@starvnt.com' && admin.role === 'SUPER_ADMIN') {
-      admin.role = 'ADMIN';
+    } else if (config.enableDevTools && admin.email !== 'admin@starvnt.com') {
+      admin.role = profile.role || 'ADMIN';
       admin.roleKey = profile.roleKey || '';
       admin.permissions = profile.permissions;
       await admin.save();

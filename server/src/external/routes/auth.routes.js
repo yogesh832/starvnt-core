@@ -72,17 +72,8 @@ router.post("/dev-auth", async (req, res, next) => {
       : "customer@starvnt.com";
 
     let user = await ExternalUser.findOne({ email });
-    if (!user) {
-      // Auto-trigger seed script if test data is missing
-      try {
-        const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
-        await seedRealVendors();
-      } catch (seedErr) {
-        console.warn("Auto-seed error in dev-auth:", seedErr.message);
-      }
-      user = await ExternalUser.findOne({ email });
-    }
-
+    // Quick sign-in creates only the requested development identity. It must
+    // never reseed the shared vendor catalog as a side effect of a login.
     if (!user) {
       user = await ExternalUser.create({
         email,
