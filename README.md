@@ -144,6 +144,13 @@ curl -X POST localhost:4000/api/internal/ops/events/<eventId>/complete -H "x-int
 curl -X POST localhost:4000/api/internal/admin/simulate-vendor-cancellation -H "x-internal-key: $K" -H "Content-Type: application/json" -d '{"bookingId":"<bookingId>","operator":"ravi"}'
 ```
 
+## Android and iOS
+
+The `mobile/` workspace contains the React Native + Expo app using the same backend.
+See [mobile setup](mobile/README.md) for development builds, public environment values,
+Google configuration and validation, and the [parity/QA record](mobile/PARITY.md)
+for implemented flows and remaining release work. Start Metro with `npm run dev:mobile`.
+
 ## Layout
 
 ```

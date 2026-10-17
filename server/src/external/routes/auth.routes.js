@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { nativeAuthTransport } from "../../common/nativeAuthTransport.js";
 import {
   normalizeEmail,
   consumeVerifiedEmailOtp,
@@ -30,6 +31,7 @@ import {
 } from "../services/otp.service.js";
 
 const router = Router();
+router.use(nativeAuthTransport(config.refreshCookieName));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

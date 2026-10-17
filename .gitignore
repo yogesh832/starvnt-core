@@ -45,6 +45,9 @@ pnpm-debug.log*
 # Coverage / test output
 coverage/
 .nyc_output/
+.expo/
+mobile/android/
+mobile/ios/
 test-results/
 playwright-report/
 

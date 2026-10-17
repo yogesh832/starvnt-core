@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { nativeAuthTransport } from '../../common/nativeAuthTransport.js';
 import rateLimit from 'express-rate-limit';
 import { config } from '../../config.js';
 import { AdminUser } from '../models/AdminUser.js';
@@ -15,6 +16,7 @@ import { requireAdminAuth } from '../middleware/requireAdminAuth.js';
 import { decryptMfaSecret, encryptMfaSecret, generateMfaSecret, otpauthUrl, verifyMfaToken } from '../utils/mfa.js';
 
 const router = Router();
+router.use(nativeAuthTransport(config.adminRefreshCookieName));
 
 // Brute-force protection on the admin auth surface.
 const adminAuthLimiter = rateLimit({

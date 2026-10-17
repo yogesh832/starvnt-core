@@ -5,9 +5,14 @@
   "description": "STARVNT — dual-domain identity & authorization architecture (MERN). One unified backend server hosting the External (Customer/Vendor) and Internal (Admin/Super Admin) identity domains on separate databases; three separate frontend portal experiences.",
   "workspaces": [
     "server",
-    "web"
+    "web",
+    "mobile"
   ],
   "scripts": {
+    "dev:mobile": "npm run start -w mobile",
+    "mobile:android": "npm run android -w mobile",
+    "mobile:ios": "npm run ios -w mobile",
+    "check:mobile": "npm run typecheck -w mobile && npm run test -w mobile",
     "dev": "npm run dev -w server",
     "dev:web": "npm run dev -w web",
     "dev:qa": "node server/scripts/run-test-environment.js",

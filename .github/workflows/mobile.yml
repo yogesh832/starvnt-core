@@ -1,0 +1,27 @@
+name: Mobile checks
+on:
+  pull_request:
+    paths: ['mobile/**', 'web/public/brand/**', 'web/src/theme.css', 'web/src/components/ui.jsx', 'web/index.html', 'server/src/common/nativeAuthTransport.js', 'server/src/customer/controllers/customer.controller.js', 'server/src/**/auth.routes.js', 'web/src/lib/adminNotifications*', 'package*.json', '.github/workflows/mobile.yml']
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_API_URL: https://app.starvnt.com
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run sync:brand -w @starvnt/mobile
+      - run: git diff --exit-code -- mobile/assets/brand mobile/public/brand mobile/src/brand.generated.json
+      - run: npm run check:mobile
+      - run: npx expo install --check
+        working-directory: mobile
+      - run: npx expo-doctor
+        working-directory: mobile
+      - run: npx expo export --platform android --platform ios
+        working-directory: mobile

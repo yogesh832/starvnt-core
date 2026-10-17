@@ -82,7 +82,12 @@ export const readOne = async (req, res) => res.json(await circleSvc.readOne(me(r
 export const documents = async (req, res) => res.json(await library.listDocuments(me(req)));
 export const downloadDocument = async (req, res) => {
   const doc = await library.documentPdf(me(req), req.params.documentId);
-  if (doc.redirectUrl) return res.redirect(302, doc.redirectUrl);
+  if (doc.redirectUrl) {
+    // Native networking stacks can retain authorization across redirects. Return
+    // the owned document's target so the app fetches it without a STARVNT bearer.
+    if (req.get('X-Starvnt-Client') === 'native') return res.json({ downloadUrl: doc.redirectUrl });
+    return res.redirect(302, doc.redirectUrl);
+  }
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${doc.filename.replace(/"/g, '')}"`);
   res.send(doc.buffer);
