@@ -4,6 +4,7 @@ import { external, internal } from "../api/runtime";
 import { useSession } from "../auth/Session";
 import { pickUpload } from "../api/upload";
 import { shareDocument } from "../api/documents";
+import { VendorProfile } from "./VendorProfile";
 import type { Data } from "../api/client";
 import {
   Button,
@@ -40,6 +41,11 @@ export function AccountScreen({ navigation }: any) {
         </Txt>
       </Card>
       <ErrorNotice message={a.error} />
+      <MenuRow
+        title="Notifications"
+        icon="notifications-outline"
+        onPress={() => navigation.navigate("NotificationSettings")}
+      />
       {!isAdmin && (
         <>
           <MenuRow
@@ -88,6 +94,13 @@ export function AccountScreen({ navigation }: any) {
         secondary
         onPress={() => s.setActiveDomain(isAdmin ? "external" : "admin")}
       />
+      {__DEV__ && (
+        <Button
+          title="⚡ Switch Test Persona (Quick Auth)"
+          secondary
+          onPress={() => navigation.navigate("TestAuth")}
+        />
+      )}
       <Button
         title="Sign out of this workspace"
         secondary
@@ -106,6 +119,14 @@ export function AccountScreen({ navigation }: any) {
   );
 }
 export function ProfileScreen() {
+  const { user } = useSession();
+  return user?.accountType === "VENDOR" ? (
+    <VendorProfile />
+  ) : (
+    <CustomerProfile />
+  );
+}
+function CustomerProfile() {
   const { user } = useSession();
   const vendor = user?.accountType === "VENDOR";
   const r = useResource(

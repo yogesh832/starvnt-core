@@ -1,5 +1,14 @@
 import React, { useState } from "react";
-import { Alert, Image, View } from "react-native";
+import { Alert, Image, Linking, View } from "react-native";
+import { quotePricing } from "../vendorCommerce";
+import { vendorCollections, vendorPipeline } from "../dashboardData";
+import { VendorMessageField } from "../VendorMessageField";
+import { VendorPortfolio } from "./VendorPortfolio";
+import {
+  VendorAnalytics,
+  VendorPayments,
+  VendorReviews,
+} from "./VendorInsights";
 import { external } from "../api/runtime";
 import { pickUpload } from "../api/upload";
 import type { Data } from "../api/client";
@@ -33,7 +42,13 @@ export const vendorModules = [
     "opportunities",
     "chatbox-ellipses-outline",
   ],
-  ["quotes", "Quotes", "/vendor/quotes", "quotes", "document-text-outline"],
+  [
+    "quotes",
+    "Quotes",
+    vendorCollections.quotes.path,
+    "quotes",
+    "document-text-outline",
+  ],
   ["bookings", "Bookings", "/vendor/bookings", "bookings", "calendar-outline"],
   ["services", "Services", "/vendor/services", "services", "grid-outline"],
   [
@@ -55,61 +70,7 @@ export const vendorModules = [
     "folder-outline",
   ],
 ];
-export function VendorHome({ navigation }: any) {
-  const r = useResource(external, "/vendor/badge-counts");
-  const profile = useResource(external, "/vendor/profile");
-  const activation = useResource(external, "/vendor/activation-status");
-  return (
-    <Page
-      {...r}
-      title={profile.data.vendor?.businessName || "Your business, in focus."}
-      subtitle="A clear view of what’s next."
-    >
-      <ErrorNotice message={profile.error || activation.error} />
-      <Card>
-        <Pill>VENDOR OS</Pill>
-        <Txt bold size={29}>
-          More time for\nwhat you do best.
-        </Txt>
-        <Button
-          title="Ask Aura+ about your business"
-          onPress={() => navigation.navigate("Chat")}
-        />
-      </Card>
-      <Stats
-        items={[
-          ["Enquiries", r.data.enquiriesCount ?? 0],
-          ["Quotes", r.data.quotesCount ?? 0],
-          ["Bookings", r.data.bookingsCount ?? 0],
-          ["Unread", r.data.unreadNotificationsCount ?? 0],
-        ]}
-      />
-      <Card>
-        <Txt bold>Workspace readiness</Txt>
-        <Pill>
-          {human(activation.data.status?.activationState || "Review setup")}
-        </Pill>
-        <Txt muted>
-          Complete your profile, services, portfolio, and verification to become
-          commercially active.
-        </Txt>
-        <Button
-          title="Complete business setup"
-          secondary
-          onPress={() => navigation.navigate("Profile")}
-        />
-      </Card>
-      {vendorModules.slice(0, 3).map(([module, title, , , icon]) => (
-        <MenuRow
-          key={module}
-          title={title}
-          icon={icon}
-          onPress={() => navigation.navigate("VendorModule", { module })}
-        />
-      ))}
-    </Page>
-  );
-}
+export { VendorHome } from "./Dashboards";
 export function VendorWork({ navigation }: any) {
   return (
     <Page
@@ -131,6 +92,11 @@ export function VendorWork({ navigation }: any) {
           onPress={() => navigation.navigate("VendorSetup", { kind })}
         />
       ))}
+      <MenuRow
+        title="Calendar & availability"
+        icon="calendar-outline"
+        onPress={() => navigation.navigate("VendorCalendar")}
+      />
       {vendorModules.map(([module, title, , , icon]) => (
         <MenuRow
           key={module}
@@ -148,15 +114,32 @@ export function VendorWork({ navigation }: any) {
   );
 }
 export function VendorModule({ route, navigation }: any) {
+  if (route.params.module === "portfolio") return <VendorPortfolio />;
+  if (route.params.module === "analytics") return <VendorAnalytics />;
+  if (route.params.module === "payments")
+    return <VendorPayments navigation={navigation} />;
+  if (route.params.module === "reviews")
+    return <VendorReviews navigation={navigation} />;
+  return (
+    <VendorModuleBody
+      key={route.params.module}
+      route={route}
+      navigation={navigation}
+    />
+  );
+}
+function VendorModuleBody({ route, navigation }: any) {
   const key = route.params.module;
   const module = vendorModules.find((m) => m[0] === key)!;
-  const r = useResource(external, module[2]);
+  const config = vendorCollections[key as keyof typeof vendorCollections];
+  const r = useResource(external, config?.path || module[2]);
   const a = useAction();
   const [query, setQuery] = useState("");
-  const rows: Data[] = (r.data[module[3]] || []).filter((row: Data) =>
-    `${row.name || ""} ${row.serviceName || ""} ${row.clientName || ""} ${row.title || ""} ${row.status || ""}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
+  const [stage, setStage] = useState("All");
+  const rows = vendorPipeline(
+    r.data[config?.collection || module[3]] || [],
+    stage,
+    query,
   );
   const add = ["services", "availability", "portfolio", "documents"].includes(
     key,
@@ -168,6 +151,20 @@ export function VendorModule({ route, navigation }: any) {
       subtitle="Connected to your STARVNT workspace."
     >
       <ErrorNotice message={a.error} />
+      {key === "documents" && (
+        <Button
+          title="PAN, GST & bank verification"
+          secondary
+          onPress={() => navigation.navigate("VendorFinancial")}
+        />
+      )}
+      {key === "availability" && (
+        <Button
+          title="Open calendar & partial-day availability"
+          secondary
+          onPress={() => navigation.navigate("VendorCalendar")}
+        />
+      )}
       {add && (
         <Button
           title={`Add ${key === "availability" ? "unavailable date" : key === "services" ? "service" : key === "portfolio" ? "portfolio project" : "document"}`}
@@ -192,6 +189,21 @@ export function VendorModule({ route, navigation }: any) {
           label="Search this section"
           value={query}
           onChangeText={setQuery}
+        />
+      )}
+      {key === "quotes" && (
+        <Choice
+          label="Quote pipeline"
+          value={stage}
+          values={[
+            "All",
+            "DRAFT",
+            "SUBMITTED",
+            "APPROVED",
+            "REJECTED",
+            "EXPIRED",
+          ]}
+          onChange={setStage}
         />
       )}
       {rows.map((row) => (
@@ -225,6 +237,55 @@ export function VendorModule({ route, navigation }: any) {
             </Txt>
           )}
           {row.executionStatus && <Txt muted>{human(row.executionStatus)}</Txt>}
+          {key === "documents" && (
+            <>
+              <Txt muted>
+                {human(row.type)} · {row.fileName}
+              </Txt>
+              {!!row.notes && <Txt>{row.notes}</Txt>}
+              {!!row.expiryDate && <Txt>Expires: {date(row.expiryDate)}</Txt>}
+              {!!row.manualReview?.required && (
+                <Txt muted>
+                  Review: {human(row.manualReview.status)} ·{" "}
+                  {row.manualReview.reason}
+                </Txt>
+              )}
+              {!!row.fileUrl && (
+                <Button
+                  title="Open document"
+                  secondary
+                  busy={a.busy}
+                  onPress={() => {
+                    void a.run(async () => {
+                      if (!/^https?:\/\//i.test(row.fileUrl))
+                        throw new Error("This document link is unavailable.");
+                      await Linking.openURL(row.fileUrl);
+                    });
+                  }}
+                />
+              )}
+              <Button
+                title="Remove document record"
+                secondary
+                busy={a.busy}
+                onPress={() =>
+                  confirm(
+                    "Remove this document record?",
+                    "Your verification status is determined by the server.",
+                    () => {
+                      void a.run(async () => {
+                        await external.call(
+                          `/vendor/documents/${id(row)}`,
+                          "DELETE",
+                        );
+                        r.refresh();
+                      });
+                    },
+                  )
+                }
+              />
+            </>
+          )}
           {key === "enquiries" && (
             <>
               <Txt muted>{row.customer?.fullName || row.clientName}</Txt>
@@ -260,6 +321,14 @@ export function VendorModule({ route, navigation }: any) {
           {key === "quotes" && (
             <>
               <Txt muted>{row.notes}</Txt>
+              <Txt muted>{row.customer?.fullName || row.customer?.email}</Txt>
+              <Button
+                title="Review quote & history"
+                secondary
+                onPress={() =>
+                  navigation.navigate("VendorQuote", { quoteId: id(row) })
+                }
+              />
               {["DRAFT", "SUBMITTED"].includes(row.status) && (
                 <Button
                   title="Revise offer"
@@ -354,16 +423,36 @@ export function VendorModule({ route, navigation }: any) {
   );
 }
 export function VendorForm({ route, navigation }: any) {
+  return (
+    <VendorFormBody
+      key={`${route.params.kind}-${id(route.params.item || {})}-${!!route.params.revise}`}
+      route={route}
+      navigation={navigation}
+    />
+  );
+}
+function VendorFormBody({ route, navigation }: any) {
   const { kind, item = {}, revise } = route.params;
   const a = useAction();
   const [form, setForm] = useState<Data>({
     name: item.name || "",
     category: item.category || "",
+    pricingType: item.pricing?.pricingType || "FIXED",
+    unit: item.pricing?.unit || "event",
+    leadTimeDays: String(item.leadTimeDays ?? 7),
+    serviceStatus: item.status || "ACTIVE",
+    taxIncluded: item.pricing?.taxIncluded === false ? "no" : "yes",
     price: String(
       item.pricing?.basePrice ?? item.pricingBreakdown?.basePrice ?? "",
     ),
     travel: String(item.pricingBreakdown?.travelFee || "0"),
-    tax: String(item.pricingBreakdown?.taxAmount || "0"),
+    tax: String(
+      item.pricingBreakdown?.additionalFee ??
+        item.pricingBreakdown?.taxAmount ??
+        "0",
+    ),
+    equipment: String(item.pricingBreakdown?.equipmentFee || "0"),
+    setup: String(item.pricingBreakdown?.setupFee || "0"),
     notes: item.notes || "",
     date: "",
     reason: "",
@@ -394,7 +483,12 @@ export function VendorForm({ route, navigation }: any) {
         !form.name.trim() ||
         !form.category.trim() ||
         !Number.isFinite(Number(form.price)) ||
-        Number(form.price) <= 0
+        Number(form.price) < 0 ||
+        !form.price.trim() ||
+        !Number.isInteger(Number(form.leadTimeDays)) ||
+        Number(form.leadTimeDays) < 0 ||
+        !form.leadTimeDays.trim() ||
+        !form.unit.trim()
       )
         throw new Error("Enter a service name, category, and valid price.");
       await external.call(
@@ -405,10 +499,13 @@ export function VendorForm({ route, navigation }: any) {
           category: form.category.trim(),
           pricing: {
             ...item.pricing,
-            pricingType: item.pricing?.pricingType || "FIXED",
+            pricingType: form.pricingType,
             basePrice: Number(form.price),
-            unit: item.pricing?.unit || "event",
+            unit: form.unit.trim(),
+            taxIncluded: form.taxIncluded === "yes",
           },
+          leadTimeDays: Number(form.leadTimeDays),
+          status: form.serviceStatus,
         },
       );
     } else if (kind === "availability") {
@@ -423,16 +520,13 @@ export function VendorForm({ route, navigation }: any) {
         reason: form.reason,
       });
     } else if (kind === "quote") {
-      const basePrice = Number(form.price),
-        travelFee = Number(form.travel),
-        taxAmount = Number(form.tax);
-      if (
-        ![basePrice, travelFee, taxAmount].every(Number.isFinite) ||
-        basePrice <= 0 ||
-        travelFee < 0 ||
-        taxAmount < 0
-      )
-        throw new Error("Enter a valid price and non-negative charges.");
+      const pricingBreakdown = quotePricing({
+        basePrice: form.price,
+        travelFee: form.travel,
+        equipmentFee: form.equipment,
+        setupFee: form.setup,
+        additionalFee: form.tax,
+      });
       await external.call(
         revise ? `/vendor/quotes/${id(item)}/revise` : "/quotes",
         "POST",
@@ -444,12 +538,7 @@ export function VendorForm({ route, navigation }: any) {
           eventDate: item.eventDate,
           serviceLocation: item.serviceLocation,
           notes: form.notes,
-          pricingBreakdown: {
-            basePrice,
-            travelFee,
-            additionalFee: taxAmount,
-            totalAmount: basePrice + travelFee + taxAmount,
-          },
+          pricingBreakdown,
           status: "SUBMITTED",
         },
       );
@@ -499,6 +588,26 @@ export function VendorForm({ route, navigation }: any) {
           {field("name", "Service name")}
           {field("category", "Service category")}
           {field("price", "Base price in ₹", true)}
+          <Choice
+            label="Pricing model"
+            values={["FIXED", "HOURLY", "PER_PERSON", "TIERED", "CUSTOM"]}
+            value={form.pricingType}
+            onChange={(v) => setForm((f) => ({ ...f, pricingType: v }))}
+          />
+          {field("unit", "Price unit (event, hour, guest…)")}
+          <Choice
+            label="Tax included"
+            values={["yes", "no"]}
+            value={form.taxIncluded}
+            onChange={(v) => setForm((f) => ({ ...f, taxIncluded: v }))}
+          />
+          {field("leadTimeDays", "Lead time in days", true)}
+          <Choice
+            label="Service status"
+            values={["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"]}
+            value={form.serviceStatus}
+            onChange={(v) => setForm((f) => ({ ...f, serviceStatus: v }))}
+          />
         </>
       )}
       {kind === "availability" && (
@@ -515,15 +624,37 @@ export function VendorForm({ route, navigation }: any) {
           </Card>
           {field("price", "Base price in ₹", true)}
           {field("travel", "Travel fee in ₹", true)}
+          {field("equipment", "Equipment fee in ₹", true)}
+          {field("setup", "Setup fee in ₹", true)}
           {field("tax", "Additional charges in ₹", true)}
-          {field("notes", "Proposal notes", false, true)}
+          <VendorMessageField
+            label="Proposal notes"
+            value={form.notes}
+            onChange={(notes) => setForm((current) => ({ ...current, notes }))}
+            context={{ type: revise ? "quote" : "opportunity", id: id(item) }}
+            disabled={a.busy}
+          />
           <Txt bold>
             Total{" "}
-            {money(Number(form.price) + Number(form.travel) + Number(form.tax))}
+            {money(
+              Number(form.price) +
+                Number(form.travel) +
+                Number(form.equipment) +
+                Number(form.setup) +
+                Number(form.tax),
+            )}
           </Txt>
         </>
       )}
-      {kind === "review" && field("notes", "Your reply", false, true)}
+      {kind === "review" && (
+        <VendorMessageField
+          label="Your reply"
+          value={form.notes}
+          onChange={(notes) => setForm((current) => ({ ...current, notes }))}
+          context={{ type: "review", id: id(item) }}
+          disabled={a.busy}
+        />
+      )}
       {["portfolio", "documents"].includes(kind) && (
         <>
           {field(
@@ -570,114 +701,4 @@ export function VendorForm({ route, navigation }: any) {
     </Page>
   );
 }
-export function VendorBooking({ route, navigation }: any) {
-  const b = route.params.booking;
-  const a = useAction();
-  const [notes, setNotes] = useState("");
-  const [url, setUrl] = useState("");
-  const [asset, setAsset] = useState<Data | null>(null);
-  return (
-    <Page title={b.serviceName || "Booking"} subtitle={b.bookingReference}>
-      <Card>
-        <Pill>{human(b.executionStatus)}</Pill>
-        <Txt>{date(b.eventDate)}</Txt>
-        <Txt muted>{human(b.paymentStatus)}</Txt>
-        <Txt bold>
-          {money(b.totalAmount || b.pricingBreakdown?.totalAmount)}
-        </Txt>
-      </Card>
-      <ErrorNotice message={a.error} />
-      <Button
-        title="Open booking conversation"
-        secondary
-        busy={a.busy}
-        onPress={() => {
-          void a.run(async () => {
-            const d = await external.call(
-              `/vendor/bookings/${id(b)}/message-thread`,
-              "POST",
-            );
-            navigation.navigate("Chat", {
-              kind: "thread",
-              threadId: id(d.thread),
-              vendor: true,
-            });
-          });
-        }}
-      />
-      <Button
-        title="Mark service as started"
-        secondary
-        busy={a.busy}
-        onPress={() =>
-          confirm(
-            "Start this service?",
-            "This records that service delivery has begun and notifies the customer.",
-            () => {
-              void a.run(async () => {
-                await external.call(`/vendor/bookings/${id(b)}/start`, "POST");
-                Alert.alert("Service started");
-                navigation.goBack();
-              });
-            },
-          )
-        }
-      />
-      <Txt bold size={22}>
-        Completion evidence
-      </Txt>
-      <Field
-        label="Delivery / evidence URL"
-        value={url}
-        onChangeText={setUrl}
-        autoCapitalize="none"
-        keyboardType="url"
-      />
-      <Field
-        label="Completion notes"
-        value={notes}
-        onChangeText={setNotes}
-        multiline
-      />
-      <Button
-        title={asset ? "Evidence uploaded" : "Upload evidence"}
-        secondary
-        busy={a.busy}
-        onPress={() => {
-          void a.run(async () => {
-            const d = await pickUpload();
-            if (d) {
-              setAsset(d);
-              setUrl(d.url);
-            }
-          });
-        }}
-      />
-      <Button
-        title="Submit completion for review"
-        busy={a.busy}
-        onPress={() => {
-          void a.run(async () => {
-            if (!url.trim())
-              throw new Error("Add delivery evidence before submitting.");
-            await external.call(
-              `/vendor/bookings/${id(b)}/submit-completion`,
-              "POST",
-              {
-                deliverablesUrl: url,
-                notes,
-                files: asset ? [asset.url] : [],
-                checklist: [],
-              },
-            );
-            Alert.alert(
-              "Evidence submitted",
-              "Customer and Core review determine completion and settlement.",
-            );
-            navigation.goBack();
-          });
-        }}
-      />
-    </Page>
-  );
-}
+export { VendorBooking } from "./VendorBooking";

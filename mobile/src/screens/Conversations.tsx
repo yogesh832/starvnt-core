@@ -1,12 +1,28 @@
 import React, { useEffect, useState } from "react";
-import { View } from "react-native";
+import { Image, Linking, View } from "react-native";
+import { attachedMessage, messageLinks } from "../messageMedia";
+import { pickUpload } from "../api/upload";
+import { vendorDestination } from "../vendorDestination";
+import { EventDateField } from "../EventFields";
+import { AuraPlan } from "../AuraPlan";
+import { auraChoice, conversationContext } from "../auraChoices";
+import { isQuoteMessage } from "../../../web/src/pages/customer/quoteMessageActions";
 import { usePlanningIntent } from "../PlanningIntent";
+import {
+  newAuraSessionId,
+  readAuraSession,
+  rememberAuraSession,
+  validAuraSessionId,
+} from "../auraSessions";
 import { external } from "../api/runtime";
 import type { Data } from "../api/client";
 import { useSession } from "../auth/Session";
+import { usePush } from "../Push";
+import { pushDestination } from "../pushDestination";
 import {
   Button,
   Card,
+  confirm,
   Empty,
   ErrorNotice,
   Field,
@@ -22,6 +38,7 @@ import {
 
 export function UpdatesScreen({ navigation }: any) {
   const { user } = useSession();
+  const { revision } = usePush();
   const vendor = user?.accountType === "VENDOR";
   const r = useResource(
     external,
@@ -32,6 +49,12 @@ export function UpdatesScreen({ navigation }: any) {
     vendor ? "/vendor/messages/threads" : "/customer/updates",
   );
   const a = useAction();
+  useEffect(() => {
+    if (revision) {
+      void r.refresh();
+      void threads.refresh();
+    }
+  }, [revision]);
   return (
     <Page
       {...r}
@@ -85,6 +108,32 @@ export function UpdatesScreen({ navigation }: any) {
           <Pill>{n.read || n.isRead ? "READ" : "NEW"}</Pill>
           <Txt bold>{n.title}</Txt>
           <Txt muted>{n.body || n.message}</Txt>
+          {(n.actionUrl ||
+            n.link ||
+            n.payload?.threadId ||
+            n.metadata?.threadId) && (
+            <Button
+              title="Open update"
+              secondary
+              onPress={() => {
+                const target = pushDestination(
+                  {
+                    version: 1,
+                    domain: "external",
+                    ownerId: id(user || {}),
+                    surface: user?.accountType,
+                    actionUrl: n.actionUrl || n.link,
+                    eventId: n.eventId || n.event,
+                    threadId: n.payload?.threadId || n.metadata?.threadId,
+                  },
+                  user || {},
+                  "external",
+                  () => false,
+                );
+                if (target) navigation.navigate(target.screen, target.params);
+              }}
+            />
+          )}
           {!(n.read || n.isRead) && (
             <Button
               title="Mark as read"
@@ -123,22 +172,115 @@ export function UpdatesScreen({ navigation }: any) {
     </Page>
   );
 }
-export function ChatScreen({ route, navigation }: any) {
-  const { eventId, kind = "aura", threadId, bookingId } = route.params || {};
+export function ChatScreen(props: any) {
+  const kind = props.route.params?.kind || "aura";
+  return kind === "aura" ? (
+    <AuraSessionBoundary {...props} />
+  ) : (
+    <ConversationScreen
+      key={`${kind}-${props.route.params?.threadId || props.route.params?.eventId}-${props.route.params?.bookingId || props.route.params?.requirementId || ""}`}
+      {...props}
+    />
+  );
+}
+function AuraSessionBoundary({ route, navigation }: any) {
+  const { user } = useSession();
+  const { prompt } = usePlanningIntent();
+  const [freshIntent] = useState(() => !!prompt);
+  const owner = id(user || {});
+  const vendor = user?.accountType === "VENDOR";
+  const { eventId, sessionId: requested, newChatKey } = route.params || {};
+  const requestKey = `${owner}-${vendor}-${eventId || "new"}-${requested || newChatKey || "current"}`;
+  const [resolved, setResolved] = useState<{
+    key: string;
+    sessionId: string;
+    error: string;
+  } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      if (requested && !validAuraSessionId(requested)) {
+        if (live)
+          setResolved({
+            key: requestKey,
+            sessionId: "",
+            error: "This conversation link is invalid.",
+          });
+        return;
+      }
+      let sessionId =
+        requested || (newChatKey || freshIntent ? newAuraSessionId() : null);
+      if (!sessionId) {
+        try {
+          sessionId = await readAuraSession(owner, vendor, eventId);
+        } catch {
+          /* Server history remains available when local preferences cannot be read. */
+        }
+      }
+      sessionId ||= newAuraSessionId();
+      try {
+        await rememberAuraSession(owner, vendor, eventId, sessionId);
+      } catch {
+        /* A local preference failure must not block a server conversation. */
+      }
+      if (live) setResolved({ key: requestKey, sessionId, error: "" });
+    })();
+    return () => {
+      live = false;
+    };
+  }, [requestKey]);
+  if (!resolved || resolved.key !== requestKey)
+    return <Page title="Aura+" loading />;
+  if (resolved.error)
+    return (
+      <Page title="Aura+">
+        <ErrorNotice message={resolved.error} />
+        <Button
+          title="Browse conversations"
+          onPress={() => navigation.navigate("AuraHistory")}
+        />
+      </Page>
+    );
+  return (
+    <ConversationScreen
+      key={resolved.sessionId}
+      route={{
+        ...route,
+        params: { ...route.params, sessionId: resolved.sessionId },
+      }}
+      navigation={navigation}
+    />
+  );
+}
+function ConversationScreen({ route, navigation }: any) {
+  const {
+    eventId,
+    kind = "aura",
+    threadId,
+    bookingId,
+    requirementId,
+  } = route.params || {};
   const { user } = useSession();
   const vendor = user?.accountType === "VENDOR";
   const c = usePalette();
   const a = useAction();
   const { prompt, setPrompt } = usePlanningIntent();
   const [text, setText] = useState(() =>
-    kind === "aura" && !vendor ? prompt : "",
+    kind === "aura" && !vendor ? route.params?.initialPrompt || prompt : "",
   );
   useEffect(() => {
     if (kind === "aura" && !vendor && prompt) setPrompt("");
   }, []);
   const [local, setLocal] = useState<Data[]>([]);
   const [activeEvent, setActiveEvent] = useState(eventId);
+  const [planEvent, setPlanEvent] = useState<Data | null>(null);
+  const [understanding, setUnderstanding] = useState<Data | null>(null);
   const [pending, setPending] = useState<Data | null>(null);
+  const [attachment, setAttachment] = useState<Data | null>(null);
+  const [draftInstructions, setDraftInstructions] = useState("");
+  const [showDraft, setShowDraft] = useState(false);
+  const [nextQuestion, setNextQuestion] = useState<Data | null>(null);
+  const [answerDate, setAnswerDate] = useState("");
   // Customer Aura sessions are caller-generated and backed by the same server session store.
   const [sessionId, setSessionId] = useState(
     () =>
@@ -151,7 +293,7 @@ export function ChatScreen({ route, navigation }: any) {
         ? `/vendor/messages/threads/${encodeURIComponent(threadId)}`
         : `/customer/messages/threads/${encodeURIComponent(threadId)}`
       : kind === "circle"
-        ? `/customer/events/${encodeURIComponent(eventId)}/messages${bookingId ? `?bookingId=${encodeURIComponent(bookingId)}` : ""}`
+        ? `/customer/events/${encodeURIComponent(eventId)}/messages?${new URLSearchParams(conversationContext(bookingId, requirementId))}`
         : vendor
           ? `/vendor/aura/sessions/${encodeURIComponent(sessionId)}`
           : `/aura/sessions/${encodeURIComponent(sessionId)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ""}`;
@@ -162,13 +304,24 @@ export function ChatScreen({ route, navigation }: any) {
       : r.data.messages || r.data.thread?.messages || [];
   useEffect(() => {
     if (kind === "aura") {
-      setLocal(r.data.messages || []);
+      setLocal(r.data.messages || r.data.session?.messages || []);
       setPending(r.data.pending || null);
+      setNextQuestion(r.data.nextQuestion || null);
+      setPlanEvent(r.data.activeEvent || null);
+      setUnderstanding(r.data.understanding || null);
+      if (r.data.activeEvent?.id) setActiveEvent(r.data.activeEvent.id);
     }
   }, [r.data, kind]);
   const messages = kind === "aura" ? local : stored;
-  async function send(override?: string, confirmation?: boolean) {
-    const message = override || text.trim();
+  async function send(
+    override?: string,
+    confirmation?: boolean,
+    choiceBody: Data = {},
+  ) {
+    const message =
+      kind === "aura"
+        ? override || text.trim()
+        : attachedMessage(override || text, attachment?.url);
     if (!message) return;
     if (kind === "aura") {
       const data = await external.call(
@@ -179,14 +332,26 @@ export function ChatScreen({ route, navigation }: any) {
           message,
           eventId: activeEvent,
           stream: false,
+          ...(!vendor ? choiceBody : {}),
           ...(typeof confirmation === "boolean"
             ? { confirm: confirmation }
             : {}),
         },
       );
       setPending(data.pending || null);
+      setNextQuestion(data.nextQuestion || null);
+      if (data.activeEvent) setPlanEvent(data.activeEvent);
+      if ("understanding" in data) setUnderstanding(data.understanding);
       const nextEvent = data.createdEventId || data.activeEvent?.id;
-      if (nextEvent) setActiveEvent(nextEvent);
+      if (nextEvent) {
+        setActiveEvent(nextEvent);
+        void rememberAuraSession(
+          id(user || {}),
+          vendor,
+          nextEvent,
+          sessionId,
+        ).catch(() => {});
+      }
       setLocal((v) => [
         ...v,
         { role: "user", content: message },
@@ -198,6 +363,7 @@ export function ChatScreen({ route, navigation }: any) {
             data.message ||
             data.text ||
             "Your plan has been updated.",
+          actions: data.actions || [],
         },
       ]);
     } else {
@@ -212,11 +378,12 @@ export function ChatScreen({ route, navigation }: any) {
         "POST",
         vendor
           ? { text: message }
-          : { body: message, ...(bookingId ? { bookingId } : {}) },
+          : { body: message, ...conversationContext(bookingId, requirementId) },
       );
       r.refresh();
     }
     setText("");
+    setAttachment(null);
   }
   return (
     <Page
@@ -234,6 +401,35 @@ export function ChatScreen({ route, navigation }: any) {
       refresh={r.refresh}
       refreshing={r.refreshing}
     >
+      {kind === "aura" && (
+        <>
+          <Button
+            title="Past conversations"
+            secondary
+            disabled={a.busy}
+            onPress={() => navigation.navigate("AuraHistory")}
+          />
+          <Button
+            title="New conversation"
+            secondary
+            disabled={a.busy}
+            onPress={() => {
+              const start = () =>
+                navigation.setParams({
+                  sessionId: undefined,
+                  newChatKey: String(Date.now()),
+                });
+              if (text.trim())
+                confirm(
+                  "Start a new conversation?",
+                  "Your unsent draft will be cleared. Sent messages remain in your conversation history.",
+                  start,
+                );
+              else start();
+            }}
+          />
+        </>
+      )}
       {!messages.length && (
         <Card>
           <Pill>
@@ -285,10 +481,137 @@ export function ChatScreen({ route, navigation }: any) {
                 ? m.content || m.text || m.body
                 : "Conversation updated"}
             </Txt>
+            {!vendor &&
+              kind !== "aura" &&
+              isQuoteMessage(m) &&
+              (eventId || m.eventId || r.data.thread?.eventId) && (
+                <Button
+                  title="Review quote"
+                  secondary
+                  onPress={() =>
+                    navigation.navigate("EventSection", {
+                      eventId: eventId || m.eventId || r.data.thread?.eventId,
+                      section: "quotes",
+                      title: "Plans & quotes",
+                    })
+                  }
+                />
+              )}
+            {messageLinks(String(m.content || m.text || m.body || "")).map(
+              (link) => (
+                <View key={link.url} style={{ gap: 8 }}>
+                  {link.image && (
+                    <Image
+                      source={{ uri: link.url }}
+                      accessibilityLabel="Shared image"
+                      style={{
+                        width: 240,
+                        maxWidth: "100%",
+                        height: 180,
+                        borderRadius: 12,
+                      }}
+                      resizeMode="contain"
+                    />
+                  )}
+                  <Button
+                    title={link.image ? "Open image" : "Open shared link"}
+                    secondary
+                    onPress={() =>
+                      a.run(async () => {
+                        await Linking.openURL(link.url);
+                      })
+                    }
+                  />
+                </View>
+              ),
+            )}
+            {kind === "aura" &&
+              vendor &&
+              !mine &&
+              (m.actions || []).map((action: Data) => {
+                const target =
+                  typeof action.to === "string"
+                    ? vendorDestination(action.to)
+                    : null;
+                return target ? (
+                  <Button
+                    key={action.to}
+                    title={action.label || "Open workspace"}
+                    secondary
+                    onPress={() =>
+                      navigation.navigate(target.screen, target.params)
+                    }
+                  />
+                ) : null;
+              })}
           </View>
         );
       })}
       <ErrorNotice message={a.error} />
+      {kind === "aura" && !vendor && (
+        <AuraPlan
+          event={planEvent}
+          understanding={understanding}
+          navigation={navigation}
+          busy={a.busy}
+          onAsk={(message) => {
+            void a.run(() => send(message));
+          }}
+          onConfirm={() =>
+            a.run(async () => {
+              if (!planEvent || !understanding?.canConfirm) return;
+              const detail = await external.call(
+                `/customer/events/${encodeURIComponent(id(planEvent))}/confirm`,
+                "POST",
+              );
+              setPlanEvent(detail.event || planEvent);
+              setUnderstanding(detail.understanding || null);
+              setNextQuestion(null);
+            })
+          }
+        />
+      )}
+      {kind === "aura" && !vendor && nextQuestion && (
+        <Card>
+          {!!nextQuestion.question && <Txt bold>{nextQuestion.question}</Txt>}
+          {(nextQuestion.options || []).map(
+            (option: Data | string, index: number) => {
+              const label = typeof option === "string" ? option : option.label;
+              const choice = auraChoice(option);
+              return (
+                <Button
+                  key={`${label}-${index}`}
+                  title={label}
+                  secondary
+                  busy={a.busy}
+                  onPress={() => {
+                    if (choice.prefill) setText(choice.prefill);
+                    else
+                      void a.run(() =>
+                        send(choice.message, undefined, choice.body),
+                      );
+                  }}
+                />
+              );
+            },
+          )}
+          {nextQuestion.topic === "event.date" && (
+            <>
+              <EventDateField
+                value={answerDate}
+                onChange={setAnswerDate}
+                minimumDate={new Date()}
+              />
+              <Button
+                title="Use this event date"
+                disabled={!answerDate}
+                busy={a.busy}
+                onPress={() => a.run(() => send(answerDate))}
+              />
+            </>
+          )}
+        </Card>
+      )}
       {pending && kind === "aura" && vendor && (
         <Card>
           <Txt bold>Review Aura’s proposed change</Txt>
@@ -328,11 +651,94 @@ export function ChatScreen({ route, navigation }: any) {
         value={text}
         onChangeText={setText}
         maxLength={2000}
+        editable={!a.busy}
       />
+      {kind !== "aura" && (
+        <>
+          <Button
+            title={
+              attachment
+                ? `Attached: ${attachment.filename}`
+                : "Attach a photo, video or document"
+            }
+            secondary
+            busy={a.busy}
+            onPress={() =>
+              a.run(async () => {
+                const uploaded = await pickUpload();
+                if (uploaded) setAttachment(uploaded);
+              })
+            }
+          />
+          {attachment && (
+            <Button
+              title="Remove attachment"
+              secondary
+              disabled={a.busy}
+              onPress={() => setAttachment(null)}
+            />
+          )}
+          {vendor && kind === "thread" && (
+            <>
+              <Button
+                title={
+                  showDraft ? "Close writing assistant" : "Write with Aura+"
+                }
+                secondary
+                disabled={a.busy}
+                onPress={() => setShowDraft(!showDraft)}
+              />
+              {showDraft && (
+                <Card>
+                  <Field
+                    label="What should the message include?"
+                    multiline
+                    value={draftInstructions}
+                    onChangeText={setDraftInstructions}
+                    maxLength={2000}
+                    editable={!a.busy}
+                  />
+                  <Button
+                    title={
+                      text.trim()
+                        ? "Replace draft with Aura+"
+                        : "Generate draft"
+                    }
+                    busy={a.busy}
+                    disabled={!draftInstructions.trim()}
+                    onPress={() =>
+                      a.run(async () => {
+                        const result = await external.call(
+                          "/vendor/messages/draft",
+                          "POST",
+                          {
+                            context: { type: "thread", id: threadId },
+                            instructions: draftInstructions.trim(),
+                          },
+                        );
+                        if (
+                          typeof result.draft !== "string" ||
+                          !result.draft.trim()
+                        )
+                          throw new Error(
+                            "Aura could not write a draft. Please try again.",
+                          );
+                        setText(result.draft);
+                        setShowDraft(false);
+                      })
+                    }
+                  />
+                  <Txt muted>Review and edit the draft before sending.</Txt>
+                </Card>
+              )}
+            </>
+          )}
+        </>
+      )}
       <Button
         title={kind === "aura" ? "Send to Aura+  ✦" : "Send message"}
         busy={a.busy}
-        disabled={!text.trim()}
+        disabled={(!text.trim() && !attachment) || r.loading}
         onPress={() => {
           void a.run(send);
         }}

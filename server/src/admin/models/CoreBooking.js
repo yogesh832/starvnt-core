@@ -30,6 +30,7 @@ const coreBookingSchema = new Schema(
       type: String,
       index: true,
     },
+    customerEvent: { type: Schema.Types.ObjectId, default: null, index: true },
     vendorId: {
       type: Schema.Types.ObjectId,
       required: true,

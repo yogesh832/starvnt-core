@@ -5,6 +5,7 @@ import { expireStaleReservations } from '../customer/repositories/commerce.repo.
 import { expireStaleOpportunities } from '../external/services/opportunitySla.service.js';
 import { incrementMetric } from '../metrics.js';
 import { configureWorker, markWorkerError, markWorkerStarted, markWorkerSuccess } from './workerHealth.js';
+import { startPushWorker } from '../notifications/push.worker.js';
 
 async function releaseStaleOutboxLocks() {
   const staleBefore = new Date(Date.now() - Math.max(60000, config.outboxWorkerIntervalMs * 4));
@@ -24,6 +25,7 @@ async function releaseStaleOutboxLocks() {
 }
 
 export function startCoreWorkers() {
+  startPushWorker();
   configureWorker('outbox', { enabled: config.outboxWorkerEnabled });
   configureWorker('reservation-expiry', { enabled: config.reservationExpiryWorkerEnabled });
 

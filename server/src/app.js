@@ -29,6 +29,7 @@ import adminExternalUsersRoutes from './admin/routes/external-users.routes.js';
 import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
 import { metricsMiddleware, renderPrometheusMetrics } from './metrics.js';
+import { pushRoutes } from './notifications/push.routes.js';
 
 export function createApp() {
   const app = express();
@@ -92,6 +93,8 @@ export function createApp() {
 
   // ── EXTERNAL domain: single auth for Customers + Vendors ──────────────────
   app.use('/api/auth', externalAuthRoutes);
+  app.use('/api/push', pushRoutes('external'));
+  app.use('/api/admin/push', pushRoutes('admin'));
 
   // Product-surface probes — prove domain isolation + account-type gating.
   app.get('/api/customer/me', requireExternalAuth, requireAccountType('CUSTOMER'), (req, res) => {

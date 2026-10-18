@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Image, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { Alert, View } from "react-native";
+import { DiscoveryOptions } from "./CustomerDiscovery";
+import { BudgetScreen, MyVendorsScreen } from "./CustomerWorkspace";
+import { AuraPlan } from "../AuraPlan";
+export { NewEvent } from "./CustomerPlanning";
+import { ServiceFields } from "../EventFields";
+import {
+  detailsPayload,
+  emptyServiceLocation,
+  serviceLocationPayload,
+  serviceLocationText,
+} from "../eventFormModel";
 import { external } from "../api/runtime";
 import type { Data } from "../api/client";
 import { useSession } from "../auth/Session";
@@ -115,7 +125,33 @@ export function CustomerHome({ navigation }: any) {
         <Card key={i}>
           <Pill>NEEDS YOUR ATTENTION</Pill>
           <Txt bold>{a.title || a.message}</Txt>
-          {a.body && <Txt muted>{a.body}</Txt>}
+          {(a.detail || a.body) && <Txt muted>{a.detail || a.body}</Txt>}
+          {a.eventId && (
+            <Button
+              title={
+                a.type === "quote_awaiting_decision"
+                  ? "Review quote"
+                  : ["payment_failed", "reservation_awaiting_payment"].includes(
+                        a.type,
+                      )
+                    ? "Review booking & payment"
+                    : "Open event"
+              }
+              secondary
+              onPress={() =>
+                a.type === "draft_to_confirm"
+                  ? navigation.navigate("Event", { eventId: a.eventId })
+                  : navigation.navigate("EventSection", {
+                      eventId: a.eventId,
+                      section:
+                        a.type === "quote_awaiting_decision"
+                          ? "quotes"
+                          : "bookings",
+                      title: a.title,
+                    })
+              }
+            />
+          )}
         </Card>
       ))}
     </Page>
@@ -152,118 +188,12 @@ export function EventsScreen({ navigation }: any) {
     </Page>
   );
 }
-export function NewEvent({ navigation }: any) {
-  const options = useResource(external, "/customer/plan-options");
-  const [form, setForm] = useState({
-    title: "",
-    city: "",
-    guestCount: "",
-    eventType: "wedding",
-    budget: "",
-    eventDate: "",
-  });
-  const [showDate, setShowDate] = useState(false);
-  const [key] = useState(
-    () => `native-event-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-  const a = useAction();
-  const update = (field: string, value: string) =>
-    setForm((f) => ({ ...f, [field]: value }));
-  return (
-    <Page
-      title="Make it an occasion"
-      subtitle="Start with the essentials. Make it yours as you go."
-    >
-      <Field
-        label="Give your event a name"
-        value={form.title}
-        onChangeText={(v) => update("title", v)}
-        placeholder="A celebration to remember"
-      />
-      <Choice
-        label="What are we celebrating?"
-        value={form.eventType}
-        values={[
-          "wedding",
-          "birthday",
-          "corporate",
-          "conference",
-          "club",
-          "cultural",
-          "institutional",
-          "puja",
-          "anniversary",
-          "social",
-          "other",
-        ]}
-        onChange={(v) => update("eventType", v)}
-      />
-      <Button
-        title={form.eventDate ? date(form.eventDate) : "Choose event date"}
-        secondary
-        onPress={() => setShowDate(true)}
-      />
-      {showDate && (
-        <DateTimePicker
-          value={
-            form.eventDate ? new Date(`${form.eventDate}T12:00:00`) : new Date()
-          }
-          minimumDate={new Date()}
-          mode="date"
-          onChange={(_, d) => {
-            setShowDate(false);
-            if (d)
-              update(
-                "eventDate",
-                `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-              );
-          }}
-        />
-      )}
-      <Field
-        label="City"
-        value={form.city}
-        onChangeText={(v) => update("city", v)}
-      />
-      <Field
-        label="Number of guests (optional)"
-        value={form.guestCount}
-        keyboardType="number-pad"
-        onChangeText={(v) => update("guestCount", v)}
-      />
-      <Field
-        label="Budget in ₹ (optional)"
-        value={form.budget}
-        keyboardType="number-pad"
-        onChangeText={(v) => update("budget", v)}
-      />
-      <ErrorNotice message={a.error || options.error} />
-      <Button
-        title="Create your event"
-        busy={a.busy}
-        onPress={() => {
-          void a.run(async () => {
-            if (!form.city.trim() || !form.eventDate)
-              throw new Error("Add the city and date to continue.");
-            const d = await external.call("/customer/events", "POST", {
-              ...form,
-              guestCount: form.guestCount ? Number(form.guestCount) : undefined,
-              budget: form.budget ? Number(form.budget) : undefined,
-              idempotencyKey: key,
-              services: [],
-            });
-            navigation.replace("Event", { eventId: id(d.event) });
-          });
-        }}
-      />
-    </Page>
-  );
-}
 const sections = [
   ["Plan & services", "requirements", "grid-outline"],
   ["Discover vendors", "services", "search-outline"],
   ["Plans & quotes", "quotes", "document-text-outline"],
   ["Bookings & payments", "bookings", "wallet-outline"],
+  ["My vendors", "vendors", "people-outline"],
   ["Budget", "financial-truth", "pie-chart-outline"],
   ["Event Circle", "messages", "chatbubbles-outline"],
   ["Event day", "event-day", "sunny-outline"],
@@ -302,7 +232,21 @@ export function EventScreen({ route, navigation }: any) {
           onPress={() => navigation.navigate("EditEvent", { eventId })}
         />
       )}
-      {e.status === "draft" && (
+      {e.status === "draft" && r.data.understanding && (
+        <AuraPlan
+          event={e}
+          understanding={r.data.understanding}
+          navigation={navigation}
+          busy={a.busy}
+          onConfirm={() =>
+            a.run(async () => {
+              await external.call(`${eventPath(eventId)}/confirm`, "POST");
+              await r.refresh();
+            })
+          }
+        />
+      )}
+      {e.status === "draft" && !r.data.understanding && (
         <Button
           title="Confirm event details"
           busy={a.busy}
@@ -328,7 +272,7 @@ export function EventScreen({ route, navigation }: any) {
           icon={icon}
           onPress={() =>
             navigation.navigate(
-              section === "messages" ? "Chat" : "EventSection",
+              section === "messages" ? "Circle" : "EventSection",
               { eventId, section, title, kind: "circle" },
             )
           }
@@ -337,12 +281,23 @@ export function EventScreen({ route, navigation }: any) {
     </Page>
   );
 }
-export function EventSection({ route, navigation }: any) {
+export function EventSection(props: any) {
+  if (props.route.params.section === "vendors")
+    return <MyVendorsScreen {...props} />;
+  return props.route.params.section === "financial-truth" ? (
+    <BudgetScreen {...props} />
+  ) : (
+    <EventSectionBody
+      key={`${props.route.params.eventId}-${props.route.params.section}-${props.route.params.category || ""}`}
+      {...props}
+    />
+  );
+}
+function EventSectionBody({ route, navigation }: any) {
   const { eventId, section, category, title } = route.params;
   const path = `${eventPath(eventId)}/${section}${category ? `?category=${encodeURIComponent(category)}` : ""}`;
   const r = useResource(external, path);
   const a = useAction();
-  const [selected, setSelected] = useState<string[]>([]);
   const act = (path: string, body?: Data) =>
     a.run(async () => {
       await external.call(path, "POST", body);
@@ -359,6 +314,11 @@ export function EventSection({ route, navigation }: any) {
             <Txt bold size={20}>
               {row.label || human(row.category)}
             </Txt>
+            {!!serviceLocationText(row.serviceLocation, r.data.event?.city) && (
+              <Txt muted size={13}>
+                {serviceLocationText(row.serviceLocation, r.data.event?.city)}
+              </Txt>
+            )}
             {row.selectedOption?.vendorName && (
               <Txt muted>
                 {row.selectedOption.vendorName} ·{" "}
@@ -395,6 +355,15 @@ export function EventSection({ route, navigation }: any) {
             />
           </Card>
         ))}
+        {section === "requirements" &&
+          !["completed", "cancelled"].includes(r.data.event?.status) && (
+            <AddRequirement
+              eventId={eventId}
+              eventType={r.data.event?.eventType}
+              existing={rows.map((row) => row.category)}
+              navigation={navigation}
+            />
+          )}
         {!rows.length && (
           <Empty
             title="Add your first service"
@@ -404,62 +373,13 @@ export function EventSection({ route, navigation }: any) {
       </>
     );
   } else if (section === "services") {
-    const rows: Data[] = r.data.options || [];
     content = (
-      <>
-        {selected.length >= 2 && (
-          <Button
-            title={`Compare ${selected.length} options`}
-            onPress={() =>
-              navigation.push("Compare", { eventId, ids: selected })
-            }
-          />
-        )}
-        {rows.map((row) => (
-          <Card key={id(row)}>
-            {row.isDemo && <Pill>DEMO LISTING</Pill>}
-            <Txt bold size={22}>
-              {row.vendorName}
-            </Txt>
-            <Txt muted>{row.packageName}</Txt>
-            <Txt bold size={22}>
-              {money(row.price)}
-            </Txt>
-            <Txt size={12} muted>
-              {row.availability?.label || "Availability is not confirmed"}
-            </Txt>
-            <Button
-              title="View vendor & package"
-              onPress={() =>
-                navigation.navigate("Service", { eventId, optionId: id(row) })
-              }
-            />
-            <Button
-              title={
-                selected.includes(id(row))
-                  ? "Remove from comparison"
-                  : "Add to comparison"
-              }
-              secondary
-              onPress={() =>
-                setSelected((s) =>
-                  s.includes(id(row))
-                    ? s.filter((v) => v !== id(row))
-                    : s.length < 3
-                      ? [...s, id(row)]
-                      : s,
-                )
-              }
-            />
-          </Card>
-        ))}
-        {!rows.length && (
-          <Empty
-            title="No options for this service yet"
-            description="Try another service, or ask Aura+ to help refine your requirements."
-          />
-        )}
-      </>
+      <DiscoveryOptions
+        data={r.data}
+        eventId={eventId}
+        navigation={navigation}
+        refresh={r.refresh}
+      />
     );
   } else if (section === "quotes") {
     content = (
@@ -592,19 +512,14 @@ export function EventSection({ route, navigation }: any) {
               }
             />
             <Button
-              title="Verify completion"
+              title="Review completion evidence"
               secondary
               busy={a.busy}
               onPress={() =>
-                confirm(
-                  "Verify completion?",
-                  "Confirm only when the booked service has been delivered.",
-                  () => {
-                    void act(`/customer/bookings/${id(b)}/verify-completion`, {
-                      notes: "",
-                    });
-                  },
-                )
+                navigation.navigate("CustomerBooking", {
+                  eventId,
+                  bookingId: id(b),
+                })
               }
             />
             <Button
@@ -719,220 +634,155 @@ export function RequirementScreen({ route, navigation }: any) {
   const r = useResource(external, `${eventPath(eventId)}/requirements`);
   const options = useResource(
     external,
-    `/customer/plan-options?eventType=${r.data.event?.eventType || "other"}`,
+    `/customer/plan-options?eventType=${encodeURIComponent(r.data.event?.eventType || "other")}`,
   );
   const [name, setName] = useState("");
-  const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("pending");
-  const [details, setDetails] = useState<Data>({});
+  const [draft, setDraft] = useState<Data>({
+    details: {},
+    serviceLocation: { ...emptyServiceLocation },
+    specialRequirements: "",
+  });
   const a = useAction();
+  const req = r.data.requirements?.find((v: Data) => v.category === category);
+  const locked =
+    ["confirmed", "booked", "completed"].includes(req?.status) ||
+    ["completed", "cancelled"].includes(r.data.event?.status);
   useEffect(() => {
-    const req = r.data.requirements?.find((v: Data) => v.category === category);
     if (req) {
       setName(req.providedValue || "");
-      setNotes(req.specialRequirements || "");
       setStatus(req.status);
-      setDetails(req.preferences || {});
+      setDraft({
+        details: { ...req.preferences },
+        serviceLocation: { ...emptyServiceLocation, ...req.serviceLocation },
+        specialRequirements: req.specialRequirements || "",
+      });
     }
   }, [r.data, category]);
-  const fields: Data[] = options.data.serviceFields?.[category] || [];
+  const eventLocationLabel = [
+    r.data.event?.location?.venueName,
+    r.data.event?.location?.locality,
+    r.data.event?.city,
+  ]
+    .filter(Boolean)
+    .join(", ");
   return (
     <Page
       {...r}
-      title={human(category)}
+      title={req?.label || human(category)}
       subtitle="Make the details work for your event."
     >
-      <Choice
-        label="How are you arranging this?"
-        value={status}
-        values={["pending", "customer_provided", "missing"]}
-        labels={{
-          pending: "I need help",
-          customer_provided: "Arranged elsewhere",
-          missing: "Decide later",
-        }}
-        onChange={setStatus}
-      />
-      {status === "customer_provided" && (
-        <Field
-          label="Who is arranging this?"
-          value={name}
-          onChangeText={setName}
-        />
-      )}
-      {fields.map((f) =>
-        f.type === "multiselect" ? (
-          <MultiChoice
-            key={f.key}
-            label={f.label}
-            values={f.options}
-            selected={details[f.key] || []}
-            onChange={(v) => setDetails((d) => ({ ...d, [f.key]: v }))}
-          />
-        ) : f.type === "select" ? (
-          <Choice
-            key={f.key}
-            label={f.label}
-            value={details[f.key] || ""}
-            values={f.options}
-            onChange={(v) => setDetails((d) => ({ ...d, [f.key]: v }))}
-          />
-        ) : (
-          <Field
-            key={f.key}
-            label={f.label}
-            value={String(details[f.key] ?? "")}
-            keyboardType={f.type === "number" ? "number-pad" : "default"}
-            onChangeText={(v) =>
-              setDetails((d) => ({
-                ...d,
-                [f.key]:
-                  f.type === "number" ? (v === "" ? null : Number(v)) : v,
-              }))
-            }
-          />
-        ),
-      )}
-      <Field
-        label="Special requirements"
-        value={notes}
-        onChangeText={setNotes}
-        multiline
-      />
-      <ErrorNotice message={a.error || options.error} />
-      <Button
-        title="Save service details"
-        busy={a.busy}
-        onPress={() => {
-          void a.run(async () => {
-            await external.call(
-              `${eventPath(eventId)}/requirements/${encodeURIComponent(category)}`,
-              "PATCH",
-              {
-                status,
-                providedValue: name.trim(),
-                details,
-                specialRequirements: notes,
-              },
-            );
-            navigation.goBack();
-          });
-        }}
-      />
-    </Page>
-  );
-}
-export function ServiceScreen({ route, navigation }: any) {
-  const { eventId, optionId } = route.params;
-  const r = useResource(
-    external,
-    `${eventPath(eventId)}/services/${encodeURIComponent(optionId)}`,
-  );
-  const o = r.data.option || {};
-  const a = useAction();
-  return (
-    <Page {...r} title={o.vendorName} subtitle={o.packageName}>
-      {o.isDemo && <Pill>DEMO LISTING</Pill>}
-      <Txt bold size={30}>
-        {money(o.price)}
-      </Txt>
-      <Txt muted>{o.description || r.data.vendorProfile?.bio}</Txt>
-      <Txt muted>Availability must be confirmed before booking.</Txt>
-      {(o.inclusions || []).map((t: string) => (
-        <Txt key={t}>✓ {t}</Txt>
-      ))}
-      <ErrorNotice message={a.error} />
-      <Button
-        title={
-          r.data.selected ? "Selected for your plan" : "Select for your plan"
-        }
-        busy={a.busy}
-        disabled={r.data.selected}
-        onPress={() => {
-          void a.run(async () => {
-            await external.call(
-              `${eventPath(eventId)}/requirements/${encodeURIComponent(o.category)}/select`,
-              "POST",
-              { optionId },
-            );
-            navigation.goBack();
-          });
-        }}
-      />
-      <Button
-        title="Save to favorites"
-        secondary
-        busy={a.busy}
-        onPress={() => {
-          void a.run(async () => {
-            await external.call("/customer/favorites", "POST", {
-              eventId,
-              optionId,
-              vendorId: o.vendorId,
-              vendorName: o.vendorName,
-              category: o.category,
-              packageName: o.packageName,
-              price: o.price,
-            });
-            Alert.alert("Saved to favorites");
-          });
-        }}
-      />
-      {(r.data.portfolio || []).map((p: Data) =>
-        p.url || p.mediaUrl ? (
-          <Image
-            key={id(p)}
-            source={{ uri: p.url || p.mediaUrl }}
-            accessibilityLabel={p.title || "Vendor portfolio"}
-            style={{ width: "100%", height: 230, borderRadius: 20 }}
-          />
-        ) : null,
-      )}
-      <Txt bold size={20}>
-        Reviews
-      </Txt>
-      {(r.data.reviews || []).map((review: Data) => (
-        <Card key={id(review)}>
-          <Txt bold>{review.rating} / 5</Txt>
-          <Txt>{review.text || review.comment}</Txt>
-        </Card>
-      ))}
-      {!r.data.reviews?.length && <Txt muted>No reviews yet.</Txt>}
-    </Page>
-  );
-}
-export function CompareScreen({ route, navigation }: any) {
-  const { eventId, ids } = route.params;
-  const r = useResource(
-    external,
-    `${eventPath(eventId)}/services/compare?ids=${ids.map(encodeURIComponent).join(",")}`,
-  );
-  return (
-    <Page
-      {...r}
-      title="Find your perfect fit"
-      subtitle="Compare the details that matter to your event."
-    >
-      {(r.data.options || []).map((o: Data) => (
-        <Card key={id(o)}>
-          <Txt bold size={22}>
-            {o.vendorName}
+      {locked ? (
+        <Card>
+          <Pill>{human(req?.status || r.data.event?.status)}</Pill>
+          <Txt>
+            This service can no longer be changed from the planning form.
           </Txt>
-          <Txt>{o.packageName}</Txt>
-          <Txt bold>{money(o.price)}</Txt>
-          {o.isDemo && <Pill>DEMO LISTING</Pill>}
-          {(o.inclusions || []).map((t: string) => (
-            <Txt key={t}>✓ {t}</Txt>
-          ))}
-          <Button
-            title="View & select"
-            secondary
-            onPress={() =>
-              navigation.navigate("Service", { eventId, optionId: id(o) })
-            }
-          />
+          <Txt muted>
+            {serviceLocationText(req?.serviceLocation, eventLocationLabel)}
+          </Txt>
         </Card>
-      ))}
+      ) : (
+        <>
+          <Choice
+            label="How are you arranging this?"
+            value={status}
+            values={["pending", "customer_provided", "missing"]}
+            labels={{
+              pending: "I need help",
+              customer_provided: "Arranged elsewhere",
+              missing: "Decide later",
+            }}
+            onChange={setStatus}
+          />
+          {status === "customer_provided" && (
+            <Field
+              label="Who is arranging this?"
+              value={name}
+              onChangeText={setName}
+            />
+          )}
+          <ServiceFields
+            category={category}
+            options={options.data}
+            value={draft}
+            onChange={setDraft}
+            eventLocationLabel={eventLocationLabel}
+          />
+          <ErrorNotice message={a.error || options.error} />
+          <Button
+            title="Save service details"
+            busy={a.busy}
+            disabled={options.loading || !!options.error}
+            onPress={() => {
+              void a.run(async () => {
+                await external.call(
+                  `${eventPath(eventId)}/requirements/${encodeURIComponent(category)}`,
+                  "PATCH",
+                  {
+                    status,
+                    providedValue: name.trim(),
+                    details: detailsPayload(draft.details),
+                    serviceLocation: serviceLocationPayload(
+                      draft.serviceLocation,
+                    ),
+                    specialRequirements:
+                      draft.specialRequirements.trim() || null,
+                  },
+                );
+                navigation.goBack();
+              });
+            }}
+          />
+        </>
+      )}
     </Page>
+  );
+}
+export { ServiceScreen, CompareScreen } from "./CustomerDiscovery";
+
+function AddRequirement({
+  eventId,
+  eventType,
+  existing,
+  navigation,
+}: {
+  eventId: string;
+  eventType?: string;
+  existing: string[];
+  navigation: any;
+}) {
+  const options = useResource(
+    external,
+    `/customer/plan-options?eventType=${encodeURIComponent(eventType || "other")}`,
+  );
+  const [category, setCategory] = useState("");
+  const categories: Data[] = (options.data.categories || []).filter(
+    (item: Data) => !existing.includes(item.value),
+  );
+  if (!categories.length && !options.error) return null;
+  return (
+    <Card>
+      <Txt bold size={20}>
+        Add another service
+      </Txt>
+      <ErrorNotice message={options.error} />
+      <Choice
+        label="Choose a service"
+        value={category}
+        values={categories.map((item) => item.value)}
+        labels={Object.fromEntries(
+          categories.map((item) => [item.value, item.label]),
+        )}
+        onChange={setCategory}
+      />
+      <Button
+        title="Add details & location"
+        disabled={!category || options.loading || !!options.error}
+        onPress={() =>
+          navigation.navigate("Requirement", { eventId, category })
+        }
+      />
+    </Card>
   );
 }

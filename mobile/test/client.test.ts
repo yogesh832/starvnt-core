@@ -21,6 +21,29 @@ const json = (body: any, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 
+test("push observers follow accepted session rotation and cannot break authentication", async () => {
+  const api = createClient("https://example.test/api", memory());
+  let changes = 0;
+  const unsubscribe = api.onSessionChanged(() => {
+    changes++;
+  });
+  api.onSessionChanged(() => {
+    throw new Error("observer failure");
+  });
+  await api.accept({ accessToken: "first", refreshToken: "first-refresh" });
+  await api.accept({ accessToken: "rotated", refreshToken: "rotated-refresh" });
+  assert.equal(changes, 2);
+  unsubscribe();
+  await api.accept({ accessToken: "next", refreshToken: "next-refresh" });
+  assert.equal(changes, 2);
+  await api.clear();
+  api.onSessionChanged(() => {
+    changes++;
+  });
+  await api.accept({ accessToken: "stale", refreshToken: "stale-refresh" }, 0);
+  assert.equal(changes, 2);
+});
+
 test("parallel expired requests rotate once and retry with the new access token", async () => {
   const vault = memory("old-refresh");
   let refreshes = 0;

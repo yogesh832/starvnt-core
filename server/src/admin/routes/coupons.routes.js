@@ -17,13 +17,13 @@ function endOfKolkataDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function couponPayload(body = {}) {
+export function couponPayload(body = {}) {
   const code = String(body.code || '').trim().toUpperCase();
   const discountType = body.discountType;
   const discountValue = Number(body.discountValue);
   const minOrderAmount = Number(body.minOrderAmount || 0);
-  const maxDiscountAmount = body.maxDiscountAmount === undefined || body.maxDiscountAmount === '' ? null : Number(body.maxDiscountAmount);
-  const usageLimit = body.usageLimit === undefined || body.usageLimit === '' ? null : Number(body.usageLimit);
+  const maxDiscountAmount = body.maxDiscountAmount == null || body.maxDiscountAmount === '' ? null : Number(body.maxDiscountAmount);
+  const usageLimit = body.usageLimit == null || body.usageLimit === '' ? null : Number(body.usageLimit);
   const validUntil = endOfKolkataDate(body.validUntil);
 
   if (!code) return { error: 'CODE_REQUIRED' };

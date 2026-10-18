@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Data, Client } from "../api/client";
 import { external, internal } from "../api/runtime";
+import { logoutPush } from "../pushRuntime";
 
 type SessionValue = {
   activeDomain: "external" | "admin";
@@ -96,6 +97,7 @@ export function SessionProvider({ children }: React.PropsWithChildren) {
           setUser(result.user);
         },
         async logout(isAdmin) {
+          await logoutPush(isAdmin ? "admin" : "external");
           await (isAdmin ? internal : external).logout();
           if (isAdmin) setAdmin(null);
           else setUser(null);

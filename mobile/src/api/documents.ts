@@ -1,6 +1,16 @@
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { external } from "./runtime";
+import type { Client } from './client';
+
+export async function shareReport(api: Client) {
+  const response = await api.download('/reports/summary/export.csv');
+  const file = new File(Paths.cache, `starvnt-report-summary-${Date.now()}.csv`);
+  file.create({ overwrite: true });
+  file.write(new Uint8Array(await response.arrayBuffer()));
+  if (!(await Sharing.isAvailableAsync())) throw new Error('File sharing is not available on this device.');
+  await Sharing.shareAsync(file.uri, { mimeType: 'text/csv', UTI: 'public.comma-separated-values' });
+}
 
 export async function shareDocument(documentId: string) {
   let response = await external.download(

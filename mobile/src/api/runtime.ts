@@ -1,14 +1,31 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
 import { createClient, Vault } from "./client";
 
+function resolveDevApiUrl(): string {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  // On physical devices in Expo Go / Dev Client, extract the development machine's LAN IP
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost ||
+    (Constants as any).manifest?.debuggerHost;
+
+  if (hostUri) {
+    const hostIp = hostUri.split(":")[0];
+    if (hostIp && hostIp !== "localhost" && hostIp !== "127.0.0.1") {
+      return `http://${hostIp}:4000`;
+    }
+  }
+
+  return Platform.OS === "android" ? "http://10.0.2.2:4000" : "http://localhost:4000";
+}
+
 export const API_URL = (
-  process.env.EXPO_PUBLIC_API_URL ||
-  (__DEV__
-    ? Platform.OS === "android"
-      ? "http://10.0.2.2:4000"
-      : "http://localhost:4000"
-    : "")
+  __DEV__ ? resolveDevApiUrl() : process.env.EXPO_PUBLIC_API_URL || ""
 ).replace(/\/$/, "");
 if (!API_URL || (!__DEV__ && !API_URL.startsWith("https://"))) {
   throw new Error(

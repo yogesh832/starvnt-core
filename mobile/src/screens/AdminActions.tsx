@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Alert, Linking } from "react-native";
+import { approvedFinanceExecution } from "../adminOperations";
 import { internal } from "../api/runtime";
 import { useSession } from "../auth/Session";
 import {
@@ -119,27 +120,41 @@ export function AdminAccess({ route, navigation }: any) {
   );
 }
 export function AdminFinance({ route, navigation }: any) {
-  const { booking, action } = route.params;
-  const { can } = useSession();
+  const { booking, approval, action: requestedAction } = route.params;
+  const action = approval
+    ? approval.type === "REFUND"
+      ? "refund"
+      : "settle"
+    : requestedAction;
+  const { can, admin } = useSession();
   const a = useAction();
   const [reference, setReference] = useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
-  const allowed = can(
-    action === "refund"
-      ? "payments.refund"
-      : action === "settle"
-        ? "settlements.release"
-        : "operations.manage",
-  );
+  const allowed =
+    (!approval ||
+      (approval.status === "APPROVED" &&
+        approval.requestedByEmail?.toLowerCase() !==
+          admin?.email?.toLowerCase())) &&
+    can(
+      action === "refund"
+        ? "payments.refund"
+        : action === "settle"
+          ? "settlements.release"
+          : "operations.manage",
+    );
   return (
     <Page
       title={
-        action === "refund"
-          ? "Request a refund"
-          : action === "settle"
-            ? "Request settlement release"
-            : "Report vendor failure"
+        approval
+          ? action === "refund"
+            ? "Execute approved refund"
+            : "Execute approved settlement"
+          : action === "refund"
+            ? "Request a refund"
+            : action === "settle"
+              ? "Request settlement release"
+              : "Report vendor failure"
       }
       subtitle={booking.bookingReference}
     >
@@ -150,14 +165,36 @@ export function AdminFinance({ route, navigation }: any) {
           separation.
         </Txt>
       </Card>
-      {action !== "fail-and-reassign" && (
+      {approval && (
+        <Card>
+          <Txt bold>Approved request</Txt>
+          <Txt>Requested by: {approval.requestedByEmail}</Txt>
+          <Txt>
+            Approved by: {approval.approvedByEmail || "Recorded by Core"}
+          </Txt>
+          <Txt>
+            Reference:{" "}
+            {approval.payload?.reference ||
+              approval.payload?.transactionReference}
+          </Txt>
+          {approval.type === "REFUND" && (
+            <Txt>Approved amount: ₹{approval.payload?.amount}</Txt>
+          )}
+          <Txt muted>{approval.reason}</Txt>
+          <Txt muted>
+            The approved amount and transfer reference are fixed for this
+            execution.
+          </Txt>
+        </Card>
+      )}
+      {!approval && action !== "fail-and-reassign" && (
         <Field
           label="Real provider / transfer reference"
           value={reference}
           onChangeText={setReference}
         />
       )}
-      {action === "refund" && (
+      {!approval && action === "refund" && (
         <Field
           label="Refund amount in ₹"
           keyboardType="number-pad"
@@ -174,22 +211,46 @@ export function AdminFinance({ route, navigation }: any) {
       <ErrorNotice message={a.error} />
       <Button
         title={
-          action === "fail-and-reassign"
-            ? "Report failure & discover alternatives"
-            : "Submit for independent approval"
+          approval
+            ? action === "refund"
+              ? "Execute approved refund"
+              : "Execute approved settlement"
+            : action === "fail-and-reassign"
+              ? "Report failure & discover alternatives"
+              : "Submit for independent approval"
         }
         busy={a.busy}
         disabled={!allowed}
         onPress={() =>
           confirm(
-            "Submit this action?",
-            "The server validates this request and records it for audit. Finance requests require a different authorized admin’s approval.",
+            approval
+              ? "Execute this approved finance request?"
+              : "Submit this action?",
+            approval
+              ? "Core will post the approved finance action using its recorded amount and reference. The requesting admin cannot execute their own request."
+              : "The server validates this request and records it for audit. Finance requests require a different authorized admin’s approval.",
             () => {
               void a.run(async () => {
                 if (!allowed)
                   throw new Error(
                     "You do not have permission for this action.",
                   );
+                if (approval) {
+                  if (!reason.trim())
+                    throw new Error("Add execution notes for the audit trail.");
+                  const execution = approvedFinanceExecution(
+                    approval,
+                    admin?.email || "",
+                    reason,
+                  );
+                  await internal.call(execution.path, "POST", execution.body);
+                  Alert.alert(
+                    "Approved finance action recorded",
+                    "Review the updated booking and ledger for the result.",
+                  );
+                  navigation.popTo("AdminModule", { module: "approvals" });
+                  return;
+                }
                 if (
                   !reason.trim() ||
                   (action !== "fail-and-reassign" && !reference.trim())

@@ -35,6 +35,10 @@ const cookieSecure =
  * so a token from one domain can never be replayed against the other.
  */
 export const config = {
+  pushEnabled: String(process.env.PUSH_ENABLED || '').toLowerCase() === 'true',
+  pushProjectId: process.env.EXPO_EAS_PROJECT_ID || process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '',
+  expoPushAccessToken: process.env.EXPO_PUSH_ACCESS_TOKEN || '',
+  pushWorkerIntervalMs: Math.max(5000, Number(process.env.PUSH_WORKER_INTERVAL_MS) || 15000),
   port: Number(process.env.PORT || 4000),
   clientOrigins: parseOrigins(process.env.CLIENT_ORIGINS),
   cookieSecure,

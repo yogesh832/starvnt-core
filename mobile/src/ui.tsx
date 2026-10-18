@@ -25,15 +25,18 @@ export function Txt({
   muted = false,
   bold = false,
   style,
+  numberOfLines,
 }: React.PropsWithChildren<{
   size?: number;
   muted?: boolean;
   bold?: boolean;
   style?: any;
+  numberOfLines?: number;
 }>) {
   const c = usePalette();
   return (
     <Text
+      numberOfLines={numberOfLines}
       style={[
         {
           fontSize: size,
@@ -227,7 +230,7 @@ export function Choice({
         {values.map((v) => (
           <Pressable
             accessibilityRole="radio"
-            accessibilityState={{ selected: value === v }}
+            accessibilityState={{ checked: value === v }}
             key={v}
             onPress={() => onChange(v)}
             style={{
@@ -275,11 +278,13 @@ export function MultiChoice({
   values,
   selected,
   onChange,
+  labels = {},
 }: {
   label: string;
   values: string[];
   selected: string[];
   onChange: (values: string[]) => void;
+  labels?: Record<string, string>;
 }) {
   const c = usePalette();
   return (
@@ -312,7 +317,7 @@ export function MultiChoice({
           >
             <Txt size={13}>
               {selected.includes(v) ? "✓ " : ""}
-              {v}
+              {labels[v] || v}
             </Txt>
           </Pressable>
         ))}
@@ -485,7 +490,8 @@ export function Stats({ items }: { items: [string, string | number][] }) {
   );
 }
 export function useResource(api: Client, path: string, pollMs = 0) {
-  const [data, setData] = useState<Data>({});
+  const [snapshot, setSnapshot] = useState({ api, path, data: {} as Data });
+  const current = snapshot.api === api && snapshot.path === path;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -493,12 +499,17 @@ export function useResource(api: Client, path: string, pollMs = 0) {
   const load = useCallback(
     async (pull = false) => {
       const request = ++serial.current;
+      setSnapshot((previous) =>
+        previous.api === api && previous.path === path
+          ? previous
+          : { api, path, data: {} },
+      );
       if (pull) setRefreshing(true);
       else setLoading(true);
       setError("");
       try {
         const value = await api.call(path);
-        if (serial.current === request) setData(value);
+        if (serial.current === request) setSnapshot({ api, path, data: value });
       } catch (e) {
         if (serial.current === request) setError((e as Error).message);
       } finally {
@@ -525,13 +536,11 @@ export function useResource(api: Client, path: string, pollMs = 0) {
     }, [load, pollMs]),
   );
   return {
-    data,
-    loading,
+    data: current ? snapshot.data : {},
+    loading: loading || !current,
     error,
     refreshing,
-    refresh: () => {
-      void load(true);
-    },
+    refresh: () => load(true),
     reload: load,
   };
 }
@@ -567,7 +576,7 @@ export const human = (v: unknown) =>
 export const money = (v: unknown) =>
   v == null
     ? "Not quoted"
-    : `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    : `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 export const id = (v: Data) => String(v.id || v._id || "");
 export const date = (v: unknown) =>
   v

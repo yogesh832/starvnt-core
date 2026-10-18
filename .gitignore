@@ -48,6 +48,7 @@ coverage/
 .expo/
 mobile/android/
 mobile/ios/
+mobile/google-services.json
 test-results/
 playwright-report/
 

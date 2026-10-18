@@ -87,6 +87,7 @@ export function VendorSetup({ route }: any) {
   const [outstation, setOutstation] = useState(false);
   const [tolls, setTolls] = useState(false);
   const [places, setPlaces] = useState<Data[]>([]);
+  const [editingLocation, setEditingLocation] = useState("");
   useEffect(() => {
     if (kind === "travel" && r.data.travelPolicy) {
       setForm((f) => ({
@@ -134,13 +135,27 @@ export function VendorSetup({ route }: any) {
         throw new Error(
           "Choose a location from search, or enter a city and valid coordinates.",
         );
-      await external.call(config.path, "POST", {
-        label: form.label || "Main location",
-        city: form.city,
-        state: form.state,
-        address: form.address,
-        coordinates: { lat: Number(form.lat), lng: Number(form.lng) },
-      });
+      await external.call(
+        editingLocation ? `${config.path}/${editingLocation}` : config.path,
+        editingLocation ? "PUT" : "POST",
+        {
+          label: form.label || "Main location",
+          city: form.city,
+          state: form.state,
+          address: form.address,
+          coordinates: { lat: Number(form.lat), lng: Number(form.lng) },
+        },
+      );
+      setEditingLocation("");
+      setForm((f) => ({
+        ...f,
+        label: "",
+        city: "",
+        state: "",
+        address: "",
+        lat: "",
+        lng: "",
+      }));
     } else if (kind === "resources") {
       if (!form.name.trim()) throw new Error("Add a resource name.");
       await external.call(config.path, "POST", {
@@ -210,16 +225,17 @@ export function VendorSetup({ route }: any) {
                 set("vendorServiceId", id(s));
                 if (kind === "capacity") {
                   const c = s.capabilities?.[0];
-                  if (c)
-                    setForm((f) => ({
-                      ...f,
-                      vendorServiceId: id(s),
-                      styles: c.styles?.join(", ") || "",
-                      equipment: c.equipment?.join(", ") || "",
-                      format: c.format || "Full day",
-                      teamSize: String(c.teamSize),
-                      simultaneousEventLimit: String(c.simultaneousEventLimit),
-                    }));
+                  setForm((f) => ({
+                    ...f,
+                    vendorServiceId: id(s),
+                    styles: c?.styles?.join(", ") || "",
+                    equipment: c?.equipment?.join(", ") || "",
+                    format: c?.format || "Full day",
+                    teamSize: String(c?.teamSize ?? 2),
+                    simultaneousEventLimit: String(
+                      c?.simultaneousEventLimit ?? 1,
+                    ),
+                  }));
                 }
               }}
             >
@@ -375,12 +391,31 @@ export function VendorSetup({ route }: any) {
           </Card>
         ))}
       <Button
-        title="Save changes"
+        title={editingLocation ? "Save location changes" : "Save changes"}
         busy={a.busy}
         onPress={() => {
           void a.run(save);
         }}
       />
+      {!!editingLocation && (
+        <Button
+          title="Cancel location editing"
+          secondary
+          disabled={a.busy}
+          onPress={() => {
+            setEditingLocation("");
+            setForm((f) => ({
+              ...f,
+              label: "",
+              city: "",
+              state: "",
+              address: "",
+              lat: "",
+              lng: "",
+            }));
+          }}
+        />
+      )}
       {config.collection && kind !== "capacity" && (
         <>
           <Txt bold size={21}>
@@ -393,6 +428,43 @@ export function VendorSetup({ route }: any) {
                 {row.address || human(row.type || row.coverageType)}
               </Txt>
               {row.isPrimary && <Pill>PRIMARY LOCATION</Pill>}
+              {kind === "origins" && (
+                <>
+                  <Button
+                    title="Edit location"
+                    secondary
+                    disabled={a.busy}
+                    onPress={() => {
+                      setEditingLocation(id(row));
+                      setForm((f) => ({
+                        ...f,
+                        label: row.label || "",
+                        city: row.city || "",
+                        state: row.state || "",
+                        address: row.address || "",
+                        lat: String(row.coordinates?.lat ?? ""),
+                        lng: String(row.coordinates?.lng ?? ""),
+                      }));
+                    }}
+                  />
+                  {!row.isPrimary && (
+                    <Button
+                      title="Make primary location"
+                      secondary
+                      busy={a.busy}
+                      onPress={() =>
+                        a.run(async () => {
+                          await external.call(
+                            `${config.path}/${id(row)}/primary`,
+                            "PATCH",
+                          );
+                          await r.refresh();
+                        })
+                      }
+                    />
+                  )}
+                </>
+              )}
               <Button
                 title="Remove"
                 secondary

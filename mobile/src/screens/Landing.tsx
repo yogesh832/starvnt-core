@@ -61,29 +61,60 @@ export function LandingScreen({ navigation }: any) {
         >
           <View
             style={{
-              alignSelf: "flex-start",
               flexDirection: "row",
               alignItems: "center",
-              gap: 8,
-              backgroundColor: c.card,
-              borderRadius: 30,
-              borderWidth: 1,
-              borderColor: c.line,
-              paddingHorizontal: 14,
-              paddingVertical: 9,
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 10,
             }}
           >
             <View
               style={{
-                width: 7,
-                height: 7,
-                borderRadius: 7,
-                backgroundColor: c.accent,
+                alignSelf: "flex-start",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                backgroundColor: c.card,
+                borderRadius: 30,
+                borderWidth: 1,
+                borderColor: c.line,
+                paddingHorizontal: 14,
+                paddingVertical: 9,
               }}
-            />
-            <Txt size={12} bold>
-              Events made simple with AI
-            </Txt>
+            >
+              <View
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 7,
+                  backgroundColor: c.accent,
+                }}
+              />
+              <Txt size={12} bold>
+                Events made simple with AI
+              </Txt>
+            </View>
+            {__DEV__ && (<Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Quick Test Auth"
+              onPress={() => navigation.navigate("TestAuth")}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                backgroundColor: c.soft,
+                borderRadius: 30,
+                borderWidth: 1,
+                borderColor: c.accent + "50",
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+              }}
+            >
+              <Icon name="flash" size={14} color={c.accent} />
+              <Txt size={12} bold style={{ color: c.accent }}>
+                ⚡ Quick Test Auth
+              </Txt>
+            </Pressable>)}
           </View>
           <View>
             <Txt
@@ -231,6 +262,11 @@ export function LandingScreen({ navigation }: any) {
           </Txt>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             <Button title="Plan an Event" onPress={() => begin(text)} />
+            {__DEV__ && (<Button
+              title="⚡ Test Auth"
+              secondary
+              onPress={() => navigation.navigate("TestAuth")}
+            />)}
             <Button
               title="For Vendors"
               secondary

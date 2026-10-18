@@ -1,4 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { PushProvider, usePush } from "./Push";
+import { pushDestination } from "./pushDestination";
+import { acknowledgePush } from "./pushRuntime";
+import { NotificationSettings } from "./screens/NotificationSettings";
+import { CircleScreen } from "./screens/CustomerWorkspace";
+import { VendorQuote } from "./screens/VendorQuote";
+import { CustomerBookingScreen } from "./screens/CustomerBooking";
 import { StatusBar, Pressable, Text, View } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -14,6 +21,7 @@ import {
   NavigationContainer,
   DarkTheme,
   DefaultTheme,
+  createNavigationContainerRef,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -33,6 +41,7 @@ import {
   CompareScreen,
 } from "./screens/Customer";
 import { EditEvent } from "./screens/EditEvent";
+import { AuraHistoryScreen } from "./screens/AuraHistory";
 import { ChatScreen, UpdatesScreen } from "./screens/Conversations";
 import { VendorOffers, CheckoutScreen } from "./screens/Checkout";
 import {
@@ -42,6 +51,8 @@ import {
   VendorForm,
   VendorBooking,
 } from "./screens/Vendor";
+import { VendorCalendar } from "./screens/VendorCalendar";
+import { VendorFinancial } from "./screens/VendorFinancial";
 import { VendorSetup } from "./screens/VendorSetup";
 import {
   AdminHome,
@@ -51,8 +62,10 @@ import {
   AdminKyc,
   AdminNotifications,
 } from "./screens/Admin";
+import { AdminEntity } from "./screens/AdminEntity";
 import { AdminAccess, AdminFinance } from "./screens/AdminActions";
 import { AccountScreen, ProfileScreen, LibraryScreen } from "./screens/Account";
+import { TestAuthScreen } from "./screens/TestAuth";
 import { Button, ErrorNotice, Icon, Page, Txt, usePalette } from "./ui";
 
 const Stack = createNativeStackNavigator();
@@ -146,9 +159,62 @@ function MainTabs() {
     </Tabs.Navigator>
   );
 }
+const pushNavigation = createNavigationContainerRef<any>();
 function Navigation() {
   const s = useSession();
   const c = usePalette();
+  const push = usePush();
+  const [navigationReady, setNavigationReady] = useState(false);
+  useEffect(() => {
+    const data = push.pending;
+    if (!data || !s.ready || s.error || !navigationReady) return;
+    const domain = data.domain;
+    if (domain !== "admin" && domain !== "external") {
+      push.consumed();
+      return;
+    }
+    const owner = domain === "admin" ? s.admin : s.user;
+    if (!owner) {
+      // Keep the tap and send the user through the correct domain's real sign-in.
+      if (s.activeDomain !== domain) {
+        s.setActiveDomain(domain);
+        return;
+      }
+      const timer = setTimeout(() => {
+        if (pushNavigation.isReady())
+          pushNavigation.navigate("Auth", {
+            mode: "login",
+            accountType: data.surface === "VENDOR" ? "VENDOR" : "CUSTOMER",
+          });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+    const target = pushDestination(data, owner, domain, s.can);
+    if (!target) {
+      push.consumed();
+      return;
+    }
+    if (s.activeDomain !== domain) {
+      s.setActiveDomain(domain);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (pushNavigation.isReady()) {
+        pushNavigation.navigate(target.screen, target.params);
+        void acknowledgePush(data).catch(() => {});
+        push.consumed();
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [
+    push.pending,
+    s.ready,
+    s.error,
+    s.activeDomain,
+    s.user,
+    s.admin,
+    navigationReady,
+  ]);
   if (!s.ready)
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
@@ -181,6 +247,8 @@ function Navigation() {
   };
   return (
     <NavigationContainer
+      ref={pushNavigation}
+      onReady={() => setNavigationReady(true)}
       theme={theme}
       documentTitle={{ formatter: () => brand.title }}
     >
@@ -213,6 +281,13 @@ function Navigation() {
               component={AuthScreen}
               options={{ headerShown: false }}
             />
+            {__DEV__ && (
+              <Stack.Screen
+                name="TestAuth"
+                component={TestAuthScreen}
+                options={{ headerShown: false }}
+              />
+            )}
           </>
         ) : (
           <>
@@ -259,9 +334,24 @@ function Navigation() {
               options={{ title: "Compare" }}
             />
             <Stack.Screen
+              name="AuraHistory"
+              component={AuraHistoryScreen}
+              options={{ title: "Aura+ conversations" }}
+            />
+            <Stack.Screen
               name="Chat"
               component={ChatScreen}
               options={{ title: "Conversation" }}
+            />
+            <Stack.Screen
+              name="Circle"
+              component={CircleScreen}
+              options={{ title: "Event Circle" }}
+            />
+            <Stack.Screen
+              name="CustomerBooking"
+              component={CustomerBookingScreen}
+              options={{ title: "Completion evidence" }}
             />
             <Stack.Screen
               name="VendorOffers"
@@ -284,9 +374,24 @@ function Navigation() {
               options={{ title: "Your business" }}
             />
             <Stack.Screen
+              name="VendorQuote"
+              component={VendorQuote}
+              options={{ title: "Quote details" }}
+            />
+            <Stack.Screen
               name="VendorBooking"
               component={VendorBooking}
               options={{ title: "Booking workspace" }}
+            />
+            <Stack.Screen
+              name="VendorCalendar"
+              component={VendorCalendar}
+              options={{ title: "Calendar & availability" }}
+            />
+            <Stack.Screen
+              name="VendorFinancial"
+              component={VendorFinancial}
+              options={{ title: "Financial onboarding" }}
             />
             <Stack.Screen
               name="VendorSetup"
@@ -309,6 +414,11 @@ function Navigation() {
               options={{ title: "Edit record" }}
             />
             <Stack.Screen
+              name="AdminEntity"
+              component={AdminEntity}
+              options={{ title: "Manage account" }}
+            />
+            <Stack.Screen
               name="AdminAccess"
               component={AdminAccess}
               options={{ title: "Staff access" }}
@@ -329,10 +439,22 @@ function Navigation() {
               options={{ title: "Profile" }}
             />
             <Stack.Screen
+              name="NotificationSettings"
+              component={NotificationSettings}
+              options={{ title: "Notifications" }}
+            />
+            <Stack.Screen
               name="Library"
               component={LibraryScreen}
               options={{ title: "Your library" }}
             />
+            {__DEV__ && (
+              <Stack.Screen
+                name="TestAuth"
+                component={TestAuthScreen}
+                options={{ headerShown: false }}
+              />
+            )}
           </>
         )}
       </Stack.Navigator>
@@ -388,9 +510,11 @@ export default function App() {
       <ThemeProvider>
         <ErrorBoundary>
           <SessionProvider>
-            <PlanningIntentProvider>
-              <Navigation />
-            </PlanningIntentProvider>
+            <PushProvider>
+              <PlanningIntentProvider>
+                <Navigation />
+              </PlanningIntentProvider>
+            </PushProvider>
           </SessionProvider>
         </ErrorBoundary>
       </ThemeProvider>

@@ -135,6 +135,14 @@ export async function startService(bookingId, vendorId) {
     throw err;
   }
 
+  if (booking.bookingStatus !== 'CONFIRMED' || booking.paymentStatus !== 'PAYMENT_VERIFIED') {
+    const err = new Error('Payment must be verified before service execution can start.');
+    err.statusCode = 409; err.code = 'BOOKING_NOT_EXECUTABLE'; throw err;
+  }
+  if (!['NOT_STARTED', 'SERVICE_SCHEDULED', 'SERVICE_STARTED'].includes(booking.executionStatus)) {
+    const err = new Error('This booking has already moved beyond service start.');
+    err.statusCode = 409; err.code = 'INVALID_EXECUTION_STATE'; throw err;
+  }
   booking.executionStatus = 'SERVICE_STARTED';
   await booking.save();
   return booking;
@@ -166,6 +174,14 @@ export async function submitCompletionEvidence(
     throw err;
   }
 
+  if (booking.bookingStatus !== 'CONFIRMED' || booking.paymentStatus !== 'PAYMENT_VERIFIED') {
+    const err = new Error('Payment must be verified before completion can be submitted.');
+    err.statusCode = 409; err.code = 'BOOKING_NOT_EXECUTABLE'; throw err;
+  }
+  if (!['SERVICE_STARTED', 'COMPLETION_SUBMITTED'].includes(booking.executionStatus)) {
+    const err = new Error('Start the service before submitting completion evidence.');
+    err.statusCode = 409; err.code = 'INVALID_EXECUTION_STATE'; throw err;
+  }
   const filePhotos = files
     .filter((f) => (f.resourceType || '').toUpperCase() !== 'VIDEO')
     .map((f) => (typeof f === 'string' ? f : f.url))

@@ -9,6 +9,7 @@ import { Booking, EventMessage, CustomerEvent, EventRequirement, EventHistory, R
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
 import { activeAccountType } from '../models/ExternalUser.js';
+import { normalizeCategory } from '../../customer/services/planCatalog.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../services/matching.service.js';
 import { createQuote, transitionQuote } from '../services/quoteStateMachine.service.js';
@@ -44,7 +45,8 @@ function quoteForCustomer(quote) {
   return {
     id: String(quote._id),
     quoteReference: quote.quoteReference,
-    opportunityId: quote.opportunity ? String(quote.opportunity) : null,
+    opportunityId: quote.opportunity ? String(quote.opportunity._id || quote.opportunity) : null,
+    eventId: quote.opportunity?.customerEvent ? String(quote.opportunity.customerEvent) : null,
     serviceName: quote.serviceName,
     eventDate: quote.eventDate,
     serviceLocation: quote.serviceLocation,
@@ -465,17 +467,31 @@ router.get('/quotes', requireExternalAuth, async (req, res, next) => {
 
 router.get('/customer/vendor-quotes', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
   try {
+    const eventId = req.query.eventId ? String(req.query.eventId) : null;
+    let opportunityFilter = { customer: req.externalUser._id };
+    let quoteFilter = { customer: req.externalUser._id };
+    let bookingFilter = { customerId: req.externalUser._id };
+    if (eventId) {
+      if (!mongoose.isValidObjectId(eventId)) return res.status(400).json({ error: 'INVALID_EVENT_ID' });
+      const ownedEvent = await CustomerEvent.findOne({ _id: eventId, customer: req.externalUser._id }).select('_id').lean();
+      if (!ownedEvent) return res.status(404).json({ error: 'EVENT_NOT_FOUND' });
+      opportunityFilter = { ...opportunityFilter, customerEvent: eventId };
+      const eventOpportunities = await Opportunity.find(opportunityFilter).select('_id').lean();
+      quoteFilter = { ...quoteFilter, opportunity: { $in: eventOpportunities.map(item => item._id) } };
+      bookingFilter = { ...bookingFilter, customerEvent: eventId };
+    }
     const [opportunities, quotes, bookings] = await Promise.all([
-      Opportunity.find({ customer: req.externalUser._id })
+      Opportunity.find(opportunityFilter)
         .populate('vendor', 'businessName category location')
         .populate('vendorService', 'name pricing')
         .sort({ createdAt: -1 })
         .limit(20),
-      Quote.find({ customer: req.externalUser._id })
+      Quote.find(quoteFilter)
         .populate('vendor', 'businessName category location')
+        .populate('opportunity', 'customerEvent')
         .sort({ createdAt: -1 })
         .limit(20),
-      CoreBooking.find({ customerId: req.externalUser._id })
+      CoreBooking.find(bookingFilter)
         .sort({ createdAt: -1 })
         .limit(20),
     ]);
@@ -703,7 +719,7 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
 
     let reservation = null;
     if (event) {
-      const category = quote.vendor?.category || 'other';
+      const category = normalizeCategory(quote.vendor?.category || quote.serviceName) || 'other';
       let reqDoc = await EventRequirement.findOne({ event: event._id, category });
       if (!reqDoc) {
         reqDoc = await EventRequirement.create({
@@ -1158,7 +1174,11 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
  */
 router.get('/quotes/:id', requireExternalAuth, async (req, res, next) => {
   try {
-    const quote = await Quote.findById(req.params.id)
+    const scope = activeAccountType(req.externalUser) === 'VENDOR'
+      ? { vendor: req.externalUser.vendorOrganization }
+      : { customer: req.externalUser._id };
+    if ('vendor' in scope && !scope.vendor) return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+    const quote = await Quote.findOne({ _id: req.params.id, ...scope })
       .populate('vendor', 'businessName category rating location')
       .populate('customer', 'fullName email');
 
@@ -1181,6 +1201,15 @@ router.post('/quotes/:id/transition', requireExternalAuth, async (req, res) => {
     const { targetStatus, reason } = req.body || {};
     if (!targetStatus) {
       return res.status(400).json({ error: 'TARGET_STATUS_REQUIRED' });
+    }
+
+    const vendor = activeAccountType(req.externalUser) === 'VENDOR';
+    const owner = vendor ? req.externalUser.vendorOrganization : req.externalUser._id;
+    if (!owner) return res.status(403).json({ error: 'QUOTE_ACCESS_DENIED' });
+    const owned = await Quote.findOne({ _id: req.params.id, [vendor ? 'vendor' : 'customer']: owner });
+    if (!owned) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
+    if (!(vendor ? ['SUBMITTED'] : ['APPROVED', 'REJECTED']).includes(targetStatus)) {
+      return res.status(403).json({ error: 'QUOTE_TRANSITION_FORBIDDEN' });
     }
 
     const quote = await transitionQuote(req.params.id, targetStatus, {
@@ -1252,11 +1281,14 @@ router.get('/vendor/bookings', requireExternalAuth, requireAccountType('VENDOR')
           const totalAmount = q.pricingBreakdown?.totalAmount || q.amount || 0;
           const advanceAmount = q.advancePayment?.amount || q.pricingBreakdown?.advanceAmount || Math.round(totalAmount * 0.2);
           const customerName = q.customer?.fullName || q.customer?.email || 'Customer';
+          const paid = q.advancePayment?.status === 'VERIFIED';
+          const opportunity = q.opportunity ? await Opportunity.findOne({ _id: q.opportunity, customer: q.customer?._id || q.customer, vendor: vendorId }).lean() : null;
           await CoreBooking.create({
             quoteId: String(q._id),
             quoteReference: q.quoteReference || `QT-${String(q._id).slice(-6)}`,
             bookingReference: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
             opportunityId: q.opportunity ? String(q.opportunity) : null,
+            customerEvent: opportunity?.customerEvent || null,
             vendorId: q.vendor,
             customerId: q.customer?._id || q.customer,
             serviceName: q.serviceName || 'Event Service',
@@ -1265,8 +1297,8 @@ router.get('/vendor/bookings', requireExternalAuth, requireAccountType('VENDOR')
             pricing: q.pricingBreakdown || { totalAmount },
             totalAmount,
             bookingStatus: 'CONFIRMED',
-            paymentStatus: 'PAYMENT_VERIFIED',
-            executionStatus: 'SERVICE_SCHEDULED',
+            paymentStatus: paid ? 'PAYMENT_VERIFIED' : 'PENDING',
+            executionStatus: paid ? 'SERVICE_SCHEDULED' : 'NOT_STARTED',
             settlementStatus: 'NOT_ELIGIBLE',
             customerName,
             vendorName: 'Vendor',
@@ -1274,8 +1306,8 @@ router.get('/vendor/bookings', requireExternalAuth, requireAccountType('VENDOR')
             paymentSummary: {
               advancePercentage: q.advancePayment?.percentage || 20,
               advanceAmount,
-              paidAmount: advanceAmount,
-              balanceAmount: Math.max(0, totalAmount - advanceAmount),
+              paidAmount: paid ? advanceAmount : 0,
+              balanceAmount: Math.max(0, totalAmount - (paid ? advanceAmount : 0)),
             },
           }).catch((e) => console.warn('[vendor/bookings auto-sync notice]:', e.message));
         }

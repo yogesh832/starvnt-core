@@ -4,6 +4,7 @@ import brand from "./src/brand.generated.json";
 const config: ExpoConfig = {
   name: "STARVNT",
   slug: "starvnt",
+  owner: "yogesh832",
   scheme: "starvnt",
   version: "1.0.0",
   icon: "./assets/brand/starvnt-icon.png",
@@ -11,6 +12,9 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   ios: { supportsTablet: true, bundleIdentifier: "com.starvnt.mobile" },
   android: {
+    ...(process.env.GOOGLE_SERVICES_JSON
+      ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+      : {}),
     package: "com.starvnt.mobile",
     adaptiveIcon: {
       foregroundImage: "./assets/brand/starvnt-icon.png",
@@ -23,6 +27,7 @@ const config: ExpoConfig = {
     themeColor: brand.launchBackground,
   },
   plugins: [
+    ["expo-notifications", { defaultChannel: "starvnt-updates" }],
     "expo-font",
     [
       "expo-splash-screen",
@@ -46,5 +51,10 @@ const config: ExpoConfig = {
         ]
       : []),
   ],
+  extra: {
+    eas: {
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || "e3aa19c9-0964-4768-8507-985be8f040bd",
+    },
+  },
 };
 export default config;

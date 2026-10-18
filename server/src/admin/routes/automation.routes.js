@@ -4,6 +4,7 @@ import { OutboxEvent } from '../models/OutboxEvent.js';
 import { processOutboxBatch } from '../../automation/services/outbox.service.js';
 import { config } from '../../config.js';
 import { workerHealthSnapshot } from '../../workers/workerHealth.js';
+import { PushJob } from '../../notifications/push.models.js';
 
 const router = Router();
 
@@ -40,6 +41,7 @@ router.get('/stats', async (req, res, next) => {
       OutboxEvent.findOne({ status: 'FAILED' }).sort({ nextRunAt: 1, updatedAt: 1 }).select('updatedAt nextRunAt attempts maxAttempts lastError').lean(),
     ]);
 
+    const pushCounts = config.pushEnabled ? await PushJob.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]) : [];
     res.json({
       ok: true,
       stats: {
@@ -52,6 +54,7 @@ router.get('/stats', async (req, res, next) => {
         oldestPending,
         nextRetry,
         workers: workerHealthSnapshot(),
+        mobilePush: { enabled: config.pushEnabled && !!config.pushProjectId, counts: Object.fromEntries(pushCounts.map(row => [row._id, row.count])) },
         config: {
           outboxWorkerEnabled: config.outboxWorkerEnabled,
           outboxWorkerIntervalMs: config.outboxWorkerIntervalMs,

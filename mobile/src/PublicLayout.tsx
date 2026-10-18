@@ -76,7 +76,28 @@ export function PublicLayout({
           >
             <LogoWord compact />
           </Pressable>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {__DEV__ && (<Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Quick Test Auth"
+              onPress={() => navigation.navigate("TestAuth")}
+              style={{
+                backgroundColor: c.soft,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 14,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                borderWidth: 1,
+                borderColor: c.accent + "45",
+              }}
+            >
+              <Icon name="flash" size={13} color={c.accent} />
+              <Txt bold size={12} style={{ color: c.accent }}>
+                Test Auth
+              </Txt>
+            </Pressable>)}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={

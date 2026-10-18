@@ -41,6 +41,7 @@ export function createClient(
   let closing = false;
   let vaultWrite: Promise<void> = Promise.resolve();
   let expired = () => {};
+  const sessionListeners = new Set<() => void>();
   function persist(action: () => Promise<void>) {
     const job = vaultWrite.then(action, action);
     vaultWrite = job.catch(() => {});
@@ -97,7 +98,16 @@ export function createClient(
     await persist(async () => {
       if (expected === generation) await vault.set(data.refreshToken);
     });
-    if (expected === generation) accessToken = data.accessToken;
+    if (expected === generation) {
+      accessToken = data.accessToken;
+      for (const listener of sessionListeners) {
+        try {
+          listener();
+        } catch {
+          /* Optional observers cannot invalidate authentication. */
+        }
+      }
+    }
   }
   async function clear() {
     generation++;
@@ -190,6 +200,12 @@ export function createClient(
     refresh,
     accept,
     clear,
+    onSessionChanged(listener: () => void) {
+      sessionListeners.add(listener);
+      return () => {
+        sessionListeners.delete(listener);
+      };
+    },
     async download(path: string): Promise<Response> {
       return (await call(path, "GET", undefined, true)).response;
     },

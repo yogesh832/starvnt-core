@@ -341,6 +341,7 @@ customerNotificationSchema.index(
   { idempotencyKey: 1 },
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
+customerNotificationSchema.index({ customer: 1, createdAt: 1, _id: 1 });
 
 const customerFavoriteSchema = new Schema(
   {

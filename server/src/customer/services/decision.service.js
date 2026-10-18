@@ -49,6 +49,7 @@ async function createVendorOpportunityForSelection({ customerId, event, requirem
   const eventDate = event.eventDate || new Date().toISOString().slice(0, 10);
   const serviceLocation = eventServiceLocation(event);
   const existing = await Opportunity.findOne({
+    customerEvent: event._id,
     vendor: option.vendorId,
     customer: customerId,
     vendorService: vendorServiceId,
@@ -57,6 +58,8 @@ async function createVendorOpportunityForSelection({ customerId, event, requirem
   }).sort({ createdAt: -1 });
 
   const payload = {
+    customerEvent: event._id,
+    customerRequirement: requirement._id,
     serviceName: option.packageName || categoryLabel(option.category),
     eventDate,
     serviceLocation,

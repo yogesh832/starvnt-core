@@ -48,6 +48,8 @@ npx expo start --go --lan --clear
 
 Keep the backend running on port 4000. Expo Go previews do not validate native Google sign-in or Razorpay payments; use the development build for those flows.
 
+The development runtime can infer the backend host from Metro's LAN host when no API override is set. An explicit `EXPO_PUBLIC_API_URL` takes priority. Development-only test-persona controls are hidden from release navigation and still depend on the backend's gated development auth route; real auth/provider QA remains required.
+
 For browser-only layout review:
 
 ```sh
@@ -73,6 +75,8 @@ Physical phones must use the computer's reachable LAN address or an HTTPS develo
 
 Google setup still needed from the project owner:
 
+Android development registration is now recorded: OAuth client `1009726530856-564bkn2rlrvoe8vsd1g6vtc6u99376sk.apps.googleusercontent.com`, package `com.starvnt.mobile`, EAS keystore SHA-1 `07:8F:20:4F:9B:AE:0D:60:D5:A6:62:C6:CD:BA:67:D5:E4:27:2C:0F`. The native SDK's `webClientId` uses the existing backend/web OAuth client `1009726530856-34nc725qvptbshmfbrtpjcis8j3pu1iq.apps.googleusercontent.com`; it is configured locally and in all EAS build profiles. These are public identifiers. No real Google login has been verified on a device.
+
 1. Confirm the final Android package and iOS bundle identifier.
 2. Register an Android OAuth client for that package and the development/release signing certificate fingerprints.
 3. Register an iOS OAuth client and set its public ID and reversed URL scheme.
@@ -82,6 +86,8 @@ Google setup still needed from the project owner:
 No frontend Razorpay secret, Cloudinary secret, SMTP password, MSG91 auth key, JWT secret or AI API key is needed. Payments receive the public checkout key from the backend. AI, OTP delivery, maps lookup, verification and media signing keep using the existing server configuration. Never copy `server/.env` into this app.
 
 ## Session contract and deployment
+
+For native push credentials, builds, delivery behavior and device QA, see [PUSH.md](./PUSH.md). Push implementation uses the same backend notifications; live delivery requires EAS/FCM/APNs setup and an always-running backend worker.
 
 Deploy the accompanying backend change before using native authentication in production. Native auth requests include `X-Starvnt-Client: native`. Successful token-issuing auth responses add a `refreshToken`; native refresh/logout send it as a JSON body field. Both domains retain their existing signing secrets, audiences, session stores, expiry checks, rotation and revocation. The header negotiates transport and grants no permission.
 
@@ -109,4 +115,4 @@ npx expo prebuild --platform android --no-install
 
 Bundle export verifies Metro/Hermes compilation; it does not build an APK/IPA or verify native SDK linking, credentials, live SMS/email, provider checkout, or app lifecycle behavior. Device QA and the remaining parity items are release gates. The mobile CI workflow checks types, session tests, Expo dependency compatibility, and both native JS exports.
 
-Build profiles in `eas.json` provide development, internal Android APK preview, and production configuration. EAS project association, Apple/Google developer accounts, certificates, store assets and final identifiers have not been created or submitted.
+Build profiles in `eas.json` provide development, internal Android APK preview, and production configuration. App config associates this workspace with `@yogesh832/starvnt`, project ID `e3aa19c9-0964-4768-8507-985be8f040bd`. Signing certificates, push credentials, store assets and final identifiers remain unverified; no cloud build or store submission was performed by the agent.

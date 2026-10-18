@@ -336,6 +336,11 @@ export function AuthScreen({ route, navigation }: any) {
         secondary
         onPress={() => setActiveDomain(isAdmin ? "external" : "admin")}
       />
+      {__DEV__ && (<Button
+        title="⚡ Quick Test Auth (Skip Login)"
+        secondary
+        onPress={() => navigation.navigate("TestAuth")}
+      />)}
     </AuthLayout>
   );
 }
