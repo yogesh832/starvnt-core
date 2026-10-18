@@ -12,6 +12,7 @@ import { PublicGradient, PublicLayout } from "../PublicLayout";
 import { usePlanningIntent } from "../PlanningIntent";
 import { useSession } from "../auth/Session";
 import { Button, Icon, Txt, usePalette } from "../ui";
+import { TEST_AUTH_ENABLED } from "../testAuth";
 
 const suggestions = [
   "My daughter's wedding",
@@ -94,7 +95,7 @@ export function LandingScreen({ navigation }: any) {
                 Events made simple with AI
               </Txt>
             </View>
-            {__DEV__ && (<Pressable
+            {TEST_AUTH_ENABLED && (<Pressable
               accessibilityRole="button"
               accessibilityLabel="Quick Test Auth"
               onPress={() => navigation.navigate("TestAuth")}
@@ -262,7 +263,7 @@ export function LandingScreen({ navigation }: any) {
           </Txt>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             <Button title="Plan an Event" onPress={() => begin(text)} />
-            {__DEV__ && (<Button
+            {TEST_AUTH_ENABLED && (<Button
               title="⚡ Test Auth"
               secondary
               onPress={() => navigation.navigate("TestAuth")}

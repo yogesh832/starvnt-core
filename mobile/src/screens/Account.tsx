@@ -5,6 +5,7 @@ import { useSession } from "../auth/Session";
 import { pickUpload } from "../api/upload";
 import { shareDocument } from "../api/documents";
 import { VendorProfile } from "./VendorProfile";
+import { TEST_AUTH_ENABLED } from "../testAuth";
 import type { Data } from "../api/client";
 import {
   Button,
@@ -94,7 +95,7 @@ export function AccountScreen({ navigation }: any) {
         secondary
         onPress={() => s.setActiveDomain(isAdmin ? "external" : "admin")}
       />
-      {__DEV__ && (
+      {TEST_AUTH_ENABLED && (
         <Button
           title="⚡ Switch Test Persona (Quick Auth)"
           secondary

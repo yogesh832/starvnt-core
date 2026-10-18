@@ -1,14 +1,16 @@
 import React, { useCallback, useState } from "react";
 import { useFocusEffect } from '@react-navigation/native';
-import { Platform, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSession } from "../auth/Session";
 import { AuthLayout } from "../AuthLayout";
 import { external } from "../api/runtime";
+import { TEST_AUTH_ENABLED } from "../testAuth";
 import {
   Button,
   Choice,
   ErrorNotice,
   Field,
+  Icon,
   Pill,
   Txt,
   useAction,
@@ -114,6 +116,9 @@ export function AuthScreen({ route, navigation }: any) {
     );
   }
   async function google() {
+    if (Platform.OS === 'ios' && (!process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || !process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME)) {
+      throw new Error('Google sign-in for iOS is not configured yet. Please continue with email or phone.');
+    }
     const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     if (!webClientId)
       throw new Error(
@@ -145,6 +150,89 @@ export function AuthScreen({ route, navigation }: any) {
       register={!isAdmin && mode === "register"}
       admin={isAdmin}
     >
+      {TEST_AUTH_ENABLED && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dev POV 1-Click Test Login"
+          onPress={() => navigation.navigate("TestAuth")}
+          style={{
+            backgroundColor: "#1e1338",
+            borderWidth: 1,
+            borderColor: "rgba(168,85,247,0.4)",
+            borderRadius: 16,
+            padding: 12,
+            marginBottom: 6,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              flex: 1,
+            }}
+          >
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                backgroundColor: "rgba(168,85,247,0.2)",
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1,
+                borderColor: "rgba(192,132,252,0.3)",
+              }}
+            >
+              <Icon name="flash" size={16} color="#c084fc" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Txt bold size={12} style={{ color: "#ffffff" }}>
+                  Dev 1-Click Test Login
+                </Txt>
+                <View
+                  style={{
+                    backgroundColor: "rgba(16,185,129,0.2)",
+                    paddingHorizontal: 5,
+                    paddingVertical: 1,
+                    borderRadius: 5,
+                  }}
+                >
+                  <Txt bold size={9} style={{ color: "#6ee7b7" }}>
+                    15 Vendors + 4 Admins
+                  </Txt>
+                </View>
+              </View>
+              <Txt size={10} style={{ color: "#cbd5e1" }}>
+                Bypass login for testing & QA
+              </Txt>
+            </View>
+          </View>
+          <View
+            style={{
+              backgroundColor: "#a855f7",
+              paddingHorizontal: 9,
+              paddingVertical: 5,
+              borderRadius: 8,
+            }}
+          >
+            <Txt bold size={11} style={{ color: "#0f172a" }}>
+              Open →
+            </Txt>
+          </View>
+        </Pressable>
+      )}
       <View style={{ gap: 10, marginTop: 6, marginBottom: 6 }}>
         <Pill>
           {isAdmin ? "CORE · INTERNAL ACCESS" : "EVENTS. SIMPLIFIED."}
@@ -336,11 +424,13 @@ export function AuthScreen({ route, navigation }: any) {
         secondary
         onPress={() => setActiveDomain(isAdmin ? "external" : "admin")}
       />
-      {__DEV__ && (<Button
-        title="⚡ Quick Test Auth (Skip Login)"
-        secondary
-        onPress={() => navigation.navigate("TestAuth")}
-      />)}
+      {TEST_AUTH_ENABLED && (
+        <Button
+          title="⚡ Quick Test Auth (Skip Login)"
+          secondary
+          onPress={() => navigation.navigate("TestAuth")}
+        />
+      )}
     </AuthLayout>
   );
 }

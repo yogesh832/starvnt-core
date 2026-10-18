@@ -11,6 +11,13 @@
       "env": { "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1009726530856-34nc725qvptbshmfbrtpjcis8j3pu1iq.apps.googleusercontent.com" },
       "android": { "buildType": "apk" }
     },
+    "appetize-ios": {
+      "extends": "production",
+      "environment": "production",
+      "developmentClient": false,
+      "autoIncrement": false,
+      "ios": { "simulator": true, "buildConfiguration": "Release" }
+    },
     "production": {
       "node": "22.23.3",
       "android": { "buildType": "app-bundle" },

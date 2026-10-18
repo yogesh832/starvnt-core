@@ -145,7 +145,7 @@ export const config = {
   requestLoggingEnabled: process.env.REQUEST_LOGGING_ENABLED === undefined
     ? isProduction
     : String(process.env.REQUEST_LOGGING_ENABLED).toLowerCase() === "true",
-  enableDevTools: process.env.ENABLE_DEV_TOOLS !== "false" && !isProduction,
+  enableDevTools: process.env.ENABLE_DEV_TOOLS === "true" || (process.env.ENABLE_DEV_TOOLS !== "false" && !isProduction),
 
   // ── Settlement math ──
   platformCommissionPercent: Number(process.env.PLATFORM_COMMISSION_PERCENT || 10),

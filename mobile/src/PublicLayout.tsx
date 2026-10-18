@@ -13,6 +13,7 @@ import { LogoWord } from "./BrandLogo";
 import { useTheme } from "./Theme";
 import { Icon, Txt, usePalette } from "./ui";
 import { useSession } from "./auth/Session";
+import { TEST_AUTH_ENABLED } from "./testAuth";
 
 export function PublicGradient({ photo = false }: { photo?: boolean }) {
   const c = usePalette();
@@ -77,7 +78,7 @@ export function PublicLayout({
             <LogoWord compact />
           </Pressable>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {__DEV__ && (<Pressable
+            {TEST_AUTH_ENABLED && (<Pressable
               accessibilityRole="button"
               accessibilityLabel="Quick Test Auth"
               onPress={() => navigation.navigate("TestAuth")}

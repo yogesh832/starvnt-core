@@ -66,6 +66,7 @@ import { AdminEntity } from "./screens/AdminEntity";
 import { AdminAccess, AdminFinance } from "./screens/AdminActions";
 import { AccountScreen, ProfileScreen, LibraryScreen } from "./screens/Account";
 import { TestAuthScreen } from "./screens/TestAuth";
+import { TEST_AUTH_ENABLED } from "./testAuth";
 import { Button, ErrorNotice, Icon, Page, Txt, usePalette } from "./ui";
 
 const Stack = createNativeStackNavigator();
@@ -281,7 +282,7 @@ function Navigation() {
               component={AuthScreen}
               options={{ headerShown: false }}
             />
-            {__DEV__ && (
+            {TEST_AUTH_ENABLED && (
               <Stack.Screen
                 name="TestAuth"
                 component={TestAuthScreen}
@@ -448,7 +449,7 @@ function Navigation() {
               component={LibraryScreen}
               options={{ title: "Your library" }}
             />
-            {__DEV__ && (
+            {TEST_AUTH_ENABLED && (
               <Stack.Screen
                 name="TestAuth"
                 component={TestAuthScreen}

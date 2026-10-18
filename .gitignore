@@ -3,6 +3,8 @@ node_modules/
 */node_modules/
 
 # Production builds
+artifacts/android/
+artifacts/ios/
 dist/
 */dist/
 build/
