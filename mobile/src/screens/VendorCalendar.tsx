@@ -164,6 +164,7 @@ export function VendorCalendar({ navigation }: any) {
         <View
           style={{
             flexDirection: "row",
+            flexWrap: 'wrap',
             justifyContent: "space-between",
             gap: 8,
           }}

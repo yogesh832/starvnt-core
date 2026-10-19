@@ -7,6 +7,7 @@ import { validateAction, describeAction, executeAction, readConfirmation, dateIn
 import { buildVendorSystemPrompt } from './vendorSystemPrompt.js';
 import { classifyAuraRequest } from '../../common/auraRouter.js';
 import { createPerformanceTracker } from '../../common/streamUtils.js';
+import { conversationLanguage, auraLanguageInstruction } from '../../common/auraLanguage.js';
 
 /**
  * Vendor Aura+ chat. It answers from the vendor's own data and suggests pages.
@@ -270,7 +271,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   tracker.markGeminiStart();
   try {
     const res = await getLlmAdapter().chat({
-      systemPrompt: buildVendorSystemPrompt(context),
+        systemPrompt: `${buildVendorSystemPrompt(context)}\n\n${auraLanguageInstruction(conversationLanguage(text, history))}`,
       history,
       message: text,
       model: route.model,

@@ -142,6 +142,8 @@ const auraSessionSchema = new Schema(
     _id: { type: String }, // client-generated session id
     customer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
     event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null },
+    previousEvent: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null },
+    switchChoices: [{ type: Schema.Types.ObjectId, ref: 'CustomerEvent' }],
   },
   { timestamps: true, collection: 'customer_aura_sessions' }
 );

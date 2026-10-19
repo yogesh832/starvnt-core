@@ -3,9 +3,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
@@ -14,6 +14,7 @@ import { useTheme } from "./Theme";
 import { Icon, Txt, usePalette } from "./ui";
 import { useSession } from "./auth/Session";
 import { TEST_AUTH_ENABLED } from "./testAuth";
+import { KeyboardScrollView } from './KeyboardScrollView';
 
 export function PublicGradient({ photo = false }: { photo?: boolean }) {
   const c = usePalette();
@@ -44,6 +45,7 @@ export function PublicLayout({
   auth = false,
 }: React.PropsWithChildren<{ navigation: any; auth?: boolean }>) {
   const c = usePalette();
+  const compact = useWindowDimensions().width < 400;
   const { mode, toggle } = useTheme();
   const { setActiveDomain } = useSession();
   return (
@@ -78,7 +80,7 @@ export function PublicLayout({
             <LogoWord compact />
           </Pressable>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {TEST_AUTH_ENABLED && (<Pressable
+            {TEST_AUTH_ENABLED && !compact && (<Pressable
               accessibilityRole="button"
               accessibilityLabel="Quick Test Auth"
               onPress={() => navigation.navigate("TestAuth")}
@@ -135,12 +137,12 @@ export function PublicLayout({
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView
+        <KeyboardScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1 }}
         >
           {children}
-        </ScrollView>
+        </KeyboardScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

@@ -6,18 +6,19 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TextInputProps,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { Client, Data } from "./api/client";
 import { usePalette } from "./Theme";
 import brand from "./brand.generated.json";
+import { KeyboardScrollView } from './KeyboardScrollView';
 export { usePalette } from "./Theme";
 export function Txt({
   children,
@@ -26,17 +27,23 @@ export function Txt({
   bold = false,
   style,
   numberOfLines,
+  adjustsFontSizeToFit,
+  minimumFontScale,
 }: React.PropsWithChildren<{
   size?: number;
   muted?: boolean;
   bold?: boolean;
   style?: any;
   numberOfLines?: number;
+  adjustsFontSizeToFit?: boolean;
+  minimumFontScale?: number;
 }>) {
   const c = usePalette();
   return (
     <Text
       numberOfLines={numberOfLines}
+      adjustsFontSizeToFit={adjustsFontSizeToFit}
+      minimumFontScale={minimumFontScale}
       style={[
         {
           fontSize: size,
@@ -92,6 +99,8 @@ export function Button({
       style={({ pressed }) => [
         {
           minHeight: 50,
+          maxWidth: '100%',
+          flexShrink: 1,
           paddingHorizontal: 18,
           paddingVertical: 13,
           borderRadius: 17,
@@ -123,6 +132,7 @@ export function Button({
               : variant === "navy"
                 ? "#ffffff"
                 : c.onAccent,
+            textAlign: 'center',
           }}
         >
           {title}
@@ -136,10 +146,11 @@ export function Card({
   onPress,
 }: React.PropsWithChildren<{ onPress?: () => void }>) {
   const c = usePalette();
+  const compact = useWindowDimensions().width <= 360;
   const style = {
     backgroundColor: c.card,
     borderRadius: 23,
-    padding: 20,
+    padding: compact ? 16 : 20,
     borderWidth: 1,
     borderColor: c.line,
     gap: 12,
@@ -234,6 +245,8 @@ export function Choice({
             key={v}
             onPress={() => onChange(v)}
             style={{
+              maxWidth: '100%',
+              minHeight: 44,
               paddingHorizontal: 14,
               paddingVertical: 11,
               borderRadius: 13,
@@ -383,16 +396,17 @@ export function Page({
   refreshing?: boolean;
 }>) {
   const c = usePalette();
+  const compact = useWindowDimensions().width <= 360;
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: c.bg }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={100}
     >
-      <ScrollView
+      <KeyboardScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
-          padding: 20,
+          padding: compact ? 16 : 20,
           paddingBottom: 42,
           gap: 18,
           maxWidth: 820,
@@ -411,7 +425,7 @@ export function Page({
       >
         {title && (
           <View style={{ gap: 5, marginVertical: 6 }}>
-            <Txt size={29} bold>
+            <Txt size={compact ? 26 : 29} bold>
               {title}
             </Txt>
             {subtitle && <Txt muted>{subtitle}</Txt>}
@@ -428,7 +442,7 @@ export function Page({
         ) : error ? null : (
           children
         )}
-      </ScrollView>
+      </KeyboardScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -481,7 +495,7 @@ export function Stats({ items }: { items: [string, string | number][] }) {
           <Txt muted size={12}>
             {label}
           </Txt>
-          <Txt size={25} bold>
+          <Txt size={25} bold numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
             {value}
           </Txt>
         </View>
@@ -548,7 +562,7 @@ export function useAction() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const locked = useRef(false);
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<unknown>) {
     if (locked.current) return;
     locked.current = true;
     setBusy(true);

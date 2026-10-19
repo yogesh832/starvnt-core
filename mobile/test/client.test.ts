@@ -136,7 +136,7 @@ test("a protected request still rejected after refresh expires the local session
   assert.equal(await vault.get(), null);
   assert.equal(expired, true);
 });
-test("logout waits for rotation then revokes the current credential", async () => {
+test("logout clears immediately and revokes a late rotated credential", async () => {
   const vault = memory("original");
   let used: string | undefined;
   let release: () => void = () => {};
@@ -155,9 +155,10 @@ test("logout waits for rotation then revokes the current credential", async () =
     return json({ ok: true });
   }) as typeof fetch);
   const refresh = api.refresh();
-  const logout = api.logout();
+  await api.logout();
+  assert.equal(await vault.get(), null);
   release();
-  await Promise.all([refresh, logout]);
+  await refresh;
   assert.equal(used, "rotated");
   assert.equal(await vault.get(), null);
 });
@@ -177,12 +178,12 @@ test("clearing a session during an in-flight refresh cannot resurrect it", async
   assert.equal(await pending, null);
   assert.equal(await vault.get(), null);
 });
-test("unsuccessful logout preserves credentials so revocation can be retried", async () => {
+test("server logout failure cannot retain a local session", async () => {
   const vault = memory("still-live");
   const api = createClient("https://example.test", vault, (async () =>
     json({ error: "UNAVAILABLE" }, 503)) as typeof fetch);
-  await assert.rejects(api.logout());
-  assert.equal(await vault.get(), "still-live");
+  await api.logout();
+  assert.equal(await vault.get(), null);
 });
 test("admin and external clients cannot share refresh credentials", async () => {
   const outside = memory("external");
@@ -219,4 +220,53 @@ test("admin navigation obeys any-permission rules and super-admin-only access", 
   assert.ok(
     visibleModules({ role: "SUPER_ADMIN" }).some((m) => m.key === "users"),
   );
+});
+
+test('an old account request returning 401 cannot clear a newly signed-in account', async () => {
+  let failOld!: () => void;
+  const gate = new Promise<void>(r => { failOld = r; });
+  const vault = memory('old');
+  const api = createClient('https://example.test', vault, (async url => {
+    if (String(url).endsWith('/old-data')) {
+      await gate;
+      return json({ error: 'UNAUTHENTICATED' }, 401);
+    }
+    return json({ accessToken: 'new', refreshToken: 'new-refresh', user: { id: 'new' } });
+  }) as typeof fetch);
+  let expired = 0;
+  api.onExpired(() => { expired++; });
+  const old = assert.rejects(api.call('/old-data'), ApiError);
+  await api.authenticate('login', {});
+  failOld();
+  await old;
+  assert.equal(await vault.get(), 'new-refresh');
+  assert.equal(expired, 0);
+});
+
+test('a failed login does not prevent a subsequent successful login', async () => {
+  let attempts = 0;
+  const vault = memory();
+  const api = createClient('https://example.test', vault, (async () => ++attempts === 1
+    ? json({ error: 'INVALID_CREDENTIALS' }, 401)
+    : json({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'account' } })) as typeof fetch);
+  await assert.rejects(api.authenticate('login', {}), ApiError);
+  assert.equal((await api.authenticate('login', {})).user.id, 'account');
+  assert.equal(await vault.get(), 'refresh');
+});
+
+test('Quick Auth replaces an old saved session with memory-only refresh and still revokes on logout', async () => {
+  const vault = memory('old-persistent');
+  const requests: { url: string; refreshToken?: string }[] = [];
+  const api = createClient('https://example.test', vault, (async (url, options) => {
+    requests.push({ url: String(url), refreshToken: JSON.parse(String(options?.body || '{}')).refreshToken });
+    return String(url).endsWith('/logout') ? json({ ok: true }) : json({ accessToken: 'temporary-access', refreshToken: String(url).endsWith('/refresh') ? 'rotated-temporary' : 'temporary', user: { id: 'test' } });
+  }) as typeof fetch);
+  await api.authenticate('dev-auth', {});
+  assert.equal(await vault.get(), null);
+  assert.ok(await api.refresh());
+  assert.equal(requests[1].refreshToken, 'temporary');
+  assert.equal(await vault.get(), null);
+  await api.logout();
+  assert.equal(requests.at(-1)?.refreshToken, 'rotated-temporary');
+  assert.equal(await api.refresh(), null);
 });

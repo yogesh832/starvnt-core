@@ -97,24 +97,16 @@ export function AccountScreen({ navigation }: any) {
       />
       {TEST_AUTH_ENABLED && (
         <Button
-          title="⚡ Switch Test Persona (Quick Auth)"
+          title="Switch Test Persona (Quick Auth)"
           secondary
           onPress={() => navigation.navigate("TestAuth")}
         />
       )}
       <Button
-        title="Sign out of this workspace"
+        title="Sign out of STARVNT"
         secondary
         busy={a.busy}
-        onPress={() =>
-          confirm(
-            "Sign out?",
-            "This revokes the current session on the server and removes it from this device.",
-            () => {
-              void a.run(() => s.logout(isAdmin));
-            },
-          )
-        }
+        onPress={() => { void a.run(() => s.logout()); }}
       />
     </Page>
   );

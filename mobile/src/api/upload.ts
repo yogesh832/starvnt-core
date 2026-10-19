@@ -1,5 +1,6 @@
 import * as DocumentPicker from "expo-document-picker";
 import { Platform } from "react-native";
+import { File } from "expo-file-system";
 import { external } from "./runtime";
 import type { Data } from "./client";
 
@@ -26,11 +27,7 @@ async function uploadAsset(
     "file",
     Platform.OS === "web" && asset.file
       ? asset.file
-      : ({
-          uri: asset.uri,
-          name: asset.name,
-          type: asset.mimeType || "application/octet-stream",
-        } as any),
+      : new File(asset.uri),
   );
   body.append(
     "mediaType",

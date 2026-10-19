@@ -33,9 +33,13 @@ export function listSessionsForCustomer(customerId) {
   return AuraSession.find({ customer: customerId }).sort({ updatedAt: -1 }).limit(50).lean();
 }
 
-export function setSessionEvent(sessionId, eventId) {
-  return AuraSession.findByIdAndUpdate(sessionId, { $set: { event: eventId } }, { new: true }).lean();
+export async function setSessionEvent(sessionId, eventId) {
+  const session = await findSession(sessionId);
+  const changed = String(session?.event || '') !== String(eventId);
+  return AuraSession.findByIdAndUpdate(sessionId, { $set: { event: eventId, switchChoices: [], ...(changed ? { previousEvent: session?.event || null } : {}) } }, { new: true }).lean();
 }
+
+export const setSwitchChoices = (sessionId, ids) => AuraSession.updateOne({ _id: sessionId }, { $set: { switchChoices: ids } });
 
 export function listMessages(sessionId, limit = 100) {
   return AuraMessage.find({ session: sessionId }).sort({ createdAt: 1, _id: 1 }).limit(limit).lean();

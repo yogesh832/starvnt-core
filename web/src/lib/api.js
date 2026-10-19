@@ -42,12 +42,13 @@ export function makeApi(base, refreshPath, options = {}) {
   }
 
   /** Low-level request: supports JSON, FormData, Blob and string bodies; returns the Response. */
-  async function raw(path, { method = "GET", body, headers = {} } = {}, retry = true) {
+  async function raw(path, { method = "GET", body, headers = {}, signal } = {}, retry = true) {
     const hasBody = body !== undefined && body !== null;
     const isJsonBody = hasBody && !(body instanceof FormData) && !(body instanceof Blob) && typeof body !== "string";
     const res = await fetch(`${base}${path}`, {
       method,
       credentials: "include",
+      signal,
       headers: {
         ...(isJsonBody ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -58,7 +59,7 @@ export function makeApi(base, refreshPath, options = {}) {
 
     if (res.status === 401 && retry) {
       const refreshed = await refresh();
-      if (refreshed) return raw(path, { method, body, headers }, false);
+      if (refreshed) return raw(path, { method, body, headers, signal }, false);
     }
 
     if (!res.ok) {

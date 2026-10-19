@@ -1,10 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Image, Linking, View } from "react-native";
 import { attachedMessage, messageLinks } from "../messageMedia";
 import { pickUpload } from "../api/upload";
 import { vendorDestination } from "../vendorDestination";
 import { EventDateField } from "../EventFields";
 import { AuraPlan } from "../AuraPlan";
+import { AuraChatView, AuraPanel, AuraRow } from '../AuraUI';
+import { AuraQuestion } from '../AuraQuestion';
+import type { AuraVoiceSubmit } from '../AuraVoice';
+import { AuraButton as AuthButton, AuraText as AuthText } from '../AuraTheme';
 import { auraChoice, conversationContext } from "../auraChoices";
 import { isQuoteMessage } from "../../../web/src/pages/customer/quoteMessageActions";
 import { usePlanningIntent } from "../PlanningIntent";
@@ -272,6 +276,10 @@ function ConversationScreen({ route, navigation }: any) {
     if (kind === "aura" && !vendor && prompt) setPrompt("");
   }, []);
   const [local, setLocal] = useState<Data[]>([]);
+  const [outgoing, setOutgoing] = useState('');
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const voiceController = useRef<AuraVoiceSubmit | null>(null);
+  const sending = useRef(false);
   const [activeEvent, setActiveEvent] = useState(eventId);
   const [planEvent, setPlanEvent] = useState<Data | null>(null);
   const [understanding, setUnderstanding] = useState<Data | null>(null);
@@ -280,6 +288,7 @@ function ConversationScreen({ route, navigation }: any) {
   const [draftInstructions, setDraftInstructions] = useState("");
   const [showDraft, setShowDraft] = useState(false);
   const [nextQuestion, setNextQuestion] = useState<Data | null>(null);
+  const [switchChoices, setSwitchChoices] = useState<Data[]>([]);
   const [answerDate, setAnswerDate] = useState("");
   // Customer Aura sessions are caller-generated and backed by the same server session store.
   const [sessionId, setSessionId] = useState(
@@ -307,24 +316,34 @@ function ConversationScreen({ route, navigation }: any) {
       setLocal(r.data.messages || r.data.session?.messages || []);
       setPending(r.data.pending || null);
       setNextQuestion(r.data.nextQuestion || null);
+      setSwitchChoices(r.data.eventChoices || []);
       setPlanEvent(r.data.activeEvent || null);
       setUnderstanding(r.data.understanding || null);
       if (r.data.activeEvent?.id) setActiveEvent(r.data.activeEvent.id);
     }
   }, [r.data, kind]);
   const messages = kind === "aura" ? local : stored;
-  async function send(
+  async function send(override?: string, confirmation?: boolean, choiceBody: Data = {}) {
+    if (sending.current) throw new Error('Aura is still replying. Please wait a moment.');
+    sending.current = true;
+    try { return await performSend(override, confirmation, choiceBody); }
+    finally { sending.current = false; }
+  }
+  async function performSend(
     override?: string,
     confirmation?: boolean,
     choiceBody: Data = {},
   ) {
     const message =
       kind === "aura"
-        ? override || text.trim()
+        ? override || (attachment ? attachedMessage(text, attachment.url) : text.trim())
         : attachedMessage(override || text, attachment?.url);
     if (!message) return;
+    let spokenAnswer = '';
     if (kind === "aura") {
-      const data = await external.call(
+      setOutgoing(message);
+      let data: Data;
+      try { data = await external.call(
         vendor ? "/vendor/aura/chat" : "/aura/chat",
         "POST",
         {
@@ -337,9 +356,11 @@ function ConversationScreen({ route, navigation }: any) {
             ? { confirm: confirmation }
             : {}),
         },
-      );
+      ); } finally { setOutgoing(''); }
+      spokenAnswer = [data.reply, data.message?.content, data.message, data.text].find(value => typeof value === 'string' && value.trim()) || 'Your plan has been updated.';
       setPending(data.pending || null);
       setNextQuestion(data.nextQuestion || null);
+      setSwitchChoices(data.eventChoices || []);
       if (data.activeEvent) setPlanEvent(data.activeEvent);
       if ("understanding" in data) setUnderstanding(data.understanding);
       const nextEvent = data.createdEventId || data.activeEvent?.id;
@@ -384,7 +405,50 @@ function ConversationScreen({ route, navigation }: any) {
     }
     setText("");
     setAttachment(null);
+    return spokenAnswer;
   }
+  function sendFromUi(message?: string, body: Data = {}) {
+    if (voiceController.current) { void voiceController.current(message || (attachment ? attachedMessage(text, attachment.url) : text), body); }
+    else void a.run(() => send(message, undefined, body));
+  }
+  if (kind === 'aura') return <AuraChatView
+    navigation={navigation} user={user} vendor={vendor}
+    eventTitle={!vendor ? planEvent?.title : undefined} hasQuestion={!!nextQuestion && !!messages.length}
+    activeEventId={activeEvent}
+    onSwitchEvent={event => sendFromUi(`Switch to ${event.title}`, { switchEventId: id(event) })}
+    onOpenEvent={() => { if (activeEvent) navigation.navigate('Event', { eventId: activeEvent }); }}
+    attachment={attachment} onRemoveAttachment={() => setAttachment(null)}
+    onAttach={() => { void a.run(async () => { const media = await pickUpload(false, ['image/*', 'video/*']); if (media) setAttachment(media); }); }}
+    messages={[...messages, ...(outgoing ? [{ role: 'user', content: outgoing }] : [])].map(m => ({ ...m, actions: (m.actions || []).map((action: Data) => ({ ...action, target: typeof action.to === 'string' ? vendorDestination(action.to) : null })) }))}
+    text={text} onChangeText={setText} busy={a.busy || voiceBusy} loading={r.loading}
+    error={a.error || r.error} onRetry={() => { void r.refresh(); }}
+    onSend={sendFromUi}
+    onHistory={() => navigation.navigate('AuraHistory')}
+    onVoiceController={submit => { voiceController.current = submit; }}
+    onVoiceMessage={async (message, body) => {
+      setVoiceBusy(true);
+      try { return await send(message, undefined, body) || ''; } finally { setVoiceBusy(false); }
+    }}
+    onOpenLink={url => { void a.run(async () => { await Linking.openURL(url); }); }}
+    onNew={() => navigation.setParams({ sessionId: undefined, newChatKey: String(Date.now()) })}
+  >
+    {!vendor && switchChoices.length > 0 && <AuraPanel><AuthText bold size={13}>Your events</AuthText>{switchChoices.map(event => <AuraRow key={id(event)} title={[event.title, event.city, event.date || 'Date to be decided'].filter(Boolean).join(' · ')} disabled={a.busy || voiceBusy} onPress={() => sendFromUi(`Switch to ${event.title}`, { switchEventId: id(event) })} />)}</AuraPanel>}
+    {!vendor && messages.length > 0 && nextQuestion && <AuraQuestion key={`${sessionId}-${nextQuestion.topic || nextQuestion.question}`} question={nextQuestion} showQuestion={!String([...messages].reverse().find(m => m.role !== 'user')?.content || '').includes(nextQuestion.question || '')} busy={a.busy || voiceBusy} onPrefill={setText} onSend={sendFromUi} />}
+    {!vendor && <AuraPlan event={planEvent} understanding={understanding} navigation={navigation} busy={a.busy || voiceBusy}
+      onAsk={sendFromUi}
+      onConfirm={() => { void a.run(async () => {
+        if (!planEvent || !understanding?.canConfirm) return;
+        const detail = await external.call(`/customer/events/${encodeURIComponent(id(planEvent))}/confirm`, 'POST');
+        setPlanEvent(detail.event || planEvent);
+        setUnderstanding(detail.understanding || null);
+        setNextQuestion(null);
+      }); }} />}
+    {vendor && pending && <AuraPanel><AuthText bold>Review Aura's proposed change</AuthText><AuthText>{pending.summary || pending.question || 'Apply the change described in the conversation?'}</AuthText>
+      <AuthButton title="Confirm change" busy={a.busy || voiceBusy} onPress={() => { void a.run(() => send('Confirm this change', true)); }} />
+      <AuraRow title="Keep as is" icon="close-outline" disabled={a.busy || voiceBusy} onPress={() => { void a.run(() => send('Cancel this change', false)); }} />
+    </AuraPanel>}
+    {!vendor && activeEvent && !understanding && <AuraRow title="Open your event plan" icon="calendar-outline" onPress={() => navigation.navigate('Event', { eventId: activeEvent })} />}
+  </AuraChatView>;
   return (
     <Page
       title={
@@ -406,13 +470,13 @@ function ConversationScreen({ route, navigation }: any) {
           <Button
             title="Past conversations"
             secondary
-            disabled={a.busy}
+            disabled={a.busy || voiceBusy}
             onPress={() => navigation.navigate("AuraHistory")}
           />
           <Button
             title="New conversation"
             secondary
-            disabled={a.busy}
+            disabled={a.busy || voiceBusy}
             onPress={() => {
               const start = () =>
                 navigation.setParams({
@@ -553,7 +617,7 @@ function ConversationScreen({ route, navigation }: any) {
           event={planEvent}
           understanding={understanding}
           navigation={navigation}
-          busy={a.busy}
+          busy={a.busy || voiceBusy}
           onAsk={(message) => {
             void a.run(() => send(message));
           }}
@@ -583,7 +647,7 @@ function ConversationScreen({ route, navigation }: any) {
                   key={`${label}-${index}`}
                   title={label}
                   secondary
-                  busy={a.busy}
+                  busy={a.busy || voiceBusy}
                   onPress={() => {
                     if (choice.prefill) setText(choice.prefill);
                     else
@@ -605,7 +669,7 @@ function ConversationScreen({ route, navigation }: any) {
               <Button
                 title="Use this event date"
                 disabled={!answerDate}
-                busy={a.busy}
+                busy={a.busy || voiceBusy}
                 onPress={() => a.run(() => send(answerDate))}
               />
             </>
@@ -622,7 +686,7 @@ function ConversationScreen({ route, navigation }: any) {
           </Txt>
           <Button
             title="Confirm change"
-            busy={a.busy}
+            busy={a.busy || voiceBusy}
             onPress={() => {
               void a.run(() => send("Confirm this change", true));
             }}
@@ -630,7 +694,7 @@ function ConversationScreen({ route, navigation }: any) {
           <Button
             title="Keep as is"
             secondary
-            busy={a.busy}
+            busy={a.busy || voiceBusy}
             onPress={() => {
               void a.run(() => send("Cancel this change", false));
             }}
@@ -662,7 +726,7 @@ function ConversationScreen({ route, navigation }: any) {
                 : "Attach a photo, video or document"
             }
             secondary
-            busy={a.busy}
+            busy={a.busy || voiceBusy}
             onPress={() =>
               a.run(async () => {
                 const uploaded = await pickUpload();
@@ -674,7 +738,7 @@ function ConversationScreen({ route, navigation }: any) {
             <Button
               title="Remove attachment"
               secondary
-              disabled={a.busy}
+              disabled={a.busy || voiceBusy}
               onPress={() => setAttachment(null)}
             />
           )}
@@ -685,7 +749,7 @@ function ConversationScreen({ route, navigation }: any) {
                   showDraft ? "Close writing assistant" : "Write with Aura+"
                 }
                 secondary
-                disabled={a.busy}
+                disabled={a.busy || voiceBusy}
                 onPress={() => setShowDraft(!showDraft)}
               />
               {showDraft && (
@@ -704,7 +768,7 @@ function ConversationScreen({ route, navigation }: any) {
                         ? "Replace draft with Aura+"
                         : "Generate draft"
                     }
-                    busy={a.busy}
+                    busy={a.busy || voiceBusy}
                     disabled={!draftInstructions.trim()}
                     onPress={() =>
                       a.run(async () => {
@@ -737,7 +801,7 @@ function ConversationScreen({ route, navigation }: any) {
       )}
       <Button
         title={kind === "aura" ? "Send to Aura+  ✦" : "Send message"}
-        busy={a.busy}
+        busy={a.busy || voiceBusy}
         disabled={(!text.trim() && !attachment) || r.loading}
         onPress={() => {
           void a.run(send);

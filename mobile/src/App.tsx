@@ -6,7 +6,7 @@ import { NotificationSettings } from "./screens/NotificationSettings";
 import { CircleScreen } from "./screens/CustomerWorkspace";
 import { VendorQuote } from "./screens/VendorQuote";
 import { CustomerBookingScreen } from "./screens/CustomerBooking";
-import { StatusBar, Pressable, Text, View } from "react-native";
+import { StatusBar, Pressable, Text, View, KeyboardAvoidingView, Platform } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";
@@ -43,6 +43,8 @@ import {
 import { EditEvent } from "./screens/EditEvent";
 import { AuraHistoryScreen } from "./screens/AuraHistory";
 import { ChatScreen, UpdatesScreen } from "./screens/Conversations";
+import { DashboardBottomBar } from './DashboardBottomBar';
+import { dashboardTabs, type NavState } from './dashboardNavigation';
 import { VendorOffers, CheckoutScreen } from "./screens/Checkout";
 import {
   VendorHome,
@@ -104,29 +106,16 @@ function MainTabs() {
   const c = usePalette();
   const admin = activeDomain === "admin",
     vendor = user?.accountType === "VENDOR";
-  const tabs: [string, string, any, string][] = admin
-    ? [
-        ["Overview", "Overview", AdminHome, "grid-outline"],
-        ["CoreUpdates", "Updates", AdminNotifications, "notifications-outline"],
-        ["Me", "Account", AccountScreen, "person-outline"],
-      ]
-    : vendor
-      ? [
-          ["Overview", "Overview", VendorHome, "grid-outline"],
-          ["Work", "Workspace", VendorWork, "briefcase-outline"],
-          ["AuraTab", "Aura+", ChatScreen, "sparkles-outline"],
-          ["Updates", "Updates", UpdatesScreen, "chatbubbles-outline"],
-          ["Me", "Account", AccountScreen, "person-outline"],
-        ]
-      : [
-          ["Overview", "Home", CustomerHome, "grid-outline"],
-          ["Events", "Events", EventsScreen, "calendar-outline"],
-          ["AuraTab", "Aura+", ChatScreen, "sparkles-outline"],
-          ["Updates", "Updates", UpdatesScreen, "chatbubbles-outline"],
-          ["Me", "Me", AccountScreen, "person-outline"],
-        ];
+  const workspace = admin ? 'admin' : vendor ? 'vendor' : 'customer';
+  const components: Record<string, any> = {
+    Overview: admin ? AdminHome : vendor ? VendorHome : CustomerHome,
+    CoreUpdates: AdminNotifications, Work: VendorWork, Events: EventsScreen,
+    AuraTab: ChatScreen, Updates: UpdatesScreen, Me: AccountScreen,
+  };
+  const tabs = dashboardTabs(workspace);
   return (
     <Tabs.Navigator
+      tabBar={() => null}
       initialRouteName={prompt && !admin && !vendor ? "AuraTab" : "Overview"}
       screenOptions={{
         headerTitle: () => <LogoWord compact />,
@@ -144,16 +133,19 @@ function MainTabs() {
         },
       }}
     >
-      {tabs.map(([name, title, component, icon]) => (
+      {tabs.map(({ name, title }) => (
         <Tabs.Screen
           key={name}
           name={name}
-          component={component}
+          component={components[name]}
           options={{
             title,
-            tabBarIcon: ({ color, size }) => (
-              <Icon name={icon} color={color} size={size} />
-            ),
+            ...(name === 'AuraTab' ? {
+              headerShown: false,
+              tabBarStyle: { backgroundColor: c.card, borderTopColor: c.line },
+              tabBarActiveTintColor: c.accent,
+              tabBarInactiveTintColor: c.muted,
+            } : {}),
           }}
         />
       ))}
@@ -166,6 +158,7 @@ function Navigation() {
   const c = usePalette();
   const push = usePush();
   const [navigationReady, setNavigationReady] = useState(false);
+  const [navigationState, setNavigationState] = useState<NavState>();
   useEffect(() => {
     const data = push.pending;
     if (!data || !s.ready || s.error || !navigationReady) return;
@@ -248,19 +241,19 @@ function Navigation() {
   };
   return (
     <NavigationContainer
+      key={identity ? `${s.activeDomain}-${identity.id || identity._id}-${s.user?.accountType || ""}` : "guest"}
       ref={pushNavigation}
-      onReady={() => setNavigationReady(true)}
+      onReady={() => { setNavigationReady(true); setNavigationState(pushNavigation.getRootState()); }}
+      onStateChange={state => setNavigationState(state)}
       theme={theme}
       documentTitle={{ formatter: () => brand.title }}
     >
       <StatusBar barStyle={c.dark ? "light-content" : "dark-content"} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'android' ? 'height' : undefined}>
+      <View style={{ flex: 1 }}>
       <Stack.Navigator
-        key={
-          identity
-            ? `${s.activeDomain}-${identity.id || identity._id}-${s.user?.accountType || ""}`
-            : "guest"
-        }
         screenOptions={{
+          statusBarStyle: c.dark ? 'light' : 'dark',
           headerShadowVisible: false,
           headerStyle: { backgroundColor: c.bg },
           headerTintColor: c.ink,
@@ -280,7 +273,7 @@ function Navigation() {
             <Stack.Screen
               name="Auth"
               component={AuthScreen}
-              options={{ headerShown: false }}
+              options={{ headerShown: false, statusBarStyle: 'light' }}
             />
             {TEST_AUTH_ENABLED && (
               <Stack.Screen
@@ -342,7 +335,7 @@ function Navigation() {
             <Stack.Screen
               name="Chat"
               component={ChatScreen}
-              options={{ title: "Conversation" }}
+              options={({ route }) => ({ title: 'Conversation', headerShown: ['thread', 'circle'].includes((route.params as any)?.kind) })}
             />
             <Stack.Screen
               name="Circle"
@@ -387,7 +380,7 @@ function Navigation() {
             <Stack.Screen
               name="VendorCalendar"
               component={VendorCalendar}
-              options={{ title: "Calendar & availability" }}
+              options={{ title: "Calendar" }}
             />
             <Stack.Screen
               name="VendorFinancial"
@@ -459,6 +452,9 @@ function Navigation() {
           </>
         )}
       </Stack.Navigator>
+      </View>
+      {!!identity && <DashboardBottomBar workspace={s.activeDomain === 'admin' ? 'admin' : s.user?.accountType === 'VENDOR' ? 'vendor' : 'customer'} state={navigationState} navigation={pushNavigation} />}
+      </KeyboardAvoidingView>
     </NavigationContainer>
   );
 }

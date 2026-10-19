@@ -36,6 +36,7 @@ export function createClient(
   fetcher: typeof fetch = fetch,
 ) {
   let accessToken: string | null = null;
+  let temporaryRefreshToken: string | null = null;
   let refreshing: Promise<Data | null> | null = null;
   let generation = 0;
   let closing = false;
@@ -46,6 +47,11 @@ export function createClient(
     const job = vaultWrite.then(action, action);
     vaultWrite = job.catch(() => {});
     return job;
+  }
+  function revoke(refreshToken: string | null) {
+    // Revocation is best effort; local logout must also work while offline.
+    if (refreshToken)
+      void send('/auth/logout', 'POST', { refreshToken }).catch(() => {});
   }
 
   async function send(
@@ -84,6 +90,10 @@ export function createClient(
       return data;
     } catch (error) {
       if (error instanceof ApiError) throw error;
+      if (error instanceof Error && /Unsupported FormData(?:Part)? implementation/.test(error.message))
+        throw new Error('This file could not be prepared for upload. Please select or record it again.');
+      if (controller.signal.aborted)
+        throw new Error('STARVNT took too long to respond. Please try again.');
       throw new Error(
         "Could not reach STARVNT. Check your connection and try again.",
       );
@@ -91,15 +101,18 @@ export function createClient(
       clearTimeout(timeout);
     }
   }
-  async function accept(data: Data, expected = generation) {
+  async function accept(data: Data, expected = generation, persistent = true) {
     if (!data.accessToken || !data.refreshToken)
       throw new Error("The server needs the native session update.");
     if (expected !== generation) return;
     await persist(async () => {
-      if (expected === generation) await vault.set(data.refreshToken);
+      if (expected !== generation) return;
+      if (persistent) await vault.set(data.refreshToken);
+      else await vault.clear();
     });
     if (expected === generation) {
       accessToken = data.accessToken;
+      temporaryRefreshToken = persistent ? null : data.refreshToken;
       for (const listener of sessionListeners) {
         try {
           listener();
@@ -112,14 +125,23 @@ export function createClient(
   async function clear() {
     generation++;
     accessToken = null;
+    temporaryRefreshToken = null;
+    refreshing = null;
     await persist(() => vault.clear());
+  }
+  async function invalidate(expected: number) {
+    if (expected !== generation) return;
+    const invalidated = generation + 1;
+    await clear();
+    if (generation === invalidated) expired();
   }
   function refresh(): Promise<Data | null> {
     if (closing) return Promise.resolve(null);
     if (refreshing) return refreshing;
     const expected = generation;
-    refreshing = (async () => {
-      const credential = await vault.get();
+    const persistent = !temporaryRefreshToken;
+    const job = (async () => {
+      const credential = temporaryRefreshToken || await vault.get();
       if (!credential) return null;
       try {
         const data = await send("/auth/refresh", "POST", {
@@ -135,31 +157,34 @@ export function createClient(
             "ACCOUNT_DISABLED_OR_MISSING",
           ].includes(data.error)
         ) {
-          if (expected === generation) {
-            await clear();
-            expired();
-          }
+          await invalidate(expected);
           return null;
         }
-        await accept(data, expected);
-        return expected === generation ? data : null;
+        if (expected !== generation) {
+          revoke(data.refreshToken);
+          return null;
+        }
+        await accept(data, expected, persistent);
+        if (expected !== generation) {
+          revoke(data.refreshToken);
+          return null;
+        }
+        return data;
       } catch (error) {
         if (
           error instanceof ApiError &&
           [400, 401, 403].includes(error.status)
         ) {
-          if (expected === generation) {
-            await clear();
-            expired();
-          }
+          await invalidate(expected);
           return null;
         }
         throw error;
       }
     })().finally(() => {
-      refreshing = null;
+      if (refreshing === job) refreshing = null;
     });
-    return refreshing;
+    refreshing = job;
+    return job;
   }
   async function call(
     path: string,
@@ -168,13 +193,13 @@ export function createClient(
     binary = false,
   ): Promise<Data> {
     const tokenAtStart = accessToken;
+    const expected = generation;
     async function retryOnce() {
       try {
         return await send(path, method, body, binary);
       } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          await clear();
-          expired();
+        if (error instanceof ApiError && error.status === 401 && expected === generation) {
+          await invalidate(expected);
         }
         throw error;
       }
@@ -185,13 +210,14 @@ export function createClient(
       if (
         !(error instanceof ApiError) ||
         error.status !== 401 ||
-        path.startsWith("/auth/")
+        path.startsWith("/auth/") ||
+        expected !== generation || closing
       )
         throw error;
       // A concurrent request may already have rotated the session.
       if (accessToken && accessToken !== tokenAtStart) return retryOnce();
       if (await refresh()) return retryOnce();
-      expired();
+      if (expected === generation) expired();
       throw error;
     }
   }
@@ -213,20 +239,35 @@ export function createClient(
       expired = listener;
     },
     async authenticate(path: string, body: Data) {
-      const expected = generation;
+      if (closing) throw new Error('Please wait for sign-out to finish.');
+      const expected = ++generation;
+      const persistent = path !== 'dev-auth' && (path !== 'switch-surface' || !temporaryRefreshToken);
+      refreshing = null;
       const data = await send(`/auth/${path}`, "POST", body);
-      await accept(data, expected);
+      await accept(data, expected, persistent);
+      if (expected !== generation) {
+        revoke(data.refreshToken);
+        throw new Error('This sign-in was cancelled. Please try again.');
+      }
       return data;
     },
     async logout() {
       closing = true;
+      generation++;
+      accessToken = null;
+      const temporaryToken = temporaryRefreshToken;
+      temporaryRefreshToken = null;
+      refreshing = null;
       try {
-        await refreshing;
-        await vaultWrite;
-        const refreshToken = await vault.get();
-        // Keep the credential available for retry if server revocation fails.
-        await send("/auth/logout", "POST", { refreshToken });
-        await clear();
+        let refreshToken: string | null = null;
+        await persist(async () => {
+          try {
+            refreshToken = temporaryToken || await vault.get();
+          } finally {
+            await vault.clear();
+          }
+        });
+        revoke(refreshToken);
       } finally {
         closing = false;
       }

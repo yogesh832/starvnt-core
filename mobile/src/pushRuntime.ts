@@ -75,7 +75,11 @@ export async function unbindPush(domain: PushDomain) {
 }
 export async function logoutPush(domain: PushDomain) {
   await pushSerial(async () => {
-    await unbindPush(domain);
+    // Session revocation invalidates its server-side push binding. Do not make
+    // authenticated requests after logout or wait on networking to clear UI.
+    // Serialization orders this before a new account's push registration.
+    if (pushAvailable)
+      await SecureStore.deleteItemAsync(`starvnt.push.${domain}.binding`).catch(() => {});
     const n = notifications();
     if (n) {
       await n.dismissAllNotificationsAsync().catch(() => {});

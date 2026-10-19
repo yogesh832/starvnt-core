@@ -86,7 +86,7 @@ export function CustomerHome({ navigation }: any) {
       <Card>
         <Pill>YOUR NEXT GREAT MOMENT</Pill>
         <Txt bold size={30}>
-          Big ideas.\nBeautifully brought to life.
+          {'Big ideas.\nBeautifully brought to life.'}
         </Txt>
         <Txt muted>Meet Aura+, your event planning companion.</Txt>
         <Button

@@ -63,6 +63,12 @@ export function PushProvider({ children }: React.PropsWithChildren) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Data | null>(launchResponse);
+  useEffect(() => {
+    if (!session.logoutRevision) return;
+    launchResponse = null;
+    setPending(null);
+    if (n) void n.clearLastNotificationResponseAsync().catch(() => {});
+  }, [session.logoutRevision]);
   const [revision, setRevision] = useState(0);
   const current = useRef(session);
   current.current = session;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { externalApi } from '../../lib/api.js';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
+import { stopAuraSpeaking, transcribeAuraAudio } from '../../lib/voice.js';
 import { getAuraPrompts } from './vendorAuraPrompts.js';
 
 /**
@@ -123,25 +124,12 @@ function writeSession(userId, sid) {
 }
 
 /**
- * Voice: speech-to-text for the question (browser Web Speech API) and
- * text-to-speech for Aura's reply. Nothing leaves the browser except the
- * transcribed text, which is sent like a typed message.
+ * Composer dictation uses ElevenLabs transcription. Continuous speech
+ * playback is owned by VoiceAgent so a reply has exactly one audio owner.
  */
-const Recognition = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
-const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
-
-function speakText(text, onDone) {
-  if (!canSpeak || !text) return onDone?.();
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = /[ऀ-ॿ]/.test(text) ? 'hi-IN' : /[ঀ-৿]/.test(text) ? 'bn-IN' : 'en-IN';
-  const voice = window.speechSynthesis.getVoices().find((v) => v.lang === u.lang) || window.speechSynthesis.getVoices().find((v) => v.lang?.startsWith(u.lang.slice(0, 2)));
-  if (voice) u.voice = voice;
-  u.rate = 1;
-  u.onend = () => onDone?.();
-  u.onerror = () => onDone?.();
-  window.speechSynthesis.speak(u);
-}
+const voiceInputSupported =
+  typeof window !== 'undefined' &&
+  Boolean(typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined');
 
 /** ChatGPT-style voice-mode glyph: five bars; they pulse while Aura+ listens. */
 function WaveIcon({ active = false }) {
@@ -310,59 +298,93 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
   const [listening, setListening] = useState(null); // null | 'dictate' | 'converse'
   const [speaking, setSpeaking] = useState(false);
   const [voiceLang, setVoiceLang] = useState('en-IN');
-  const recRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
 
   /** Stop listening (keeping what was heard) and stop any reply being spoken. */
   function stopVoice() {
-    recRef.current?.stop();
-    if (canSpeak) window.speechSynthesis.cancel();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    if (streamRef.current) {
+      try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+      streamRef.current = null;
+    }
+    stopAuraSpeaking();
     setSpeaking(false);
+    setListening(null);
   }
 
   // Stop listening/speaking when the panel closes or unmounts.
   useEffect(() => {
     const abort = () => {
-      recRef.current?.abort();
-      if (canSpeak) window.speechSynthesis.cancel();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try { mediaRecorderRef.current.stop(); } catch {}
+      }
+      if (streamRef.current) {
+        try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+        streamRef.current = null;
+      }
+      stopAuraSpeaking();
       setSpeaking(false);
+      setListening(null);
     };
     if (!open) abort();
     return abort;
   }, [open]);
 
-  function startVoice(voiceMode) {
+  async function startVoice(voiceMode) {
     if (listening || speaking) return stopVoice();
-    if (!Recognition) return setError('Voice input is not supported in this browser. Try Chrome or Edge.');
+    if (!voiceInputSupported) return setError('Voice input is not supported in this browser.');
     setError('');
-    const rec = new Recognition();
-    rec.lang = voiceLang;
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
     const prefix = voiceMode === 'dictate' && input.trim() ? `${input.trim()} ` : '';
-    let finalText = '';
-    rec.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i += 1) {
-        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      audioChunksRef.current = [];
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
       }
-      setInput(`${prefix}${(finalText + interim).trim()}`);
-    };
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setError('Microphone permission denied. Allow the mic in your browser to talk to Aura+.');
-      else if (e.error !== 'aborted' && e.error !== 'no-speech') setError('Could not hear you. Please try again.');
-    };
-    rec.onend = () => {
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        setListening(null);
+        mediaRecorderRef.current = null;
+        if (streamRef.current) {
+          try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+          streamRef.current = null;
+        }
+        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+        if (blob.size < 500) return;
+        try {
+          setInput(`${prefix}Transcribing…`);
+          const text = await transcribeAuraAudio(blob);
+          if (text) {
+            setInput(`${prefix}${text}`);
+
+          } else {
+            setInput(prefix.trim());
+          }
+        } catch (err) {
+          setError(err?.message || 'Could not transcribe voice');
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      setListening(voiceMode);
+      recorder.start(250);
+      setInput(`${prefix}Listening…`);
+    } catch {
+      setError('Microphone permission denied. Allow mic access in your browser.');
       setListening(null);
-      recRef.current = null;
-      if (voiceMode === 'converse' && finalText.trim()) send(finalText, { spoken: true });
-    };
-    recRef.current = rec;
-    setListening(voiceMode);
-    rec.start();
+    }
   }
 
-  async function send(text, { spoken = false, confirm } = {}) {
+  async function send(text, { confirm } = {}) {
     const message = String(text || '').trim();
     if (!message || sending) return;
     setError('');
@@ -377,18 +399,10 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
       { role: 'model', content: '', actions: [] },
     ]);
 
-    const VOICE_PROGRESS_PHRASES = [
-      'Okay, let me get that information for you.',
-      'Sure, let me check that for you.',
-      'Got it, I’m looking into that for you.',
-    ];
-
     let hasReceivedToken = false;
     let thinkingTimer = null;
     let rotationInterval = null;
     let timeoutTimer = null;
-    let voiceProgressTimer = null;
-    let hasSpokenVoiceProgress = false;
     let statusIdx = 0;
     const abortController = new AbortController();
 
@@ -402,16 +416,6 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
       }
     }, CHAT_THINKING_STATUS_DELAY_MS);
 
-    if (spoken) {
-      voiceProgressTimer = setTimeout(() => {
-        if (!hasReceivedToken && !hasSpokenVoiceProgress) {
-          hasSpokenVoiceProgress = true;
-          const phrase = VOICE_PROGRESS_PHRASES[Math.floor(Math.random() * VOICE_PROGRESS_PHRASES.length)];
-          speakText(phrase);
-        }
-      }, CHAT_THINKING_STATUS_DELAY_MS);
-    }
-
     timeoutTimer = setTimeout(() => {
       abortController.abort();
     }, 25000);
@@ -420,7 +424,6 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
       if (thinkingTimer) clearTimeout(thinkingTimer);
       if (rotationInterval) clearInterval(rotationInterval);
       if (timeoutTimer) clearTimeout(timeoutTimer);
-      if (voiceProgressTimer) clearTimeout(voiceProgressTimer);
     };
 
     let accumulatedText = '';
@@ -483,10 +486,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
         setPending(donePayload.pending || null);
         window.dispatchEvent(new Event('vendorAuraUpdated'));
         if (donePayload.profileUpdated) window.dispatchEvent(new Event('vendorProfileUpdated'));
-        if (spoken && canSpeak) {
-          setSpeaking(true);
-          speakText(donePayload.reply || accumulatedText, () => setSpeaking(false));
-        }
+
       }
       return accumulatedText;
     } catch (err) {
@@ -515,11 +515,12 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
 
   // Voice mode (orb): a continuous spoken conversation; each turn goes through send(),
   // so setup confirmations work by voice too ("haan" / "no").
-  const agent = useVoiceAgent({ lang: voiceLang, onUtterance: (t) => send(t) });
+  const agent = useVoiceAgent({ lang: voiceLang, onUtterance: (t, extra) => send(t, extra) });
+  const sendInteractive = (text, extra) => agent.open ? agent.submit(text, extra) : send(text, extra);
   useEffect(() => {
-    if (!open && agent.open) agent.end();
+    if ((!open || mode === 'manual') && agent.open) agent.end();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, mode]);
 
   // A prompt handed over from elsewhere (dashboard card) is sent once the panel is ready.
   useEffect(() => {
@@ -530,6 +531,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
   }, [open, loaded, prompt]);
 
   function newChat() {
+    agent.end();
+
     const sid = newId();
     writeSession(userId, sid);
     setSessionId(sid);
@@ -1188,12 +1191,13 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
           </div>
         ) : (
         <div className="min-w-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 border-t border-gray-100 shrink-0 space-y-2">
+          <VoiceAgentOverlay agent={agent} compact title="Aura+" />
           {error && <div className="text-[11px] text-red-500 px-1">{error}</div>}
           <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pb-0.5" aria-label="Suggested questions">
             {chips.map((c) => (
               <button
                 key={c}
-                onClick={() => send(c)}
+                onClick={() => sendInteractive(c)}
                 disabled={sending}
                 className="aura-suggestion min-w-0 max-w-full whitespace-normal break-words text-left rounded-full bg-lavender text-navy text-[11px] font-semibold px-3 py-1.5 hover:bg-primary-soft disabled:opacity-50"
               >
@@ -1205,7 +1209,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              send(input);
+
+              sendInteractive(input);
             }}
             className="aura-composer flex items-center gap-1 rounded-full border border-gray-200 bg-white shadow-sm focus-within:border-primary/40 pl-1.5 pr-1.5 py-1.5 transition"
           >
@@ -1219,7 +1224,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
               placeholder={listening === 'converse' ? 'Listening… speak now' : listening === 'dictate' ? 'Listening… tap the mic to stop' : 'Ask Aura+ anything'}
               className="flex-1 min-w-0 bg-transparent outline-none text-[13px] px-1"
             />
-            {Recognition && (
+            {voiceInputSupported && (
               <>
                 <button
                   type="button"
@@ -1233,7 +1238,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
                 <button
                   type="button"
                   onClick={() => (listening === 'dictate' ? stopVoice() : startVoice('dictate'))}
-                  disabled={sending || listening === 'converse' || speaking}
+                  disabled={agent.open || sending || listening === 'converse' || speaking}
                   className={`relative w-8 h-8 rounded-full grid place-items-center shrink-0 transition disabled:opacity-40 ${
                     listening === 'dictate' ? 'bg-red-50 text-red-500' : 'text-ink/70 hover:bg-lavender'
                   }`}
@@ -1245,7 +1250,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
                 </button>
               </>
             )}
-            {(input.trim() && !listening) || !Recognition ? (
+            {(input.trim() && !listening) || !voiceInputSupported ? (
               <button
                 type="submit"
                 disabled={sending || !input.trim()}
@@ -1258,11 +1263,11 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
             ) : (
               <button
                 type="button"
-                onClick={() => (speaking ? stopVoice() : agent.start())}
+                onClick={() => agent.open ? agent.end() : (speaking ? stopVoice() : agent.start(!messages.length))}
                 disabled={(sending || listening) && !speaking}
                 className="relative w-8 h-8 rounded-full text-white grid place-items-center shrink-0 transition disabled:opacity-50 bg-primary hover:bg-primary-dark"
-                title={speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
-                aria-label={speaking ? 'Stop speaking' : 'Voice mode'}
+                title={agent.open ? 'End voice mode' : speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={agent.open ? 'End voice mode' : speaking ? 'Stop speaking' : 'Voice mode'}
               >
                 <span className="relative">{speaking ? <span className="block w-2.5 h-2.5 rounded-[3px] bg-white" /> : <WaveIcon />}</span>
               </button>
@@ -1277,14 +1282,6 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
         </div>
         )}
 
-        <VoiceAgentOverlay
-          agent={agent}
-          embedded
-          title="Aura+"
-          subtitle="Your business assistant · voice"
-          lang={voiceLang}
-          onToggleLang={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}
-        />
       </aside>
     </>
   );

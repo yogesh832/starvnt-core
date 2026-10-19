@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { ScrollView, View, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSession } from "../auth/Session";
 import { Card, Icon, Pill, Txt, usePalette, ErrorNotice } from "../ui";
 import { LogoWord } from "../BrandLogo";
 import { TEST_AUTH_ENABLED } from "../testAuth";
+import { quickAuthenticate } from '../auth/quickAuth';
 
 type TestAccount = {
   id: string;
@@ -263,26 +264,19 @@ export function TestAuthScreen({ navigation }: any) {
   const c = usePalette();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
+  const pending = useRef(false);
 
   async function handleQuickLogin(acc: TestAccount) {
-    if (!TEST_AUTH_ENABLED) return;
+    if (!TEST_AUTH_ENABLED || pending.current) return;
+    pending.current = true;
     setBusyId(acc.id);
     setError("");
     try {
-      if (acc.domain === "admin") {
-        await signIn("admin", "dev-auth", {
-          email: acc.email,
-          role: acc.role,
-        });
-      } else {
-        await signIn("external", "dev-auth", {
-          accountType: acc.accountType,
-          email: acc.email,
-        });
-      }
-      // Navigation switches automatically via SessionProvider state!
+      await quickAuthenticate(acc, signIn, navigation);
     } catch (err: any) {
       setError(err?.message || "Failed to authenticate test profile.");
+    } finally {
+      pending.current = false;
       setBusyId(null);
     }
   }
@@ -322,7 +316,7 @@ export function TestAuthScreen({ navigation }: any) {
                 </View>
 
                 <View style={{ flex: 1, gap: 2 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View style={{ flexDirection: "row", flexWrap: 'wrap', alignItems: "center", gap: 8 }}>
                     <Txt bold size={15}>
                       {acc.name}
                     </Txt>
@@ -383,7 +377,7 @@ export function TestAuthScreen({ navigation }: any) {
             </Txt>
           </View>
           <Txt size={13} muted>
-            1-tap login with development and QA personas. Skip OTPs and passwords to explore any surface.
+            1-tap login with development and QA personas. Test sessions end when you reload or sign out.
           </Txt>
         </View>
 

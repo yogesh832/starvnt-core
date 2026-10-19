@@ -11,6 +11,8 @@ import { findBudgetRange, budgetRangesFor, normalizeEventType } from '../service
 import { badRequest, forbidden, notFound, HttpError } from '../utils/http.js';
 import { classifyAuraRequest } from '../../common/auraRouter.js';
 import { createPerformanceTracker } from '../../common/streamUtils.js';
+import { conversationLanguage, localizeAuraQuestion, auraLanguageInstruction } from '../../common/auraLanguage.js';
+import { resolveEventSwitch, eventChoices, switchReply } from './eventSwitch.js';
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const SKIP_TOPIC_RE = /^(event|requirement|location)\.[a-z_]+$/;
@@ -19,18 +21,6 @@ const MAX_MESSAGE = 2000;
 const FALLBACK_REPLY =
   "Sorry, I'm having trouble thinking right now. I've kept what you told me — please check the card, or try again in a moment.";
 const WEAK_REPLY_RE = /^(pata nahi|i don't know|not sure|main abhi|sorry,? i('| a)m having trouble|sorry,? i can('|no)t|please check the (card|plan))/i;
-const CATEGORY_LABELS = {
-  venue: 'venue',
-  catering: 'catering',
-  decor: 'decor',
-  photography: 'photography',
-  sound: 'sound',
-  cake: 'cake',
-  entertainment: 'entertainment',
-  anchor: 'anchor',
-  photo_booth: 'photo booth',
-  special_effects: 'special effects',
-};
 
 async function ownedSession(customerId, sessionId) {
   if (!SESSION_ID_RE.test(sessionId || '')) throw badRequest('INVALID_SESSION', 'Invalid session id');
@@ -62,10 +52,15 @@ export async function getSession(customer, sessionId, { eventId } = {}) {
   let scopedEventId = session?.event || null;
   if (!session && eventId) scopedEventId = (await ownedEventOr404(customer._id, eventId))._id;
   const messages = session ? await auraRepo.listMessages(sessionId) : [];
+  const state = await stateFor(customer._id, scopedEventId);
+  const language = conversationLanguage('', messages);
+  const choices = session?.switchChoices?.length ? eventChoices((await core.listEvents(customer._id)).filter(event => session.switchChoices.map(String).includes(String(event._id)))) : [];
   return {
     sessionId,
     messages: messages.map((m) => ({ role: m.role, content: m.content, createdAt: m.createdAt })),
-    ...(await stateFor(customer._id, scopedEventId)),
+    ...state,
+    nextQuestion: choices.length ? null : localizeAuraQuestion(state.nextQuestion, language, state.activeEvent),
+    eventChoices: choices,
   };
 }
 
@@ -98,13 +93,17 @@ function salvageOntoCurrent(x) {
  * While there is no event or it is a draft, Aura+ asks exactly one question:
  * the one computed from what was actually saved this turn (never the model's).
  */
-function composeReply(reply, { event, nextQuestion: q, assumedDate }) {
+function composeReply(reply, { event, nextQuestion: q, assumedDate, language = 'en' }) {
   const parts = [reply.trim()];
   if (assumedDate) {
-    parts.push(`I've assumed the year ${assumedDate.slice(0, 4)} for the date — please check it on the card.`);
+    const year = assumedDate.slice(0, 4);
+    parts.push(language === 'hi' ? `मैं तारीख के लिए ${year} मान रही हूँ। कृपया कार्ड में तारीख जाँच लें।` : language === 'hinglish' ? `Main tareekh ke liye ${year} maan rahi hoon. Kripya card mein date check kar lein.` : `I've assumed the year ${year} for the date — please check it on the card.`);
   }
   const asking = !event || event.status === 'draft';
-  if (asking && q?.question && !reply.includes(q.question)) parts.push(q.question);
+  const alreadyAsksQuestion = /[?？]/.test(reply);
+  if (asking && q?.question && !alreadyAsksQuestion && !reply.toLowerCase().includes(q.question.toLowerCase())) {
+    parts.push(q.question);
+  }
   return parts.join('\n\n');
 }
 
@@ -113,28 +112,10 @@ function isWeakReply(reply = '') {
   return !text || WEAK_REPLY_RE.test(text) || text.length < 30;
 }
 
-function deterministicReply({ activeEvent, extracted = {}, text = '' }) {
-  const eventType = activeEvent?.eventType || extracted.eventType || extracted.newEventType || 'event';
-  const city = activeEvent?.city || extracted.city || extracted.newEventCity;
-  const guestCount = activeEvent?.guestCount || extracted.guestCount || extracted.newEventGuestCount;
-  const wantedCategories = Object.entries(CATEGORY_LABELS)
-    .filter(([key, label]) => new RegExp(`\\b${label.replace(' ', '\\s+')}\\b`, 'i').test(text) || extracted.neededCategories?.includes?.(key))
-    .map(([, label]) => label);
-
-  const context = [
-    eventType ? `a ${String(eventType).replace(/_/g, ' ')}` : null,
-    city ? `in ${city}` : null,
-    guestCount ? `for ${guestCount} guests` : null,
-  ].filter(Boolean).join(' ');
-
-  const parts = [`Got it. I have started planning ${context || 'your event'} and saved the details I could read from your message.`];
-  if (wantedCategories.length) {
-    parts.push(`For vendors, I would handle ${wantedCategories.slice(0, 6).join(', ')} first, then compare availability, travel fit, package total, and review quality before you request quotes.`);
-  } else {
-    parts.push('Next, confirm the date, guest count, city, budget, and the services you want so I can shortlist vendors cleanly.');
-  }
-  parts.push('Nothing is booked until you approve it.');
-  return parts.join('\n\n');
+function deterministicReply({ activeEvent, extracted = {}, text = '', language = 'en' }) {
+  if (language === 'hi') return activeEvent ? 'जो जानकारी मिल सकी, उसे कार्ड पर दिखा रही हूँ। आपकी मंज़ूरी के बिना कोई बुकिंग नहीं होगी।' : 'मैं आपका इवेंट प्लान करने में मदद कर सकती हूँ।';
+  if (language === 'hinglish') return activeEvent ? 'Jo jaankari mil saki, use card par dikha rahi hoon. Aapki manzoori ke bina koi booking nahi hogi.' : 'Main aapka event plan karne mein madad kar sakti hoon.';
+  return activeEvent ? "I've added the details I could save to your event card. Nothing is booked until you approve it." : 'I can help you plan your event.';
 }
 
 // The draft starts with its type only; the other facts go through the writer,
@@ -147,7 +128,7 @@ function createDraftFrom(customerId, facts) {
 /**
  * POST /aura/chat pipeline (Blueprint §5.1).
  */
-export async function chat(customer, { sessionId, message, eventId, skipTopic, budgetRange, serviceLocation } = {}, options = {}) {
+export async function chat(customer, { sessionId, message, eventId, switchEventId, skipTopic, budgetRange, serviceLocation } = {}, options = {}) {
   const tracker = createPerformanceTracker();
   const customerId = customer._id;
   const text = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE) : '';
@@ -168,6 +149,24 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   } else if (session.event) {
     event = await core.getEvent(customerId, session.event);
   }
+
+  if (switchEventId !== undefined && (typeof switchEventId !== 'string' || !/^[a-f\d]{24}$/i.test(switchEventId))) throw badRequest('INVALID_EVENT', 'Invalid event');
+  const navigation = resolveEventSwitch(text, await core.listEvents(customerId), { currentId: event?._id, previousId: session.previousEvent, pendingIds: session.switchChoices || [], explicitId: switchEventId });
+  if (navigation) {
+    if (navigation.kind === 'switch' && !navigation.event) throw notFound('Event not found');
+    const history = await auraRepo.recentMessages(sessionId, 12);
+    const language = conversationLanguage(switchEventId ? '' : text, history);
+    const selected = navigation.event;
+    const choices = selected ? [] : eventChoices(navigation.events);
+    if (selected) await auraRepo.setSessionEvent(sessionId, selected._id);
+    else await auraRepo.setSwitchChoices(sessionId, choices.map(choice => choice.id));
+    const state = await stateFor(customerId, selected?._id || event?._id);
+    state.nextQuestion = selected ? localizeAuraQuestion(state.nextQuestion, language, state.activeEvent) : null;
+    const reply = switchReply(language, selected, choices, navigation.notFound);
+    await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: reply }]);
+    return { reply, ...state, eventChoices: choices, eventSwitched: !!selected, written: [], skipped: [], createdEventId: null };
+  }
+  if (session.switchChoices?.length) await auraRepo.setSwitchChoices(sessionId, []);
 
   // What Aura asked last turn (before this turn's writes) — used by the guards.
   const before = event ? await stateFor(customerId, event._id) : await stateFor(customerId, null);
@@ -206,6 +205,7 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   if (options.onStatus) options.onStatus('context_retrieval');
   const { prompt: context } = await buildContext({ customer, event });
   const history = await auraRepo.recentMessages(sessionId, 12);
+  const language = conversationLanguage(text, history);
   tracker.markContextEnd();
 
   const route = classifyAuraRequest(text, { intent: event?.eventType ? 'EVENT_PLAN' : 'GENERAL' });
@@ -217,7 +217,7 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   tracker.markGeminiStart();
   try {
     const out = await getLlmAdapter().chat({
-      systemPrompt: buildSystemPrompt(context),
+      systemPrompt: `${buildSystemPrompt(context)}\n\n${auraLanguageInstruction(language)}`,
       history,
       message: text,
       model: route.model,
@@ -305,10 +305,12 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
 
   // 11. State AFTER this turn's writes; the one next question comes from it
   const after = await stateFor(customerId, event?._id || null);
+  after.nextQuestion = localizeAuraQuestion(after.nextQuestion, language, after.activeEvent);
   if (isWeakReply(reply)) {
-    reply = deterministicReply({ activeEvent: after.activeEvent, extracted: x, text });
+    reply = deterministicReply({ activeEvent: after.activeEvent, extracted: x, text, language });
   }
-  reply = composeReply(reply || deterministicReply({ activeEvent: after.activeEvent, extracted: x, text }), {
+  reply = composeReply(reply || deterministicReply({ activeEvent: after.activeEvent, extracted: x, text, language }), {
+    language,
     event: after.activeEvent,
     nextQuestion: after.nextQuestion,
     assumedDate: writes.written.includes('eventDate') && !yearStated ? after.understanding?.facts.date.value : null,

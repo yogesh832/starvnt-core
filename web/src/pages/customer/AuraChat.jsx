@@ -5,7 +5,9 @@ import MapLocationPicker from '../../components/MapLocationPicker.jsx';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import UnderstandingCard from './UnderstandingCard.jsx';
+import AuraEventMenu from './AuraEventMenu.jsx';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
+import { stopAuraSpeaking, transcribeAuraAudio } from '../../lib/voice.js';
 
 const QUICK_PROMPTS = [
   "My daughter's wedding",
@@ -219,96 +221,107 @@ function AuraErrorState({ message, onRetry }) {
   );
 }
 
-
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-
-const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
-
-/** Read Aura's reply aloud in the reply's script (Hindi / Bengali / English). */
-function speakText(text, onDone) {
-  if (!canSpeak || !text) return onDone?.();
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = /[ऀ-ॿ]/.test(text) ? 'hi-IN' : /[ঀ-]/.test(text) ? 'bn-IN' : 'en-IN';
-  const voices = window.speechSynthesis.getVoices();
-  const voice = voices.find((v) => v.lang === u.lang) || voices.find((v) => v.lang?.startsWith(u.lang.slice(0, 2)));
-  if (voice) u.voice = voice;
-  u.onend = () => onDone?.();
-  u.onerror = () => onDone?.();
-  window.speechSynthesis.speak(u);
-}
-
 /**
- * Voice conversation (Web Speech API): the spoken words fill the box live and
+ * Voice conversation: the spoken words fill the box live and
  * are sent when the customer stops talking; the reply is then read aloud.
- * Only the transcribed text leaves the browser, like a typed message.
+ * Continuous conversation and ElevenLabs playback are owned by VoiceAgent.
  */
-function useVoice({ onInterim, onFinal, onError }) {
+function useVoice({ onInterim, onError }) {
   // mode: 'dictate' = mic fills the box only (like ChatGPT's mic);
   //       'converse' = voice chat: send when the customer stops talking, reply aloud.
   const [listening, setListening] = useState(null); // null | 'dictate' | 'converse'
   const [speaking, setSpeaking] = useState(false);
   const [lang, setLang] = useState('en-IN');
-  const recRef = useRef(null);
-  const Speech = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
+
+  const isSupported = typeof window !== 'undefined' && Boolean(
+    typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined'
+  );
 
   /** Stop listening (keeping what was heard) and stop any reply being spoken. */
   function stop() {
-    recRef.current?.stop();
-    if (canSpeak) window.speechSynthesis.cancel();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    if (streamRef.current) {
+      try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+      streamRef.current = null;
+    }
+    stopAuraSpeaking();
     setSpeaking(false);
+    setListening(null);
   }
 
   // Stop listening/speaking when the chat unmounts.
   useEffect(
     () => () => {
-      recRef.current?.abort();
-      if (canSpeak) window.speechSynthesis.cancel();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try { mediaRecorderRef.current.stop(); } catch {}
+      }
+      if (streamRef.current) {
+        try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+      }
+      stopAuraSpeaking();
     },
     []
   );
 
-  function start(mode, base = '') {
+  async function start(mode, base = '') {
     if (listening || speaking) return stop();
-    if (!Speech) return;
-    const rec = new Speech();
-    rec.lang = lang;
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
     const prefix = base.trim() ? `${base.trim()} ` : '';
-    let finalText = '';
-    rec.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i += 1) {
-        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
+
+    // Universal ElevenLabs STT via MediaRecorder across all browsers
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      audioChunksRef.current = [];
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
       }
-      onInterim(`${prefix}${(finalText + interim).trim()}`);
-    };
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') onError('Microphone permission denied. Allow the mic in your browser to talk to Aura+.');
-      else if (e.error !== 'aborted' && e.error !== 'no-speech') onError('Could not hear you. Please try again.');
-    };
-    rec.onend = () => {
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        setListening(null);
+        mediaRecorderRef.current = null;
+        if (streamRef.current) {
+          try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+          streamRef.current = null;
+        }
+        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+        if (blob.size < 500) return;
+        try {
+          onInterim(`${prefix}Transcribing…`);
+          const text = await transcribeAuraAudio(blob);
+          if (text) {
+            onInterim(`${prefix}${text}`);
+
+          } else {
+            onInterim(prefix.trim());
+          }
+        } catch (err) {
+          onError(err?.message || 'Could not transcribe voice');
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      setListening(mode);
+      recorder.start(250);
+      onInterim(`${prefix}Listening…`);
+    } catch {
+      onError('Microphone permission denied. Allow mic access in your browser.');
       setListening(null);
-      recRef.current = null;
-      if (mode === 'converse' && finalText.trim()) onFinal(`${prefix}${finalText.trim()}`);
-    };
-    recRef.current = rec;
-    setListening(mode);
-    rec.start();
+    }
   }
 
-  function speak(text) {
-    if (!canSpeak) return;
-    setSpeaking(true);
-    speakText(text, () => setSpeaking(false));
-  }
-
-  return { supported: Boolean(Speech), listening, speaking, lang, setLang, start, stop, speak };
+  return { supported: isSupported, listening, speaking, lang, setLang, start, stop };
 }
 
 /** ChatGPT-style voice-mode glyph: five bars; they bounce while Aura+ listens or talks. */
@@ -350,13 +363,14 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [activeEvent, setActiveEvent] = useState(null);
+  const activeEventRef = useRef(null);
+  const [switchChoices, setSwitchChoices] = useState([]);
   const [understanding, setUnderstanding] = useState(null);
   const [nextQ, setNextQ] = useState(null);
   const [input, setInput] = useState('');
   const [attachedUrl, setAttachedUrl] = useState('');
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [activeZoomImage, setActiveZoomImage] = useState(null);
-  const [customChoice, setCustomChoice] = useState('');
   const [pickedDate, setPickedDate] = useState('');
   const [pickedLocation, setPickedLocation] = useState(null);
   const [savingStructured, setSavingStructured] = useState(false);
@@ -393,14 +407,15 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const sendRef = useRef(null);
   const voice = useVoice({
     onInterim: (t) => setInput(t),
-    onFinal: (t) => sendRef.current?.(t, {}, { spoken: true }),
     onError: (msg) => setError(msg),
   });
 
   const applyState = useCallback((s) => {
+    activeEventRef.current = s.activeEvent || null;
     setActiveEvent(s.activeEvent || null);
     setUnderstanding(s.understanding || null);
     setNextQ(s.nextQuestion || null);
+    setSwitchChoices(s.eventChoices || []);
   }, []);
 
   // Load (or start) the session for this event scope; history comes from the server.
@@ -443,7 +458,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   }, [messages, understanding, sending]);
 
   const send = useCallback(
-    async (text, extra = {}, { spoken = false } = {}) => {
+    async (text, extra = {}) => {
       const msg = (text ?? '').trim();
       if (!msg || !sessionId || sending) return;
       setInput('');
@@ -459,18 +474,10 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         { role: 'model', content: '' }
       ]);
 
-const VOICE_PROGRESS_PHRASES = [
-  'Okay, let me get that information for you.',
-  'Sure, let me check that for you.',
-  'Got it, I’m looking into that for you.',
-];
-
       let hasReceivedToken = false;
       let thinkingTimer = null;
       let rotationInterval = null;
       let timeoutTimer = null;
-      let voiceProgressTimer = null;
-      let hasSpokenVoiceProgress = false;
       let statusIdx = 0;
       const abortController = new AbortController();
 
@@ -485,16 +492,6 @@ const VOICE_PROGRESS_PHRASES = [
         }
       }, CHAT_THINKING_STATUS_DELAY_MS);
 
-      if (spoken) {
-        voiceProgressTimer = setTimeout(() => {
-          if (!hasReceivedToken && !hasSpokenVoiceProgress) {
-            hasSpokenVoiceProgress = true;
-            const phrase = VOICE_PROGRESS_PHRASES[Math.floor(Math.random() * VOICE_PROGRESS_PHRASES.length)];
-            speakText(phrase);
-          }
-        }, CHAT_THINKING_STATUS_DELAY_MS);
-      }
-
       // 25s safety timeout
       timeoutTimer = setTimeout(() => {
         abortController.abort();
@@ -504,7 +501,6 @@ const VOICE_PROGRESS_PHRASES = [
         if (thinkingTimer) clearTimeout(thinkingTimer);
         if (rotationInterval) clearInterval(rotationInterval);
         if (timeoutTimer) clearTimeout(timeoutTimer);
-        if (voiceProgressTimer) clearTimeout(voiceProgressTimer);
       };
 
       let accumulatedText = '';
@@ -512,7 +508,7 @@ const VOICE_PROGRESS_PHRASES = [
 
       try {
         await customerApi.auraChatStream(
-          { sessionId, message: msg, eventId: scopedEventId || undefined, ...extra },
+          { sessionId, message: msg, eventId: activeEventRef.current?.id || scopedEventId || undefined, ...extra },
           (event) => {
             if (event.type === 'status') {
               if (event.message) setStatusMessage(event.message);
@@ -556,7 +552,6 @@ const VOICE_PROGRESS_PHRASES = [
         setSending(false);
 
         if (donePayload) {
-          if (spoken) voice.speak(donePayload.reply || accumulatedText);
           applyState(donePayload);
           if (donePayload.createdEventId) writeSession(sessionKey(user?.id, donePayload.createdEventId), sessionId);
           onEventChanged?.(donePayload);
@@ -592,7 +587,9 @@ const VOICE_PROGRESS_PHRASES = [
   sendRef.current = send;
 
   // Voice mode (orb): a continuous spoken conversation; each turn goes through send().
-  const agent = useVoiceAgent({ lang: voice.lang, onUtterance: (t) => sendRef.current?.(t) });
+  const agent = useVoiceAgent({ lang: voice.lang, onUtterance: (t, extra) => sendRef.current?.(t, extra) });
+  const sendInteractive = (message, extra) => agent.open ? agent.submit(message, extra) : send(message, extra);
+  const switchEvent = event => sendInteractive(`Switch to ${event.title}`, { switchEventId: event.id });
 
   // ?ask= auto-sends once, then leaves the URL clean.
   useEffect(() => {
@@ -607,26 +604,19 @@ const VOICE_PROGRESS_PHRASES = [
   }, [params, loading, sessionId, send, setParams]);
 
   function onChip(opt) {
-    setCustomChoice('');
     if (opt.prefill) {
       setInput(opt.prefill);
       setTimeout(() => inputRef.current?.focus(), 0);
-    } else if (opt.skipTopic) send(opt.label, { skipTopic: opt.skipTopic });
-    else if (opt.budgetRange) send(opt.label, { budgetRange: opt.budgetRange });
-    else if (opt.serviceLocation) send(opt.label, { serviceLocation: opt.serviceLocation });
-    else send(opt.message || opt.label);
+    } else if (opt.skipTopic) sendInteractive(opt.label, { skipTopic: opt.skipTopic });
+    else if (opt.budgetRange) sendInteractive(opt.label, { budgetRange: opt.budgetRange });
+    else if (opt.serviceLocation) sendInteractive(opt.label, { serviceLocation: opt.serviceLocation });
+    else sendInteractive(opt.message || opt.label);
   }
 
-  function sendCustomChoice() {
-    const text = customChoice.trim();
-    if (!text) return;
-    setCustomChoice('');
-    send(text);
-  }
 
   function sendPickedDate() {
     if (!pickedDate) return;
-    send(pickedDate);
+    sendInteractive(pickedDate);
     setPickedDate('');
   }
 
@@ -667,6 +657,7 @@ const VOICE_PROGRESS_PHRASES = [
   }
 
   function newChat() {
+    if (agent.open) agent.end();
     const sid = newSessionId();
     writeSession(sessionKey(user?.id, null), sid);
     askedRef.current = false;
@@ -690,7 +681,7 @@ const VOICE_PROGRESS_PHRASES = [
 
   const chips = (() => {
     if (sending || loading) return [];
-    if (messages.length === 0) return QUICK_PROMPTS.map((p) => ({ label: p, message: p }));
+    if (messages.length === 0) return agent.open ? [] : QUICK_PROMPTS.map((p) => ({ label: p, message: p }));
     if (nextQ?.options?.length) return nextQ.options;
     if (activeEvent && activeEvent.status !== 'draft') return EVENT_PROMPTS.map((p) => ({ label: p, message: p }));
     return [];
@@ -705,9 +696,7 @@ const VOICE_PROGRESS_PHRASES = [
     <div className="flex flex-col h-full min-h-0 bg-white dark:bg-[#161926]">
       {/* Header */}
       <div className="flex items-center gap-3 px-3 sm:px-6 py-3 border-b border-gray-100 dark:border-gray-800/80 bg-white/70 dark:bg-[#161926]/80 backdrop-blur-sm shrink-0">
-        <span className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-sm shrink-0">
-          <Icon name="bolt" size={15} />
-        </span>
+        <AuraEventMenu activeId={activeEvent?.id} busy={sending || loading} onSwitch={switchEvent} />
         <div className="min-w-0 flex-1">
           {activeEvent ? (
             <Link to={`/customer/events/${activeEvent.id}`} className="text-sm font-extrabold text-navy dark:text-white hover:text-primary dark:hover:text-[#a5b4fc] truncate block">{activeEvent.title}</Link>
@@ -728,9 +717,11 @@ const VOICE_PROGRESS_PHRASES = [
           return <Bubble key={i} from={m.role} onZoomImage={setActiveZoomImage}>{m.content}</Bubble>;
         })}
 
+        {switchChoices.length > 0 && <div className="pl-10 space-y-2 aura-card-reveal"><div className="text-xs font-semibold text-navy dark:text-slate-100">Your events</div>{switchChoices.map(event => <button key={event.id} type="button" disabled={sending || loading} onClick={() => switchEvent(event)} className="block w-full max-w-xl text-left rounded-2xl border border-primary/25 p-3 text-primary dark:text-[#a5b4fc] hover:bg-primary/10 disabled:opacity-50"><span className="block text-xs font-semibold">{event.title}</span><span className="block text-[10px] mt-1">{[event.city, event.date || 'Date to be decided'].filter(Boolean).join(' · ')}</span></button>)}</div>}
+
         {understanding?.showUnderstandingCard && activeEvent && (
-          <div className="pl-10">
-            <UnderstandingCard understanding={understanding} event={activeEvent} onChanged={onCardChanged} onAsk={(t) => send(t)} />
+          <div className="pl-10 aura-card-reveal">
+            <UnderstandingCard understanding={understanding} event={activeEvent} onChanged={onCardChanged} onAsk={(t) => sendInteractive(t)} />
           </div>
         )}
 
@@ -747,11 +738,13 @@ const VOICE_PROGRESS_PHRASES = [
         ) : null}
 
         {showAnswerPanel && (
-          <div className="pl-10 space-y-2">
+          <div key={nextQ?.topic || 'ideas'} className="pl-10 space-y-2 aura-card-reveal">
             {showChipQuestion && (
-              <div className="text-[10px] font-bold text-muted dark:text-slate-400 uppercase tracking-wide">{nextQ.question}</div>
+              <div className="text-xs text-navy dark:text-slate-200">{nextQ.question}</div>
             )}
             {chips.length > 0 && (
+              <>
+              <p className="text-[10px] text-muted dark:text-slate-400">{nextQ?.language === 'hi' ? 'चाहें तो यह देख लें — या अपना जवाब बोलें या लिखें।' : nextQ?.language === 'hinglish' ? 'Chahein to yeh dekh lein — ya apna jawab bolein ya likhein.' : 'A few ideas, if helpful. You can also speak or type your own answer.'}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
                 {chips.map((c) => (
                   <button
@@ -763,6 +756,7 @@ const VOICE_PROGRESS_PHRASES = [
                   </button>
                 ))}
               </div>
+              </>
             )}
             {showDatePicker && (
               <div className="max-w-xl bg-white dark:bg-[#1e2235] border border-gray-100 dark:border-gray-700 rounded-2xl p-3 shadow-xs space-y-2">
@@ -817,32 +811,6 @@ const VOICE_PROGRESS_PHRASES = [
                 </button>
               </div>
             )}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                sendCustomChoice();
-              }}
-              className="max-w-xl bg-white dark:bg-[#1e2235] border border-gray-100 dark:border-gray-700 rounded-2xl p-2.5 shadow-xs"
-            >
-              <textarea
-                value={customChoice}
-                onChange={(e) => setCustomChoice(e.target.value)}
-                disabled={sending || loading}
-                rows={2}
-                placeholder="Something else? Type your own answer here..."
-                className="w-full resize-y min-h-16 max-h-48 outline-none bg-transparent text-xs sm:text-sm text-navy dark:text-white placeholder:text-muted/60 dark:placeholder:text-slate-400 px-2 py-1"
-              />
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={sending || loading || !customChoice.trim()}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 hover:bg-primary-dark transition disabled:opacity-50"
-                >
-                  <Icon name="send" size={13} />
-                  Send answer
-                </button>
-              </div>
-            </form>
           </div>
         )}
         <div ref={bottomRef} />
@@ -854,13 +822,14 @@ const VOICE_PROGRESS_PHRASES = [
           if (attachedUrl) {
             const body = input.trim() ? `${input.trim()}\n[Reference Image]: ${attachedUrl}` : `[Reference Image]: ${attachedUrl}`;
             setAttachedUrl('');
-            send(body);
+            sendInteractive(body);
           } else {
-            send(input);
+            sendInteractive(input);
           }
         }}
         className="p-3 sm:p-4 max-w-3xl w-full mx-auto shrink-0 bg-white dark:bg-[#161926]"
       >
+        <VoiceAgentOverlay agent={agent} compact title={activeEvent?.title || 'Aura+'} />
         {attachedUrl && (
           <div className="mb-2 px-3 py-1.5 bg-lavender/50 dark:bg-[#1e2235] border border-gray-200 dark:border-gray-700 rounded-2xl flex items-center gap-2">
             <img src={attachedUrl} alt="Attached reference" className="w-8 h-8 rounded-lg object-cover border border-gray-200 dark:border-gray-700" />
@@ -931,7 +900,7 @@ const VOICE_PROGRESS_PHRASES = [
               <button
                 type="button"
                 onClick={() => (voice.listening === 'dictate' ? voice.stop() : voice.start('dictate', input))}
-                disabled={sending || loading || voice.listening === 'converse' || voice.speaking}
+                disabled={agent.open || sending || loading || voice.listening === 'converse' || voice.speaking}
                 className={`relative w-9 h-9 rounded-full grid place-items-center shrink-0 transition disabled:opacity-40 ${
                   voice.listening === 'dictate' ? 'bg-red-50 text-red-500' : 'text-ink/70 dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10'
                 }`}
@@ -957,11 +926,11 @@ const VOICE_PROGRESS_PHRASES = [
             voice.supported && (
               <button
                 type="button"
-                onClick={() => (voice.speaking ? voice.stop() : agent.start())}
+                onClick={() => agent.open ? agent.end() : (voice.speaking ? voice.stop() : agent.start(!messages.length && !activeEvent))}
                 disabled={(sending || loading || voice.listening) && !voice.speaking}
                 className="relative w-9 h-9 grid place-items-center rounded-full text-white shadow-sm shrink-0 transition disabled:opacity-50 bg-primary hover:bg-primary-dark"
-                title={voice.speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
-                aria-label={voice.speaking ? 'Stop speaking' : 'Voice mode'}
+                title={agent.open ? 'End voice mode' : voice.speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={agent.open ? 'End voice mode' : voice.speaking ? 'Stop speaking' : 'Voice mode'}
               >
                 <span className="relative">
                   {voice.speaking ? <span className="block w-3 h-3 rounded-[3px] bg-white" /> : <WaveIcon />}
@@ -972,14 +941,6 @@ const VOICE_PROGRESS_PHRASES = [
         </div>
         <p className="text-[10px] text-muted dark:text-slate-400 text-center mt-1.5">You decide — Aura+ never books or pays without you.</p>
       </form>
-
-      <VoiceAgentOverlay
-        agent={agent}
-        title={activeEvent?.title || 'Aura+'}
-        subtitle="Your event assistant · voice"
-        lang={voice.lang}
-        onToggleLang={() => voice.setLang(voice.lang === 'en-IN' ? 'hi-IN' : 'en-IN')}
-      />
 
       {/* Lightbox Zoom Modal */}
       {activeZoomImage && (

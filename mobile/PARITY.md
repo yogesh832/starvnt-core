@@ -1,4 +1,4 @@
-# Web-to-native parity and QA record
+# Web-to-native parity and QA record/
 
 Audited from the repository's web routes, auth providers, API clients, customer controllers/services, Vendor OS routes, Core routes and shared notification logic. The existing web implementation includes placeholder content in some admin event-workspace views; mobile must use real API data rather than copy fabricated checklist/service entries.
 
