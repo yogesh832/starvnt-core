@@ -27,6 +27,7 @@ const config: ExpoConfig = {
     themeColor: brand.launchBackground,
   },
   plugins: [
+    "expo-image",
     ['expo-audio', { microphonePermission: 'Allow STARVNT to use your microphone to talk to Aura.', enableBackgroundRecording: false, enableBackgroundPlayback: false }],
     ["expo-notifications", { defaultChannel: "starvnt-updates" }],
     "expo-font",

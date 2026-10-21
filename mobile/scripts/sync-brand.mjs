@@ -43,6 +43,7 @@ for (const file of [
 for (const [from, to] of [
   ['images/aura/orb-96.png', 'aura-orb-96.png'],
   ['images/aura/orb-384.png', 'aura-orb-384.png'],
+  ['images/aura/orb-motion-128.v1.webp', 'aura-orb-motion-128.v1.webp'],
   ['images/customer-wedding-hero.jpg', 'customer-wedding-hero.jpg'],
 ]) await copyFile(new URL(`public/${from}`, source), new URL(to, target));
 const brand = {
