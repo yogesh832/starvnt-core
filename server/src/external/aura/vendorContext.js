@@ -18,11 +18,8 @@ import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
  * evaluateVendorActivation() is the same recompute the dashboard runs on load.
  */
 
-// Primary categories offered on Profile & Hub (web BusinessPages ProfilePage select).
-export const CATEGORIES = [
-  'Cinematic Production', 'Photography', 'Videography', 'Decor & Styling', 'Catering',
-  'Makeup & Styling', 'DJ & Music', 'Venue', 'Event Planning',
-];
+import { VENDOR_CATEGORY_VALUES } from '../../common/vendorCategories.js';
+export const CATEGORIES = VENDOR_CATEGORY_VALUES;
 
 export const PAGES = [
   'dashboard', 'enquiries', 'quotes', 'bookings', 'calendar', 'portfolio', 'services', 'availability',

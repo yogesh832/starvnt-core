@@ -1,3 +1,4 @@
+import { VendorCategoryPicker } from "../VendorCategoryPicker";
 import React, { useState } from "react";
 import { Alert, Image, Linking, View } from "react-native";
 import { quotePricing } from "../vendorCommerce";
@@ -586,7 +587,7 @@ function VendorFormBody({ route, navigation }: any) {
       {kind === "services" && (
         <>
           {field("name", "Service name")}
-          {field("category", "Service category")}
+          <VendorCategoryPicker label="Service category" value={form.category || ""} onChange={(category) => setForm(current => ({ ...current, category }))} />
           {field("price", "Base price in ₹", true)}
           <Choice
             label="Pricing model"

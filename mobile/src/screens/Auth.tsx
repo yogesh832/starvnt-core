@@ -1,3 +1,4 @@
+import { VendorCategoryPicker } from "../VendorCategoryPicker";
 import React, { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from '@react-navigation/native';
 import { Modal, Platform, Pressable, TurboModuleRegistry, View } from "react-native";
@@ -31,7 +32,6 @@ export function AuthScreen({ route, navigation }: any) {
     const action = useAction();
     const [resendAt, setResendAt] = useState(0);
     const [seconds, setSeconds] = useState(0);
-    const [categoryOpen, setCategoryOpen] = useState(false);
     useEffect(() => {
         const tick = () => setSeconds(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
         tick();
@@ -204,7 +204,7 @@ export function AuthScreen({ route, navigation }: any) {
         {vendor && <>
           <AuthField label="Brand name" icon="storefront-outline" placeholder="CineMade Studios" {...field('businessName')} autoCapitalize="words" editable={!working}/>
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1.2, gap: 6 }}><AuthText size={13} color="#dce6f8">Category</AuthText><Pressable accessibilityRole="button" accessibilityLabel="Select vendor category" disabled={working} onPress={() => setCategoryOpen(true)} style={{ minHeight: 50, borderWidth: 1, borderColor: '#25324b', borderRadius: 14, backgroundColor: '#131e33', padding: 12, justifyContent: 'center' }}><AuthText color={form.category ? '#fff' : '#879bbd'} size={13}>{form.category || 'Select category  ⌄'}</AuthText></Pressable></View>
+            <View style={{ flex: 1.2 }}><VendorCategoryPicker label="Category" value={form.category} disabled={working} onChange={(category) => setForm(current => ({ ...current, category }))}/></View>
             <View style={{ flex: 1 }}><AuthField label="City" icon="location-outline" placeholder="e.g. Mumbai" {...field('city')} autoCapitalize="words" editable={!working}/></View>
           </View>
         </>}
@@ -232,13 +232,6 @@ export function AuthScreen({ route, navigation }: any) {
       <AuthLink title={isAdmin ? 'Customer or vendor sign in' : 'Internal team sign in'} disabled={working} onPress={() => setActiveDomain(isAdmin ? 'external' : 'admin')}/>
       {TEST_AUTH_ENABLED && <AuthLink title="Dev · Quick Test Auth" onPress={() => navigation.navigate('TestAuth')}/>}
     </View>}
-    <Modal visible={categoryOpen} transparent animationType="slide" onRequestClose={() => setCategoryOpen(false)}>
-      <Pressable accessibilityLabel="Close category selection" onPress={() => setCategoryOpen(false)} style={{ flex: 1, backgroundColor: '#0009', justifyContent: 'flex-end' }}>
-        <View style={{ padding: 24, paddingBottom: 40, gap: 5, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: '#111c30' }}><AuthText bold size={20}>Choose your category</AuthText>
-          {['Cinematic Production', 'Photography', 'Videography', 'Decor & Styling', 'Catering', 'DJ & Music'].map(category => <AuthLink key={category} title={category} onPress={() => { setForm(v => ({ ...v, category })); setCategoryOpen(false); }}/>)}
-          <AuthLink title="Cancel" onPress={() => setCategoryOpen(false)}/>
-        </View>
-      </Pressable>
-    </Modal>
+
   </AuthLayout>;
 }

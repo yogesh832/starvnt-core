@@ -447,7 +447,7 @@ function contactQuestion(vendor) {
 function brandQuestion(vendor) {
   const missing = missingBrand(vendor);
   if (!missing.length) return 'Please check your brand details on the Profile page.';
-  const ask = missing[0] === 'category' ? `What's your main category — ${CATEGORIES.join(', ')}?` : `What's your ${missing[0]}?`;
+  const ask = missing[0] === 'category' ? "What's your main service category? For example photography, sound, catering or event coordination. You can also search the full category list in your profile." : `What's your ${missing[0]}?`;
   return `Still needed for your brand: ${missing.join(', ')}. ${ask}`;
 }
 

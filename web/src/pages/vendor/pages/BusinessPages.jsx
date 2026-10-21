@@ -1,3 +1,4 @@
+import VendorCategoryPicker from "../../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Page, Card } from "./shared.jsx";
@@ -953,22 +954,7 @@ export function ServicesPage() {
                 <label className="block text-muted font-semibold mb-1">
                   Category
                 </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-semibold text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="Photography">Photography</option>
-                  <option value="Videography">Videography</option>
-                  <option value="Decor">Decor & Styling</option>
-                  <option value="Catering">Catering</option>
-                  <option value="Makeup">Makeup & Styling</option>
-                  <option value="Entertainment">
-                    DJ & Music / Entertainment
-                  </option>
-                  <option value="Venue">Venue</option>
-                  <option value="Planning">Event Planning</option>
-                </select>
+                <VendorCategoryPicker label="Service category" value={category} onChange={setCategory} required />
               </div>
               <div>
                 <label className="block text-muted font-semibold mb-1">
@@ -4651,29 +4637,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                       <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
                         Primary Category
                       </label>
-                      <select
-                        value={profile.category}
-                        onChange={(e) =>
-                          setProfile({ ...profile, category: e.target.value })
-                        }
-                        required
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      >
-                        <option value="">Select Primary Category...</option>
-                        <option value="Cinematic Production">
-                          Cinematic Production
-                        </option>
-                        <option value="Photography">Photography</option>
-                        <option value="Videography">Videography</option>
-                        <option value="Decor & Styling">Decor & Styling</option>
-                        <option value="Catering">Catering</option>
-                        <option value="Makeup & Styling">
-                          Makeup & Styling
-                        </option>
-                        <option value="DJ & Music">DJ & Music</option>
-                        <option value="Venue">Venue</option>
-                        <option value="Event Planning">Event Planning</option>
-                      </select>
+                      <VendorCategoryPicker value={profile.category} onChange={(category) => setProfile({ ...profile, category })} required />
                     </div>
                     <div>
                       <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">

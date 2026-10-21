@@ -1,3 +1,4 @@
+import { VENDOR_CATEGORIES, findVendorCategory } from '../../common/vendorCategories.js';
 /**
  * Category Workspaces — Shared Engine, Different Capability (Spec §10).
  *
@@ -5,9 +6,9 @@
  * should configure capability and UX on top of the same domain model."
  */
 
-export const CATEGORY_DEFINITIONS = {
+const LEGACY_DEFINITIONS = {
   Photography: {
-    label: 'Photography & Videography',
+    label: 'Photography',
     capabilityFields: ['styles', 'deliverables', 'teamSize', 'equipment', 'cameraModels', 'droneIncluded'],
     defaultStyles: ['Candid', 'Traditional', 'Cinematic', 'Aerial/Drone', 'Pre-wedding'],
     criticalLogic: 'Team/resource allocation, venue/date coverage, multi-location schedule, portfolio evidence',
@@ -80,23 +81,34 @@ export const CATEGORY_DEFINITIONS = {
   },
 };
 
-/**
- * Validates and normalizes category capability attributes.
- */
-export function validateCategoryCapability(category, attributes = {}) {
-  const definition = CATEGORY_DEFINITIONS[category] || CATEGORY_DEFINITIONS.Photography;
-  const filtered = {};
+const SPECIAL_DEFINITIONS = {
+  Videography: { capabilityFields: ['videoFormats', 'deliverables', 'teamSize', 'equipment', 'cameraModels', 'droneIncluded'], defaultStyles: ['Documentary', 'Traditional', 'Highlight video'] },
+  Cinematic_Production: { capabilityFields: ['filmFormats', 'deliverables', 'teamSize', 'equipment', 'droneIncluded', 'editingIncluded'], defaultStyles: ['Cinematic', 'Documentary', 'Wedding film'] },
+  DJ: { capabilityFields: ['genres', 'performanceHours', 'equipment', 'teamSize', 'soundIncluded'], defaultStyles: ['Bollywood', 'EDM', 'Retro', 'Sufi'] },
+  Sound: { capabilityFields: ['soundSystemWattage', 'microphones', 'mixingConsole', 'equipment', 'teamSize', 'technicians'], defaultStyles: ['Speech / Conference', 'Live sound', 'Concert sound'] },
+  Event_Planning: { capabilityFields: ['eventTypes', 'planningScope', 'teamSize', 'budgetManagement', 'vendorManagement'], defaultStyles: ['Full planning', 'Partial planning', 'Destination planning'] },
+  Event_Coordination: { capabilityFields: ['eventTypes', 'coordinationHours', 'teamSize', 'guestCount', 'handoverLeadDays'], defaultStyles: ['Event-day coordination', 'Multi-day coordination', 'Guest coordination'] },
+};
 
-  for (const field of definition.capabilityFields) {
-    if (attributes[field] !== undefined) {
-      filtered[field] = attributes[field];
-    }
-  }
-
-  return {
-    category,
-    isValid: true,
-    definition,
-    attributes: filtered,
+export const CATEGORY_DEFINITIONS = { ...LEGACY_DEFINITIONS };
+for (const category of VENDOR_CATEGORIES) {
+  const definition = {
+    label: category.value,
+    capabilityFields: ['styles', 'deliverables', 'teamSize', 'equipment', 'simultaneousEventLimit'],
+    defaultStyles: ['Custom service'],
+    criticalLogic: 'Declared scope + capability + capacity + resources + dated availability',
+    ...(LEGACY_DEFINITIONS[category.key] || {}),
+    ...(SPECIAL_DEFINITIONS[category.key] || {}),
   };
+  CATEGORY_DEFINITIONS[category.key] = definition;
+  CATEGORY_DEFINITIONS[category.value] = definition;
+}
+
+export function validateCategoryCapability(category, attributes = {}) {
+  const known = findVendorCategory(category);
+  const definition = CATEGORY_DEFINITIONS[known?.key || category];
+  if (!definition) return { category, isValid: false, definition: null, attributes: {} };
+  const filtered = {};
+  for (const field of definition.capabilityFields) if (attributes[field] !== undefined) filtered[field] = attributes[field];
+  return { category, isValid: true, definition, attributes: filtered };
 }

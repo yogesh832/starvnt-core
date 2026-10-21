@@ -1,3 +1,4 @@
+import VendorCategoryPicker from "../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useExternalAuth } from "../../auth/ExternalAuthContext.jsx";
@@ -865,29 +866,12 @@ export default function ExternalLogin() {
                               required
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             <div>
                               <label className="block text-xs font-semibold text-ink/80 mb-1">
                                 Category
                               </label>
-                              <select
-                                className={inputCls}
-                                value={form.category}
-                                onChange={set("category")}
-                                required
-                              >
-                                <option value="">Select Category...</option>
-                                <option value="Cinematic Production">
-                                  Cinematic Production
-                                </option>
-                                <option value="Photography">Photography</option>
-                                <option value="Videography">Videography</option>
-                                <option value="Decor & Styling">
-                                  Decor & Styling
-                                </option>
-                                <option value="Catering">Catering</option>
-                                <option value="DJ & Music">DJ & Music</option>
-                              </select>
+                              <VendorCategoryPicker value={form.category} onChange={(category) => setForm((current) => ({ ...current, category }))} className={inputCls} required />
                             </div>
                             <div>
                               <label className="block text-xs font-semibold text-ink/80 mb-1">
@@ -1103,27 +1087,12 @@ export default function ExternalLogin() {
                               required
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             <div>
                               <label className="block text-xs font-semibold text-ink/80 mb-1">
                                 Category
                               </label>
-                              <select
-                                className={inputCls}
-                                value={form.category}
-                                onChange={set("category")}
-                              >
-                                <option value="">Select Category...</option>
-                                <option value="Cinematic Production">
-                                  Cinematic Production
-                                </option>
-                                <option value="Photography">Photography</option>
-                                <option value="Decor & Styling">
-                                  Decor & Styling
-                                </option>
-                                <option value="Catering">Catering</option>
-                                <option value="DJ & Music">DJ & Music</option>
-                              </select>
+                              <VendorCategoryPicker value={form.category} onChange={(category) => setForm((current) => ({ ...current, category }))} className={inputCls} required />
                             </div>
                             <div>
                               <label className="block text-xs font-semibold text-ink/80 mb-1">
@@ -1261,27 +1230,12 @@ export default function ExternalLogin() {
                           required
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
                           <label className="block text-xs font-semibold text-ink/80 mb-1">
                             Category
                           </label>
-                          <select
-                            className={inputCls}
-                            value={form.category}
-                            onChange={set("category")}
-                          >
-                            <option value="">Select Category...</option>
-                            <option value="Cinematic Production">
-                              Cinematic Production
-                            </option>
-                            <option value="Photography">Photography</option>
-                            <option value="Decor & Styling">
-                              Decor & Styling
-                            </option>
-                            <option value="Catering">Catering</option>
-                            <option value="DJ & Music">DJ & Music</option>
-                          </select>
+                          <VendorCategoryPicker value={form.category} onChange={(category) => setForm((current) => ({ ...current, category }))} className={inputCls} required />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-ink/80 mb-1">

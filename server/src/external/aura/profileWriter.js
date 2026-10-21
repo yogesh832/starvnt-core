@@ -1,3 +1,4 @@
+import { VENDOR_CATEGORIES, findVendorCategory } from '../../common/vendorCategories.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { CATEGORIES } from './vendorContext.js';
 
@@ -41,7 +42,8 @@ const CATEGORY_WORDS = [
   [/\b(decor|decoration|decorations|decorator|styling)\b/i, 'Decor & Styling'],
   [/\b(catering|caterer|caterers|food)\b/i, 'Catering'],
   [/\b(makeup|make-up|make up|mua|bridal makeup)\b/i, 'Makeup & Styling'],
-  [/\b(dj|music|band|sound)\b/i, 'DJ & Music'],
+  [/\b(dj|disc jockey)\b/i, 'DJ & Music'],
+  [/\b(sound|audio|speakers)\b/i, 'Sound & Audio'],
   [/\b(venue|banquet|hall|lawn|resort)\b/i, 'Venue'],
   [/\b(planner|planning|event planning|wedding planner)\b/i, 'Event Planning'],
 ];
@@ -49,6 +51,15 @@ const CATEGORY_WORDS = [
 /** Canonical category only if the vendor's own message names it. */
 export function matchCategory(raw, message) {
   const text = String(message || '');
+  const stated = ` ${tokens(text).join(' ')} `;
+  const mentions = category => [category.value, category.key, ...category.aliases].some(alias => stated.includes(` ${tokens(alias).join(' ')} `));
+  const chosen = findVendorCategory(raw);
+  if (chosen && mentions(chosen)) return chosen.value;
+  if (!raw) {
+    const matches = VENDOR_CATEGORIES.filter(mentions);
+    if (matches.length === 1) return matches[0].value;
+    if (matches.length > 1) return null; // One primary category; do not guess between two businesses.
+  }
   const exact = CATEGORIES.find((c) => c.toLowerCase() === String(raw || '').trim().toLowerCase());
   if (exact && valueStatedIn(exact.split(/[&]/)[0], text)) return exact;
   for (const [re, cat] of CATEGORY_WORDS) {

@@ -517,8 +517,11 @@ export default function PortfolioPage() {
   const vendorCategory = vendorProfile?.category || 'Cinematic Production';
   const currCategoryConfig =
     CATEGORY_CONFIGS[vendorCategory] ||
-    CATEGORY_CONFIGS['Photography'] ||
-    CATEGORY_CONFIGS['Cinematic Production'];
+    {
+      icon: 'services', defaultEventType: 'Other', defaultStyle: 'Custom', defaultVenue: '', defaultCover: '',
+      placeholder: 'Describe a real project for your service', eventTypes: ['Wedding', 'Birthday', 'Corporate', 'Other'], styles: ['Custom'], presets: [],
+      demo: () => ({ projectName: 'Sample project — replace with your work', eventType: 'Other', style: 'Custom', description: '', images: [], media: [] }),
+    };
 
   function openProjectShowcase(project) {
     setProjectDetailFilter('ALL');

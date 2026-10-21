@@ -1,3 +1,4 @@
+import { VendorCategoryPicker } from "../VendorCategoryPicker";
 import React, { useEffect, useState } from "react";
 import { Image, Linking, Platform, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -114,7 +115,7 @@ export function VendorProfile() {
           />
         )}
       </Card>
-      {fields.map(([key, label]) => (
+      {fields.map(([key, label]) => key === "category" ? <VendorCategoryPicker key={key} label={label} value={form.category || ""} disabled={a.busy} onChange={(category) => setForm(current => ({ ...current, category }))}/> : (
         <Field
           key={key}
           label={label}

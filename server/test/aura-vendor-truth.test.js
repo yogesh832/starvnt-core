@@ -53,7 +53,7 @@ test('vendor results use exact stored names and amounts, distinguish base rates,
   assert.match(reply, /Availability needs an event date/);
   assert.equal(selectVendorRows(rows, 'Show photographers').length, 1);
   assert.equal(selectVendorRows(rows, 'फोटोग्राफर दिखाओ').length, 1);
-  assert.deepEqual(plan.categoriesMentioned('Show DJ prices'), ['sound']);
+  assert.deepEqual(plan.categoriesMentioned('Show DJ prices'), ['dj']);
   assert.match(vendorPrice({ ...rows[0], requiresVendorConfirmation: true }), /needs vendor confirmation/);
   assert.match(vendorTruthReply([], { city: 'Kapkote' }), /no matching active services/);
 });
