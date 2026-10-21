@@ -23,6 +23,7 @@ const adminAuditLogSchema = new Schema(
     ip: { type: String, default: '' },
     userAgent: { type: String, default: '' },
     idempotencyKey: { type: String, unique: true, sparse: true },
+    requestId: { type: String, default: '', index: true },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

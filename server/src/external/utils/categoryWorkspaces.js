@@ -54,6 +54,24 @@ export const CATEGORY_DEFINITIONS = {
     defaultStyles: ['Deluxe Suite', 'Presidential Suite', 'Standard Double', 'Cottage Villa'],
     criticalLogic: 'Room inventory availability + property/location match',
   },
+  Religious_Services: {
+    label: 'Religious & Spiritual Services',
+    capabilityFields: ['traditions', 'ceremonyTypes', 'officiantRoles', 'languageSpoken', 'samagriProvided', 'outstationTravelAllowed'],
+    defaultStyles: ['Hindu Purohit / Priest', 'Muslim Imam / Nikah Officiant', 'Christian Priest / Pastor', 'Sikh Granthi', 'Buddhist Monk', 'Jain Priest', 'Interfaith Officiant', 'Spiritual Ceremony Specialist'],
+    criticalLogic: 'Tradition + ceremony type + language + samagri/ritual requirements',
+  },
+  Corporate_Production: {
+    label: 'Corporate & Conference Production',
+    capabilityFields: ['productionTypes', 'screenSizes', 'avEquipment', 'stageDesigns', 'printingBranding', 'simultaneousTranslators'],
+    defaultStyles: ['Conference & Seminar', 'Product Launch', 'Exhibition & Trade Show', 'Corporate Annual Gala', 'Award Ceremony'],
+    criticalLogic: 'Technical specifications + branding + stage/AV scale',
+  },
+  Anchor_Host: {
+    label: 'Anchor, Emcee & Host Services',
+    capabilityFields: ['languages', 'eventTypes', 'yearsExperience', 'scriptWritingIncluded', 'rehearsalIncluded'],
+    defaultStyles: ['Corporate Emcee', 'Wedding / Sangeet Host', 'Concert / Festival Anchor', 'Bilingual Anchor'],
+    criticalLogic: 'Language fluency + event format + crowd engagement style',
+  },
   Bridal_Wear: {
     label: 'Bridal Wear & Inventory Rental',
     capabilityFields: ['garmentTypes', 'sizes', 'rentalPeriodDays', 'depositRequired', 'alterationsIncluded', 'dispatchLeadTimeHours'],

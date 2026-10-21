@@ -1,4 +1,4 @@
-import { categoriesMentioned } from '../services/planCatalog.js';
+import { categoriesMentioned, normalizeEventType } from '../services/planCatalog.js';
 import { isValidISODate, toISO, todayISO } from '../services/dates.js';
 
 /**
@@ -176,11 +176,31 @@ const NEGATION_RE = /\b(don't|dont|do not|no need|not need|nahi|nahin|without)\b
 /** Categories from sentences that state a need, excluding hedged or negated ones. */
 export function parseStatedNeeds(text) {
   const found = new Set();
-  for (const sentence of text.split(/[.!?\n;]+/)) {
+  for (const sentence of text.split(/[.!?\n;,]+|\b(?:bas|but|lekin)\b/i)) {
     if (!NEED_RE.test(sentence) || HEDGE_RE.test(sentence) || NEGATION_RE.test(sentence)) continue;
     for (const c of categoriesMentioned(sentence)) found.add(c);
   }
   return [...found];
+}
+
+/** Multiple services explicitly handled by the customer, never guessed from a vendor result. */
+export function parseProvidedCategories(text) {
+  const found = new Set();
+  for (const clause of text.split(/[.!\n;,]+|\b(?:bas|but|lekin)\b/i)) {
+    if (clause.includes('?') || HEDGE_RE.test(clause) || NEGATION_RE.test(clause)) continue;
+    if (/\b(?:already (?:have|arranged|booked)|(?:hum|ham|main|we)\s+(?:khud\s+)?(?:kar|kr|sambhal|handle|will handle|will do)|(?:arranged|sorted)\s*(?:hai|hain))\b/i.test(clause)) {
+      for (const category of categoriesMentioned(clause)) found.add(category);
+    }
+  }
+  if (/\b(?:ghar|home)\s+(?:par|pe|mein|me)\b/i.test(text) && !/\?/.test(text)) found.add('venue');
+  return [...found];
+}
+
+/** A stated event type is enough to start a draft when the model cannot extract it. */
+export function parseStatedEventType(text, askedTopic) {
+  if (askedTopic !== 'event.type' && !/\b(?:mera|mere|meri|hamara|our|my|planning|plan kar|krwana|karwana)\b/i.test(text)) return null;
+  const type = normalizeEventType(text);
+  return type && type !== 'other' ? type : null;
 }
 
 const blank = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 0);
@@ -188,6 +208,11 @@ const blank = (v) => v == null || v === '' || (Array.isArray(v) && v.length === 
 /** Returns a copy of `extracted` with blanks filled from the message, plus `dateYearStated`. */
 export function backfillFacts(message, extracted = {}, { today = todayISO(), askedTopic = null } = {}) {
   const out = { ...extracted };
+  const statedType = parseStatedEventType(message, askedTopic);
+  if (blank(out.eventType) && blank(out.newEventType) && statedType) out.eventType = statedType;
+  const provided = parseProvidedCategories(message);
+  if (provided.length) out.providedCategories = provided;
+  if (blank(out.venueName) && provided.includes('venue')) out.venueName = /\b(?:ghar|home)\b/i.exec(message)?.[0];
   const parsedDate = parseDate(message, today);
   if (blank(out.date) && blank(out.newEventDate) && parsedDate) out.date = parsedDate.date;
   if (blank(out.guestCount) && blank(out.newEventGuestCount)) {
@@ -222,6 +247,15 @@ export function backfillFacts(message, extracted = {}, { today = todayISO(), ask
     const needs = parseStatedNeeds(message);
     if (needs.length) out.neededCategories = needs;
   }
+  // Preserve the customer's service wording (including timing) for the enquiry.
+  // This comes from explicit need clauses, never from a model's invented brief.
+  const serviceBriefs = [];
+  for (const category of out.neededCategories || []) {
+    if (provided.includes(category)) continue;
+    const clauses = message.split(/[.!?\n;]+/).filter(clause => NEED_RE.test(clause) && !HEDGE_RE.test(clause) && !NEGATION_RE.test(clause) && categoriesMentioned(clause).includes(category));
+    if (clauses.length) serviceBriefs.push({ category, brief: clauses.join('. ').trim().slice(0, 1000) });
+  }
+  if (serviceBriefs.length) out.serviceBriefs = serviceBriefs;
   return out;
 }
 

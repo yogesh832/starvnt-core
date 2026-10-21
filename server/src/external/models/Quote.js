@@ -41,6 +41,7 @@ const quoteSchema = new Schema(
       ref: 'VendorService',
       required: true,
     },
+    category: { type: String, default: '' },
     serviceName: {
       type: String,
       required: true,

@@ -127,6 +127,66 @@ router.post('/vendor/portfolio/upload', requireExternalAuth, requireAccountType(
   }
 });
 
+router.post('/media/upload', requireExternalAuth, upload.single('file'), async (req, res, next) => {
+  try {
+    const userId = req.externalUser?._id || 'guest';
+    if (!isCloudinaryConfigured) {
+      return res.status(503).json({ error: 'CLOUDINARY_NOT_CONFIGURED', message: 'Cloudinary media storage is not configured.' });
+    }
+
+    const fileBuffer = req.file ? req.file.buffer : null;
+    const originalName = req.file ? req.file.originalname : (req.body.filename || 'chat_attachment');
+    const b64Data = req.body.file;
+    const mediaType = req.body.mediaType || 'IMAGE';
+
+    if (!fileBuffer && !b64Data) {
+      return res.status(400).json({ error: 'NO_FILE_PROVIDED' });
+    }
+
+    const isVideo = mediaType === 'VIDEO' || /\.(mp4|mov|webm|avi|mkv)$/i.test(originalName) || (b64Data && b64Data.startsWith('data:video/'));
+    const resourceType = isVideo ? 'video' : 'auto';
+    const publicId = `${Date.now()}_${originalName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+    try {
+      let uploadResult;
+      if (fileBuffer) {
+        uploadResult = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: `starvnt_chat/${userId}`, resource_type: resourceType, public_id: publicId },
+            (error, result) => { if (error) reject(error); else resolve(result); }
+          );
+          stream.end(fileBuffer);
+        });
+      } else {
+        uploadResult = await cloudinary.uploader.upload(b64Data, {
+          folder: `starvnt_chat/${userId}`,
+          resource_type: resourceType,
+          public_id: publicId,
+        });
+      }
+
+      const url = uploadResult.secure_url;
+      const thumb = uploadResult.resource_type === 'video' ? url.replace(/\.[^/.]+$/, '.jpg') : url;
+
+      return res.status(201).json({
+        ok: true,
+        url,
+        thumbnailUrl: thumb,
+        provider: 'cloudinary',
+        publicId: uploadResult.public_id,
+        resourceType: uploadResult.resource_type === 'video' ? 'VIDEO' : 'IMAGE',
+        filename: originalName,
+      });
+    } catch (err) {
+      console.warn('[Chat Media Upload] Cloud storage failed:', err.message || err);
+      return res.status(502).json({ error: 'MEDIA_UPLOAD_FAILED', message: err.message || 'Upload failed' });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+
 /**
  * Bulk Media Upload & Ingestion Pipeline (Spec §7, Golden Test M).
  * Supports 50+ photos + multiple videos in a single unified operation.

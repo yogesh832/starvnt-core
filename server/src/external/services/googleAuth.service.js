@@ -20,6 +20,7 @@ export async function verifyGoogleIdToken(token) {
       fullName,
       googleId: sub,
       avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80',
+      trustSource: 'TEST_GOOGLE_TOKEN',
     };
   }
 
@@ -37,7 +38,11 @@ export async function verifyGoogleIdToken(token) {
 
       // Verify audience if configured
       if (config.googleClientId && data.aud && data.aud !== config.googleClientId) {
-        console.warn(`[GoogleAuth] Audience mismatch: token=${data.aud}, config=${config.googleClientId}`);
+        throw new Error('GOOGLE_AUDIENCE_MISMATCH');
+      }
+
+      if (data.email_verified === 'false' || data.email_verified === false) {
+        throw new Error('GOOGLE_EMAIL_NOT_VERIFIED');
       }
 
       return {
@@ -45,29 +50,17 @@ export async function verifyGoogleIdToken(token) {
         fullName: data.name || data.email.split('@')[0],
         googleId: data.sub,
         avatarUrl: data.picture || '',
+        trustSource: 'GOOGLE_TOKENINFO',
       };
     }
   } catch (err) {
-    console.warn('[GoogleAuth] Remote tokeninfo call warning:', err.message);
-  }
-
-  // 3. Fallback: Parse unencrypted JWT payload directly if Google token format
-  try {
-    const parts = token.split('.');
-    if (parts.length === 3) {
-      const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
-      const payload = JSON.parse(payloadJson);
-      if (payload.email) {
-        return {
-          email: payload.email.toLowerCase(),
-          fullName: payload.name || payload.email.split('@')[0],
-          googleId: payload.sub || `google-${Date.now()}`,
-          avatarUrl: payload.picture || '',
-        };
-      }
+    if (
+      err.message === 'GOOGLE_AUDIENCE_MISMATCH' ||
+      err.message === 'GOOGLE_EMAIL_NOT_VERIFIED'
+    ) {
+      throw err;
     }
-  } catch (err) {
-    // Ignore JWT parse error
+    console.warn('[GoogleAuth] Remote tokeninfo call warning:', err.message);
   }
 
   throw new Error('INVALID_GOOGLE_TOKEN');

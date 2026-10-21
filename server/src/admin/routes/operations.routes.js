@@ -1,6 +1,10 @@
 import express from 'express';
-import { requireAdminAuth } from '../middleware/requireAdminAuth.js';
+import { requireAdminAuth, requirePermission } from '../middleware/requireAdminAuth.js';
 import { CoreBooking } from '../models/CoreBooking.js';
+import { FinanceLedgerEntry } from '../models/FinanceLedgerEntry.js';
+import { AdminApprovalRequest } from '../models/AdminApprovalRequest.js';
+import { Payment } from '../../customer/models/index.js';
+import { recordRefund } from '../services/financeLedger.service.js';
 import {
   verifyPaymentFromCore,
   validateCompletionFromCore,
@@ -10,8 +14,46 @@ import {
 
 const router = express.Router();
 
+function requireAnyPermission(...allowed) {
+  return (req, res, next) => {
+    const admin = req.admin;
+    if (!admin) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+    if (admin.role === 'SUPER_ADMIN') return next();
+    if (allowed.some((permission) => admin.permissions.includes(permission))) return next();
+    return res.status(403).json({ error: 'FORBIDDEN', requiredAnyOf: allowed });
+  };
+}
+
 function escapeRegex(text = '') {
   return String(text).replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+
+function money(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+}
+
+function approvalSummary(row) {
+  if (!row) return null;
+  return {
+    id: String(row._id),
+    type: row.type,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    status: row.status,
+    requestedByEmail: row.requestedByEmail,
+    approvedByEmail: row.approvedByEmail,
+    reason: row.reason,
+    payload: row.payload,
+    createdAt: row.createdAt,
+    approvedAt: row.approvedAt,
+  };
+}
+
+function adminCanApproveRequest(admin, approval) {
+  if (admin?.role === 'SUPER_ADMIN') return true;
+  const needed = approval?.type === 'REFUND' ? 'payments.refund' : 'settlements.approve';
+  return admin?.permissions?.includes(needed);
 }
 
 // Require admin authentication for all Core Operations routes
@@ -21,7 +63,7 @@ router.use(requireAdminAuth);
  * List authoritative Core bookings with multi-field search, vendor filtering,
  * category, city, and status tabs.
  */
-router.get('/bookings', async (req, res, next) => {
+router.get('/bookings', requireAnyPermission('bookings.read', 'operations.read'), async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
     const skip = parseInt(req.query.skip) || 0;
@@ -166,7 +208,7 @@ router.get('/bookings', async (req, res, next) => {
 /**
  * Get booking details.
  */
-router.get('/bookings/:id', async (req, res, next) => {
+router.get('/bookings/:id', requireAnyPermission('bookings.read', 'operations.read'), async (req, res, next) => {
   try {
     const booking = await CoreBooking.findById(req.params.id);
     if (!booking) {
@@ -179,12 +221,275 @@ router.get('/bookings/:id', async (req, res, next) => {
 });
 
 /**
+ * Authoritative Payments & Settlements summary.
+ *
+ * Keeps booking GMV, collected customer payments, platform ledger entries,
+ * refunds and vendor settlement releases separate for reconciliation.
+ */
+router.get('/finance-summary', requireAnyPermission('payments.read', 'settlements.read'), async (req, res, next) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const skip = parseInt(req.query.skip) || 0;
+    const tab = String(req.query.tab || 'Customer Payments').toLowerCase();
+
+    const [
+      customerPaymentAgg,
+      heldAgg,
+      settlementAgg,
+      refundAgg,
+      gmvAgg,
+    ] = await Promise.all([
+      Payment.aggregate([
+        { $match: { status: 'verified' } },
+        { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+      CoreBooking.aggregate([
+        {
+          $match: {
+            paymentStatus: 'PAYMENT_VERIFIED',
+            settlementStatus: { $ne: 'SETTLED' },
+            bookingStatus: 'CONFIRMED',
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            amount: { $sum: '$paymentSummary.paidAmount' },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      FinanceLedgerEntry.aggregate([
+        { $match: { type: 'SETTLEMENT_RELEASE' } },
+        { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+      FinanceLedgerEntry.aggregate([
+        { $match: { type: 'REFUND' } },
+        { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+      CoreBooking.aggregate([
+        { $match: { bookingStatus: 'CONFIRMED' } },
+        { $group: { _id: null, amount: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    let rows = [];
+    let total = 0;
+    if (tab.includes('settlement')) {
+      [rows, total] = await Promise.all([
+        FinanceLedgerEntry.find({ type: 'SETTLEMENT_RELEASE' }).sort({ postedAt: -1 }).skip(skip).limit(limit).lean(),
+        FinanceLedgerEntry.countDocuments({ type: 'SETTLEMENT_RELEASE' }),
+      ]);
+      rows = rows.map((row) => ({
+        id: String(row._id),
+        kind: 'Vendor Settlement',
+        reference: row.reference || row.idempotencyKey,
+        bookingId: row.booking ? String(row.booking) : '',
+        party: row.vendorId ? String(row.vendorId) : 'Vendor',
+        amount: money(row.amount),
+        currency: row.currency || 'INR',
+        status: 'POSTED',
+        date: row.postedAt || row.createdAt,
+      }));
+    } else if (tab.includes('refund')) {
+      [rows, total] = await Promise.all([
+        FinanceLedgerEntry.find({ type: 'REFUND' }).sort({ postedAt: -1 }).skip(skip).limit(limit).lean(),
+        FinanceLedgerEntry.countDocuments({ type: 'REFUND' }),
+      ]);
+      rows = rows.map((row) => ({
+        id: String(row._id),
+        kind: 'Refund',
+        reference: row.reference || row.idempotencyKey,
+        bookingId: row.booking ? String(row.booking) : '',
+        party: row.customerId ? String(row.customerId) : 'Customer',
+        amount: money(row.amount),
+        currency: row.currency || 'INR',
+        status: 'POSTED',
+        date: row.postedAt || row.createdAt,
+      }));
+    } else {
+      [rows, total] = await Promise.all([
+        Payment.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Payment.countDocuments(),
+      ]);
+      rows = rows.map((row) => ({
+        id: String(row._id),
+        kind: 'Customer Payment',
+        reference: row.providerPaymentId || row.providerOrderId || row.providerRef || String(row._id),
+        bookingId: row.reservation ? String(row.reservation) : '',
+        party: row.customer ? String(row.customer) : 'Customer',
+        amount: money(row.amount),
+        currency: row.currency || 'INR',
+        status: row.status || 'pending',
+        date: row.verifiedAt || row.createdAt,
+      }));
+    }
+
+    res.json({
+      ok: true,
+      total,
+      count: rows.length,
+      rows,
+      stats: {
+        totalCollected: money(customerPaymentAgg[0]?.amount),
+        totalCollectedCount: customerPaymentAgg[0]?.count || 0,
+        heldBalance: money(heldAgg[0]?.amount),
+        heldBookingCount: heldAgg[0]?.count || 0,
+        releasedToVendors: money(settlementAgg[0]?.amount),
+        releasedSettlementCount: settlementAgg[0]?.count || 0,
+        refunds: money(refundAgg[0]?.amount),
+        refundCount: refundAgg[0]?.count || 0,
+        bookingGmv: money(gmvAgg[0]?.amount),
+        bookingCount: gmvAgg[0]?.count || 0,
+      },
+      definitions: {
+        totalCollected: 'Sum of customer payment records with status=verified.',
+        heldBalance: 'Sum of paid advance amounts on confirmed Core bookings whose payment is verified and settlement is not settled.',
+        releasedToVendors: 'Sum of FinanceLedgerEntry records with type=SETTLEMENT_RELEASE.',
+        refunds: 'Sum of FinanceLedgerEntry records with type=REFUND.',
+        bookingGmv: 'Sum of totalAmount on confirmed Core bookings; not equivalent to collected cash.',
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/approvals', requireAnyPermission('settlements.read', 'settlements.approve'), async (req, res, next) => {
+  try {
+    const status = String(req.query.status || 'PENDING').toUpperCase();
+    const filter = {};
+    if (status && status !== 'ALL') filter.status = status;
+    if (req.query.type) filter.type = String(req.query.type).toUpperCase();
+    const approvals = await AdminApprovalRequest.find(filter).sort({ createdAt: -1 }).limit(Math.min(Number(req.query.limit || 50), 100)).lean();
+    res.json({ ok: true, approvals: approvals.map(approvalSummary) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/approvals/:id/approve', requireAnyPermission('settlements.approve', 'payments.refund'), async (req, res, next) => {
+  try {
+    const approval = await AdminApprovalRequest.findById(req.params.id);
+    if (!approval) return res.status(404).json({ error: 'APPROVAL_NOT_FOUND' });
+    if (!adminCanApproveRequest(req.admin, approval)) return res.status(403).json({ error: 'FORBIDDEN' });
+    if (approval.status !== 'PENDING') return res.status(409).json({ error: 'APPROVAL_NOT_PENDING' });
+    if (String(approval.requestedBy) === String(req.admin._id)) {
+      return res.status(403).json({ error: 'MAKER_CHECKER_REQUIRED', message: 'The requesting admin cannot approve the same finance action.' });
+    }
+    approval.status = 'APPROVED';
+    approval.approvedBy = req.admin._id;
+    approval.approvedByEmail = req.admin.email;
+    approval.approvedAt = new Date();
+    if (req.body?.reason) approval.reason = `${approval.reason}\nApproval note: ${String(req.body.reason).trim()}`;
+    await approval.save();
+    res.json({ ok: true, approval: approvalSummary(approval) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/approvals/:id/reject', requireAnyPermission('settlements.approve', 'payments.refund'), async (req, res, next) => {
+  try {
+    const approval = await AdminApprovalRequest.findById(req.params.id);
+    if (!approval) return res.status(404).json({ error: 'APPROVAL_NOT_FOUND' });
+    if (!adminCanApproveRequest(req.admin, approval)) return res.status(403).json({ error: 'FORBIDDEN' });
+    if (approval.status !== 'PENDING') return res.status(409).json({ error: 'APPROVAL_NOT_PENDING' });
+    approval.status = 'REJECTED';
+    approval.rejectedBy = req.admin._id;
+    approval.rejectedByEmail = req.admin.email;
+    approval.rejectedAt = new Date();
+    approval.reason = `${approval.reason}\nRejected: ${String(req.body?.reason || 'No reason provided').trim()}`;
+    await approval.save();
+    res.json({ ok: true, approval: approvalSummary(approval) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/bookings/:id/refund', requirePermission('payments.refund'), async (req, res) => {
+  try {
+    const booking = await CoreBooking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ error: 'BOOKING_NOT_FOUND' });
+
+    const amount = money(req.body?.amount ?? booking.paymentSummary?.paidAmount);
+    const reference = String(req.body?.reference || req.body?.transactionReference || '').trim();
+    if (amount <= 0) return res.status(400).json({ error: 'REFUND_AMOUNT_REQUIRED', message: 'Refund amount must be greater than zero.' });
+    if (!reference) return res.status(400).json({ error: 'REFUND_REFERENCE_REQUIRED', message: 'A real refund/payment provider reference is required.' });
+
+    if (!req.body?.approvalId) {
+      const existing = await AdminApprovalRequest.findOne({
+        type: 'REFUND',
+        targetId: String(req.params.id),
+        status: 'PENDING',
+      }).lean();
+      const approval = existing || await AdminApprovalRequest.create({
+        type: 'REFUND',
+        targetType: 'CoreBooking',
+        targetId: String(req.params.id),
+        requestedBy: req.admin._id,
+        requestedByEmail: req.admin.email,
+        reason: String(req.body?.reason || req.body?.notes || 'Refund requested').trim(),
+        payload: {
+          amount,
+          reference,
+          notes: req.body?.notes || '',
+        },
+        requestId: req.requestId || '',
+      });
+      return res.status(202).json({
+        ok: true,
+        pendingApproval: true,
+        approval: approvalSummary(approval),
+        message: 'Refund request created. A different authorized admin must approve it before ledger posting.',
+      });
+    }
+
+    const approval = await AdminApprovalRequest.findOne({
+      _id: req.body.approvalId,
+      type: 'REFUND',
+      targetId: String(req.params.id),
+      status: 'APPROVED',
+    });
+    if (!approval) {
+      return res.status(403).json({ error: 'APPROVAL_REQUIRED', message: 'Approved maker-checker request is required before refund posting.' });
+    }
+    if (String(approval.requestedBy) === String(req.admin._id)) {
+      return res.status(403).json({ error: 'MAKER_CHECKER_REQUIRED', message: 'The requesting admin cannot execute the same approved refund.' });
+    }
+
+    booking.paymentStatus = 'REFUNDED';
+    booking.settlementStatus = booking.settlementStatus === 'SETTLED' ? booking.settlementStatus : 'NOT_ELIGIBLE';
+    await booking.save();
+    await recordRefund(
+      booking,
+      {
+        amount: req.body.amount ?? approval.payload?.amount,
+        reference: req.body.reference || req.body.transactionReference || approval.payload?.reference,
+        reason: req.body.reason || req.body.notes || approval.reason,
+      },
+      req.admin.email
+    );
+    approval.status = 'USED';
+    approval.usedAt = new Date();
+    await approval.save();
+    res.json({ ok: true, booking });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ error: err.code || 'REFUND_ERROR', message: err.message });
+  }
+});
+
+/**
  * Authoritative Payment Verification from Core (Golden Test I).
  */
-router.post('/bookings/:id/verify-payment', async (req, res) => {
+router.post('/bookings/:id/verify-payment', requirePermission('payments.approve'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
-    const booking = await verifyPaymentFromCore(req.params.id, req.body, coreActor);
+    const booking = await verifyPaymentFromCore(
+      req.params.id,
+      { ...(req.body || {}), traceContext: { requestId: req.requestId } },
+      coreActor
+    );
     res.json({ ok: true, booking });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'PAYMENT_VERIFICATION_ERROR', message: err.message });
@@ -194,7 +499,7 @@ router.post('/bookings/:id/verify-payment', async (req, res) => {
 /**
  * Authoritative Completion Validation from Core (Golden Test K).
  */
-router.post('/bookings/:id/validate-completion', async (req, res) => {
+router.post(['/bookings/:id/validate-completion', '/bookings/:id/verify-completion'], requirePermission('operations.manage'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
     const { approved = true, notes } = req.body || {};
@@ -208,10 +513,58 @@ router.post('/bookings/:id/validate-completion', async (req, res) => {
 /**
  * Authoritative Settlement Execution from Core (Golden Test K).
  */
-router.post('/bookings/:id/settle', async (req, res) => {
+router.post('/bookings/:id/settle', requirePermission('settlements.release'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_FINANCE';
-    const booking = await settleBooking(req.params.id, req.body, coreActor);
+    const transactionReference = String(req.body?.transactionReference || '').trim();
+    if (!transactionReference) {
+      return res.status(400).json({ error: 'SETTLEMENT_REFERENCE_REQUIRED', message: 'A real bank/transfer reference is required.' });
+    }
+
+    if (!req.body?.approvalId) {
+      const existing = await AdminApprovalRequest.findOne({
+        type: 'SETTLEMENT_RELEASE',
+        targetId: String(req.params.id),
+        status: 'PENDING',
+      }).lean();
+      const approval = existing || await AdminApprovalRequest.create({
+        type: 'SETTLEMENT_RELEASE',
+        targetType: 'CoreBooking',
+        targetId: String(req.params.id),
+        requestedBy: req.admin._id,
+        requestedByEmail: req.admin.email,
+        reason: String(req.body?.reason || req.body?.notes || 'Settlement release requested').trim(),
+        payload: {
+          transactionReference,
+          notes: req.body?.notes || '',
+        },
+        requestId: req.requestId || '',
+      });
+      return res.status(202).json({
+        ok: true,
+        pendingApproval: true,
+        approval: approvalSummary(approval),
+        message: 'Settlement release request created. A different authorized admin must approve it before payout release.',
+      });
+    }
+
+    const approval = await AdminApprovalRequest.findOne({
+      _id: req.body.approvalId,
+      type: 'SETTLEMENT_RELEASE',
+      targetId: String(req.params.id),
+      status: 'APPROVED',
+    });
+    if (!approval) {
+      return res.status(403).json({ error: 'APPROVAL_REQUIRED', message: 'Approved maker-checker request is required before settlement release.' });
+    }
+    if (String(approval.requestedBy) === String(req.admin._id)) {
+      return res.status(403).json({ error: 'MAKER_CHECKER_REQUIRED', message: 'The requesting admin cannot execute the same approved settlement release.' });
+    }
+
+    const booking = await settleBooking(req.params.id, { ...approval.payload, ...req.body, approvalId: String(approval._id) }, coreActor);
+    approval.status = 'USED';
+    approval.usedAt = new Date();
+    await approval.save();
     res.json({ ok: true, booking });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'SETTLEMENT_ERROR', message: err.message });
@@ -221,7 +574,7 @@ router.post('/bookings/:id/settle', async (req, res) => {
 /**
  * Handle vendor failure and discover alternatives on the same requirement/location (Golden Test L).
  */
-router.post('/bookings/:id/fail-and-reassign', async (req, res) => {
+router.post('/bookings/:id/fail-and-reassign', requirePermission('operations.manage'), async (req, res) => {
   try {
     const { reason, failedBy } = req.body || {};
     const result = await handleVendorFailureAndDiscoverAlternatives(req.params.id, {

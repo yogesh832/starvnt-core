@@ -1,5 +1,10 @@
 import { CoreBooking } from '../models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../../external/services/matching.service.js';
+import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
+import { VendorFinancialProfile } from '../../external/models/VendorFinancialProfile.js';
+import { Payment } from '../../customer/models/index.js';
+import { ensureInvoiceForBooking, recordSettlementRelease, settlementMath } from './financeLedger.service.js';
+import { recordBusinessAudit } from '../utils/audit.js';
 
 /**
  * Execution, Completion Validation & Settlement Service (Spec §11, §12).
@@ -23,8 +28,64 @@ export async function verifyPaymentFromCore(bookingId, paymentDetails = {}, core
     throw err;
   }
 
-  // Update authoritative payment truth
+  if (booking.paymentStatus === 'PAYMENT_VERIFIED') {
+    return booking;
+  }
+
+  const reference = String(
+    paymentDetails.paymentId ||
+      paymentDetails.providerPaymentId ||
+      paymentDetails.transactionReference ||
+      booking.paymentSummary?.providerPaymentId ||
+      ''
+  ).trim();
+  const orderId = String(paymentDetails.providerOrderId || booking.paymentSummary?.providerOrderId || '').trim();
+  const expectedAmount = Number(paymentDetails.paidAmount || 0);
+  const referenceClauses = [
+    ...(reference ? [{ providerRef: reference }] : []),
+    ...(orderId ? [{ providerOrderId: orderId }] : []),
+  ];
+
+  if (!referenceClauses.length) {
+    const err = new Error('PAYMENT_EVIDENCE_REQUIRED: Provide a verified payment/order reference from the customer payment ledger.');
+    err.statusCode = 409;
+    err.code = 'PAYMENT_EVIDENCE_REQUIRED';
+    throw err;
+  }
+
+  const paymentFilter = {
+    status: 'verified',
+    $or: referenceClauses,
+  };
+  if (expectedAmount > 0) paymentFilter.amount = expectedAmount;
+
+  const payment = await Payment.findOne(paymentFilter).lean();
+
+  if (!payment) {
+    const err = new Error('PAYMENT_NOT_VERIFIED: No matching verified customer payment record was found for this booking.');
+    err.statusCode = 409;
+    err.code = 'PAYMENT_NOT_VERIFIED';
+    throw err;
+  }
+
+  const fromState = {
+    paymentStatus: booking.paymentStatus,
+    executionStatus: booking.executionStatus,
+    paymentSummary: booking.paymentSummary,
+  };
+
   booking.paymentStatus = 'PAYMENT_VERIFIED';
+  booking.paymentSummary = {
+    ...(booking.paymentSummary?.toObject?.() || booking.paymentSummary || {}),
+    paidAmount: payment.amount,
+    balanceAmount: Math.max(0, Number(booking.totalAmount || 0) - Number(payment.amount || 0)),
+    provider: payment.provider || booking.paymentSummary?.provider || 'razorpay',
+    providerOrderId: payment.providerOrderId || booking.paymentSummary?.providerOrderId || '',
+    providerPaymentId: payment.providerRef || reference || booking.paymentSummary?.providerPaymentId || '',
+    paidAt: payment.verifiedAt || payment.updatedAt || new Date(),
+    couponCode: payment.coupon?.code || booking.paymentSummary?.couponCode || '',
+    couponDiscountAmount: payment.coupon?.discountAmount || booking.paymentSummary?.couponDiscountAmount || 0,
+  };
   
   // Advance execution state to SERVICE_SCHEDULED if currently NOT_STARTED
   if (booking.executionStatus === 'NOT_STARTED') {
@@ -32,6 +93,25 @@ export async function verifyPaymentFromCore(bookingId, paymentDetails = {}, core
   }
 
   await booking.save();
+  await recordBusinessAudit({
+    who: coreActor,
+    actorType: 'ADMIN',
+    action: 'BOOKING_PAYMENT_VERIFIED',
+    resourceType: 'CoreBooking',
+    resourceId: String(booking._id),
+    referenceId: payment.providerRef || payment.providerOrderId || String(payment._id),
+    fromState,
+    toState: {
+      paymentStatus: booking.paymentStatus,
+      executionStatus: booking.executionStatus,
+      paymentSummary: booking.paymentSummary,
+    },
+    why: paymentDetails.notes || 'Matched booking to an authoritative verified customer payment.',
+    source: 'CUSTOMER_PAYMENT_LEDGER',
+    authority: 'CORE_FINANCE',
+    idempotencyKey: `booking_payment_verified_${booking._id}_${payment._id}`,
+    traceContext: paymentDetails.traceContext,
+  });
   return booking;
 }
 
@@ -55,6 +135,14 @@ export async function startService(bookingId, vendorId) {
     throw err;
   }
 
+  if (booking.bookingStatus !== 'CONFIRMED' || booking.paymentStatus !== 'PAYMENT_VERIFIED') {
+    const err = new Error('Payment must be verified before service execution can start.');
+    err.statusCode = 409; err.code = 'BOOKING_NOT_EXECUTABLE'; throw err;
+  }
+  if (!['NOT_STARTED', 'SERVICE_SCHEDULED', 'SERVICE_STARTED'].includes(booking.executionStatus)) {
+    const err = new Error('This booking has already moved beyond service start.');
+    err.statusCode = 409; err.code = 'INVALID_EXECUTION_STATE'; throw err;
+  }
   booking.executionStatus = 'SERVICE_STARTED';
   await booking.save();
   return booking;
@@ -86,6 +174,14 @@ export async function submitCompletionEvidence(
     throw err;
   }
 
+  if (booking.bookingStatus !== 'CONFIRMED' || booking.paymentStatus !== 'PAYMENT_VERIFIED') {
+    const err = new Error('Payment must be verified before completion can be submitted.');
+    err.statusCode = 409; err.code = 'BOOKING_NOT_EXECUTABLE'; throw err;
+  }
+  if (!['SERVICE_STARTED', 'COMPLETION_SUBMITTED'].includes(booking.executionStatus)) {
+    const err = new Error('Start the service before submitting completion evidence.');
+    err.statusCode = 409; err.code = 'INVALID_EXECUTION_STATE'; throw err;
+  }
   const filePhotos = files
     .filter((f) => (f.resourceType || '').toUpperCase() !== 'VIDEO')
     .map((f) => (typeof f === 'string' ? f : f.url))
@@ -123,7 +219,12 @@ export async function submitCompletionEvidence(
  * Completion validation unlocks SETTLEMENT_ELIGIBLE.
  */
 export async function validateCompletionFromCore(bookingId, { approved = true, notes = '' } = {}, coreActor = 'CORE_ADMIN') {
-  const booking = await CoreBooking.findById(bookingId);
+  let booking = await CoreBooking.findById(bookingId).catch(() => null);
+  if (!booking) {
+    booking = await CoreBooking.findOne({
+      $or: [{ quoteId: bookingId }, { bookingReference: bookingId }],
+    });
+  }
   if (!booking) {
     const err = new Error(`CoreBooking with ID ${bookingId} not found`);
     err.statusCode = 404;
@@ -153,6 +254,7 @@ export async function validateCompletionFromCore(bookingId, { approved = true, n
   // Approved by Core
   booking.executionStatus = 'COMPLETION_VERIFIED';
   booking.settlementStatus = 'SETTLEMENT_ELIGIBLE';
+  await ensureInvoiceForBooking(booking, coreActor);
   booking.validationAudit = {
     verifiedBy: coreActor,
     verifiedAt: new Date(),
@@ -160,6 +262,20 @@ export async function validateCompletionFromCore(bookingId, { approved = true, n
   };
 
   await booking.save();
+
+  if (booking.vendorId) {
+    await recordLifecycleEventMessage({
+      vendorId: booking.vendorId,
+      customerId: booking.customerId,
+      eventId: booking.customerEvent,
+      bookingId: booking._id,
+      sender: 'SYSTEM',
+      senderName: 'STARVNT Core',
+      text: `✓ Completion Verified: STARVNT Core validated service completion for ${booking.serviceName || 'booking'}. Vendor payout is now eligible for settlement.`,
+      type: 'completion',
+    }).catch(() => null);
+  }
+
   return booking;
 }
 
@@ -186,15 +302,52 @@ export async function settleBooking(bookingId, { transactionReference = '' } = {
     throw err;
   }
 
+  const cleanReference = String(transactionReference || '').trim();
+  if (!cleanReference) {
+    const err = new Error('SETTLEMENT_REFERENCE_REQUIRED: A real bank/transfer reference is required before settlement can be marked released.');
+    err.statusCode = 400;
+    err.code = 'SETTLEMENT_REFERENCE_REQUIRED';
+    throw err;
+  }
+
+  const financialProfile = await VendorFinancialProfile.findOne({ vendor: booking.vendorId }).lean().catch(() => null);
+  if (financialProfile?.wallet?.isFrozen) {
+    const err = new Error(`SETTLEMENT_WALLET_FROZEN: Vendor wallet is frozen pending review. ${financialProfile.wallet.freezeReason || ''}`.trim());
+    err.statusCode = 409;
+    err.code = 'SETTLEMENT_WALLET_FROZEN';
+    throw err;
+  }
+
+  const tax = settlementMath(booking.totalAmount);
   booking.settlementStatus = 'SETTLED';
   booking.settlementDetails = {
     settledBy: coreActor,
     settledAt: new Date(),
-    amount: booking.totalAmount,
-    transactionReference: transactionReference || `SETTLE-${Date.now()}`,
+    amount: tax.vendorPayable,
+    grossAmount: booking.totalAmount,
+    platformFee: tax.platformFee,
+    gstAmount: tax.gstAmount,
+    tdsAmount: tax.tdsAmount,
+    vendorPayable: tax.vendorPayable,
+    transactionReference: cleanReference,
   };
 
   await booking.save();
+  await recordSettlementRelease(booking, coreActor);
+
+  if (booking.vendorId) {
+    await recordLifecycleEventMessage({
+      vendorId: booking.vendorId,
+      customerId: booking.customerId,
+      eventId: booking.customerEvent,
+      bookingId: booking._id,
+      sender: 'SYSTEM',
+      senderName: 'STARVNT Core',
+      text: `🎉 Booking Fully Settled: Final settlement (₹${Number(booking.totalAmount || 0).toLocaleString('en-IN')}) released to vendor. Service lifecycle complete!`,
+      type: 'payment',
+    }).catch(() => null);
+  }
+
   return booking;
 }
 

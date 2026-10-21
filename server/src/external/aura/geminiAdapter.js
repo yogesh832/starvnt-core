@@ -1,8 +1,9 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import '../../config.js';
 import { extractReplyChunk } from '../../common/streamUtils.js';
 
-const TIMEOUT_MS = 15000;
-const ATTEMPTS = 3;
+const TIMEOUT_MS = Number(process.env.VENDOR_LLM_TIMEOUT_MS || process.env.LLM_TIMEOUT_MS || 40000);
+const ATTEMPTS = Number(process.env.LLM_ATTEMPTS || 1);
 
 const str = { type: Type.STRING, nullable: true };
 const num = { type: Type.NUMBER, nullable: true };
@@ -45,25 +46,39 @@ const RESPONSE_SCHEMA = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function modelCandidates(primary, fallback) {
+  const configured = String(process.env.AURA_MODEL_FALLBACKS || process.env.GEMINI_FALLBACK_MODELS || '')
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
+  return [...new Set([primary, ...configured, fallback].filter(Boolean))];
+}
+
+function timeoutError() {
+  const err = new Error(`LLM request timed out after ${TIMEOUT_MS}ms`);
+  err.code = 'LLM_TIMEOUT';
+  return err;
+}
+
 function isRetryable(err) {
   const status = err?.status ?? err?.code;
   if (status === 400 || status === 401 || status === 403 || status === 404) return false;
   return true;
 }
 
-export function createGeminiAdapter() {
+export function createGeminiAdapter({ client } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   const defaultModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
   const defaultThinking = process.env.GEMINI_THINKING_LEVEL || 'minimal';
 
-  if (!apiKey) {
+  if (!apiKey && !client) {
     return {
       async chat() {
         throw Object.assign(new Error('GEMINI_API_KEY is not set'), { code: 'LLM_NOT_CONFIGURED' });
       },
     };
   }
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = client || new GoogleGenAI({ apiKey });
 
   return {
     async chat({ systemPrompt, history = [], message, model, thinkingLevel, onChunk, onStatus }) {
@@ -86,53 +101,60 @@ export function createGeminiAdapter() {
       };
 
       let lastErr;
-      for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+      const models = modelCandidates(selectedModel, defaultModel);
+      for (const candidateModel of models) {
+        const candidateThinking = candidateModel === selectedModel ? selectedThinking : defaultThinking;
+        for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+        let timer;
+        let streamed = false;
         try {
-          if (typeof onChunk === 'function') {
-            if (typeof onStatus === 'function') onStatus('generating');
-            const streamRes = await ai.models.generateContentStream({
-              model: selectedModel,
-              contents,
-              config: { ...genConfig, abortSignal: controller.signal },
-            });
+          const requestPromise = (async () => {
+            if (typeof onChunk === 'function') {
+              if (typeof onStatus === 'function') onStatus('generating');
+              const streamRes = await ai.models.generateContentStream({
+                model: candidateModel,
+                contents,
+                config: { ...genConfig, thinkingConfig: { thinkingLevel: candidateThinking }, abortSignal: controller.signal },
+              });
 
-            let fullText = '';
-            let lastStreamedLength = 0;
+              let fullText = '';
+              let lastStreamedLength = 0;
 
-            for await (const chunk of streamRes) {
-              const textChunk = chunk?.text || '';
-              fullText += textChunk;
+              for await (const chunk of streamRes) {
+                const textChunk = chunk?.text || '';
+                fullText += textChunk;
 
-              const { chunk: incrementalText, newLength } = extractReplyChunk(fullText, lastStreamedLength);
-              if (incrementalText) {
-                lastStreamedLength = newLength;
-                onChunk(incrementalText);
+                const { chunk: incrementalText, newLength } = extractReplyChunk(fullText, lastStreamedLength);
+                if (incrementalText) {
+                  streamed = true;
+                  lastStreamedLength = newLength;
+                  onChunk(incrementalText);
+                }
               }
+
+              let parsed = {};
+              try {
+                parsed = JSON.parse(fullText || '{}');
+              } catch {
+                const replyMatch = fullText.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"?/s);
+                parsed = { reply: replyMatch ? replyMatch[1] : fullText, actions: [], profile: {}, setupAction: null };
+              }
+
+              return {
+                text: String(parsed.reply || '').trim(),
+                actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+                profile: parsed.profile && typeof parsed.profile === 'object' ? parsed.profile : {},
+                setupAction: parsed.setupAction && typeof parsed.setupAction === 'object' ? parsed.setupAction : null,
+                model: candidateModel,
+                thinkingLevel: candidateThinking,
+              };
             }
 
-            let parsed = {};
-            try {
-              parsed = JSON.parse(fullText || '{}');
-            } catch {
-              const replyMatch = fullText.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"?/s);
-              parsed = { reply: replyMatch ? replyMatch[1] : fullText, actions: [], profile: {}, setupAction: null };
-            }
-
-            return {
-              text: String(parsed.reply || '').trim(),
-              actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-              profile: parsed.profile && typeof parsed.profile === 'object' ? parsed.profile : {},
-              setupAction: parsed.setupAction && typeof parsed.setupAction === 'object' ? parsed.setupAction : null,
-              model: selectedModel,
-              thinkingLevel: selectedThinking,
-            };
-          } else {
             const res = await ai.models.generateContent({
-              model: selectedModel,
+              model: candidateModel,
               contents,
-              config: { ...genConfig, abortSignal: controller.signal },
+              config: { ...genConfig, thinkingConfig: { thinkingLevel: candidateThinking }, abortSignal: controller.signal },
             });
             const parsed = JSON.parse(res.text || '{}');
             return {
@@ -140,18 +162,34 @@ export function createGeminiAdapter() {
               actions: Array.isArray(parsed.actions) ? parsed.actions : [],
               profile: parsed.profile && typeof parsed.profile === 'object' ? parsed.profile : {},
               setupAction: parsed.setupAction && typeof parsed.setupAction === 'object' ? parsed.setupAction : null,
-              model: selectedModel,
-              thinkingLevel: selectedThinking,
+              model: candidateModel,
+              thinkingLevel: candidateThinking,
             };
-          }
+          })();
+
+          const deadline = new Promise((_, reject) => {
+            timer = setTimeout(() => {
+              controller.abort();
+              reject(timeoutError());
+            }, TIMEOUT_MS);
+          });
+          const result = await Promise.race([requestPromise, deadline]);
+          if (!result.text) throw new Error('LLM returned an empty reply');
+          return result;
         } catch (err) {
           lastErr = err;
-          console.warn(`[vendor-aura] Gemini attempt ${attempt} (${selectedModel}) failed:`, err?.message || err);
+          console.warn(`[vendor-aura] Gemini attempt ${attempt} (${candidateModel}) failed:`, err?.message || err);
+          // A retry would append a second response to text already shown.
+          if (streamed) throw err;
           if (!isRetryable(err) || attempt === ATTEMPTS) break;
           await sleep(500 * 2 ** (attempt - 1));
         } finally {
-          clearTimeout(timer);
+          if (timer) clearTimeout(timer);
         }
+        }
+        // A missing model can recover on another configured model. Authentication
+        // and invalid-request errors cannot be repaired by switching models.
+        if (!isRetryable(lastErr) && Number(lastErr?.status ?? lastErr?.code) !== 404) break;
       }
       throw lastErr;
     },

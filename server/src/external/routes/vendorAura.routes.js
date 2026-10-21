@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { chat, getSession } from '../aura/vendorAura.service.js';
+import { chat, getSession, listSessions } from '../aura/vendorAura.service.js';
 
 /**
  * Vendor Aura+ (mounted inside vendor.routes.js after resolveVendorContext,
@@ -22,7 +22,16 @@ function sendError(res, next, err) {
   return next(err);
 }
 
+router.get('/sessions', async (req, res, next) => {
+  try {
+    res.json({ ok: true, ...(await listSessions({ vendor: req.vendor })) });
+  } catch (err) {
+    sendError(res, next, err);
+  }
+});
+
 router.get('/sessions/:sid', async (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     res.json({ ok: true, ...(await getSession({ vendor: req.vendor, sessionId: req.params.sid })) });
   } catch (err) {

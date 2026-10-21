@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { nativeAuthTransport } from "../../common/nativeAuthTransport.js";
 import {
   normalizeEmail,
   consumeVerifiedEmailOtp,
@@ -9,7 +10,6 @@ import rateLimit from "express-rate-limit";
 import { config } from "../../config.js";
 import { ExternalUser, userRoles } from "../models/ExternalUser.js";
 import { VendorOrganization } from "../models/VendorOrganization.js";
-import { OperatingLocation } from "../models/OperatingLocation.js";
 import { ExternalSession } from "../models/ExternalSession.js";
 import {
   hashPassword,
@@ -31,6 +31,7 @@ import {
 } from "../services/otp.service.js";
 
 const router = Router();
+router.use(nativeAuthTransport(config.refreshCookieName));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -56,60 +57,78 @@ function clearRefreshCookie(res) {
   res.clearCookie(config.refreshCookieName, options);
 }
 
-// ── Demo Accounts for Testing & Quick Login ────────────────────────────────
-router.get("/demo-accounts", async (req, res, next) => {
+// ── Reseed Real Vendors Trigger (Testing & QA Playground) ───────────────────
+
+// ── Dev Single-Click Auth Endpoint (Testing & QA Playground) ────────────────
+router.post("/dev-auth", async (req, res, next) => {
   try {
-    const [vendors, customers] = await Promise.all([
-      ExternalUser.find({ accountType: "VENDOR", status: "ACTIVE" })
-        .populate("vendorOrganization")
-        .lean(),
-      ExternalUser.find({ accountType: "CUSTOMER", status: "ACTIVE" }).lean(),
-    ]);
+    if (!config.enableDevTools) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+    const { accountType = "VENDOR", email: requestedEmail, blankProfile = false } = req.body || {};
+    const targetType = String(accountType).toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "VENDOR";
+    const email = requestedEmail
+      ? String(requestedEmail).toLowerCase()
+      : targetType === "VENDOR"
+      ? "vendor@starvnt.com"
+      : "customer@starvnt.com";
 
-    const formattedVendors = vendors.map((u) => {
-      const org = u.vendorOrganization || {};
-      return {
-        id: u._id,
-        fullName: u.fullName,
-        email: u.email,
-        phone: u.phone,
-        businessName: org.businessName || u.fullName,
-        category: org.category || "Vendor",
-        location: org.location || "",
-        rating: org.rating || { average: 4.9, count: 50 },
-        profilePicUrl: org.profilePicUrl || u.avatarUrl || "",
-        googlePlaceId: org.googlePlaceId || null,
-        bio: org.bio || "",
-        type: "VENDOR",
-      };
-    });
+    let user = await ExternalUser.findOne({ email });
+    // Quick sign-in creates only the requested development identity. It must
+    // never reseed the shared vendor catalog as a side effect of a login.
+    if (!user) {
+      user = await ExternalUser.create({
+        email,
+        phone: targetType === "VENDOR" ? "+919876543210" : "+919876543211",
+        fullName: targetType === "VENDOR" ? "Dev Test Vendor" : "Dev Test Customer",
+        accountType: targetType,
+        roles: [targetType],
+        passwordHash: await hashPassword("Password123!"),
+      });
+    }
 
-    const formattedCustomers = customers.map((c) => ({
-      id: c._id,
-      fullName: c.fullName,
-      email: c.email,
-      phone: c.phone,
-      type: "CUSTOMER",
-    }));
+    grantRole(user, targetType);
+    user.accountType = targetType;
+    await user.save();
 
-    return res.json({
+    if (targetType === "VENDOR") {
+      if (blankProfile === true && !user.vendorOrganization && !await VendorOrganization.exists({ owner: user._id })) {
+        const org = await VendorOrganization.create({
+          businessName: `${user.fullName}'s Studio`,
+          owner: user._id,
+          category: '',
+          location: '',
+          workingHours: null,
+          status: 'PENDING',
+          activationState: 'REGISTERED',
+          isProfileCompleted: false,
+          isCommerciallyActive: false,
+        });
+        user.vendorOrganization = org._id;
+        await user.save();
+      } else await ensureVendorOrganization(user, {
+        businessName: "Dev StarVnt Studio",
+        category: "Photography",
+        city: "Kapkote"
+      });
+    }
+
+    const { session, refreshToken } = await createSession(user, req, targetType);
+    res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
+
+    const tokens = issueTokens(user, session);
+    res.json({
       ok: true,
-      defaultPassword: "Password123",
-      vendors: formattedVendors,
-      customers: formattedCustomers,
-      admin: {
-        email: "admin@starvnt.com",
-        fullName: "Chief Systems Architect",
-        role: "SUPER_ADMIN",
-        type: "ADMIN",
-      },
+      accessToken: tokens.accessToken,
+      user: user.toSafeJSON(),
+      accountType: targetType,
+      redirectTo: targetType === "VENDOR" ? "/vendor" : "/customer"
     });
   } catch (err) {
     next(err);
   }
 });
 
-// ── Reseed Real Vendors Trigger (Testing & QA Playground) ───────────────────
 router.post("/reseed", async (req, res, next) => {
   try {
     const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
@@ -168,6 +187,24 @@ function issueTokens(user, session) {
 
 function resolveExistingAccountType(user) {
   return user.accountType || userRoles(user)[0] || "CUSTOMER";
+}
+
+function resolveExistingSignInSurface(user, requestedSurface) {
+  const primarySurface = resolveExistingAccountType(user);
+  if (!requestedSurface || requestedSurface === primarySurface) {
+    return { signInAs: primarySurface };
+  }
+  const roles = userRoles(user);
+  if (roles.includes(requestedSurface)) {
+    return { signInAs: requestedSurface };
+  }
+  return {
+    error: "ACCOUNT_SURFACE_COLLISION",
+    message:
+      "This Google identity is already linked to a different STARVNT account surface. Sign in to the existing surface first, then explicitly switch or link the vendor/customer surface.",
+    existingAccountType: primarySurface,
+    requestedAccountType: requestedSurface,
+  };
 }
 
 function grantRole(user, role) {
@@ -413,9 +450,11 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
       const requestedSurface = accountType === "VENDOR" ? "VENDOR" : accountType === "CUSTOMER" ? "CUSTOMER" : null;
-      signInAs = requestedSurface || resolveExistingAccountType(user);
-      grantRole(user, signInAs);
-      user.accountType = signInAs;
+      const surfaceResolution = resolveExistingSignInSurface(user, requestedSurface);
+      if (surfaceResolution.error) {
+        return res.status(409).json(surfaceResolution);
+      }
+      signInAs = surfaceResolution.signInAs;
       await prepareAccountType(user, signInAs, {
         businessName,
         brandName,
@@ -483,7 +522,9 @@ router.post("/google", authLimiter, async (req, res, next) => {
   } catch (err) {
     if (
       err.message === "INVALID_GOOGLE_TOKEN" ||
-      err.message === "MISSING_GOOGLE_CREDENTIAL"
+      err.message === "MISSING_GOOGLE_CREDENTIAL" ||
+      err.message === "GOOGLE_AUDIENCE_MISMATCH" ||
+      err.message === "GOOGLE_EMAIL_NOT_VERIFIED"
     ) {
       return res.status(400).json({ error: err.message });
     }
@@ -947,7 +988,7 @@ router.post("/refresh", async (req, res, next) => {
     // If the session had a specific accountType, respect it so user stays on their active portal.
     session.revokedAt = new Date();
     await session.save();
-    const fresh = await createSession(user, req, resolveExistingAccountType(user));
+    const fresh = await createSession(user, req, session.accountType || resolveExistingAccountType(user));
     res.cookie(
       config.refreshCookieName,
       fresh.refreshToken,

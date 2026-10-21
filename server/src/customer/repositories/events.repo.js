@@ -19,9 +19,26 @@ export function listEventsForCustomer(customerId) {
   return CustomerEvent.find({ customer: customerId }).sort({ createdAt: -1 }).lean();
 }
 
+export function findEventByIdempotencyKey(customerId, idempotencyKey) {
+  return CustomerEvent.findOne({ customer: customerId, idempotencyKey }).lean();
+}
+
 export async function createEvent(data) {
   const doc = await CustomerEvent.create(data);
   return doc.toObject();
+}
+
+export async function createEventOnce(data) {
+  try {
+    const doc = await CustomerEvent.create(data);
+    return { event: doc.toObject(), created: true };
+  } catch (err) {
+    if (err?.code === 11000 && data.idempotencyKey) {
+      const existing = await findEventByIdempotencyKey(data.customer, data.idempotencyKey);
+      if (existing) return { event: existing, created: false };
+    }
+    throw err;
+  }
 }
 
 export function updateEventFields(customerId, eventId, fields, { onlyStatuses } = {}) {

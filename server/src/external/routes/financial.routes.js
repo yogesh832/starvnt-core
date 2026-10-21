@@ -62,7 +62,8 @@ router.post('/pan', async (req, res, next) => {
     }
 
     // Run backend verification
-    const verificationResult = await verifyPan(normalizedPan, req.vendor.businessName);
+    const vendorNames = [req.vendor?.businessName, req.vendor?.brandName].filter(Boolean);
+    const verificationResult = await verifyPan(normalizedPan, vendorNames.length ? vendorNames : req.vendor.businessName);
 
     const isVerified = Boolean(verificationResult.ok && verificationResult.matched);
     const panStatus = isVerified ? 'VERIFIED' : verificationResult.ok ? 'VERIFIED' : 'FAILED';
@@ -214,7 +215,8 @@ router.post('/gst', async (req, res, next) => {
       });
     }
 
-    const verificationResult = await verifyGstin(normalizedGstin, req.vendor.businessName);
+    const vendorNames = [req.vendor?.businessName, req.vendor?.brandName].filter(Boolean);
+    const verificationResult = await verifyGstin(normalizedGstin, vendorNames.length ? vendorNames : req.vendor.businessName);
     const isVerified = Boolean(verificationResult.ok && verificationResult.matched);
     const gstStatus = isVerified ? 'VERIFIED' : verificationResult.ok ? 'VERIFIED' : 'FAILED';
 
@@ -305,7 +307,7 @@ router.post('/bank', async (req, res, next) => {
     res.json({
       ok: true,
       bankAccount: profile.bankAccount,
-      message: 'Bank details updated. Proceed to ₹0.02 Penny-drop verification.',
+      message: 'Bank details updated. Proceed to bank account verification.',
     });
   } catch (err) {
     next(err);
@@ -314,12 +316,12 @@ router.post('/bank', async (req, res, next) => {
 
 /**
  * POST /api/vendor/financial/bank/verify
- * Spec §6, §7, §8, §9, §10: Execute ₹0.02 Penny-drop verification.
+ * Spec §6, §7, §8, §9, §10: Execute bank account verification.
  * Independent of GST Status!
  */
 router.post('/bank/verify', async (req, res, next) => {
   try {
-    const { accountHolderName, accountNumber, ifsc, bankName, accountType, forceRetry } =
+    const { accountHolderName, accountNumber, ifsc, bankName, accountType, phone, forceRetry } =
       req.body || {};
 
     let profile = await VendorFinancialProfile.findOne({ vendor: req.vendorId });
@@ -334,6 +336,7 @@ router.post('/bank/verify', async (req, res, next) => {
     const result = await requestBankVerification(req.vendorId, bankDetails, {
       requestedBy: 'VENDOR',
       forceRetry: Boolean(forceRetry),
+      phone,
     });
 
     if (!result.ok && result.error) {

@@ -1,5 +1,8 @@
 import { Quote } from '../models/Quote.js';
+import { Opportunity } from '../models/Opportunity.js';
+import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
+import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
 
 /**
  * Valid state transitions for Quotes (Spec §9, §10, Golden Test G).
@@ -98,6 +101,50 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
 
   // If quote is APPROVED, publish QUOTE_APPROVED event to Central Automation Outbox
   if (targetStatus === 'APPROVED') {
+    try {
+      const policy = await getCommercialPolicyForCategory(quote.category || quote.serviceName);
+      const advancePercentage = policy.minimumReservationPercent ?? 20;
+      const totalAmount = quote.pricingBreakdown?.totalAmount || quote.amount || 0;
+      const advanceAmount = quote.advancePayment?.amount || Math.round((totalAmount * advancePercentage) / 100);
+      const paid = quote.advancePayment?.status === 'VERIFIED';
+      const opportunity = quote.opportunity ? await Opportunity.findOne({ _id: quote.opportunity, customer: quote.customer, vendor: quote.vendor }).lean() : null;
+      await CoreBooking.findOneAndUpdate(
+        { quoteId: quote._id.toString() },
+        {
+          $setOnInsert: {
+            quoteId: quote._id.toString(),
+            quoteReference: quote.quoteReference || `QT-${quote._id.toString().slice(-6)}`,
+            bookingReference: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
+            opportunityId: quote.opportunity ? quote.opportunity.toString() : null,
+            customerEvent: opportunity?.customerEvent || null,
+            vendorId: quote.vendor,
+            customerId: quote.customer,
+            serviceName: quote.serviceName || 'Event Service',
+            eventDate: quote.eventDate || new Date().toISOString().split('T')[0],
+            serviceLocation: quote.serviceLocation || {},
+            pricing: quote.pricingBreakdown || { totalAmount },
+            totalAmount,
+            bookingStatus: 'CONFIRMED',
+            paymentStatus: paid ? 'PAYMENT_VERIFIED' : 'PENDING',
+            executionStatus: paid ? 'SERVICE_SCHEDULED' : 'NOT_STARTED',
+            settlementStatus: 'NOT_ELIGIBLE',
+            customerName: 'Customer',
+            vendorName: 'Vendor',
+            category: quote.category || 'Service',
+            paymentSummary: {
+              advancePercentage,
+              advanceAmount,
+              paidAmount: paid ? advanceAmount : 0,
+              balanceAmount: Math.max(0, totalAmount - (paid ? advanceAmount : 0)),
+            },
+          },
+        },
+        { upsert: true, new: true }
+      );
+    } catch (err) {
+      console.warn('[quoteStateMachine] CoreBooking upsert notice:', err.message);
+    }
+
     await publishOutboxEvent({
       eventType: 'QUOTE_APPROVED',
       aggregateType: 'Quote',

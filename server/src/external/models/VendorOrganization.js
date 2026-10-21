@@ -12,6 +12,7 @@ const { Schema } = mongoose;
 const vendorOrganizationSchema = new Schema(
   {
     businessName: { type: String, required: true, trim: true, maxlength: 160 },
+    brandName: { type: String, trim: true, default: '', maxlength: 160 },
     category: { type: String, trim: true, default: '' }, // Photography, Catering, Venue, Decoration…
     owner: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
     status: {
@@ -53,6 +54,20 @@ const vendorOrganizationSchema = new Schema(
     },
     isCommerciallyActive: { type: Boolean, default: false, index: true },
     isProfileCompleted: { type: Boolean, default: false, index: true },
+    verificationLadderLevel: {
+      type: String,
+      enum: [
+        'SELF_DECLARED',
+        'PHONE_VERIFIED',
+        'KYC_VERIFIED',
+        'DOCUMENT_VERIFIED',
+        'PORTFOLIO_VERIFIED',
+        'BOOKING_VERIFIED',
+        'STARVNT_VERIFIED',
+      ],
+      default: 'SELF_DECLARED',
+      index: true,
+    },
     location: { type: String, trim: true, default: '' },
     phone: { type: String, trim: true, default: '' },
     website: { type: String, trim: true, default: '' },
@@ -65,6 +80,17 @@ const vendorOrganizationSchema = new Schema(
       documentType: { type: String, default: null },
       documentRef: { type: String, default: null },
       notes: { type: String, default: '' },
+    },
+    manualReview: {
+      status: { type: String, enum: ['NONE', 'NEEDS_REVIEW', 'IN_REVIEW', 'APPROVED', 'REJECTED'], default: 'NONE', index: true },
+      reason: { type: String, trim: true, default: '' },
+      provider: { type: String, trim: true, default: '' },
+      documentRef: { type: Schema.Types.ObjectId, ref: 'VendorDocument', default: null },
+      requestedAt: { type: Date, default: null },
+      assignedTo: { type: Schema.Types.ObjectId, ref: 'AdminUser', default: null },
+      reviewedBy: { type: Schema.Types.ObjectId, ref: 'AdminUser', default: null },
+      reviewedAt: { type: Date, default: null },
+      notes: { type: String, trim: true, default: '' },
     },
     rating: {
       average: { type: Number, default: 0, min: 0, max: 5 },

@@ -1,4 +1,16 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+
+// Also load the server's env file when Node is launched from the repository
+// root. Existing process / working-directory settings keep their precedence.
+if (process.env.STARVNT_ENV_FILE) {
+  // An explicit QA environment must not inherit credentials from server/.env.
+  dotenv.config({ path: resolve(process.cwd(), process.env.STARVNT_ENV_FILE) });
+} else {
+  dotenv.config();
+  dotenv.config({ path: fileURLToPath(new URL("../.env", import.meta.url)) });
+}
 
 function parseOrigins(value) {
   return (value || "http://localhost:5173")
@@ -23,6 +35,10 @@ const cookieSecure =
  * so a token from one domain can never be replayed against the other.
  */
 export const config = {
+  pushEnabled: String(process.env.PUSH_ENABLED || '').toLowerCase() === 'true',
+  pushProjectId: process.env.EXPO_EAS_PROJECT_ID || process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '',
+  expoPushAccessToken: process.env.EXPO_PUSH_ACCESS_TOKEN || '',
+  pushWorkerIntervalMs: Math.max(5000, Number(process.env.PUSH_WORKER_INTERVAL_MS) || 15000),
   port: Number(process.env.PORT || 4000),
   clientOrigins: parseOrigins(process.env.CLIENT_ORIGINS),
   cookieSecure,
@@ -37,7 +53,7 @@ export const config = {
   audience: "starvnt-external",
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL || "15m",
   refreshTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS || 30),
-  refreshCookieName: "starvnt_ext_rt",
+  refreshCookieName: process.env.REFRESH_COOKIE_NAME || "starvnt_ext_rt",
 
   // ── Internal admin domain ──
   mongoUriAdmin: process.env.MONGO_URI_ADMIN || "",
@@ -45,8 +61,12 @@ export const config = {
   adminAudience: "starvnt-admin",
   adminAccessTokenTtl: process.env.ADMIN_ACCESS_TOKEN_TTL || "15m",
   adminRefreshTtlDays: Number(process.env.ADMIN_REFRESH_TOKEN_TTL_DAYS || 7),
-  adminRefreshCookieName: "starvnt_admin_rt",
+  adminRefreshCookieName: process.env.ADMIN_REFRESH_COOKIE_NAME || "starvnt_admin_rt",
   adminAuthRateLimit: Number(process.env.ADMIN_AUTH_RATE_LIMIT || 10),
+  adminMfaRequiredForSuperAdmin: process.env.ADMIN_MFA_REQUIRED_FOR_SUPER_ADMIN === undefined
+    ? isProduction
+    : String(process.env.ADMIN_MFA_REQUIRED_FOR_SUPER_ADMIN).toLowerCase() === "true",
+  adminMfaIssuer: process.env.ADMIN_MFA_ISSUER || "STARVNT Core",
 
   // ── Super admin bootstrap ──
   superAdminName: process.env.SUPER_ADMIN_NAME || "STARVNT Super Admin",
@@ -97,14 +117,38 @@ export const config = {
   panApiBaseUrl: process.env.PAN_API_BASE_URL || process.env.GSTIN_API_BASE_URL || "https://www.gstinapi.in/v1",
   panMockEnabled: process.env.PAN_MOCK_ENABLED === "true" || process.env.NODE_ENV === "test",
 
+  // ── Bank account verification ──
+  bankVerificationProvider: process.env.BANK_VERIFICATION_PROVIDER || "CASHFREE",
+  bankVerificationMockEnabled: process.env.BANK_VERIFICATION_MOCK_ENABLED === "true" || process.env.NODE_ENV === "test",
+  cashfreeClientId: process.env.CASHFREE_CLIENT_ID || "",
+  cashfreeClientSecret: process.env.CASHFREE_CLIENT_SECRET || "",
+  cashfreeBavBaseUrl: process.env.CASHFREE_BAV_BASE_URL || "https://sandbox.cashfree.com",
+
   // ── Gemini & Aura+ Dual-Path Architecture ──
   geminiApiKey: process.env.GEMINI_API_KEY || "",
   geminiModel: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   geminiThinkingLevel: process.env.GEMINI_THINKING_LEVEL || "minimal",
 
-  auraReasoningModel: process.env.AURA_REASONING_MODEL || "gemini-3.8-flash",
+  auraReasoningModel: process.env.AURA_REASONING_MODEL || process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   auraReasoningLevel: process.env.AURA_REASONING_LEVEL || "low",
 
   chatThinkingStatusDelayMs: Number(process.env.CHAT_THINKING_STATUS_DELAY_MS || 1200),
   chatStatusRotationMs: Number(process.env.CHAT_STATUS_ROTATION_MS || 2500),
+
+  // ── Core workers / safety gates ──
+  enableQaPaymentBypass: process.env.ENABLE_QA_PAYMENT_BYPASS === "true",
+  outboxWorkerEnabled: process.env.OUTBOX_WORKER_ENABLED !== "false",
+  outboxWorkerIntervalMs: Number(process.env.OUTBOX_WORKER_INTERVAL_MS || 15000),
+  reservationExpiryWorkerEnabled: process.env.RESERVATION_EXPIRY_WORKER_ENABLED !== "false",
+  reservationExpiryIntervalMs: Number(process.env.RESERVATION_EXPIRY_INTERVAL_MS || 60000),
+  metricsEnabled: process.env.METRICS_ENABLED !== "false",
+  requestLoggingEnabled: process.env.REQUEST_LOGGING_ENABLED === undefined
+    ? isProduction
+    : String(process.env.REQUEST_LOGGING_ENABLED).toLowerCase() === "true",
+  enableDevTools: process.env.ENABLE_DEV_TOOLS === "true" || (process.env.ENABLE_DEV_TOOLS !== "false" && !isProduction),
+
+  // ── Settlement math ──
+  platformCommissionPercent: Number(process.env.PLATFORM_COMMISSION_PERCENT || 10),
+  tdsPercent: Number(process.env.TDS_PERCENT || 1),
+  gstPercent: Number(process.env.GST_PERCENT || 18),
 };

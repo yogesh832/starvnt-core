@@ -11,6 +11,7 @@ import { VendorBlockout } from '../models/VendorBlockout.js';
 import { VendorBookingSlot } from '../models/VendorBookingSlot.js';
 import { Notification } from '../models/Notification.js';
 import { Opportunity } from '../models/Opportunity.js';
+import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.js';
 import { Quote } from '../models/Quote.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
@@ -25,8 +26,27 @@ import { verifyPan } from '../services/panVerification.service.js';
 import { v2 as cloudinary } from 'cloudinary';
 import vendorAuraRoutes from './vendorAura.routes.js';
 import financialRoutes from './financial.routes.js';
+import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
+import rateLimit from 'express-rate-limit';
+import { openBookingThread, openServiceThread, draftThreadMessage, draftVendorMessage } from '../services/vendorMessaging.service.js';
 
 const router = Router();
+const draftLimiter = rateLimit({ windowMs: 60000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false });
+
+function googleRatingFromPlaces(placeData, fallbackName) {
+  if (!placeData || placeData.error || typeof placeData.rating !== 'number') return null;
+  return {
+    source: 'GOOGLE_PLACES',
+    rating: placeData.rating,
+    reviewCount: placeData.userRatingCount || 0,
+    googleMapsUrl: placeData.googleMapsUri || '',
+    reviews: placeData.reviews || [],
+    address: placeData.formattedAddress || '',
+    name: placeData.displayName?.text || fallbackName || '',
+    lat: placeData.location?.latitude || null,
+    lng: placeData.location?.longitude || null,
+  };
+}
 
 // Middleware: Authenticate and resolve vendor organization context
 router.use(requireExternalAuth, requireAccountType('VENDOR'));
@@ -72,18 +92,7 @@ router.get('/profile', async (req, res) => {
         const url = `https://places.googleapis.com/v1/places/${req.vendor.googlePlaceId}?fields=id,displayName,rating,userRatingCount,reviews,googleMapsUri,formattedAddress,location&key=${key}`;
         const gRes = await fetch(url);
         const gData = await gRes.json();
-        if (gData && !gData.error) {
-          googleRating = {
-            rating: gData.rating,
-            reviewCount: gData.userRatingCount,
-            googleMapsUrl: gData.googleMapsUri,
-            reviews: gData.reviews || [],
-            address: gData.formattedAddress,
-            name: gData.displayName?.text || req.vendor.businessName,
-            lat: gData.location?.latitude || null,
-            lng: gData.location?.longitude || null,
-          };
-        }
+        googleRating = googleRatingFromPlaces(gData, req.vendor.businessName);
       }
     } catch (err) {
       console.warn('[vendor/profile] Google Places fetch failed:', err.message);
@@ -125,6 +134,7 @@ router.get('/google-places/search', async (req, res, next) => {
             googleMapsUrl: p.googleMapsUri || '',
             lat: p.location?.latitude || null,
             lng: p.location?.longitude || null,
+            source: 'GOOGLE_PLACES',
           }));
         }
       } catch (err) {
@@ -145,11 +155,12 @@ router.get('/google-places/search', async (req, res, next) => {
             id: `place_${item.place_id}`,
             name: item.name || item.display_name.split(',')[0],
             address: item.display_name,
-            rating: 4.8,
-            reviewCount: 36,
+            rating: null,
+            reviewCount: 0,
             googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.display_name)}`,
             lat: Number(item.lat),
             lng: Number(item.lon),
+            source: 'OPENSTREETMAP_UNRATED',
           }));
         }
       } catch (nomErr) {
@@ -165,8 +176,9 @@ router.get('/google-places/search', async (req, res, next) => {
 
 router.put('/profile', async (req, res, next) => {
   try {
-    const { businessName, category, location, city, phone, website, bio, googlePlaceId } = req.body || {};
+    const { businessName, brandName, category, location, city, phone, website, bio, googlePlaceId } = req.body || {};
     if (businessName) req.vendor.businessName = businessName.trim();
+    if (brandName !== undefined) req.vendor.brandName = brandName.trim();
     const categoryResult = normalizePrimaryCategory(category);
     if (categoryResult.error) {
       return res.status(400).json({ error: categoryResult.error });
@@ -233,6 +245,14 @@ router.get('/activation-status', async (req, res, next) => {
   try {
     const status = await evaluateVendorActivation(req.vendorId);
     res.json({ ok: true, status });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/financial-truth', async (req, res, next) => {
+  try {
+    res.json({ ok: true, financialTruth: await vendorFinancialTruth(req.vendorId) });
   } catch (err) {
     next(err);
   }
@@ -779,15 +799,30 @@ router.post('/availability/bookings', async (req, res, next) => {
     if (!date || !vendorServiceId) {
       return res.status(400).json({ error: 'DATE_AND_SERVICE_REQUIRED' });
     }
+    const service = await VendorService.findOne({ _id: vendorServiceId, vendor: req.vendorId });
+    if (!service) {
+      return res.status(404).json({ error: 'SERVICE_NOT_FOUND' });
+    }
+    const resourceIds = Array.isArray(assignedResources) ? assignedResources.filter(Boolean) : [];
+    if (resourceIds.length) {
+      const ownedResourceCount = await VendorResource.countDocuments({
+        _id: { $in: resourceIds },
+        vendor: req.vendorId,
+        status: { $ne: 'RETIRED' },
+      });
+      if (ownedResourceCount !== new Set(resourceIds.map(String)).size) {
+        return res.status(403).json({ error: 'RESOURCE_NOT_OWNED_BY_VENDOR' });
+      }
+    }
 
     const slot = await VendorBookingSlot.create({
       vendor: req.vendorId,
-      vendorService: vendorServiceId,
+      vendorService: service._id,
       date,
       startTime: startTime || '09:00',
       endTime: endTime || '18:00',
       serviceLocation: serviceLocation || {},
-      assignedResources: assignedResources || [],
+      assignedResources: resourceIds,
       status: 'CONFIRMED',
     });
 
@@ -859,6 +894,14 @@ router.get('/badge-counts', async (req, res, next) => {
 
     res.json({
       ok: true,
+      source: 'CORE_VENDOR_OS',
+      metricSource: {
+        enquiriesCount: 'Opportunity.status=NEW',
+        quotesCount: 'Quote.status in DRAFT,SUBMITTED',
+        bookingsCount: 'CoreBooking.bookingStatus=CONFIRMED',
+        messagesCount: 'VendorMessageThread.unreadVendorCount',
+        unreadNotificationsCount: 'Notification.isRead=false',
+      },
       enquiriesCount,
       quotesCount,
       bookingsCount,
@@ -906,15 +949,7 @@ router.get('/reviews', async (req, res, next) => {
         const url = `https://places.googleapis.com/v1/places/${vendorOrg.googlePlaceId}?fields=id,displayName,rating,userRatingCount,reviews,googleMapsUri,formattedAddress&key=${key}`;
         const gRes = await fetch(url);
         const gData = await gRes.json();
-        if (gData && !gData.error) {
-          googleRating = {
-            rating: gData.rating,
-            reviewCount: gData.userRatingCount,
-            googleMapsUrl: gData.googleMapsUri,
-            reviews: gData.reviews || [],
-            address: gData.formattedAddress,
-          };
-        }
+        googleRating = googleRatingFromPlaces(gData, vendorOrg.businessName);
       } catch (err) {
         console.warn('[vendor/reviews] Google Places fetch failed:', err.message);
       }
@@ -938,47 +973,10 @@ router.get('/reviews', async (req, res, next) => {
 
 router.post('/reviews', async (req, res, next) => {
   try {
-    const {
-      customerName,
-      customerEmail,
-      bookingReference,
-      serviceName,
-      eventType,
-      eventDate,
-      rating,
-      reviewText,
-      wouldRecommend,
-    } = req.body || {};
-
-    if (!customerName || !rating || !reviewText) {
-      return res.status(400).json({ error: 'MISSING_REQUIRED_REVIEW_FIELDS' });
-    }
-
-    const review = await VendorReview.create({
-      vendor: req.vendorId,
-      customerName: customerName.trim(),
-      customerEmail: (customerEmail || '').trim(),
-      bookingReference: (bookingReference || '').trim(),
-      serviceName: (serviceName || 'Photography & Production').trim(),
-      eventType: (eventType || 'Wedding').trim(),
-      eventDate: eventDate || new Date().toISOString().slice(0, 10),
-      rating: Number(rating),
-      reviewText: reviewText.trim(),
-      wouldRecommend: wouldRecommend !== false,
-      isVerified: true,
-      status: 'PUBLISHED',
+    return res.status(403).json({
+      error: 'REVIEW_CREATION_CORE_ONLY',
+      message: 'Vendor OS cannot create verified ratings. Reviews must come from completed customer bookings or admin-moderated Core workflows.',
     });
-
-    // Keep VendorOrganization rating in sync
-    const allReviews = await VendorReview.find({ vendor: req.vendorId, status: 'PUBLISHED' });
-    const count = allReviews.length;
-    const avg = count > 0 ? allReviews.reduce((acc, r) => acc + r.rating, 0) / count : 0;
-    await VendorOrganization.findByIdAndUpdate(req.vendorId, {
-      'rating.average': Number(avg.toFixed(1)),
-      'rating.count': count,
-    });
-
-    res.status(201).json({ ok: true, review });
   } catch (err) {
     next(err);
   }
@@ -1023,7 +1021,8 @@ router.get('/messages/threads', async (req, res, next) => {
         .limit(5);
 
       if (opportunities.length > 0) {
-        for (const opp of opportunities) {
+        for (const rawOpp of opportunities) {
+          const opp = maskOpportunityCustomer(rawOpp);
           const clientName = opp.customer?.fullName || 'Prospective Client';
           await VendorMessageThread.create({
             vendor: req.vendorId,
@@ -1036,25 +1035,12 @@ router.get('/messages/threads', async (req, res, next) => {
             eventType: opp.requiredCapability || 'Enquiry',
             eventDate: opp.eventDate || '',
             venueLocation: opp.serviceLocation?.address || opp.serviceLocation?.locality || opp.serviceLocation?.city || '',
-            lastMessageText: `Hi! We sent an enquiry regarding ${opp.serviceName} on ${opp.eventDate}.`,
+            lastMessageText: '',
             lastMessageAt: opp.createdAt || new Date(),
-            unreadVendorCount: 1,
-            messages: [
-              {
-                sender: 'SYSTEM',
-                senderName: 'STARVNT Core',
-                text: `Opportunity matched for ${opp.serviceName} at ${opp.serviceLocation?.locality || opp.serviceLocation?.city || 'Venue'}.`,
-                createdAt: opp.createdAt || new Date(),
-                isRead: true,
-              },
-              {
-                sender: 'CLIENT',
-                senderName: clientName,
-                text: `Hi! We sent an enquiry regarding ${opp.serviceName} on ${opp.eventDate}. Could you share your availability and a formal quote?`,
-                createdAt: opp.createdAt || new Date(),
-                isRead: false,
-              },
-            ],
+            unreadVendorCount: 0,
+            customerEvent: opp.customerEvent || null,
+            customerRequirement: opp.customerRequirement || null,
+            messages: [],
           });
         }
         threads = await VendorMessageThread.find({ vendor: req.vendorId, status: { $ne: 'BLOCKED' } })
@@ -1115,10 +1101,48 @@ router.get('/messages/threads/:id', async (req, res, next) => {
   }
 });
 
+router.post('/bookings/:id/message-thread', async (req, res, next) => {
+  try {
+    const thread = await openBookingThread({ vendorId: req.vendorId, bookingId: req.params.id });
+    res.json({ ok: true, thread });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.error });
+    next(err);
+  }
+});
+
+router.post('/messages/context/:type/:id', async (req, res, next) => {
+  try {
+    const thread = await openServiceThread({ vendorId: req.vendorId, type: req.params.type, id: req.params.id });
+    res.json({ ok: true, thread });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.error });
+    next(err);
+  }
+});
+
+router.post('/messages/threads/:id/draft', draftLimiter, async (req, res, next) => {
+  try {
+    res.json({ ok: true, ...(await draftThreadMessage({ vendorId: req.vendorId, threadId: req.params.id, instructions: req.body?.instructions })) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.error });
+    next(err);
+  }
+});
+
+router.post('/messages/draft', draftLimiter, async (req, res, next) => {
+  try {
+    res.json({ ok: true, ...(await draftVendorMessage({ vendorId: req.vendorId, context: req.body?.context, instructions: req.body?.instructions })) });
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.error });
+    next(err);
+  }
+});
+
 router.post('/messages/threads/:id', async (req, res, next) => {
   try {
     const { text } = req.body || {};
-    if (!text || !text.trim()) {
+    if (typeof text !== 'string' || !text.trim() || text.trim().length > 2000) {
       return res.status(400).json({ error: 'MESSAGE_TEXT_REQUIRED' });
     }
 
@@ -1131,17 +1155,20 @@ router.post('/messages/threads/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'THREAD_NOT_FOUND' });
     }
 
+    if (thread.status === 'BLOCKED') return res.status(409).json({ error: 'THREAD_BLOCKED' });
+
     const newMsg = {
       sender: 'VENDOR',
       senderName: req.vendor.businessName || 'Vendor',
       text: text.trim(),
-      isRead: true,
+      isRead: false,
       createdAt: new Date(),
     };
 
     thread.messages.push(newMsg);
     thread.lastMessageText = text.trim();
     thread.lastMessageAt = new Date();
+    thread.unreadClientCount = (thread.unreadClientCount || 0) + 1;
     await thread.save();
 
     if (thread.customerBooking) {
@@ -1161,6 +1188,7 @@ router.post('/messages/threads/:id', async (req, res, next) => {
             bookingId: booking._id,
             type: 'message',
             title: `${req.vendor.businessName || 'Vendor'} replied`,
+            payload: { threadId: String(thread._id) },
             body: text.trim().slice(0, 180),
             actionUrl: `/customer/events/${booking.event}/circle?booking=${booking._id}`,
             idempotencyKey: `customer.vendor-reply.booking.${thread._id}.${thread.messages.length}`,
@@ -1181,6 +1209,7 @@ router.post('/messages/threads/:id', async (req, res, next) => {
           eventId: thread.customerEvent,
           type: 'message',
           title: `${req.vendor.businessName || 'Vendor'} replied`,
+          payload: { threadId: String(thread._id) },
           body: text.trim().slice(0, 180),
           actionUrl: `/customer/events/${thread.customerEvent}/circle?service=${thread.customerRequirement}`,
           idempotencyKey: `customer.vendor-reply.requirement.${thread._id}.${thread.messages.length}`,
@@ -1188,6 +1217,15 @@ router.post('/messages/threads/:id', async (req, res, next) => {
       ]);
     }
 
+    if (thread.customer && !thread.customerBooking && !thread.customerRequirement) {
+      await notifyCustomer({
+        customerId: thread.customer, type: 'message',
+        title: `${req.vendor.businessName || 'Vendor'} replied`, body: text.trim().slice(0, 180),
+        payload: { threadId: String(thread._id) },
+        actionUrl: `/customer/updates?tab=messages&thread=${thread._id}`,
+        idempotencyKey: `customer.vendor-reply.thread.${thread._id}.${thread.messages.length}`,
+      });
+    }
     res.status(201).json({ ok: true, thread, message: newMsg });
   } catch (err) {
     next(err);
@@ -1308,6 +1346,7 @@ router.post('/documents', async (req, res, next) => {
     let verificationSource = 'MANUAL';
     let verificationResult = undefined;
     let resolvedNotes = notes ? notes.trim() : '';
+    let manualReview = { required: false, status: 'NONE' };
 
     if (normalizedType === 'GST') {
       verificationSource = 'GSTIN_API';
@@ -1335,6 +1374,7 @@ router.post('/documents', async (req, res, next) => {
           ? `GSTIN found, but name did not confidently match "${req.vendor.businessName}".`
           : providerReviewReason(result, 'GSTIN');
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
+        manualReview = { required: true, reason, status: 'NEEDS_REVIEW', requestedAt: new Date() };
       }
     } else if (normalizedType === 'PAN') {
       verificationSource = 'PAN_API';
@@ -1365,6 +1405,7 @@ router.post('/documents', async (req, res, next) => {
           ? `Corporate PAN found, but registered name did not confidently match "${req.vendor.businessName}".`
           : providerReviewReason(result, 'Corporate PAN');
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
+        manualReview = { required: true, reason, status: 'NEEDS_REVIEW', requestedAt: new Date() };
       }
     }
 
@@ -1381,6 +1422,7 @@ router.post('/documents', async (req, res, next) => {
       expiryDate: expiryDate || '',
       verificationSource,
       verificationResult,
+      manualReview,
       verifiedAt: status === 'VERIFIED' ? new Date() : null,
     });
 
@@ -1399,6 +1441,16 @@ router.post('/documents', async (req, res, next) => {
       };
       await req.vendor.save();
       activation = await evaluateVendorActivation(req.vendorId);
+    } else if (manualReview.required) {
+      req.vendor.manualReview = {
+        status: 'NEEDS_REVIEW',
+        reason: manualReview.reason,
+        provider: verificationSource,
+        documentRef: doc._id,
+        requestedAt: manualReview.requestedAt,
+        notes: resolvedNotes,
+      };
+      await req.vendor.save();
     }
 
     res.status(201).json({ ok: true, document: doc, activation });

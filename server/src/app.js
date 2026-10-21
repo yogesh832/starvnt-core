@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import crypto from 'crypto';
 import { config } from './config.js';
 
 import externalAuthRoutes from './external/routes/auth.routes.js';
@@ -22,9 +23,13 @@ import adminOperationsRoutes from './admin/routes/operations.routes.js';
 import adminEventsRoutes from './admin/routes/events.routes.js';
 import adminDisputesRoutes from './admin/routes/disputes.routes.js';
 import adminPolicyRoutes from './admin/routes/policy.routes.js';
+import adminSettingsRoutes from './admin/routes/settings.routes.js';
+import adminReportsRoutes from './admin/routes/reports.routes.js';
 import adminExternalUsersRoutes from './admin/routes/external-users.routes.js';
 import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
+import { metricsMiddleware, renderPrometheusMetrics } from './metrics.js';
+import { pushRoutes } from './notifications/push.routes.js';
 
 export function createApp() {
   const app = express();
@@ -32,18 +37,64 @@ export function createApp() {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cors({ origin: config.clientOrigins, credentials: true }));
+  app.use((req, res, next) => {
+    const incoming = req.headers['x-request-id'] || req.headers['x-correlation-id'];
+    req.requestId = String(incoming || crypto.randomUUID()).slice(0, 120);
+    res.setHeader('X-Request-Id', req.requestId);
+    next();
+  });
+  if (config.requestLoggingEnabled) {
+    app.use((req, res, next) => {
+      const started = Date.now();
+      res.on('finish', () => {
+        const ms = Date.now() - started;
+        console.log(JSON.stringify({
+          level: res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info',
+          type: 'http_request',
+          requestId: req.requestId,
+          method: req.method,
+          path: req.originalUrl,
+          status: res.statusCode,
+          durationMs: ms,
+          ip: req.ip,
+        }));
+      });
+      next();
+    });
+  }
   // Payment webhooks need the raw body for signature checks: before express.json().
   app.use('/api/webhooks', webhookRouter);
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use(cookieParser());
+  if (config.metricsEnabled) app.use(metricsMiddleware);
 
   app.get('/api/health', (req, res) =>
     res.json({ ok: true, domains: ['EXTERNAL', 'ADMIN'] })
   );
 
+  if (config.enableDevTools) {
+    app.all('/api/test/echo', (req, res) => {
+      res.json({
+        ok: true,
+        timestamp: Date.now(),
+        method: req.method,
+        query: req.query,
+        body: req.body,
+        serverTime: new Date().toISOString()
+      });
+    });
+  }
+
+  app.get('/metrics', (req, res) => {
+    if (!config.metricsEnabled) return res.status(404).json({ error: 'NOT_FOUND' });
+    res.type('text/plain; version=0.0.4').send(renderPrometheusMetrics());
+  });
+
   // ── EXTERNAL domain: single auth for Customers + Vendors ──────────────────
   app.use('/api/auth', externalAuthRoutes);
+  app.use('/api/push', pushRoutes('external'));
+  app.use('/api/admin/push', pushRoutes('admin'));
 
   // Product-surface probes — prove domain isolation + account-type gating.
   app.get('/api/customer/me', requireExternalAuth, requireAccountType('CUSTOMER'), (req, res) => {
@@ -73,6 +124,8 @@ export function createApp() {
   app.use('/api/admin/events', adminEventsRoutes);
   app.use('/api/admin/disputes', adminDisputesRoutes);
   app.use('/api/admin/policy', adminPolicyRoutes);
+  app.use('/api/admin/settings', adminSettingsRoutes);
+  app.use('/api/admin/reports', adminReportsRoutes);
   app.use('/api/admin/external-users', adminExternalUsersRoutes);
   app.use('/api/admin/coupons', requireAdminAuth, adminCouponsRoutes);
 

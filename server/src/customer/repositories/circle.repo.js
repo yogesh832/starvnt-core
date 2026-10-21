@@ -30,3 +30,5 @@ export const listNotifications = (customerId) => CustomerNotification.find({ cus
 export const countUnread = (customerId) => CustomerNotification.countDocuments({ customer: customerId, readAt: null });
 export const markAllRead = (customerId) =>
   CustomerNotification.updateMany({ customer: customerId, readAt: null }, { $set: { readAt: new Date(), status: 'READ' } });
+export const markOneRead = (customerId, notificationId) =>
+  CustomerNotification.updateOne({ _id: notificationId, customer: customerId }, { $set: { readAt: new Date(), status: 'READ' } });

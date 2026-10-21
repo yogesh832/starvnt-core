@@ -5,14 +5,17 @@ import { Quote } from '../models/Quote.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
 import { notifyCustomer, notifyVendor } from '../../notifications/notification.service.js';
 import mongoose from 'mongoose';
-import { EventMessage, CustomerEvent, EventRequirement, EventHistory, Reservation } from '../../customer/models/index.js';
+import { Booking, EventMessage, CustomerEvent, EventRequirement, EventHistory, Reservation } from '../../customer/models/index.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
 import { activeAccountType } from '../models/ExternalUser.js';
+import { normalizeCategory } from '../../customer/services/planCatalog.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../services/matching.service.js';
 import { createQuote, transitionQuote } from '../services/quoteStateMachine.service.js';
 import { startService, submitCompletionEvidence, validateCompletionFromCore } from '../../admin/services/executionSettlement.service.js';
+import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.js';
+import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
 import * as razorpay from '../../customer/services/payments/razorpay.js';
 import { validateCouponForPayment, recordCouponUsageOnce } from '../../customer/services/coupon.service.js';
 
@@ -42,7 +45,8 @@ function quoteForCustomer(quote) {
   return {
     id: String(quote._id),
     quoteReference: quote.quoteReference,
-    opportunityId: quote.opportunity ? String(quote.opportunity) : null,
+    opportunityId: quote.opportunity ? String(quote.opportunity._id || quote.opportunity) : null,
+    eventId: quote.opportunity?.customerEvent ? String(quote.opportunity.customerEvent) : null,
     serviceName: quote.serviceName,
     eventDate: quote.eventDate,
     serviceLocation: quote.serviceLocation,
@@ -177,6 +181,18 @@ async function completePaidVendorQuote({ quote, actorName, paymentId }) {
   const approved = await Quote.findById(quote._id)
     .populate('vendor', 'businessName category location');
 
+  await recordLifecycleEventMessage({
+    vendorId,
+    customerId,
+    eventId: booking.customerEvent,
+    bookingId: booking._id,
+    quoteId: quote._id,
+    sender: 'SYSTEM',
+    senderName: 'STARVNT Core',
+    text: `✓ Booking Confirmed! Booking #${booking.bookingReference || String(booking._id).slice(-6).toUpperCase()} confirmed for ${booking.serviceName || 'Service'}. Total: ₹${totalAmount.toLocaleString('en-IN')}, Paid Advance: ₹${paidAmount.toLocaleString('en-IN')}, Remaining Balance: ₹${Math.max(0, totalAmount - paidAmount).toLocaleString('en-IN')}. Execution workspace activated.`,
+    type: 'booking',
+  }).catch(() => null);
+
   return { quote: approved, booking };
 }
 
@@ -217,8 +233,14 @@ router.post('/opportunities/generate', requireExternalAuth, async (req, res, nex
 
     const createdOpportunities = [];
 
-    // Create an actionable Opportunity for each eligible candidate
-    for (const candidate of matchResult.eligibleCandidates) {
+    // Create standard opportunities first. If none exist, surface extended-service
+    // fallback opportunities separately; do not rewrite vendor coverage.
+    const candidatesForOpportunities = matchResult.eligibleCandidates.length
+      ? matchResult.eligibleCandidates
+      : matchResult.extendedServiceCandidates || [];
+
+    for (const candidate of candidatesForOpportunities) {
+      const isExtended = candidate.coverageStatus === 'EXTENDED_SERVICE_REQUIRED';
       const opp = await Opportunity.create({
         vendor: candidate.vendorId,
         customer: req.externalUser._id,
@@ -234,15 +256,18 @@ router.post('/opportunities/generate', requireExternalAuth, async (req, res, nex
           ? `${candidate.cost.travelBreakdown.originLocality} -> ${serviceLocation?.locality || serviceLocation?.city || 'Venue'}`
           : `${serviceLocation?.locality || serviceLocation?.city || 'Local'}`,
         travelCost: candidate.cost?.travelCost || 0,
+        coverageStatus: isExtended ? 'EXTENDED_SERVICE_REQUIRED' : 'STANDARD_COVERAGE',
+        extendedService: isExtended ? candidate.extendedService : null,
         status: 'NEW',
-        action: 'Respond / Quote',
+        slaExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        action: isExtended ? 'Confirm Extended Service / Quote' : 'Respond / Quote',
       });
       createdOpportunities.push(opp);
 
       // Create live notification for candidate vendor through central notification service.
       await notifyVendor({
         vendorId: candidate.vendorId,
-        title: 'New Enquiry Received',
+        title: isExtended ? 'Extended Service Enquiry' : 'New Enquiry Received',
         message: `${candidate.serviceName} · ${date} · ${serviceLocation?.locality || 'New Town'} · ${guestCount} guests`,
         type: 'ENQUIRY',
         priority: 'HIGH',
@@ -350,6 +375,17 @@ router.post('/customer/demo/mahiman-enquiry', requireExternalAuth, requireAccoun
       });
     }
 
+    await recordLifecycleEventMessage({
+      vendorId: vendor._id,
+      customerId: req.externalUser._id,
+      eventId: opportunity.customerEvent,
+      opportunityId: opportunity._id,
+      sender: 'CLIENT',
+      senderName: req.externalUser.fullName || req.externalUser.email || 'Customer',
+      text: `📩 New Enquiry Sent to ${vendor.businessName}: ${service.name || 'DJ & Music'} for event date ${eventDate} (${guestCount} guests) at ${serviceLocation.address || 'service venue'}.`,
+      type: 'enquiry',
+    }).catch(() => null);
+
     res.status(201).json({ ok: true, vendor, service, opportunity });
   } catch (err) {
     next(err);
@@ -375,13 +411,43 @@ router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VEN
       .populate('customer', 'fullName email phone')
       .sort({ createdAt: -1 });
 
-    res.json({ ok: true, count: opportunities.length, opportunities });
+    // Cross-check with existing quotes to ensure accurate RESPONDED status
+    const oppIds = opportunities.map((o) => o._id);
+    const existingQuotes = await Quote.find({ vendor: vendorId, opportunity: { $in: oppIds } }).select('opportunity status').lean().catch(() => []);
+    const quotedOppMap = new Map(existingQuotes.map((q) => [String(q.opportunity), q.status]));
+
+    const enrichedOpps = opportunities.map((o) => {
+      const quoteStatus = quotedOppMap.get(String(o._id));
+      const plain = maskOpportunityCustomer(o, quoteStatus);
+      if (quoteStatus || plain.status === 'RESPONDED') {
+        plain.status = 'RESPONDED';
+        plain.quoteStatus = quoteStatus || 'SUBMITTED';
+      }
+      return plain;
+    });
+
+    res.json({ ok: true, count: enrichedOpps.length, opportunities: enrichedOpps });
   } catch (err) {
     next(err);
   }
 });
 
 // ── QUOTE LIFECYCLE (Spec §9, Golden Test G) ──────────────────────────────
+
+router.post('/vendor/opportunities/:id/decline', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'INVALID_OPPORTUNITY_ID' });
+    const vendor = req.externalUser.vendorOrganization;
+    if (!vendor) return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+    const opportunity = await Opportunity.findOneAndUpdate(
+      { _id: req.params.id, vendor, status: { $in: ['NEW', 'VIEWED', 'DECLINED'] } },
+      { $set: { status: 'DECLINED' } },
+      { new: true },
+    );
+    if (!opportunity) return res.status(409).json({ error: 'OPPORTUNITY_NOT_ACTIONABLE', message: 'This enquiry is no longer available to decline.' });
+    res.json({ ok: true, status: opportunity.status });
+  } catch (error) { next(error); }
+});
 
 /**
  * Retrieves quotes for the authenticated user (vendor or customer).
@@ -416,17 +482,31 @@ router.get('/quotes', requireExternalAuth, async (req, res, next) => {
 
 router.get('/customer/vendor-quotes', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
   try {
+    const eventId = req.query.eventId ? String(req.query.eventId) : null;
+    let opportunityFilter = { customer: req.externalUser._id };
+    let quoteFilter = { customer: req.externalUser._id };
+    let bookingFilter = { customerId: req.externalUser._id };
+    if (eventId) {
+      if (!mongoose.isValidObjectId(eventId)) return res.status(400).json({ error: 'INVALID_EVENT_ID' });
+      const ownedEvent = await CustomerEvent.findOne({ _id: eventId, customer: req.externalUser._id }).select('_id').lean();
+      if (!ownedEvent) return res.status(404).json({ error: 'EVENT_NOT_FOUND' });
+      opportunityFilter = { ...opportunityFilter, customerEvent: eventId };
+      const eventOpportunities = await Opportunity.find(opportunityFilter).select('_id').lean();
+      quoteFilter = { ...quoteFilter, opportunity: { $in: eventOpportunities.map(item => item._id) } };
+      bookingFilter = { ...bookingFilter, customerEvent: eventId };
+    }
     const [opportunities, quotes, bookings] = await Promise.all([
-      Opportunity.find({ customer: req.externalUser._id })
+      Opportunity.find(opportunityFilter)
         .populate('vendor', 'businessName category location')
         .populate('vendorService', 'name pricing')
         .sort({ createdAt: -1 })
         .limit(20),
-      Quote.find({ customer: req.externalUser._id })
+      Quote.find(quoteFilter)
         .populate('vendor', 'businessName category location')
+        .populate('opportunity', 'customerEvent')
         .sort({ createdAt: -1 })
         .limit(20),
-      CoreBooking.find({ customerId: req.externalUser._id })
+      CoreBooking.find(bookingFilter)
         .sort({ createdAt: -1 })
         .limit(20),
     ]);
@@ -654,7 +734,7 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
 
     let reservation = null;
     if (event) {
-      const category = quote.vendor?.category || 'other';
+      const category = normalizeCategory(quote.vendor?.category || quote.serviceName) || 'other';
       let reqDoc = await EventRequirement.findOne({ event: event._id, category });
       if (!reqDoc) {
         reqDoc = await EventRequirement.create({
@@ -969,12 +1049,30 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
       actor: req.externalUser.fullName || req.externalUser.email,
     });
 
-    if (opportunityId) {
+    if (opportunityId && quote.status === 'SUBMITTED') {
       await Opportunity.findOneAndUpdate(
         { _id: opportunityId, vendor: resolvedVendorId },
         { status: 'RESPONDED', action: 'Quote Sent' }
       );
     }
+
+    const vendorOrg = await VendorOrganization.findById(resolvedVendorId).lean().catch(() => null);
+    const vendorName = vendorOrg?.businessName || 'Vendor Partner';
+    const totalAmount = Number(quote.pricingBreakdown?.totalAmount || 0);
+    const advanceAmount = Number(quote.advanceAmount || Math.ceil((totalAmount * ADVANCE_PERCENTAGE) / 100));
+
+    if (quote.status === 'SUBMITTED') await recordLifecycleEventMessage({
+      vendorId: resolvedVendorId,
+      customerId: quote.customer,
+      eventId: quote.event,
+      opportunityId: quote.opportunity,
+      quoteId: quote._id,
+      sender: 'SYSTEM',
+      senderName: 'STARVNT',
+      serviceName: quote.serviceName,
+      text: `📄 Quote Received: ${vendorName} sent a quote offer for ${quote.serviceName || 'Service Package'} — Total ₹${totalAmount.toLocaleString('en-IN')} (Advance: ₹${advanceAmount.toLocaleString('en-IN')}). Review proposal and accept in quotes.`,
+      type: 'quote',
+    }).catch(() => null);
 
     res.status(201).json({ ok: true, quote });
   } catch (err) {
@@ -1015,7 +1113,7 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
 
     const previousStatus = quote.status;
     quote.pricingBreakdown = pricing;
-    quote.notes = cleanMessage || reasonText;
+    quote.notes = cleanMessage;
     quote.status = 'SUBMITTED';
     quote.validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     quote.advancePayment = {
@@ -1052,12 +1150,13 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
       const thread = await VendorMessageThread.findOne({
         vendor: quote.vendor,
         customer: quote.customer,
+        ...(quote.opportunity ? { opportunity: quote.opportunity } : { quote: quote._id }),
       });
       if (thread) {
         const text = `📄 Vendor Revised Quotation:\nTotal: ₹${pricing.totalAmount.toLocaleString('en-IN')}${cleanMessage ? '\nNotes: ' + cleanMessage : ''}`;
         thread.messages.push({
-          sender: 'VENDOR',
-          senderName: req.externalUser.fullName || 'Vendor',
+          sender: 'SYSTEM',
+          senderName: 'STARVNT',
           text,
           isRead: false,
           metadata: {
@@ -1090,7 +1189,11 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
  */
 router.get('/quotes/:id', requireExternalAuth, async (req, res, next) => {
   try {
-    const quote = await Quote.findById(req.params.id)
+    const scope = activeAccountType(req.externalUser) === 'VENDOR'
+      ? { vendor: req.externalUser.vendorOrganization }
+      : { customer: req.externalUser._id };
+    if ('vendor' in scope && !scope.vendor) return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+    const quote = await Quote.findOne({ _id: req.params.id, ...scope })
       .populate('vendor', 'businessName category rating location')
       .populate('customer', 'fullName email');
 
@@ -1113,6 +1216,15 @@ router.post('/quotes/:id/transition', requireExternalAuth, async (req, res) => {
     const { targetStatus, reason } = req.body || {};
     if (!targetStatus) {
       return res.status(400).json({ error: 'TARGET_STATUS_REQUIRED' });
+    }
+
+    const vendor = activeAccountType(req.externalUser) === 'VENDOR';
+    const owner = vendor ? req.externalUser.vendorOrganization : req.externalUser._id;
+    if (!owner) return res.status(403).json({ error: 'QUOTE_ACCESS_DENIED' });
+    const owned = await Quote.findOne({ _id: req.params.id, [vendor ? 'vendor' : 'customer']: owner });
+    if (!owned) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
+    if (!(vendor ? ['SUBMITTED'] : ['APPROVED', 'REJECTED']).includes(targetStatus)) {
+      return res.status(403).json({ error: 'QUOTE_TRANSITION_FORBIDDEN' });
     }
 
     const quote = await transitionQuote(req.params.id, targetStatus, {
@@ -1169,12 +1281,124 @@ router.get('/vendor/bookings', requireExternalAuth, requireAccountType('VENDOR')
       return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
     }
 
-    const bookings = await CoreBooking.find({ vendorId }).sort({ eventDate: 1 });
+    // Auto-sync any APPROVED/BOOKED/ACCEPTED quotes for this vendor into CoreBooking if missing
+    try {
+      const approvedQuotes = await Quote.find({
+        vendor: vendorId,
+        status: { $in: ['APPROVED', 'BOOKED', 'ACCEPTED'] },
+      }).populate('customer', 'fullName email phone').lean();
+
+      for (const q of approvedQuotes) {
+        const existing = await CoreBooking.findOne({
+          $or: [{ quoteId: String(q._id) }, { quoteId: q._id }],
+        });
+        if (!existing) {
+          const totalAmount = q.pricingBreakdown?.totalAmount || q.amount || 0;
+          const advanceAmount = q.advancePayment?.amount || q.pricingBreakdown?.advanceAmount || Math.round(totalAmount * 0.2);
+          const customerName = q.customer?.fullName || q.customer?.email || 'Customer';
+          const paid = q.advancePayment?.status === 'VERIFIED';
+          const opportunity = q.opportunity ? await Opportunity.findOne({ _id: q.opportunity, customer: q.customer?._id || q.customer, vendor: vendorId }).lean() : null;
+          await CoreBooking.create({
+            quoteId: String(q._id),
+            quoteReference: q.quoteReference || `QT-${String(q._id).slice(-6)}`,
+            bookingReference: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
+            opportunityId: q.opportunity ? String(q.opportunity) : null,
+            customerEvent: opportunity?.customerEvent || null,
+            vendorId: q.vendor,
+            customerId: q.customer?._id || q.customer,
+            serviceName: q.serviceName || 'Event Service',
+            eventDate: q.eventDate || new Date().toISOString().split('T')[0],
+            serviceLocation: q.serviceLocation || {},
+            pricing: q.pricingBreakdown || { totalAmount },
+            totalAmount,
+            bookingStatus: 'CONFIRMED',
+            paymentStatus: paid ? 'PAYMENT_VERIFIED' : 'PENDING',
+            executionStatus: paid ? 'SERVICE_SCHEDULED' : 'NOT_STARTED',
+            settlementStatus: 'NOT_ELIGIBLE',
+            customerName,
+            vendorName: 'Vendor',
+            category: q.category || 'Service',
+            paymentSummary: {
+              advancePercentage: q.advancePayment?.percentage || 20,
+              advanceAmount,
+              paidAmount: paid ? advanceAmount : 0,
+              balanceAmount: Math.max(0, totalAmount - (paid ? advanceAmount : 0)),
+            },
+          }).catch((e) => console.warn('[vendor/bookings auto-sync notice]:', e.message));
+        }
+      }
+    } catch (syncErr) {
+      console.warn('[vendor/bookings sync error]:', syncErr.message);
+    }
+
+    const bookings = await CoreBooking.find({
+      $or: [{ vendorId }, { vendorId: String(vendorId) }],
+    }).sort({ eventDate: 1 });
     res.json({ ok: true, count: bookings.length, bookings });
   } catch (err) {
     next(err);
   }
 });
+
+async function resolveCustomerEventAndBooking(coreBooking, { strict = false } = {}) {
+  let eventId = coreBooking?.customerEvent || null;
+  let custBooking = null;
+  let customerId = coreBooking?.customerId || null;
+
+  if (coreBooking?.quoteId) {
+    custBooking = await Booking.findOne({
+      $or: [
+        { _id: coreBooking.quoteId },
+        { reservation: coreBooking.quoteId },
+        ...(!strict ? [{ customer: coreBooking.customerId, category: coreBooking.category }] : []),
+      ],
+    }).lean().catch(() => null);
+  }
+
+  if (!strict && !custBooking && coreBooking?.customerId && coreBooking?.category) {
+    custBooking = await Booking.findOne({
+      customer: coreBooking.customerId,
+      category: coreBooking.category,
+    }).sort({ createdAt: -1 }).lean().catch(() => null);
+  }
+
+  if (custBooking) {
+    if (custBooking.event) eventId = custBooking.event;
+    if (custBooking.customer) customerId = custBooking.customer;
+  }
+
+  if (!eventId && coreBooking?.quoteId) {
+    const vq = await Quote.findById(coreBooking.quoteId).lean().catch(() => null);
+    if (vq?.customerEvent) eventId = vq.customerEvent;
+    if (vq?.customer) customerId = customerId || vq.customer;
+    if (!eventId && vq?.opportunity) {
+      const opp = await Opportunity.findById(vq.opportunity).lean().catch(() => null);
+      if (opp?.customerEvent) eventId = opp.customerEvent;
+      if (opp?.customer) customerId = customerId || opp.customer;
+    }
+  }
+
+  if (!eventId && coreBooking?.opportunityId) {
+    const opp = await Opportunity.findById(coreBooking.opportunityId).lean().catch(() => null);
+    if (opp?.customerEvent) eventId = opp.customerEvent;
+    if (opp?.customer) customerId = customerId || opp.customer;
+  }
+
+  if (!strict && !eventId && customerId) {
+    const latestEvent = await CustomerEvent.findOne({ customer: customerId, status: { $ne: 'cancelled' } })
+      .sort({ createdAt: -1 })
+      .lean()
+      .catch(() => null);
+    if (latestEvent) eventId = latestEvent._id;
+  }
+
+  if (!customerId && eventId) {
+    const ev = await CustomerEvent.findById(eventId).lean().catch(() => null);
+    if (ev?.customer) customerId = ev.customer;
+  }
+
+  return { eventId, custBooking, customerId };
+}
 
 /**
  * Vendor marks service execution as started.
@@ -1183,6 +1407,56 @@ router.post('/vendor/bookings/:id/start', requireExternalAuth, requireAccountTyp
   try {
     const vendorId = req.externalUser.vendorOrganization;
     const booking = await startService(req.params.id, vendorId);
+
+    // Sync status and notify customer
+    try {
+      const vendorOrg = await VendorOrganization.findById(vendorId).lean();
+      const vendorName = vendorOrg?.businessName || booking.vendorName || 'Vendor';
+      const serviceName = booking.serviceName || 'Event Service';
+      const text = `Service status: In progress · ${serviceName}.`;
+
+      const { eventId, custBooking, customerId } = await resolveCustomerEventAndBooking(booking, { strict: true });
+      const targetCustomerId = customerId || booking.customerId;
+
+      // Save resolved eventId back onto core booking if missing
+      if (eventId && !booking.customerEvent) {
+        booking.customerEvent = eventId;
+        await booking.save().catch(() => null);
+      }
+
+      // 0. Sync CustomerBooking
+      if (custBooking) {
+        await Booking.updateOne(
+          { _id: custBooking._id },
+          { $set: { executionStatus: 'SERVICE_STARTED', startedAt: new Date() } }
+        ).catch(() => null);
+      }
+
+      // Check-in updates booking state only. A vendor-authored chat message
+      // is composed separately in this booking's conversation.
+      // 3. Send HIGH priority Notification to Customer
+      if (targetCustomerId) {
+        await notifyCustomer({
+          customerId: targetCustomerId,
+          eventId,
+          bookingId: custBooking?._id || booking._id,
+          type: 'booking',
+          priority: 'HIGH',
+          title: `🚀 Service Started - ${vendorName}`,
+          body: text,
+          actionUrl: eventId ? `/customer/events/${eventId}/bookings` : '/customer/updates',
+          idempotencyKey: `start-work-${booking._id}-${Date.now()}`,
+          payload: {
+            bookingId: custBooking?._id || booking._id,
+            coreBookingId: booking._id,
+            eventId,
+          },
+        }).catch((e) => console.warn('[startService notifyCustomer err]:', e.message));
+      }
+    } catch (notifyErr) {
+      console.warn('[startService notify notice]:', notifyErr.message);
+    }
+
     res.json({ ok: true, booking });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'EXECUTION_ERROR', message: err.message });
@@ -1209,6 +1483,111 @@ router.post(
         photos,
         videos,
       });
+
+      // Notify customer with High Priority to review evidence, verify completion, and pay balance
+      try {
+        const vendorOrg = await VendorOrganization.findById(vendorId).lean();
+        const vendorName = vendorOrg?.businessName || booking.vendorName || 'Vendor';
+        const refName = booking.bookingReference || `BK-${String(booking._id).slice(-4)}`;
+        const evidenceUrl = deliverablesUrl || (photos && photos[0]) || (videos && videos[0]) || '';
+
+        const textParts = [
+          `📸 Work Marked Done & Completion Evidence Uploaded for ${refName} by ${vendorName}.`,
+          notes ? `Notes: ${notes}` : '',
+          evidenceUrl ? `Proof: ${evidenceUrl}` : '',
+          `Please inspect the uploaded evidence assets and verify completion to unlock settlement.`,
+        ];
+        const text = textParts.filter(Boolean).join('\n');
+
+        const { eventId, custBooking, customerId } = await resolveCustomerEventAndBooking(booking, { strict: true });
+        const targetCustomerId = customerId || booking.customerId;
+
+        // Save resolved eventId back onto core booking if missing
+        if (eventId && !booking.customerEvent) {
+          booking.customerEvent = eventId;
+          await booking.save().catch(() => null);
+        }
+
+        // 1. Sync CustomerBooking
+        if (custBooking) {
+          await Booking.updateOne(
+            { _id: custBooking._id },
+            { $set: { executionStatus: 'COMPLETION_SUBMITTED', completedAt: new Date(), completionEvidence: booking.completionEvidence } }
+          ).catch(() => null);
+        }
+
+        // 2. Post to VendorMessageThread
+        if (targetCustomerId) {
+          await VendorMessageThread.findOneAndUpdate(
+            { vendor: vendorId, customer: targetCustomerId, booking: booking._id },
+            {
+              $set: {
+                lastMessageText: `Work marked done for ${refName}. Evidence uploaded!`,
+                lastMessageAt: new Date(),
+                status: 'ACTIVE',
+              },
+              $push: {
+                messages: {
+                  sender: 'SYSTEM',
+                  senderName: 'STARVNT',
+                  text,
+                  isRead: false,
+                  createdAt: new Date(),
+                },
+              },
+              $inc: { unreadClientCount: 1 },
+            }
+          ).catch(() => null);
+        }
+
+        // 3. Post to EventMessage (Circle chat) with evidence assets & action payload
+        if (eventId) {
+          await EventMessage.create({
+            event: eventId,
+            booking: custBooking?._id || booking._id,
+            senderType: 'system',
+            senderName: 'STARVNT',
+            body: text,
+            payload: {
+              type: 'EVIDENCE_SUBMITTED',
+              bookingId: booking._id,
+              eventId,
+              vendorName,
+              deliverablesUrl: deliverablesUrl || '',
+              photos: photos || [],
+              videos: videos || [],
+              notes: notes || '',
+              actionUrl: `/customer/events/${eventId}/bookings?inspect=${booking._id}`,
+              actionLabel: 'Review & Verify Evidence',
+            },
+          }).catch((e) => console.warn('[submitCompletion EventMessage err]:', e.message));
+        }
+
+        // 4. Send HIGH PRIORITY Notification to Customer
+        if (targetCustomerId) {
+          await notifyCustomer({
+            customerId: targetCustomerId,
+            eventId,
+            bookingId: custBooking?._id || booking._id,
+            type: 'completion',
+            priority: 'HIGH',
+            title: `🚨 Completion Evidence Uploaded - Action Required`,
+            body: `Work marked done by ${vendorName}. Proof of work attached! Inspect evidence & verify completion.`,
+            actionUrl: eventId ? `/customer/events/${eventId}/bookings?inspect=${booking._id}` : `/customer/bookings`,
+            idempotencyKey: `submit-completion-${booking._id}-${Date.now()}`,
+            payload: {
+              bookingId: custBooking?._id || booking._id,
+              coreBookingId: booking._id,
+              eventId,
+              evidenceUrl,
+              photos: photos || [],
+              videos: videos || [],
+            },
+          }).catch((e) => console.warn('[submitCompletion notifyCustomer err]:', e.message));
+        }
+      } catch (notifyErr) {
+        console.warn('[submitCompletion notify notice]:', notifyErr.message);
+      }
 
       res.json({ ok: true, booking });
     } catch (err) {

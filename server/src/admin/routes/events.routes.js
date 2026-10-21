@@ -2,6 +2,10 @@ import { Router } from 'express';
 import { requireAdminAuth, requirePermission } from '../middleware/requireAdminAuth.js';
 import { CustomerEvent } from '../../customer/models/index.js';
 import { ExternalUser } from '../../external/models/ExternalUser.js';
+import mongoose from 'mongoose';
+import { EventRequirement, EventHistory } from '../../customer/models/index.js';
+import { CoreBooking } from '../models/CoreBooking.js';
+import { serializeRequirement } from '../../customer/services/understanding.js';
 
 const router = Router();
 
@@ -21,7 +25,34 @@ function eventTypeLabel(event) {
     : 'Event';
 }
 
+function statusForTab(tab) {
+  const status = String(tab || '').toLowerCase().replace(/\s+/g, '_');
+  const aliases = {
+    confirmed: 'booked',
+    in_progress: 'in_progress',
+    inprogress: 'in_progress',
+    cancelled: 'cancelled',
+    canceled: 'cancelled',
+  };
+  return aliases[status] || status;
+}
+
 router.use(requireAdminAuth, requirePermission('events.read'));
+
+router.get('/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: 'EVENT_NOT_FOUND' });
+    const event = await CustomerEvent.findById(req.params.id).populate('customer', 'fullName email phone').lean();
+    if (!event) return res.status(404).json({ error: 'EVENT_NOT_FOUND' });
+    const canReadBookings = req.admin.role === 'SUPER_ADMIN' || ['bookings.read', 'operations.read'].some(permission => req.admin.permissions.includes(permission));
+    const [requirements, history, bookings] = await Promise.all([
+      EventRequirement.find({ event: event._id }).lean(),
+      EventHistory.find({ event: event._id }).sort({ createdAt: -1 }).limit(50).lean(),
+      canReadBookings ? CoreBooking.find({ customerEvent: event._id, customerId: event.customer?._id }).sort({ eventDate: 1 }).lean() : Promise.resolve(null),
+    ]);
+    res.json({ ok: true, event, requirements: requirements.map(row => serializeRequirement(event.eventType, row)), history, bookings, canReadBookings });
+  } catch (error) { next(error); }
+});
 
 router.get('/', async (req, res, next) => {
   try {
@@ -31,9 +62,7 @@ router.get('/', async (req, res, next) => {
 
     const tab = req.query.tab || req.query.status;
     if (tab && tab !== 'All') {
-      const status = String(tab).toLowerCase().replace(/\s+/g, '_');
-      if (status === 'in_progress') filter.status = 'in_progress';
-      else filter.status = status;
+      filter.status = statusForTab(tab);
     }
 
     if (req.query.search && req.query.search.trim()) {

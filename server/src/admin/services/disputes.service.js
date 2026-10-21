@@ -1,5 +1,67 @@
 import { CoreBooking } from '../models/CoreBooking.js';
 import { handleVendorFailureAndDiscoverAlternatives } from './executionSettlement.service.js';
+import { VendorFinancialProfile } from '../../external/models/VendorFinancialProfile.js';
+import { recordBusinessAudit } from '../utils/audit.js';
+import { recordDisputeHold, settlementMath } from './financeLedger.service.js';
+
+async function freezeVendorWalletForDispute(booking, reason) {
+  if (!booking.vendorId) return;
+  const payable = settlementMath(booking.totalAmount).vendorPayable;
+  await VendorFinancialProfile.findOneAndUpdate(
+    { vendor: booking.vendorId },
+    {
+      $set: {
+        'wallet.isFrozen': true,
+        'wallet.freezeReason': reason,
+        'wallet.frozenAt': new Date(),
+        'wallet.frozenBalance': payable,
+      },
+    },
+    { upsert: true, new: true }
+  );
+  await recordDisputeHold(booking, reason);
+  await recordBusinessAudit({
+    actorType: 'SYSTEM',
+    action: 'VENDOR_WALLET_FROZEN',
+    resourceType: 'VendorFinancialProfile',
+    resourceId: String(booking.vendorId),
+    referenceId: String(booking._id),
+    toState: { walletFrozen: true, frozenBalance: payable },
+    why: reason,
+    source: 'DISPUTE_ENGINE',
+    authority: 'CORE_FINANCE',
+    idempotencyKey: `vendor_wallet_frozen_${booking._id}`,
+  });
+}
+
+async function releaseVendorWalletFreezeIfResolved(booking, reason) {
+  if (!booking.vendorId) return;
+  const hasOpenDispute = booking.disputes.some((d) => d.status !== 'RESOLVED');
+  if (hasOpenDispute) return;
+  await VendorFinancialProfile.findOneAndUpdate(
+    { vendor: booking.vendorId },
+    {
+      $set: {
+        'wallet.isFrozen': false,
+        'wallet.freezeReason': '',
+        'wallet.frozenBalance': 0,
+        'wallet.unfrozenAt': new Date(),
+      },
+    }
+  );
+  await recordBusinessAudit({
+    actorType: 'SYSTEM',
+    action: 'VENDOR_WALLET_UNFROZEN',
+    resourceType: 'VendorFinancialProfile',
+    resourceId: String(booking.vendorId),
+    referenceId: String(booking._id),
+    toState: { walletFrozen: false },
+    why: reason,
+    source: 'DISPUTE_ENGINE',
+    authority: 'CORE_FINANCE',
+    idempotencyKey: `vendor_wallet_unfrozen_${booking._id}`,
+  });
+}
 
 /**
  * Dispute & Issue Management Service (Spec §29, §30, §31, §32).
@@ -40,6 +102,7 @@ export async function reportIssue(bookingId, { reportedBy = 'CUSTOMER', issueTyp
   }
 
   await booking.save();
+  await freezeVendorWalletForDispute(booking, description || issueType);
   return booking;
 }
 
@@ -99,6 +162,7 @@ export async function resolveDispute(bookingId, disputeId, { decision, notes, re
       booking.settlementStatus = 'SETTLEMENT_ELIGIBLE';
       // In a full implementation, you would adjust the payable amount here
       booking.pricing.totalAmount = settlementAmount;
+      booking.totalAmount = settlementAmount || booking.totalAmount;
       break;
 
     case 'REFUND':
@@ -125,5 +189,6 @@ export async function resolveDispute(bookingId, disputeId, { decision, notes, re
   }
 
   await booking.save();
+  await releaseVendorWalletFreezeIfResolved(booking, `Dispute resolved: ${decision}`);
   return booking;
 }

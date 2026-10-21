@@ -4,6 +4,7 @@ import * as auraRepo from '../repositories/aura.repo.js';
 import * as quotesRepo from '../repositories/quotes.repo.js';
 import * as commerceRepo from '../repositories/commerce.repo.js';
 import * as circleRepo from '../repositories/circle.repo.js';
+import { countUnreadTotal } from './circle.service.js';
 import { serializeBooking, serializePayment } from './commerce.service.js';
 import { badRequest, notFound, conflict } from '../utils/http.js';
 import { CLOSED_EVENT_STATUSES, LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
@@ -34,14 +35,30 @@ import {
   serializeRequirement,
 } from './understanding.js';
 import * as catalog from './catalog.service.js';
-import { serviceFields, validateDetails, validateServiceLocation, LOCATION_SENSITIVE, ROUTE_CATEGORIES } from './serviceRequirements.js';
+import { serviceDetailsJsonSchema, serviceFields, validateDetails, validateServiceLocation, LOCATION_SENSITIVE, ROUTE_CATEGORIES } from './serviceRequirements.js';
 import { computeEventSummary, eventSteps, attentionFor } from './summary.js';
 import { customerHistory } from './history.service.js';
+import { customerFinancialTruth } from '../../common/financialTruth.service.js';
+import { Opportunity } from '../../external/models/Opportunity.js';
+import { serviceRequirementSummary } from './enquiryBrief.js';
 
 const EDITABLE_STATUSES = ['draft', 'planning'];
 // Arranged elsewhere or reset: an earlier option choice no longer applies.
 const NO_SELECTION = { selectedOptionId: null, selectedOption: { vendorName: null, packageName: null, price: null, isDemo: false } };
 const FACT_KEYS = ['eventType', 'title', 'eventDate', 'city', 'guestCount', 'budget', 'budgetRange', 'budgetMin', 'budgetMax', 'customType', 'location', 'specialRequirements', 'notes'];
+const IDEMPOTENCY_KEYS = ['idempotencyKey', 'clientRequestId'];
+
+function splitIdempotency(input = {}, fallback = null) {
+  const source = input && typeof input === 'object' ? input : {};
+  const factInput = { ...source };
+  let key = fallback;
+  for (const field of IDEMPOTENCY_KEYS) {
+    if (!key && source[field] != null) key = source[field];
+    delete factInput[field];
+  }
+  const idempotencyKey = key == null ? null : String(key).trim().slice(0, 160) || null;
+  return { factInput, idempotencyKey };
+}
 
 // Event location keys (area is accepted as an alias of locality; city maps to the top-level city).
 const LOCATION_TEXT = { country: 60, state: 60, locality: 80, venueName: 120, address: 300, pincode: 12, landmark: 120, notes: 500 };
@@ -266,15 +283,23 @@ export async function listEvents(customerId) {
 }
 
 export async function createDraftEvent(customerId, facts, { actorType = 'customer', actorId = null } = {}) {
-  const clean = validateFacts(facts);
+  const { factInput, idempotencyKey } = splitIdempotency(facts);
+  const clean = validateFacts(factInput);
   if (!clean.eventType) throw badRequest('VALIDATION_FAILED', 'Event type is required', { fields: { eventType: 'Required' } });
-  const event = await eventsRepo.createEvent({
+  if (idempotencyKey) {
+    const existing = await eventsRepo.findEventByIdempotencyKey(customerId, idempotencyKey);
+    if (existing) return existing;
+  }
+  const { event, created } = await eventsRepo.createEventOnce({
     ...nest(clean),
     title: clean.title || defaultTitle(clean.eventType, clean.customType),
     customer: customerId,
     status: 'draft',
+    idempotencyKey,
   });
-  await eventsRepo.appendHistory({ eventId: event._id, actorType, actorId, action: 'event_draft_created', details: { eventType: event.eventType } });
+  if (created) {
+    await eventsRepo.appendHistory({ eventId: event._id, actorType, actorId, action: 'event_draft_created', details: { eventType: event.eventType } });
+  }
   return event;
 }
 
@@ -378,8 +403,11 @@ export async function mergePreferences(customerId, eventId, category, preference
   if (CLOSED_EVENT_STATUSES.includes(event.status)) return { applied: false, reason: 'event_closed' };
   const existing = await reqRepo.findRequirement(event._id, cat);
   if (existing && LOCKED_REQUIREMENT_STATUSES.includes(existing.status)) return { applied: false, reason: 'locked' };
-  const { changed } = await reqRepo.upsertRequirement(event._id, cat, { preferences, source: existing?.source ?? 'customer' });
+  const { changed, row } = await reqRepo.upsertRequirement(event._id, cat, { preferences, source: existing?.source ?? 'customer' });
   if (changed) {
+    // Keep an unanswered enquiry in step with the customer's amended brief.
+    // Answered quotes, contracts and prices are deliberately outside this write.
+    if (row.selectedOptionId) await Opportunity.updateMany({ customer: customerId, customerEvent: event._id, customerRequirement: row._id, status: { $in: ['NEW', 'VIEWED'] } }, { $set: { requiredCapability: serviceRequirementSummary(row, { packageName: row.selectedOption?.packageName }, event) } });
     await eventsRepo.appendHistory({ eventId: event._id, actorType, actorId, action: 'preferences_updated', details: { category: cat, keys: Object.keys(preferences) } });
   }
   return { applied: changed };
@@ -521,7 +549,7 @@ export async function requirementsDetail(customerId, eventId) {
 
 export async function dashboard(customerId, eventId) {
   const event = await getOwnedEventOr404(customerId, eventId);
-  const [requirements, contextRows, stats, recent, signals, allBookings, payments] = await Promise.all([
+  const [requirements, contextRows, stats, recent, signals, allBookings, payments, financialTruth] = await Promise.all([
     reqRepo.listRequirements(event._id),
     auraRepo.listContext(event._id),
     event.status === 'draft' ? new Map() : catalog.optionStats(event),
@@ -529,6 +557,7 @@ export async function dashboard(customerId, eventId) {
     attentionSignals([event._id]),
     commerceRepo.listBookings(event._id),
     commerceRepo.listPayments(event._id),
+    customerFinancialTruth(customerId, event._id),
   ]);
   const summary = computeEventSummary(event, requirements, stats, allBookings.filter((b) => b.status === 'confirmed'));
   const attention = attentionFor(event, signals(event._id));
@@ -547,6 +576,7 @@ export async function dashboard(customerId, eventId) {
     payments: payments.map(serializePayment),
     attention,
     attentionCount: attention.length,
+    financialTruth,
     steps: eventSteps(event, requirements),
     understanding: event.status === 'draft' ? buildUnderstanding(event, requirements, contextRows) : null,
     recentHistory: recent,
@@ -563,7 +593,7 @@ export async function home(customerId) {
     byEvent.get(k).push(r);
   }
   const active = events.filter((e) => !CLOSED_EVENT_STATUSES.includes(e.status));
-  const [signals, unread] = await Promise.all([attentionSignals(active.map((e) => e._id)), circleRepo.countUnread(customerId)]);
+  const [signals, unread] = await Promise.all([attentionSignals(active.map((e) => e._id)), countUnreadTotal(customerId)]);
   return {
     activeEvents: active.map((e) => {
       const rows = byEvent.get(String(e._id)) || [];
@@ -591,14 +621,19 @@ export async function eventDay(customerId, eventId) {
  * so an invalid service never leaves a half-created event behind. The
  * customer typed the facts, so the event starts in planning (no draft).
  */
-export async function createManualEvent(customerId, body = {}) {
-  const { services = [], ...factInput } = body || {};
+export async function createManualEvent(customerId, body = {}, { idempotencyKey: headerIdempotencyKey = null } = {}) {
+  const { services = [], ...rawFactInput } = body || {};
+  const { factInput, idempotencyKey } = splitIdempotency(rawFactInput, headerIdempotencyKey);
   const facts = validateFacts(factInput);
   const missing = [];
   if (!facts.eventType) missing.push({ field: 'eventType', label: 'Event type' });
   if (!facts.eventDate) missing.push({ field: 'eventDate', label: 'Date' });
   if (!facts.city) missing.push({ field: 'city', label: 'Location' });
   if (missing.length) throw badRequest('MISSING_DETAILS', `Please add: ${missing.map((m) => m.label).join(', ')}`, { missing });
+  if (idempotencyKey) {
+    const existing = await eventsRepo.findEventByIdempotencyKey(customerId, idempotencyKey);
+    if (existing) return eventDetail(customerId, existing._id);
+  }
 
   if (!Array.isArray(services) || services.length > 40) throw badRequest('VALIDATION_FAILED', 'services must be a list');
   const statements = [];
@@ -632,12 +667,14 @@ export async function createManualEvent(customerId, body = {}) {
     });
   }
 
-  const event = await eventsRepo.createEvent({
+  const { event, created } = await eventsRepo.createEventOnce({
     ...nest(facts),
     title: facts.title || defaultTitle(facts.eventType, facts.customType),
     customer: customerId,
     status: 'planning',
+    idempotencyKey,
   });
+  if (!created) return eventDetail(customerId, event._id);
   const t = templateFor(event.eventType);
   await reqRepo.insertMissingRequirements(event._id, [...t.essential, ...t.recommended, ...t.optional]);
   for (const st of statements) {
@@ -801,6 +838,7 @@ export function planOptions(eventType) {
     budgetRanges: t ? budgetRangesFor(t) : { wedding: budgetRangesFor('wedding'), other: budgetRangesFor('other') },
     // Event Type + Service Category → relevant requirement fields (options from the Vendor OS taxonomy).
     serviceFields: Object.fromEntries(Object.keys(CATEGORY_LABELS).map((c) => [c, serviceFields(c, t || 'other')])),
+    serviceSchemas: Object.fromEntries(Object.keys(CATEGORY_LABELS).map((c) => [c, serviceDetailsJsonSchema(c, t || 'other')])),
     locationSensitive: LOCATION_SENSITIVE,
     routeCategories: ROUTE_CATEGORIES,
   };

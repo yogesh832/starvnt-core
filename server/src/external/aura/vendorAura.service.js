@@ -1,12 +1,16 @@
 import { VendorAuraSession, VendorAuraMessage } from '../models/VendorAura.js';
 import { VendorService } from '../models/VendorService.js';
 import { getLlmAdapter } from './llmAdapter.js';
-import { buildVendorContext, PAGES, CATEGORIES, setupSummary, isAutoBusinessName } from './vendorContext.js';
-import { applyProfileFromChat } from './profileWriter.js';
+import { buildVendorContext, PAGES, CATEGORIES, SETUP_STEPS, setupSummary, isAutoBusinessName } from './vendorContext.js';
+import { applyProfileFromChat, matchCategory } from './profileWriter.js';
 import { validateAction, describeAction, executeAction, readConfirmation, dateIn, reasonFrom, isMessageRelevantToPending } from './setupActions.js';
 import { buildVendorSystemPrompt } from './vendorSystemPrompt.js';
 import { classifyAuraRequest } from '../../common/auraRouter.js';
 import { createPerformanceTracker } from '../../common/streamUtils.js';
+import { conversationLanguage, auraLanguageInstruction } from '../../common/auraLanguage.js';
+import { vendorAuraActivity } from '../../common/auraActivity.service.js';
+import { activityAnswer } from '../../common/auraActivityAnswer.js';
+import { enquiryAnswer } from './enquiryAnswer.js';
 
 /**
  * Vendor Aura+ chat. It answers from the vendor's own data and suggests pages.
@@ -21,6 +25,44 @@ const SESSION_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const MAX_ACTIONS = 3;
 
 export const FALLBACK_REPLY = "Sorry, I can't answer right now. Please try again in a moment — your dashboard has the latest numbers.";
+
+/** Keep setup and settlement queries usable during a provider outage without inventing data or writes. */
+export function setupFallback(message, vendor, context, pending = null) {
+  if (pending) return {
+    reply: `I couldn't reach Aura's chat service. Your confirmation is still pending: ${describeAction(pending)}. Say “yes” to confirm or “no” to cancel.`,
+    actions: [],
+  };
+
+  const isSettlement = /\b(settle|settlement|settlements|payout|payouts|earning|earnings|kamai|hisaab|hisab|escrow|receivable|payment|payments|balance)\b/i.test(message);
+  if (isSettlement) {
+    const s = context?.settlements;
+    const settled = s?.settledAmount != null ? `₹${Number(s.settledAmount).toLocaleString('en-IN')}` : null;
+    const pendingAmount = s?.pendingSettlementAmount != null ? `₹${Number(s.pendingSettlementAmount).toLocaleString('en-IN')}` : null;
+    let text = "Aura's chat service is temporarily unavailable. ";
+    if (settled !== null && pendingAmount !== null) {
+      text += `According to your verified records: Total Settled is ${settled} and Pending Settlement is ${pendingAmount}. `;
+    }
+    text += "You can track your complete escrow balances, payouts, and settlement ledger on the Payments page.";
+    return {
+      reply: text,
+      actions: [{ label: 'Payments & Settlements', to: '/vendor/payments' }],
+    };
+  }
+
+  const category = matchCategory('', message);
+  const setupRequest = category || /\b(profile|setup|brand|category|business|equipment|coverage|portfolio)\b/i.test(message);
+  if (!setupRequest) return { reply: FALLBACK_REPLY, actions: [{ label: 'Open dashboard', to: '/vendor/dashboard' }] };
+  const missing = missingBrand(vendor).length;
+  const nextKind = context?.profileSetup?.steps?.find((s) => !s.done)?.kind;
+  const next = missing ? null : SETUP_STEPS.find((s) => s.key === nextKind);
+  const question = missing
+    ? brandQuestion(vendor)
+    : next ? `Next: ${next.label}. Open the page below to complete it.` : 'You can review your brand details and continue setup from your Profile page.';
+  return {
+    reply: `${category ? `You mentioned ${category}. ` : ''}Aura's chat service is temporarily unavailable. ${question}`,
+    actions: [{ label: next?.short || 'Open profile', to: next?.to || '/vendor/profile' }],
+  };
+}
 
 const httpError = (status, error) => Object.assign(new Error(error), { status, error });
 
@@ -70,12 +112,40 @@ function serialize(m) {
 
 const pendingView = (p) => (p ? { kind: p.kind, summary: describeAction(p), isUpdate: Boolean(p.isUpdate) } : null);
 
+/** Conversation summaries are scoped before joining any message content. */
+export async function listSessions({ vendor }) {
+  const sessions = await VendorAuraSession.aggregate([
+    { $match: { vendor: vendor._id } },
+    { $sort: { updatedAt: -1, _id: -1 } },
+    { $limit: 50 },
+    { $lookup: {
+      from: VendorAuraMessage.collection.name,
+      let: { sid: '$_id' },
+      pipeline: [
+        { $match: { $expr: { $eq: ['$session', '$$sid'] } } },
+        { $sort: { createdAt: 1, _id: 1 } },
+        { $group: { _id: null, title: { $first: '$content' }, preview: { $last: '$content' }, messageCount: { $sum: 1 } } },
+      ],
+      as: 'conversation',
+    } },
+    { $unwind: '$conversation' },
+    { $project: { _id: 0, sessionId: '$_id', updatedAt: 1,
+      title: { $substrCP: ['$conversation.title', 0, 120] },
+      preview: { $substrCP: ['$conversation.preview', 0, 240] },
+      messageCount: '$conversation.messageCount',
+      confirmationPending: { $ne: [{ $ifNull: ['$pending', null] }, null] },
+    } },
+  ]);
+  return { sessions };
+}
+
 export async function getSession({ vendor, sessionId }) {
   if (!isValidSessionId(sessionId)) throw httpError(400, 'INVALID_SESSION_ID');
   const session = await ownedSession(sessionId, vendor._id);
-  if (!session) return { sessionId, messages: [], pending: null };
-  const messages = await VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: 1, _id: 1 }).limit(100).lean();
-  return { sessionId, messages: messages.map(serialize), pending: pendingView(session.pending) };
+  const activity = await vendorAuraActivity(vendor._id);
+  if (!session) return { sessionId, messages: [], pending: null, activity };
+  const messages = (await VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(100).lean()).reverse();
+  return { sessionId, messages: messages.map(serialize), pending: pendingView(session.pending), activity };
 }
 
 /** What Aura+ says after a setup step is saved: the next step, as a question it can act on. */
@@ -170,11 +240,25 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
         }
       }
       await saveTurn(sessionId, text, reply, actions, null);
+      console.log('\n' + '═'.repeat(70));
+      console.log(`[Aura Vendor Chat ✓ Confirmed Action]`);
+      console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
+      console.log(`💬 Session  : ${sessionId}`);
+      console.log(`📩 Message  : "${text}"`);
+      console.log(`🤖 Aura Rep : "${reply}"`);
+      console.log('═'.repeat(70) + '\n');
       return { reply, actions, fallback: false, profileUpdated: Boolean(setup), setup, pending: null };
     }
     if (answer === false) {
       const reply = "Okay, I didn't save it. Tell me what to change, or ask me anything else.";
       await saveTurn(sessionId, text, reply, [], null);
+      console.log('\n' + '═'.repeat(70));
+      console.log(`[Aura Vendor Chat ✗ Cancelled Action]`);
+      console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
+      console.log(`💬 Session  : ${sessionId}`);
+      console.log(`📩 Message  : "${text}"`);
+      console.log(`🤖 Aura Rep : "${reply}"`);
+      console.log('═'.repeat(70) + '\n');
       return { reply, actions: [], fallback: false, profileUpdated: false, setup: null, pending: null };
     }
     if (!isMessageRelevantToPending(session.pending, text)) {
@@ -185,12 +269,26 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
 
   tracker.markContextStart();
   if (options.onStatus) options.onStatus('context_retrieval');
-  const [context, recent] = await Promise.all([
-    buildVendorContext(vendor, { page: typeof page === 'string' ? page : null }),
+  const [activity, recent] = await Promise.all([
+    vendorAuraActivity(vendor._id),
     VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(HISTORY).lean(),
   ]);
-  context.waitingForConfirmation = session.pending ? describeAction(session.pending) : null;
   const history = recent.reverse().map((m) => ({ role: m.role, content: m.content }));
+  const operational = activityAnswer(text, activity, conversationLanguage(text, history));
+  if (operational) {
+    tracker.markContextEnd();
+    await saveTurn(sessionId, text, operational.reply, operational.actions, session.pending);
+    return { ...operational, activity, pending: pendingView(session.pending), fallback: false, profileUpdated: false };
+  }
+  const context = await buildVendorContext(vendor, { page: typeof page === 'string' ? page : null });
+  context.activity = activity;
+  const enquiry = enquiryAnswer(text, context, conversationLanguage(text, history));
+  if (enquiry) {
+    tracker.markContextEnd();
+    await saveTurn(sessionId, text, enquiry.reply, enquiry.actions, session.pending);
+    return { ...enquiry, activity, pending: pendingView(session.pending), fallback: false, profileUpdated: false };
+  }
+  context.waitingForConfirmation = session.pending ? describeAction(session.pending) : null;
   tracker.markContextEnd();
 
   const route = classifyAuraRequest(text, { intent: 'VENDOR_ASSISTANT' });
@@ -205,7 +303,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   tracker.markGeminiStart();
   try {
     const res = await getLlmAdapter().chat({
-      systemPrompt: buildVendorSystemPrompt(context),
+        systemPrompt: `${buildVendorSystemPrompt(context)}\n\n${auraLanguageInstruction(conversationLanguage(text, history))}`,
       history,
       message: text,
       model: route.model,
@@ -230,6 +328,9 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
     console.warn('[vendor-aura] LLM failed, using fallback:', err?.code || err?.message || err);
   }
   tracker.markGenerationEnd();
+  if (fallback) {
+    ({ reply, actions } = setupFallback(text, vendor, context, session.pending));
+  }
 
   // Brand basics: save what the vendor stated, then say exactly what was saved
   // (the server writes this line, so the reply never claims a save that didn't happen).
@@ -266,7 +367,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   // When the app adds its own lines (saved / confirm / next question), the model's
   // questions and any "I saved it" claims are dropped — only the server reports saves.
   if (saved.length || proposal || missingForProposal) {
-    const head = withoutClaims(withoutQuestions(reply));
+    const head = fallback ? '' : withoutClaims(withoutQuestions(reply));
     const parts = [head || (proposal ? 'Great, here is what I will do:' : 'Got it!')];
     if (saved.length) parts.push(`\n✅ Saved to your profile — ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}.`);
     if (proposal) {
@@ -300,6 +401,29 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   }
 
   await saveTurn(sessionId, text, reply, actions, pending);
+
+  const metrics = tracker.getMetrics();
+  console.log('\n' + '═'.repeat(70));
+  console.log(`[Aura Vendor Chat]`);
+  console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
+  console.log(`📁 Category : ${vendor.category || 'N/A'} | Page: ${page || 'N/A'}`);
+  console.log(`💬 Session  : ${sessionId}`);
+  console.log(`📩 Msg      : "${text}"`);
+  if (saved.length) {
+    console.log(`💾 Saved    : ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}`);
+  }
+  if (proposal) {
+    console.log(`📝 Proposed : ${describeAction(proposal)}`);
+  }
+  console.log(`🤖 Aura (${route.model}${fallback ? ' [FALLBACK]' : ''}):\n"${reply}"`);
+  if (actions?.length) {
+    console.log(`🔗 Actions  : ${actions.map((a) => `${a.label} (${a.to})`).join(', ')}`);
+  }
+  if (metrics?.totalDurationMs) {
+    console.log(`⏱️ Perf     : Total ${metrics.totalDurationMs}ms | FirstToken ${metrics.firstTokenMs || 'N/A'}ms`);
+  }
+  console.log('═'.repeat(70) + '\n');
+
   return {
     reply,
     actions,
@@ -307,7 +431,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
     profileUpdated: saved.length > 0,
     setup,
     pending: pendingView(pending),
-    metrics: tracker.getMetrics(),
+    metrics,
     model: route.model,
     thinkingLevel: route.thinkingLevel,
   };
