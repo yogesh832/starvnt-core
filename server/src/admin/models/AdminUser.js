@@ -26,6 +26,7 @@ const adminUserSchema = new Schema(
     passwordHash: { type: String, required: true, select: false },
     avatarUrl: { type: String, trim: true, default: '' },
     role: { type: String, enum: ADMIN_ROLES, default: 'ADMIN', index: true },
+    roleKey: { type: String, default: '', trim: true, uppercase: true, index: true },
     permissions: {
       type: [String],
       default: [],
@@ -40,6 +41,8 @@ const adminUserSchema = new Schema(
     // MFA scaffolding — enforcement layers on top of these flags later.
     mfaEnabled: { type: Boolean, default: false },
     mfaRequired: { type: Boolean, default: false },
+    mfaSecretEncrypted: { type: String, default: '', select: false },
+    mfaConfiguredAt: { type: Date, default: null },
     lastLoginAt: { type: Date, default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: 'AdminUser', default: null },
   },
@@ -53,12 +56,14 @@ adminUserSchema.methods.toSafeJSON = function toSafeJSON() {
     email: this.email,
     avatarUrl: this.avatarUrl,
     role: this.role,
+    roleKey: this.roleKey || '',
     permissions: this.permissions,
     // SUPER_ADMIN effectively holds every permission.
     effectivePermissions: this.role === 'SUPER_ADMIN' ? ['*'] : this.permissions,
     status: this.status,
     mfaEnabled: this.mfaEnabled,
     mfaRequired: this.mfaRequired,
+    mfaConfiguredAt: this.mfaConfiguredAt,
     createdAt: this.createdAt,
     lastLoginAt: this.lastLoginAt,
   };

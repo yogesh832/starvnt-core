@@ -187,12 +187,20 @@ function sanitizePackageName(name, category, vendorName) {
 // ── Bookings & payments view ────────────────────────────────────────────────
 export async function bookingsView(customerId, eventId) {
   const event = await getOwnedEventOr404(customerId, eventId);
-  const [reservations, customerBookings, payments, coreBookings] = await Promise.all([
+  const [reservations, customerBookings, payments] = await Promise.all([
     commerceRepo.listReservations(event._id),
     commerceRepo.listBookings(event._id),
     commerceRepo.listPayments(event._id),
-    CoreBooking.find({ customerId }).sort({ createdAt: -1 }).lean().catch(() => []),
   ]);
+  const linkedIds = customerBookings.flatMap(b => [b._id, b.quoteId, b.reservation]).filter(Boolean).map(String);
+  const coreIds = customerBookings.map(b => b.coreBookingId).filter(Boolean);
+  const references = customerBookings.map(b => b.reference).filter(Boolean);
+  const coreBookings = await CoreBooking.find({ customerId, $or: [
+    { customerEvent: event._id },
+    ...(linkedIds.length ? [{ quoteId: { $in: linkedIds } }] : []),
+    ...(coreIds.length ? [{ _id: { $in: coreIds } }] : []),
+    ...(references.length ? [{ bookingReference: { $in: references } }] : []),
+  ] }).sort({ createdAt: -1 }).lean();
 
   const mappedBookings = customerBookings.map((b) => {
     const serialized = serializeBooking(b);
@@ -201,8 +209,7 @@ export async function bookingsView(customerId, eventId) {
       (c) =>
         (c.quoteId && (String(c.quoteId) === String(b._id) || String(c.quoteId) === String(b.quoteId) || String(c.quoteId) === String(b.reservation))) ||
         (b.coreBookingId && String(c._id) === String(b.coreBookingId)) ||
-        (c.bookingReference && b.reference && c.bookingReference === b.reference) ||
-        (b.category && c.category && normalizeCategory(b.category) === normalizeCategory(c.category))
+        (c.bookingReference && b.reference && c.bookingReference === b.reference)
     );
     if (cb) {
       serialized.reference = cb.bookingReference || serialized.reference;
@@ -229,8 +236,7 @@ export async function bookingsView(customerId, eventId) {
       (mb) =>
         (cb.quoteId && (String(mb.id) === String(cb.quoteId) || String(mb.quoteId) === String(cb.quoteId) || String(mb.reservation) === String(cb.quoteId))) ||
         String(mb.id) === String(cb._id) ||
-        (cb.bookingReference && mb.reference === cb.bookingReference) ||
-        (mb.category && cb.category && normalizeCategory(mb.category) === normalizeCategory(cb.category))
+        (cb.bookingReference && mb.reference === cb.bookingReference)
     );
     if (!exists) {
       let catKey = normalizeCategory(cb.category) || normalizeCategory(cb.serviceName);
@@ -306,39 +312,22 @@ export async function cancelBooking(customerId, bookingId) {
 
 export async function verifyBookingCompletion(customerId, bookingId, body = {}) {
   const isObjectId = mongoose.isValidObjectId(bookingId);
-
-  let coreBooking = await CoreBooking.findOne({
-    customerId,
-    $or: [
-      { _id: isObjectId ? bookingId : null },
-      { quoteId: isObjectId ? bookingId : null },
-      { bookingReference: bookingId },
-    ].filter(Boolean),
-  });
-
+  const links = [
+    ...(isObjectId ? [{ _id: bookingId }, { quoteId: bookingId }] : []),
+    { bookingReference: bookingId },
+  ];
+  let coreBooking = await CoreBooking.findOne({ customerId, $or: links });
   if (!coreBooking) {
-    const custBooking = await commerceRepo.getBooking(bookingId);
-    if (custBooking) {
-      coreBooking = await CoreBooking.findOne({
-        $or: [
-          { _id: custBooking.coreBookingId },
-          { quoteId: custBooking._id },
-          { bookingReference: custBooking.reference },
-        ].filter(Boolean),
-      });
-    }
+    const customerBooking = await commerceRepo.getBooking(bookingId);
+    if (!customerBooking || String(customerBooking.customer) !== String(customerId)) throw notFound('Booking not found');
+    const linked = [
+      ...(customerBooking.coreBookingId ? [{ _id: customerBooking.coreBookingId }] : []),
+      { quoteId: customerBooking._id },
+      ...(customerBooking.reference ? [{ bookingReference: customerBooking.reference }] : []),
+    ];
+    coreBooking = await CoreBooking.findOne({ customerId, $or: linked });
+    if (!coreBooking) throw badRequest('CORE_BOOKING_REQUIRED', 'This booking must be linked to Core before completion can be verified.');
   }
-
-  if (!coreBooking) {
-    const custBooking = await commerceRepo.getBooking(bookingId);
-    if (custBooking) {
-      custBooking.executionStatus = 'COMPLETION_VERIFIED';
-      await Booking.updateOne({ _id: custBooking._id }, { $set: { executionStatus: 'COMPLETION_VERIFIED' } }).catch(() => null);
-      return { ok: true, booking: custBooking };
-    }
-    throw notFound('Booking not found');
-  }
-
   if (coreBooking.executionStatus !== 'COMPLETION_SUBMITTED') {
     if (coreBooking.executionStatus === 'COMPLETION_VERIFIED') {
       return { ok: true, booking: coreBooking };
@@ -614,6 +603,7 @@ export async function confirmBookingFor(payment) {
   const resId = reservation ? reservation._id : payment.reservation;
   const existing = await commerceRepo.findBookingForReservation(resId);
   if (existing) {
+    if (String(existing.payment) === String(payment._id)) return existing;
     const newPaid = (existing.paidAmount || 0) + payment.amount;
     const newBalance = Math.max(0, (existing.amount || 0) - newPaid);
     const updated = await commerceRepo.updateBooking(existing._id, {}, { paidAmount: newPaid, balanceAmount: newBalance });
@@ -624,7 +614,7 @@ export async function confirmBookingFor(payment) {
           $set: {
             'paymentSummary.paidAmount': newPaid,
             'paymentSummary.balanceAmount': newBalance,
-            settlementStatus: newBalance === 0 ? 'ELIGIBLE' : 'NOT_ELIGIBLE',
+            settlementStatus: 'NOT_ELIGIBLE',
           },
         }
       ).catch(() => null);
@@ -807,6 +797,10 @@ export async function verifyPayment(paymentId, { actorType, actorId }) {
       },
       idempotencyKey: `payment_confirmed_${payment._id}`
     });
+  }
+  if (!moved && payment.status === 'verified') {
+    const booking = await commerceRepo.findBookingForReservation(payment.reservation);
+    return { payment, booking };
   }
   const booking = await confirmBookingFor(moved || payment);
   return { payment: moved || (await commerceRepo.getPayment(paymentId)), booking };

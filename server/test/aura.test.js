@@ -38,7 +38,7 @@ test('golden path: draft → card → chips → skip → budget range → confir
   assert.match(r.body.reply, /assumed the year \d{4}/);
   assert.ok(r.body.reply.endsWith('Which city will it be in?'));
   // Draft stage keeps the prompt small: no vendor list.
-  assert.match(llm.calls[0].systemPrompt, /"vendors":\[\]/);
+  assert.equal(llm.calls.length, 0, 'literal planning facts do not need a model call');
 
   const eventId = r.body.activeEvent.id;
   r = await chat(token, { sessionId: s, message: 'It is in Kolkata' }).expect(200);
@@ -77,21 +77,20 @@ test('hallucination guards drop values the customer never said', async () => {
   const { token } = await makeUser();
   const s = sid();
   scriptLlm([
-    { text: 'ok', extracted: { eventType: 'birthday' } },
     {
       text: 'ok',
       extracted: {
         providedCategory: 'venue',
         providedValue: 'Kisan Palace Gardens', // not in the message
         needsHelpCategory: 'makeup', // not mentioned
-        tentativeCategory: 'entertainment',
+        tentativeCategory: 'sound',
         neededCategories: ['photography', 'catering'],
         city: 'Mumbai', // not in the message
       },
     },
   ]);
   await chat(token, { sessionId: s, message: "It's my son's birthday" }).expect(200);
-  const r = await chat(token, { sessionId: s, message: 'The venue is Kisan Palace. Maybe a DJ. We need photography.' }).expect(200);
+  const r = await chat(token, { sessionId: s, message: 'The venue is Kisan Palace. Maybe a DJ. We need photography. Can you help?' }).expect(200);
   // The model's "Kisan Palace Gardens" is dropped; only the literal "Kisan Palace" is kept.
   assert.deepEqual(r.body.understanding.services.provided.map((p) => p.value), ['Kisan Palace']);
   assert.equal(r.body.understanding.facts.location.venueName, 'Kisan Palace');
@@ -99,9 +98,9 @@ test('hallucination guards drop values the customer never said', async () => {
   assert.deepEqual(r.body.understanding.services.needed.map((x) => x.category), ['photography']);
   assert.equal(r.body.understanding.facts.city.value, null);
   const eventId = r.body.activeEvent.id;
-  const note = await models.AuraContext.findOne({ event: eventId, field: 'tentative:entertainment' }).lean();
+  const note = await models.AuraContext.findOne({ event: eventId, field: 'tentative:sound' }).lean();
   assert.equal(note.state, 'INFERRED');
-  const reqs = await models.EventRequirement.find({ event: eventId, category: 'entertainment' }).lean();
+  const reqs = await models.EventRequirement.find({ event: eventId, category: 'sound' }).lean();
   assert.equal(reqs.length, 0, 'tentative is never business state');
 });
 

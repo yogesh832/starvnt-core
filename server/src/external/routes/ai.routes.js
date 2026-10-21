@@ -1,3 +1,4 @@
+import { createVoiceRouter } from './voice.routes.js';
 import { Router } from 'express';
 import { requireExternalAuth } from '../middleware/requireExternalAuth.js';
 import { OpenAI } from 'openai';
@@ -11,10 +12,17 @@ const AI_CHAT_TIMEOUT_MS = Number(process.env.AI_CHAT_TIMEOUT_MS || 8000);
 const AI_FALLBACK_REPLY =
   "Sorry, I can't reach the planning assistant right now. Your chat is saved, and you can try again in a moment.";
 
-const openai = new OpenAI({ 
-  apiKey: process.env.GEMINI_API_KEY, 
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/" 
-});
+let openai;
+function getAIClient() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw Object.assign(new Error('GEMINI_API_KEY is not set'), { code: 'AI_NOT_CONFIGURED' });
+  }
+  openai ||= new OpenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+  });
+  return openai;
+}
 
 function cleanContent(value) {
   return String(value || '').trim();
@@ -189,10 +197,7 @@ Do not output the final JSON block until you have enough information.`;
     let aiMessage = AI_FALLBACK_REPLY;
     let fallback = false;
     try {
-      if (!process.env.GEMINI_API_KEY) {
-        throw Object.assign(new Error('GEMINI_API_KEY is not set'), { code: 'AI_NOT_CONFIGURED' });
-      }
-      const response = await withTimeout(openai.chat.completions.create({
+      const response = await withTimeout(getAIClient().chat.completions.create({
         model: "gemini-3.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
@@ -233,36 +238,6 @@ Do not output the final JSON block until you have enough information.`;
   }
 });
 
-router.post('/voice', requireExternalAuth, async (req, res, next) => {
-  try {
-    const { text } = req.body;
-    
-    // Default Rachel voice
-    const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
-      method: 'POST',
-      headers: {
-        'Accept': 'audio/mpeg',
-        'Content-Type': 'application/json',
-        'xi-api-key': process.env.ELEVENLABS_API_KEY
-      },
-      body: JSON.stringify({
-        text: text,
-        model_id: "eleven_monolingual_v1",
-        voice_settings: { stability: 0.5, similarity_boost: 0.5 }
-      })
-    });
-    
-    if (!response.ok) {
-       throw new Error(`ElevenLabs API error: ${response.status}`);
-    }
-
-    res.setHeader('Content-Type', 'audio/mpeg');
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    res.send(buffer);
-  } catch (err) {
-    next(err);
-  }
-});
+router.use(createVoiceRouter());
 
 export default router;

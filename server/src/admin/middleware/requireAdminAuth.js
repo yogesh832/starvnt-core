@@ -64,6 +64,16 @@ export function requirePermission(...required) {
   };
 }
 
+export function requireAnyPermission(...allowed) {
+  return (req, res, next) => {
+    const admin = req.admin;
+    if (!admin) return res.status(401).json({ error: 'UNAUTHENTICATED' });
+    if (admin.role === 'SUPER_ADMIN') return next();
+    if (allowed.some((permission) => admin.permissions.includes(permission))) return next();
+    return res.status(403).json({ error: 'FORBIDDEN', requiredAnyOf: allowed });
+  };
+}
+
 /** Role gate — e.g. only SUPER_ADMIN may create/disable admins. */
 export function requireRole(...roles) {
   return (req, res, next) => {

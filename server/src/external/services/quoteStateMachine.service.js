@@ -1,4 +1,5 @@
 import { Quote } from '../models/Quote.js';
+import { Opportunity } from '../models/Opportunity.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
@@ -105,6 +106,8 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
       const advancePercentage = policy.minimumReservationPercent ?? 20;
       const totalAmount = quote.pricingBreakdown?.totalAmount || quote.amount || 0;
       const advanceAmount = quote.advancePayment?.amount || Math.round((totalAmount * advancePercentage) / 100);
+      const paid = quote.advancePayment?.status === 'VERIFIED';
+      const opportunity = quote.opportunity ? await Opportunity.findOne({ _id: quote.opportunity, customer: quote.customer, vendor: quote.vendor }).lean() : null;
       await CoreBooking.findOneAndUpdate(
         { quoteId: quote._id.toString() },
         {
@@ -113,6 +116,7 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
             quoteReference: quote.quoteReference || `QT-${quote._id.toString().slice(-6)}`,
             bookingReference: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
             opportunityId: quote.opportunity ? quote.opportunity.toString() : null,
+            customerEvent: opportunity?.customerEvent || null,
             vendorId: quote.vendor,
             customerId: quote.customer,
             serviceName: quote.serviceName || 'Event Service',
@@ -121,8 +125,8 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
             pricing: quote.pricingBreakdown || { totalAmount },
             totalAmount,
             bookingStatus: 'CONFIRMED',
-            paymentStatus: 'PAYMENT_VERIFIED',
-            executionStatus: 'SERVICE_SCHEDULED',
+            paymentStatus: paid ? 'PAYMENT_VERIFIED' : 'PENDING',
+            executionStatus: paid ? 'SERVICE_SCHEDULED' : 'NOT_STARTED',
             settlementStatus: 'NOT_ELIGIBLE',
             customerName: 'Customer',
             vendorName: 'Vendor',
@@ -130,8 +134,8 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
             paymentSummary: {
               advancePercentage,
               advanceAmount,
-              paidAmount: advanceAmount,
-              balanceAmount: Math.max(0, totalAmount - advanceAmount),
+              paidAmount: paid ? advanceAmount : 0,
+              balanceAmount: Math.max(0, totalAmount - (paid ? advanceAmount : 0)),
             },
           },
         },

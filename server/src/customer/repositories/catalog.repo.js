@@ -14,6 +14,11 @@ const locationFields = ['city', 'locality', 'address', 'state', 'postalCode'];
 const coverageFields = ['city', 'localities', 'state'];
 const EXTENDED_FALLBACK_RADIUS_KM = 150;
 
+export async function catalogPlaces() {
+  const places = await Promise.all([OperatingLocation.distinct('city'), OperatingLocation.distinct('locality'), ServiceCoverage.distinct('city'), ServiceCoverage.distinct('localities')]);
+  return [...new Set(places.flat().filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()))];
+}
+
 function coordsOf(value) {
   const lat = Number(value?.lat);
   const lng = Number(value?.lng);

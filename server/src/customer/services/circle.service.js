@@ -14,6 +14,7 @@ import { getOwnedEventOr404 } from './events.service.js';
 import { serializeEvent } from './understanding.js';
 import { categoryLabel } from './planCatalog.js';
 import { badRequest, notFound } from '../utils/http.js';
+import { ownedCustomerThread, readCustomerThread, postCustomerThreadMessage } from './threadMessages.service.js';
 
 /**
  * Event Circle (messages per context) and Updates (notifications).
@@ -42,22 +43,21 @@ export async function recordLifecycleEventMessage({
   title,
   type = 'message',
   metadata = null,
+  serviceName = '',
 }) {
   if (!vendorId || !text) return null;
 
   const now = new Date();
 
-  let thread = await VendorMessageThread.findOne({
-    vendor: vendorId,
-    $or: [
-      { customer: customerId },
-      { booking: bookingId },
-      { customerBooking: bookingId },
-      { opportunity: opportunityId },
-    ].filter(Boolean),
-  });
+  const contextFilter = bookingId ? { booking: bookingId }
+    : opportunityId ? { opportunity: opportunityId }
+    : quoteId ? { quote: quoteId }
+    : eventId ? { customerEvent: eventId } : null;
+  let thread = contextFilter ? await VendorMessageThread.findOne({
+    vendor: vendorId, ...(customerId ? { customer: customerId } : {}), ...contextFilter,
+  }) : null;
 
-  if (!thread && customerId) {
+  if (!thread && customerId && contextFilter) {
     const cust = await ExternalUser.findById(customerId).lean().catch(() => null);
     const event = eventId ? await CustomerEvent.findById(eventId).lean().catch(() => null) : null;
     const clientName = cust?.fullName || cust?.name || event?.contactName || 'Customer';
@@ -66,13 +66,14 @@ export async function recordLifecycleEventMessage({
       vendor: vendorId,
       customer: customerId,
       opportunity: opportunityId || null,
+      quote: quoteId || null,
       booking: bookingId || null,
-      customerBooking: bookingId || null,
+      customerBooking: null,
       customerEvent: eventId || null,
       clientName,
       clientEmail: cust?.email || '',
       clientPhone: cust?.phone || '',
-      eventName: event?.title || 'Event Booking',
+      eventName: serviceName || event?.title || 'Event Booking',
       eventType: event?.eventType || 'Service',
       eventDate: event?.eventDate || '',
       status: 'ACTIVE',
@@ -128,7 +129,9 @@ export async function recordLifecycleEventMessage({
         type: type || 'message',
         title: title || `${senderName}: ${text.slice(0, 60)}`,
         body: text,
-        actionUrl: eventId ? `/customer/events/${eventId}/bookings` : '/customer/updates',
+        actionUrl: type === 'quote'
+          ? (eventId ? `/customer/events/${eventId}/quotes` : '/customer/go/quotes')
+          : (eventId ? `/customer/events/${eventId}/bookings` : '/customer/updates'),
         eventId: eventId ? String(eventId) : null,
         idempotencyKey: `lifecycle-msg-${thread?._id || customerId}-${Date.now()}`,
       }).catch(() => null);
@@ -382,28 +385,22 @@ export async function circle(customerId, eventId) {
 
 export async function listMessages(customerId, eventId, query = {}) {
   const event = await getOwnedEventOr404(customerId, eventId);
+  if (query.threadId) {
+    const thread = await ownedCustomerThread(customerId, query.threadId);
+    if (String(thread.customerEvent) !== String(event._id)) throw notFound('Conversation not found in this event');
+    return readCustomerThread(customerId, query.threadId);
+  }
   const ctx = await resolveContext(event, query);
+  if ((query.bookingId || query.requirementId) && !ctx.bookingId && !ctx.requirementId) throw notFound('Service conversation not found');
   await backfillCustomerRequirementMessagesToVendor({ event, requirementId: ctx.requirementId, customerId });
 
   const circleMsgs = (await circleRepo.listMessages(event._id, ctx)).map(serializeMessage);
 
   // Retrieve thread messages from VendorMessageThread so vendor replies appear seamlessly
-  let threadDocs = [];
-  if (query.threadId && mongoose.isValidObjectId(query.threadId)) {
-    const single = await VendorMessageThread.findById(query.threadId).lean().catch(() => null);
-    if (single) threadDocs = [single];
-  }
-  if (threadDocs.length === 0) {
-    const threadFilter = { customer: customerId };
-    if (ctx.bookingId) threadFilter.customerBooking = ctx.bookingId;
-    else if (ctx.requirementId) threadFilter.customerRequirement = ctx.requirementId;
-    else threadFilter.customerEvent = event._id;
-
-    threadDocs = await VendorMessageThread.find(threadFilter).lean().catch(() => []);
-    if (threadDocs.length === 0) {
-      threadDocs = await VendorMessageThread.find({ customer: customerId }).lean().catch(() => []);
-    }
-  }
+  const threadFilter = { customer: customerId, customerEvent: event._id };
+  if (ctx.bookingId) threadFilter.customerBooking = ctx.bookingId;
+  else if (ctx.requirementId) threadFilter.customerRequirement = ctx.requirementId;
+  const threadDocs = await VendorMessageThread.find(threadFilter).lean().catch(() => []);
 
   if (threadDocs.length > 0) {
     const unreadIds = threadDocs.filter((t) => (t.unreadClientCount || 0) > 0).map((t) => t._id);
@@ -421,7 +418,7 @@ export async function listMessages(customerId, eventId, query = {}) {
       for (const m of t.messages) {
         threadMsgs.push({
           id: String(m._id || `vm-${m.createdAt?.getTime?.() || Math.random()}`),
-          senderType: m.sender === 'CLIENT' ? 'customer' : 'vendor',
+          senderType: m.sender === 'CLIENT' ? 'customer' : m.sender === 'VENDOR' ? 'vendor' : 'system',
           senderName: m.sender === 'CLIENT' ? 'You' : m.senderName || t.clientName || 'Vendor',
           body: m.text,
           createdAt: m.createdAt || t.lastMessageAt || t.updatedAt,
@@ -452,10 +449,16 @@ export async function postMessage(customerId, eventId, body = {}) {
   const event = await getOwnedEventOr404(customerId, eventId);
   const text = typeof body.body === 'string' ? body.body.trim() : '';
   if (!text || text.length > 2000) throw badRequest('INVALID_BODY', 'Message must be 1–2000 characters');
+  if (body.threadId) {
+    const thread = await ownedCustomerThread(customerId, body.threadId);
+    if (String(thread.customerEvent) !== String(event._id)) throw notFound('Conversation not found in this event');
+    return postCustomerThreadMessage(customerId, body.threadId, text);
+  }
   const ctx = await resolveContext(event, {
     bookingId: body.bookingId || body.booking,
     requirementId: body.requirementId || body.service || body.requirement,
   });
+  if ((body.bookingId || body.booking || body.requirementId || body.service || body.requirement) && !ctx.bookingId && !ctx.requirementId) throw notFound('Service conversation not found');
   const m = await circleRepo.addMessage({
     event: event._id,
     booking: ctx.bookingId || null,
@@ -464,24 +467,6 @@ export async function postMessage(customerId, eventId, body = {}) {
     senderCustomer: customerId,
     body: text,
   });
-
-  const threadId = body.threadId;
-  if (threadId && mongoose.isValidObjectId(threadId)) {
-    const now = new Date();
-    await VendorMessageThread.findByIdAndUpdate(threadId, {
-      $set: { lastMessageText: text, lastMessageAt: now, status: 'ACTIVE' },
-      $push: {
-        messages: {
-          sender: 'CLIENT',
-          senderName: event.contactName || event.hostName || 'Customer',
-          text,
-          isRead: false,
-          createdAt: now,
-        },
-      },
-      $inc: { unreadVendorCount: 1 },
-    }).catch(() => null);
-  }
 
   await syncCustomerBookingMessageToVendor({ event, bookingId: ctx.bookingId, customerId, text });
   await syncCustomerRequirementMessageToVendor({
@@ -544,7 +529,7 @@ export async function countUnreadTotal(customerId) {
   }).length;
 
   const threadUnread = threadDocs
-    .filter((t) => (!t.customerEvent || validEventIds.has(String(t.customerEvent))) && events.length > 0)
+    .filter((t) => !t.customerEvent || validEventIds.has(String(t.customerEvent)))
     .reduce((sum, t) => sum + (t.unreadClientCount || 0), 0);
 
   return unreadNotifs + threadUnread;
@@ -604,7 +589,6 @@ export async function updates(customerId) {
 
   const validThreads = threads.filter((t) => {
     if (t.customerEvent && !validEventIds.has(String(t.customerEvent))) return false;
-    if (events.length === 0) return false;
     return true;
   });
 
@@ -639,13 +623,13 @@ export async function updates(customerId) {
         status: n.status || (n.readAt ? 'READ' : 'DELIVERED'),
         eventId: n.event ? String(n.event) : null,
         eventTitle: n.event ? titles.get(String(n.event)) || null : null,
+        threadId: n.payload?.threadId ? String(n.payload.threadId) : null,
         read: Boolean(n.readAt),
         createdAt: n.createdAt,
       };
     }),
     threads: (validThreads || []).map((t) => {
-      const defaultEvId = events.length > 0 ? String(events[0]._id) : null;
-      const evId = t.customerEvent ? String(t.customerEvent) : defaultEvId;
+      const evId = t.customerEvent ? String(t.customerEvent) : null;
       const serviceId = t.customerRequirement ? String(t.customerRequirement) : null;
       const bookingId = t.customerBooking ? String(t.customerBooking) : null;
       const toUrl = evId

@@ -66,5 +66,6 @@ export function auditContext(req) {
     userAgent: req.headers['user-agent'] || '',
     actor: req.admin?._id || null,
     actorEmail: req.admin?.email || '',
+    requestId: req.requestId || req.headers['x-request-id'] || req.headers['x-correlation-id'] || '',
   };
 }

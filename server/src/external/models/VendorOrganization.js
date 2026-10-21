@@ -81,6 +81,17 @@ const vendorOrganizationSchema = new Schema(
       documentRef: { type: String, default: null },
       notes: { type: String, default: '' },
     },
+    manualReview: {
+      status: { type: String, enum: ['NONE', 'NEEDS_REVIEW', 'IN_REVIEW', 'APPROVED', 'REJECTED'], default: 'NONE', index: true },
+      reason: { type: String, trim: true, default: '' },
+      provider: { type: String, trim: true, default: '' },
+      documentRef: { type: Schema.Types.ObjectId, ref: 'VendorDocument', default: null },
+      requestedAt: { type: Date, default: null },
+      assignedTo: { type: Schema.Types.ObjectId, ref: 'AdminUser', default: null },
+      reviewedBy: { type: Schema.Types.ObjectId, ref: 'AdminUser', default: null },
+      reviewedAt: { type: Date, default: null },
+      notes: { type: String, trim: true, default: '' },
+    },
     rating: {
       average: { type: Number, default: 0, min: 0, max: 5 },
       count: { type: Number, default: 0 },

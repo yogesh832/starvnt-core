@@ -6,10 +6,10 @@ import { computeEventSummary } from '../services/summary.js';
 
 /**
  * CURRENT DATA for Aura+'s prompt. Kept small on purpose: with a full vendor
- * list Gemini took 15–17 s and hit the 12 s timeout. Vendors are empty when
- * there is no event or the event is still a draft.
+ * list Gemini took 15–17 s and hit the 12 s timeout. Public vendor rows remain
+ * compact, but draft status and requirement categories must not hide records.
  */
-export async function buildContext({ customer, event }) {
+export async function buildContext({ customer, event, catalogScope = event }) {
   const confirmed = event && event.status !== 'draft';
   const [requirements, contextRows, allEvents, stats, bookingRows, paymentRows, reservationRows] = await Promise.all([
     event ? core.listRequirements(event._id) : [],
@@ -39,14 +39,7 @@ export async function buildContext({ customer, event }) {
         failed: count(paymentRows, 'failed'),
       }
     : null;
-  // Only categories still needed: customer-requested ones, then open essentials.
-  const needed = confirmed
-    ? requirements
-        .filter((r) => r.status === 'pending' || (r.status === 'missing' && tierOf(event.eventType, r.category) === 'essential'))
-        .map((r) => r.category)
-        .slice(0, 6)
-    : [];
-  const vendors = needed.length ? await core.compactOptions(event, needed) : [];
+  const vendors = await core.vendorCatalog(catalogScope);
 
   const pastEvents = allEvents
     .filter((e) => !event || String(e._id) !== String(event._id))
@@ -65,6 +58,7 @@ export async function buildContext({ customer, event }) {
     raw: { requirements, contextRows },
     prompt: {
       today: todayISO(),
+      activity: await core.readActivity(customer._id, event?._id),
       customerFirstName: (customer.fullName || '').split(' ')[0] || null,
       event: event
         ? {
@@ -101,7 +95,8 @@ export async function buildContext({ customer, event }) {
       contextStates: buildContextStates(event, requirements, contextRows),
       inferredNotes,
       clarification: clarification ? { topic: clarification.topic, question: clarification.question } : null,
-      vendors, // [] when there is no event or it is a draft
+      vendors,
+      vendorSearch: { source: 'customer_catalog_api', city: catalogScope?.city || null, date: catalogScope?.eventDate || null, guestCount: catalogScope?.guestCount || null, serviceCount: vendors.length, vendorCount: new Set(vendors.map(v => v.vendorId || v.vendor)).size, locationRequired: !catalogScope?.city && !catalogScope?.location?.coordinates },
       bookings,
       paymentStatus, // STATUS only; never settlement
 

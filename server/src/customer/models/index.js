@@ -45,8 +45,14 @@ const customerEventSchema = new Schema(
     },
     specialRequirements: { type: String, trim: true, maxlength: 1000, default: null },
     notes: { type: String, trim: true, maxlength: 1000, default: null },
+    idempotencyKey: { type: String, trim: true, maxlength: 160, default: null },
   },
   { timestamps: true, collection: 'customer_events' }
+);
+
+customerEventSchema.index(
+  { customer: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
 
 export const REQUIREMENT_STATUSES = [
@@ -136,6 +142,9 @@ const auraSessionSchema = new Schema(
     _id: { type: String }, // client-generated session id
     customer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
     event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null },
+    previousEvent: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null },
+    switchChoices: [{ type: Schema.Types.ObjectId, ref: 'CustomerEvent' }],
+    catalogSearch: { type: Schema.Types.Mixed, default: null },
   },
   { timestamps: true, collection: 'customer_aura_sessions' }
 );
@@ -335,6 +344,45 @@ customerNotificationSchema.index(
   { idempotencyKey: 1 },
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
+customerNotificationSchema.index({ customer: 1, createdAt: 1, _id: 1 });
+
+const customerFavoriteSchema = new Schema(
+  {
+    customer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
+    event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null, index: true },
+    optionId: { type: String, trim: true, maxlength: 160, default: null },
+    vendorId: { type: String, trim: true, maxlength: 160, default: null },
+    vendorName: { type: String, trim: true, maxlength: 160, required: true },
+    category: { type: String, trim: true, maxlength: 80, default: null },
+    packageName: { type: String, trim: true, maxlength: 180, default: null },
+    price: { type: Number, min: 0, default: null },
+    source: { type: String, enum: ['customer', 'selected_option', 'system'], default: 'customer' },
+    notes: { type: String, trim: true, maxlength: 500, default: null },
+  },
+  { timestamps: true, collection: 'customer_favorites' }
+);
+customerFavoriteSchema.index(
+  { customer: 1, optionId: 1 },
+  { unique: true, partialFilterExpression: { optionId: { $type: 'string' } } }
+);
+
+const customerContractDocumentSchema = new Schema(
+  {
+    customer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
+    event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null, index: true },
+    booking: { type: Schema.Types.ObjectId, ref: 'CustomerBooking', default: null, index: true },
+    coreBooking: { type: Schema.Types.ObjectId, default: null, index: true },
+    title: { type: String, trim: true, maxlength: 180, required: true },
+    fileName: { type: String, trim: true, maxlength: 240, required: true },
+    fileUrl: { type: String, trim: true, maxlength: 1200, required: true },
+    mimeType: { type: String, trim: true, maxlength: 120, default: 'application/pdf' },
+    fileSize: { type: String, trim: true, maxlength: 80, default: '' },
+    status: { type: String, enum: ['UPLOADED', 'ACTIVE', 'ARCHIVED'], default: 'ACTIVE', index: true },
+    uploadedBy: { type: String, enum: ['customer', 'admin', 'system'], default: 'customer' },
+    notes: { type: String, trim: true, maxlength: 500, default: '' },
+  },
+  { timestamps: true, collection: 'customer_contract_documents' }
+);
 
 // Development-only demo packages. Kept apart from Vendor OS collections so
 // they never appear in vendor or admin views; never read in production.
@@ -383,3 +431,5 @@ export const Booking = externalConn.model('CustomerBooking', bookingSchema);
 export const OptionAvailability = externalConn.model('CustomerOptionAvailability', optionAvailabilitySchema);
 export const EventMessage = externalConn.model('CustomerEventMessage', eventMessageSchema);
 export const CustomerNotification = externalConn.model('CustomerNotification', customerNotificationSchema);
+export const CustomerFavorite = externalConn.model('CustomerFavorite', customerFavoriteSchema);
+export const CustomerContractDocument = externalConn.model('CustomerContractDocument', customerContractDocumentSchema);

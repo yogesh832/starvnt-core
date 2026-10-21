@@ -136,20 +136,10 @@ test('edit: location changes keep the venue in step; protected status stays prot
 test('Aura+ conversation fills the same event step by step (prompt §27)', async () => {
   const { user, token } = await makeUser();
   const s = sid();
-  // A terse model: the guards + fallback parser must still capture what was said.
-  scriptLlm([
-    { text: 'A wedding, lovely!', extracted: { eventType: 'wedding' } },
-    { text: 'Noted.', extracted: {} },
-    { text: 'Noted.', extracted: {} },
-    { text: 'Noted.', extracted: { area: 'New Town' } },
-    { text: 'Noted.', extracted: {} },
-    { text: 'Noted.', extracted: {} },
-    { text: 'Noted.', extracted: {} },
-    { text: 'Noted.', extracted: {} },
-    { text: 'Noted.', extracted: {} },
-    { text: 'Noted.', extracted: { providedCategory: 'catering' } },
-    { text: 'Updated.', extracted: {} },
-  ]);
+  // Literal turns can bypass the model, so script by request rather than turn index.
+  scriptLlm(Array.from({ length: 12 }, () => ({ message }) => ({
+    text: 'Noted.', extracted: /New Town/i.test(message) ? { area: 'New Town' } : {},
+  })));
   const say = (message) => chat(token, { sessionId: s, message }).expect(200);
 
   let r = await say('I want a wedding.');
@@ -198,7 +188,6 @@ test('Aura+ never invents venue, address, pincode or city; questions never overw
   const { user, token } = await makeUser();
   const s = sid();
   scriptLlm([
-    { text: 'ok', extracted: { eventType: 'birthday' } },
     { text: 'ok', extracted: { venueName: 'Grand Hotel', address: '12 Park Street', pincode: '700016', city: 'Mumbai', landmark: 'Near metro' } },
   ]);
   await chat(token, { sessionId: s, message: "It's my son's birthday" }).expect(200);

@@ -80,6 +80,14 @@ const vendorDocumentSchema = new Schema(
       checkedAt: { type: Date, default: null },
       error: { type: String, trim: true, default: '' },
     },
+    manualReview: {
+      required: { type: Boolean, default: false, index: true },
+      reason: { type: String, trim: true, default: '' },
+      status: { type: String, enum: ['NONE', 'NEEDS_REVIEW', 'IN_REVIEW', 'APPROVED', 'REJECTED'], default: 'NONE', index: true },
+      requestedAt: { type: Date, default: null },
+      reviewedBy: { type: Schema.Types.ObjectId, ref: 'AdminUser', default: null },
+      reviewedAt: { type: Date, default: null },
+    },
     expiryDate: {
       type: String,
       default: '',

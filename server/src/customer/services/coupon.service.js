@@ -68,6 +68,15 @@ export async function recordCouponUsageOnce(code) {
     {
       code: normalized,
       isActive: true,
+      $and: [
+        {
+          $or: [
+            { validUntil: { $exists: false } },
+            { validUntil: null },
+            { validUntil: { $gte: new Date() } },
+          ],
+        },
+      ],
       $or: [
         { usageLimit: { $exists: false } },
         { usageLimit: null },

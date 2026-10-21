@@ -161,18 +161,19 @@ test('compare: 2–4 options of one service', async () => {
   await request(app).get(url([ids.live, 'demo_cat_01'])).set(auth(token)).expect(400);
 });
 
-test('Aura+ sees compact options only once the event is confirmed', async () => {
+test('Aura+ sees real catalogue options during draft planning as well as after confirmation', async () => {
   const { user, token } = await makeUser();
   const llm = scriptLlm([{ text: 'ok', extracted: {} }, { text: 'ok', extracted: {} }]);
   const draft = await models.CustomerEvent.create({ customer: user._id, eventType: 'wedding', title: 'Draft', status: 'draft', city: 'Kolkata' });
   await request(app).post('/api/aura/chat').set(auth(token)).send({ sessionId: sid(), eventId: String(draft._id), message: 'hi' }).expect(200);
-  assert.match(llm.calls[0].systemPrompt, /"vendors":\[\]/);
+  assert.match(llm.calls[0].systemPrompt, /"vendor":"Premium Moments"/);
+  assert.ok(!llm.calls[0].systemPrompt.includes('Hidden Studio'));
 
   const ev = await plannedWedding(user, token);
   await request(app).patch(`/api/customer/events/${ev._id}/requirements/photography`).set(auth(token)).send({ status: 'pending' }).expect(200);
-  await request(app).post('/api/aura/chat').set(auth(token)).send({ sessionId: sid(), eventId: String(ev._id), message: 'Which photographer?' }).expect(200);
-  const prompt = llm.calls[1].systemPrompt;
-  assert.match(prompt, /"vendor":"Premium Moments"/);
-  assert.match(prompt, /"isDemo":true/);
-  assert.ok(!prompt.includes('Hidden Studio'));
+  const result = await request(app).post('/api/aura/chat').set(auth(token)).send({ sessionId: sid(), eventId: String(ev._id), message: 'Which photographer?' }).expect(200);
+  assert.equal(result.body.vendorSearch.source, 'customer_catalog_api');
+  assert.ok(result.body.vendorSuggestions.some(row => row.vendor === 'Premium Moments'));
+  assert.ok(!result.body.vendorSuggestions.some(row => row.vendor === 'Hidden Studio'));
+  assert.equal(llm.calls.length, 1, 'catalogue lookups answer directly from saved records');
 });

@@ -4,13 +4,18 @@ import { getLlmAdapter } from './llmAdapter.js';
 import { buildContext } from './contextBuilder.js';
 import { buildSystemPrompt } from './systemPrompt.js';
 import { applyGuards } from './extractionGuards.js';
-import { backfillFacts, messageStatesYear } from './factBackfill.js';
+import { backfillFacts, messageStatesYear, parseGuests, parseDate } from './factBackfill.js';
 import { writeExtraction } from './extractionWriter.js';
 import { buildUnderstanding, nextQuestion, serializeEvent } from '../services/understanding.js';
 import { findBudgetRange, budgetRangesFor, normalizeEventType } from '../services/planCatalog.js';
 import { badRequest, forbidden, notFound, HttpError } from '../utils/http.js';
 import { classifyAuraRequest } from '../../common/auraRouter.js';
 import { createPerformanceTracker } from '../../common/streamUtils.js';
+import { conversationLanguage, localizeAuraQuestion, auraLanguageInstruction } from '../../common/auraLanguage.js';
+import { resolveEventSwitch, eventChoices, switchReply } from './eventSwitch.js';
+import { isVendorRequest, isCatalogLookupOnly, selectVendorRows, vendorTruthReply, scopeMatchesEvent } from './vendorTruth.js';
+import { rememberCatalog, catalogScopeFor } from './catalogMemory.js';
+import { activityAnswer } from '../../common/auraActivityAnswer.js';
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const SKIP_TOPIC_RE = /^(event|requirement|location)\.[a-z_]+$/;
@@ -19,18 +24,6 @@ const MAX_MESSAGE = 2000;
 const FALLBACK_REPLY =
   "Sorry, I'm having trouble thinking right now. I've kept what you told me — please check the card, or try again in a moment.";
 const WEAK_REPLY_RE = /^(pata nahi|i don't know|not sure|main abhi|sorry,? i('| a)m having trouble|sorry,? i can('|no)t|please check the (card|plan))/i;
-const CATEGORY_LABELS = {
-  venue: 'venue',
-  catering: 'catering',
-  decor: 'decor',
-  photography: 'photography',
-  sound: 'sound',
-  cake: 'cake',
-  entertainment: 'entertainment',
-  anchor: 'anchor',
-  photo_booth: 'photo booth',
-  special_effects: 'special effects',
-};
 
 async function ownedSession(customerId, sessionId) {
   if (!SESSION_ID_RE.test(sessionId || '')) throw badRequest('INVALID_SESSION', 'Invalid session id');
@@ -57,15 +50,38 @@ async function stateFor(customerId, eventId) {
   };
 }
 
+async function refreshCatalog(memory, event) {
+  const scope = catalogScopeFor(memory, event);
+  if (!scope) return { vendorSuggestions: [], vendorSearch: null };
+  const vendorSuggestions = selectVendorRows(await core.vendorCatalog(scope), memory.query);
+  return { vendorSuggestions, vendorSearch: { source: 'customer_catalog_api', query: memory.query, city: scope.city || null, date: scope.eventDate || null, guestCount: scope.guestCount || null, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(scope, event), checkedAt: new Date().toISOString() } };
+}
+
 export async function getSession(customer, sessionId, { eventId } = {}) {
   const session = await ownedSession(customer._id, sessionId);
   let scopedEventId = session?.event || null;
   if (!session && eventId) scopedEventId = (await ownedEventOr404(customer._id, eventId))._id;
   const messages = session ? await auraRepo.listMessages(sessionId) : [];
+  const state = await stateFor(customer._id, scopedEventId);
+  const activity = await core.readActivity(customer._id, scopedEventId);
+  const language = conversationLanguage('', messages);
+  const choices = session?.switchChoices?.length ? eventChoices((await core.listEvents(customer._id)).filter(event => session.switchChoices.map(String).includes(String(event._id)))) : [];
+  const lastQuery = [...messages].reverse().find(message => message.role === 'user')?.content || '';
+  let memory = session?.catalogSearch || null;
+  if (!choices.length && !memory && isVendorRequest(lastQuery)) {
+    const city = await core.catalogLocationHint(lastQuery);
+    const scope = { ...(state.activeEvent || {}), _id: scopedEventId, ...(city ? { city, location: city.toLowerCase() === state.activeEvent?.city?.toLowerCase() ? state.activeEvent?.location : null } : {}), ...(parseGuests(lastQuery) ? { guestCount: parseGuests(lastQuery) } : {}), ...(parseDate(lastQuery) ? { eventDate: parseDate(lastQuery).date } : {}) };
+    memory = rememberCatalog(lastQuery, scope, state.activeEvent);
+    if (session) await auraRepo.setCatalogSearch(sessionId, memory);
+  }
+  const { vendorSuggestions, vendorSearch } = choices.length ? { vendorSuggestions: [], vendorSearch: null } : await refreshCatalog(memory, state.activeEvent);
   return {
     sessionId,
     messages: messages.map((m) => ({ role: m.role, content: m.content, createdAt: m.createdAt })),
-    ...(await stateFor(customer._id, scopedEventId)),
+    ...state,
+    nextQuestion: choices.length || isCatalogLookupOnly(lastQuery) || activityAnswer(lastQuery, activity, language) ? null : localizeAuraQuestion(state.nextQuestion, language, state.activeEvent),
+    eventChoices: choices,
+    vendorSuggestions, vendorSearch, activity,
   };
 }
 
@@ -98,13 +114,17 @@ function salvageOntoCurrent(x) {
  * While there is no event or it is a draft, Aura+ asks exactly one question:
  * the one computed from what was actually saved this turn (never the model's).
  */
-function composeReply(reply, { event, nextQuestion: q, assumedDate }) {
+function composeReply(reply, { event, nextQuestion: q, assumedDate, language = 'en' }) {
   const parts = [reply.trim()];
   if (assumedDate) {
-    parts.push(`I've assumed the year ${assumedDate.slice(0, 4)} for the date — please check it on the card.`);
+    const year = assumedDate.slice(0, 4);
+    parts.push(language === 'hi' ? `मैं तारीख के लिए ${year} मान रही हूँ। कृपया कार्ड में तारीख जाँच लें।` : language === 'hinglish' ? `Main tareekh ke liye ${year} maan rahi hoon. Kripya card mein date check kar lein.` : `I've assumed the year ${year} for the date — please check it on the card.`);
   }
   const asking = !event || event.status === 'draft';
-  if (asking && q?.question && !reply.includes(q.question)) parts.push(q.question);
+  const alreadyAsksQuestion = /[?？]/.test(reply);
+  if (asking && q?.question && !alreadyAsksQuestion && !reply.toLowerCase().includes(q.question.toLowerCase())) {
+    parts.push(q.question);
+  }
   return parts.join('\n\n');
 }
 
@@ -113,28 +133,10 @@ function isWeakReply(reply = '') {
   return !text || WEAK_REPLY_RE.test(text) || text.length < 30;
 }
 
-function deterministicReply({ activeEvent, extracted = {}, text = '' }) {
-  const eventType = activeEvent?.eventType || extracted.eventType || extracted.newEventType || 'event';
-  const city = activeEvent?.city || extracted.city || extracted.newEventCity;
-  const guestCount = activeEvent?.guestCount || extracted.guestCount || extracted.newEventGuestCount;
-  const wantedCategories = Object.entries(CATEGORY_LABELS)
-    .filter(([key, label]) => new RegExp(`\\b${label.replace(' ', '\\s+')}\\b`, 'i').test(text) || extracted.neededCategories?.includes?.(key))
-    .map(([, label]) => label);
-
-  const context = [
-    eventType ? `a ${String(eventType).replace(/_/g, ' ')}` : null,
-    city ? `in ${city}` : null,
-    guestCount ? `for ${guestCount} guests` : null,
-  ].filter(Boolean).join(' ');
-
-  const parts = [`Got it. I have started planning ${context || 'your event'} and saved the details I could read from your message.`];
-  if (wantedCategories.length) {
-    parts.push(`For vendors, I would handle ${wantedCategories.slice(0, 6).join(', ')} first, then compare availability, travel fit, package total, and review quality before you request quotes.`);
-  } else {
-    parts.push('Next, confirm the date, guest count, city, budget, and the services you want so I can shortlist vendors cleanly.');
-  }
-  parts.push('Nothing is booked until you approve it.');
-  return parts.join('\n\n');
+function deterministicReply({ activeEvent, extracted = {}, text = '', language = 'en' }) {
+  if (language === 'hi') return activeEvent ? 'जो जानकारी मिल सकी, उसे कार्ड पर दिखा रही हूँ। आपकी मंज़ूरी के बिना कोई बुकिंग नहीं होगी।' : 'मैं आपका इवेंट प्लान करने में मदद कर सकती हूँ।';
+  if (language === 'hinglish') return activeEvent ? 'Jo jaankari mil saki, use card par dikha rahi hoon. Aapki manzoori ke bina koi booking nahi hogi.' : 'Main aapka event plan karne mein madad kar sakti hoon.';
+  return activeEvent ? "I've added the details I could save to your event card. Nothing is booked until you approve it." : 'I can help you plan your event.';
 }
 
 // The draft starts with its type only; the other facts go through the writer,
@@ -147,7 +149,7 @@ function createDraftFrom(customerId, facts) {
 /**
  * POST /aura/chat pipeline (Blueprint §5.1).
  */
-export async function chat(customer, { sessionId, message, eventId, skipTopic, budgetRange, serviceLocation } = {}, options = {}) {
+export async function chat(customer, { sessionId, message, eventId, switchEventId, skipTopic, budgetRange, serviceLocation } = {}, options = {}) {
   const tracker = createPerformanceTracker();
   const customerId = customer._id;
   const text = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE) : '';
@@ -169,19 +171,47 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
     event = await core.getEvent(customerId, session.event);
   }
 
+  if (switchEventId !== undefined && (typeof switchEventId !== 'string' || !/^[a-f\d]{24}$/i.test(switchEventId))) throw badRequest('INVALID_EVENT', 'Invalid event');
+  const navigation = resolveEventSwitch(text, await core.listEvents(customerId), { currentId: event?._id, previousId: session.previousEvent, pendingIds: session.switchChoices || [], explicitId: switchEventId });
+  if (navigation) {
+    if (navigation.kind === 'switch' && !navigation.event) throw notFound('Event not found');
+    const history = await auraRepo.recentMessages(sessionId, 12);
+    const language = conversationLanguage(switchEventId ? '' : text, history);
+    const selected = navigation.event;
+    const choices = selected ? [] : eventChoices(navigation.events);
+    if (selected) await auraRepo.setSessionEvent(sessionId, selected._id);
+    else await auraRepo.setSwitchChoices(sessionId, choices.map(choice => choice.id));
+    const state = await stateFor(customerId, selected?._id || event?._id);
+    state.nextQuestion = selected ? localizeAuraQuestion(state.nextQuestion, language, state.activeEvent) : null;
+    const reply = switchReply(language, selected, choices, navigation.notFound);
+    await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: reply }]);
+
+    console.log('\n' + '═'.repeat(70));
+    console.log(`[Aura Customer Chat ⇄ Switch Event]`);
+    console.log(`👤 Customer : ${customer.fullName || 'Customer'} (${customer.email || customerId})`);
+    console.log(`💬 Session  : ${sessionId}`);
+    console.log(`📩 User Msg : "${text}"`);
+    console.log(`🤖 Aura Rep : "${reply}"`);
+    console.log('═'.repeat(70) + '\n');
+
+    return { reply, ...state, eventChoices: choices, eventSwitched: !!selected, written: [], skipped: [], createdEventId: null };
+  }
+  if (session.switchChoices?.length) await auraRepo.setSwitchChoices(sessionId, []);
+
   // What Aura asked last turn (before this turn's writes) — used by the guards.
   const before = event ? await stateFor(customerId, event._id) : await stateFor(customerId, null);
   const askedTopic = before.nextQuestion?.topic || null;
 
   // 3. Chips first
   const chipWrites = [];
-  if (skipTopic !== undefined && skipTopic !== null) {
+  const readOnlyCatalog = isCatalogLookupOnly(text);
+  if (!readOnlyCatalog && skipTopic !== undefined && skipTopic !== null) {
     if (typeof skipTopic !== 'string' || !SKIP_TOPIC_RE.test(skipTopic)) throw badRequest('INVALID_SKIP_TOPIC', 'Invalid topic');
     if (!event) throw badRequest('NO_ACTIVE_EVENT', 'Tell me about your event first');
     await core.setNote(event._id, `skip:${skipTopic}`, true, 'KNOWN', 'customer');
     chipWrites.push(`skip:${skipTopic}`);
   }
-  if (budgetRange !== undefined && budgetRange !== null) {
+  if (!readOnlyCatalog && budgetRange !== undefined && budgetRange !== null) {
     const range = findBudgetRange(String(budgetRange));
     if (!range) throw badRequest('INVALID_BUDGET_RANGE', 'Unknown budget range');
     if (!event) throw badRequest('NO_ACTIVE_EVENT', 'Tell me about your event first');
@@ -190,7 +220,7 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
     chipWrites.push('budgetRange');
   }
   // "At the event venue" chip for a service location.
-  if (serviceLocation !== undefined && serviceLocation !== null) {
+  if (!readOnlyCatalog && serviceLocation !== undefined && serviceLocation !== null) {
     if (typeof serviceLocation !== 'object' || serviceLocation.mode !== 'event' || typeof serviceLocation.category !== 'string') {
       throw badRequest('INVALID_SERVICE_LOCATION', 'Invalid service location');
     }
@@ -204,9 +234,32 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   // 4. Context & Request Routing
   tracker.markContextStart();
   if (options.onStatus) options.onStatus('context_retrieval');
-  const { prompt: context } = await buildContext({ customer, event });
+  const vendorRequest = isVendorRequest(text);
+  const cityHint = vendorRequest ? await core.catalogLocationHint(text) : null;
+  const searchScope = {
+    ...(event || {}), ...(cityHint && cityHint.toLowerCase() !== event?.city?.toLowerCase() ? { city: cityHint, location: null } : {}),
+    ...(vendorRequest && parseGuests(text) ? { guestCount: parseGuests(text) } : {}),
+    ...(vendorRequest && parseDate(text) ? { eventDate: parseDate(text).date } : {}),
+  };
+  const { prompt: context } = await buildContext({ customer, event, catalogScope: searchScope });
   const history = await auraRepo.recentMessages(sessionId, 12);
+  const language = conversationLanguage(text, history);
   tracker.markContextEnd();
+
+  const operational = activityAnswer(text, context.activity, language);
+  if (operational) {
+    await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: operational.reply }]);
+    return { ...operational, ...(await stateFor(customerId, event?._id)), nextQuestion: null, activity: context.activity, written: [], skipped: [], createdEventId: null };
+  }
+
+  const searchMessage = /find one|ढूँढ|dhoondh/i.test(text) && askedTopic?.startsWith('requirement.') ? `${text} ${askedTopic.split('.')[1]}` : text;
+  if (isCatalogLookupOnly(text)) {
+    const vendorSuggestions = selectVendorRows(context.vendors, searchMessage);
+    const reply = vendorTruthReply(vendorSuggestions, searchScope, language, searchMessage);
+    await auraRepo.setCatalogSearch(sessionId, rememberCatalog(searchMessage, searchScope, event));
+    await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: reply }]);
+    return { reply, ...(await stateFor(customerId, event?._id)), nextQuestion: null, vendorSuggestions, vendorSearch: { ...context.vendorSearch, query: searchMessage, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(searchScope, event), checkedAt: new Date().toISOString() }, written: [], skipped: [], createdEventId: null };
+  }
 
   const route = classifyAuraRequest(text, { intent: event?.eventType ? 'EVENT_PLAN' : 'GENERAL' });
   if (options.onStatus) options.onStatus(route.stage);
@@ -214,15 +267,17 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   // 5. LLM
   let reply = '';
   let rawExtracted = {};
+  const literal = backfillFacts(text, {}, { askedTopic });
+  const literalOnly = !/[?？]|\b(why|how|should|explain|suggest|recommend|kya|kyon|kyu|kaise|batao|batayein)\b/i.test(text) && Object.values(literal).some(value => value != null && value !== '' && (!Array.isArray(value) || value.length));
   tracker.markGeminiStart();
-  try {
+  if (!literalOnly) try {
     const out = await getLlmAdapter().chat({
-      systemPrompt: buildSystemPrompt(context),
+      systemPrompt: `${buildSystemPrompt(context)}\n\n${auraLanguageInstruction(language)}`,
       history,
       message: text,
       model: route.model,
       thinkingLevel: route.thinkingLevel,
-      onChunk: options.onChunk ? (token) => {
+      onChunk: options.onChunk && !vendorRequest ? (token) => {
         tracker.markFirstToken();
         options.onChunk(token);
       } : undefined,
@@ -239,6 +294,9 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
   // 6–7. Guards, then the deterministic fallback parser (blanks only)
   const { extracted: guarded, dropped } = applyGuards(rawExtracted, text, { askedTopic });
   let x = backfillFacts(text, guarded, { askedTopic });
+  // A catalogue-backed place match is safe for a planning statement, including
+  // lowercase Roman Hindi. Pure catalogue queries returned above without writes.
+  if (!x.city && !x.newEventCity && cityHint) x.city = cityHint;
   if (chipWrites.includes('budgetRange')) {
     // the chip is the statement
     delete x.budget;
@@ -281,7 +339,9 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
         area: x.area,
         serviceLocations: x.serviceLocations,
         neededCategories: x.neededCategories,
+        serviceBriefs: x.serviceBriefs,
         providedCategory: x.providedCategory,
+        providedCategories: x.providedCategories,
         providedValue: x.providedValue,
         needsHelpCategory: x.needsHelpCategory,
         tentativeCategory: x.tentativeCategory,
@@ -305,10 +365,26 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
 
   // 11. State AFTER this turn's writes; the one next question comes from it
   const after = await stateFor(customerId, event?._id || null);
-  if (isWeakReply(reply)) {
-    reply = deterministicReply({ activeEvent: after.activeEvent, extracted: x, text });
+  let vendorSuggestions = [];
+  if (vendorRequest) {
+    const freshScope = { ...searchScope, ...(event || {}), ...(after.activeEvent || {}), _id: event?._id, ...(cityHint ? { city: cityHint, location: cityHint.toLowerCase() !== after.activeEvent?.city?.toLowerCase() ? null : after.activeEvent?.location } : {}) };
+    vendorSuggestions = selectVendorRows(await core.vendorCatalog(freshScope), searchMessage);
+    reply = vendorTruthReply(vendorSuggestions, freshScope, language, searchMessage);
+    after.vendorSearch = { source: 'customer_catalog_api', query: searchMessage, city: freshScope.city || null, date: freshScope.eventDate || null, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(freshScope, after.activeEvent), checkedAt: new Date().toISOString() };
+    await auraRepo.setCatalogSearch(sessionId, rememberCatalog(searchMessage, freshScope, after.activeEvent));
+  } else if (session.catalogSearch) {
+    const refreshed = await refreshCatalog(session.catalogSearch, after.activeEvent);
+    vendorSuggestions = refreshed.vendorSuggestions;
+    after.vendorSearch = refreshed.vendorSearch;
+    const scope = catalogScopeFor(session.catalogSearch, after.activeEvent);
+    if (scope) await auraRepo.setCatalogSearch(sessionId, rememberCatalog(session.catalogSearch.query, scope, after.activeEvent));
   }
-  reply = composeReply(reply || deterministicReply({ activeEvent: after.activeEvent, extracted: x, text }), {
+  after.nextQuestion = localizeAuraQuestion(after.nextQuestion, language, after.activeEvent);
+  if (isWeakReply(reply)) {
+    reply = deterministicReply({ activeEvent: after.activeEvent, extracted: x, text, language });
+  }
+  reply = composeReply(reply || deterministicReply({ activeEvent: after.activeEvent, extracted: x, text, language }), {
+    language,
     event: after.activeEvent,
     nextQuestion: after.nextQuestion,
     assumedDate: writes.written.includes('eventDate') && !yearStated ? after.understanding?.facts.date.value : null,
@@ -317,6 +393,35 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
     { role: 'user', content: text },
     { role: 'model', content: reply },
   ]);
+
+  const metrics = tracker.getMetrics();
+  console.log('\n' + '═'.repeat(70));
+  console.log(`[Aura Customer Chat]`);
+  console.log(`👤 Customer : ${customer.fullName || 'Customer'} (${customer.email || customerId})`);
+  console.log(`💬 Session  : ${sessionId}`);
+  if (after.activeEvent) {
+    console.log(`📅 Event    : ${after.activeEvent.title || 'Untitled'} (${after.activeEvent.eventType || 'N/A'}) | City: ${after.activeEvent.city || 'N/A'} | Date: ${after.activeEvent.eventDate || 'N/A'}`);
+  }
+  console.log(`📩 User Msg : "${text}"`);
+  if (chipWrites.length) {
+    console.log(`⚡ Action   : ${chipWrites.join(', ')}`);
+  }
+  const cleanFacts = Object.entries(x || {}).filter(([_, v]) => v !== undefined && v !== null && v !== '');
+  if (cleanFacts.length) {
+    console.log(`🔍 Extracted:`, JSON.stringify(Object.fromEntries(cleanFacts)));
+  }
+  if (writes.written.length) {
+    console.log(`💾 Saved    : ${writes.written.join(', ')}`);
+  }
+  console.log(`🤖 Aura (${route.model}) [${language}]:\n"${reply}"`);
+  if (after.nextQuestion?.question) {
+    console.log(`❓ Next Q   : "${after.nextQuestion.question}"`);
+  }
+  if (metrics?.totalDurationMs) {
+    console.log(`⏱️ Perf     : Total ${metrics.totalDurationMs}ms | FirstToken ${metrics.firstTokenMs || 'N/A'}ms`);
+  }
+  console.log('═'.repeat(70) + '\n');
+
   return {
     reply,
     extracted: x,
@@ -327,6 +432,7 @@ export async function chat(customer, { sessionId, message, eventId, skipTopic, b
     metrics: tracker.getMetrics(),
     model: route.model,
     thinkingLevel: route.thinkingLevel,
+    vendorSuggestions,
     ...after,
   };
 }

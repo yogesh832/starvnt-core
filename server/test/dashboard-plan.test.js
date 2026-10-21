@@ -123,8 +123,8 @@ test('requirements: customer rules, locks, closed events, add service', async ()
 
   // Adding a service by a synonym creates the row once.
   r = await request(app).patch(url('dj')).set(auth(token)).send({ status: 'pending' }).expect(200);
-  assert.equal(r.body.requirement.category, 'entertainment');
-  assert.equal(r.body.requirement.tier, 'recommended');
+  assert.equal(r.body.requirement.category, 'sound');
+  assert.equal(r.body.requirement.tier, 'essential');
 
   await models.CustomerEvent.updateOne({ _id: ev._id }, { $set: { status: 'completed' } });
   const closed = await request(app).patch(url('photography')).set(auth(token)).send({ status: 'missing' }).expect(400);

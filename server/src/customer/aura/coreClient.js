@@ -4,6 +4,7 @@ import * as reqRepo from '../repositories/requirements.repo.js';
 import * as auraRepo from '../repositories/aura.repo.js';
 import * as catalog from '../services/catalog.service.js';
 import * as commerceRepo from '../repositories/commerce.repo.js';
+export { customerAuraActivity as readActivity } from '../../common/auraActivity.service.js';
 
 /**
  * The ONLY door from Aura+ into Core. Everything Aura+ reads or writes goes
@@ -21,6 +22,8 @@ export const listRequirements = (eventId) => reqRepo.listRequirements(eventId);
 export const listContext = (eventId) => auraRepo.listContext(eventId);
 export const optionStats = (event) => catalog.optionStats(event);
 export const compactOptions = (event, categories) => catalog.compactOptionsFor(event, categories);
+export const vendorCatalog = (event) => catalog.auraCatalogOptions(event);
+export const catalogLocationHint = (message) => catalog.catalogLocationHint(message);
 // Read-only views of commitments. There is no write counterpart here.
 export const readBookings = (eventId) => commerceRepo.listBookings(eventId);
 export const readPayments = (eventId) => commerceRepo.listPayments(eventId);

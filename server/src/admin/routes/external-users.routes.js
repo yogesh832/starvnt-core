@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdminAuth, requirePermission } from '../middleware/requireAdminAuth.js';
+import { requireAdminAuth, requirePermission, requireAnyPermission } from '../middleware/requireAdminAuth.js';
 import { externalConn } from '../../db/index.js';
 import { evaluateVendorActivation } from '../../external/services/vendorActivation.service.js';
 import { recordAudit, auditContext } from '../utils/audit.js';
@@ -48,7 +48,7 @@ router.use(requireAdminAuth);
 /**
  * List all Customers
  */
-router.get('/customers', requirePermission('users.read'), async (req, res, next) => {
+router.get('/customers', requirePermission('customers.read'), async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 50;
     const skip = parseInt(req.query.skip, 10) || 0;
@@ -104,7 +104,7 @@ router.patch('/customers/:id', requirePermission('customers.update'), async (req
     await recordAudit({
       ...auditContext(req),
       action: 'CUSTOMER_UPDATED',
-      targetResource: 'customers',
+      targetType: 'customers',
       targetId: customer._id,
       fromState,
       toState: {
@@ -142,7 +142,7 @@ router.post('/customers/:id/flag', requirePermission('customers.update'), async 
     await recordAudit({
       ...auditContext(req),
       action: nextFlag ? 'CUSTOMER_FLAGGED' : 'CUSTOMER_UNFLAGGED',
-      targetResource: 'customers',
+      targetType: 'customers',
       targetId: customer._id,
       reason,
       toState: { isFlagged: customer.isFlagged, flagReason: customer.flagReason },
@@ -183,7 +183,7 @@ router.post('/customers/:id/restrict', requirePermission('customers.disable'), a
     await recordAudit({
       ...auditContext(req),
       action: customer.isRestricted ? 'CUSTOMER_RESTRICTED' : 'CUSTOMER_UNRESTRICTED',
-      targetResource: 'customers',
+      targetType: 'customers',
       targetId: customer._id,
       reason,
       toState: {
@@ -210,17 +210,33 @@ router.delete('/customers/:id', requirePermission('customers.delete'), async (re
       return res.status(404).json({ error: 'CUSTOMER_NOT_FOUND' });
     }
 
-    await ExternalUser.findByIdAndDelete(customer._id);
+    const fromState = {
+      fullName: customer.fullName,
+      email: customer.email,
+      status: customer.status,
+      isRestricted: customer.isRestricted,
+    };
+    customer.status = 'DISABLED';
+    customer.isRestricted = true;
+    customer.restrictionReason = req.body?.reason || 'Deactivated by admin. Record retained for audit and relationship integrity.';
+    customer.restrictedUntil = null;
+    await customer.save();
 
     await recordAudit({
       ...auditContext(req),
-      action: 'CUSTOMER_DELETED',
-      targetResource: 'customers',
-      targetId: customer._id,
-      fromState: { fullName: customer.fullName, email: customer.email },
+      action: 'CUSTOMER_DEACTIVATED',
+      targetType: 'ExternalUser',
+      targetId: String(customer._id),
+      fromState,
+      toState: {
+        status: customer.status,
+        isRestricted: customer.isRestricted,
+        restrictionReason: customer.restrictionReason,
+      },
+      reason: req.body?.reason || '',
     });
 
-    res.json({ ok: true, message: 'Customer deleted successfully' });
+    res.json({ ok: true, message: 'Customer deactivated and retained for audit.', customer: customer.toSafeJSON() });
   } catch (err) {
     next(err);
   }
@@ -229,7 +245,7 @@ router.delete('/customers/:id', requirePermission('customers.delete'), async (re
 /**
  * List all Vendors (Users)
  */
-router.get('/vendors', requirePermission('users.read'), async (req, res, next) => {
+router.get('/vendors', requirePermission('vendors.read'), async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 50;
     const skip = parseInt(req.query.skip, 10) || 0;
@@ -253,7 +269,7 @@ router.get('/vendors', requirePermission('users.read'), async (req, res, next) =
 /**
  * List all Vendor Organizations
  */
-router.get('/organizations', requirePermission('users.read'), async (req, res, next) => {
+router.get('/organizations', requirePermission('vendors.read'), async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 50;
     const skip = parseInt(req.query.skip, 10) || 0;
@@ -269,6 +285,8 @@ router.get('/organizations', requirePermission('users.read'), async (req, res, n
       } else if (lower === 'pending') {
         query['verification.isVerified'] = { $ne: true };
         query.status = { $ne: 'REJECTED' };
+      } else if (lower === 'manual review' || lower === 'review') {
+        query['manualReview.status'] = { $in: ['NEEDS_REVIEW', 'IN_REVIEW'] };
       } else if (lower === 'rejected') {
         query.status = 'REJECTED';
       } else if (lower === 'flagged') {
@@ -307,11 +325,29 @@ router.get('/organizations', requirePermission('users.read'), async (req, res, n
       .populate('owner', 'fullName email phone')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
       
     const total = await VendorOrganization.countDocuments(query);
+    const organizationIds = organizations.map((org) => org._id);
+    const pendingDocCounts = await VendorDocument.aggregate([
+      { $match: { vendor: { $in: organizationIds }, status: { $in: ['SUBMITTED', 'PENDING'] } } },
+      { $group: { _id: '$vendor', count: { $sum: 1 } } },
+    ]);
+    const pendingDocCountByVendor = new Map(pendingDocCounts.map((row) => [String(row._id), row.count]));
+    const enriched = organizations.map((org) => {
+      const pendingDocumentCount = pendingDocCountByVendor.get(String(org._id)) || 0;
+      return {
+        ...org,
+        pendingDocumentCount,
+        adminActions: {
+          canApproveVerification: pendingDocumentCount > 0 && org.verification?.isVerified !== true,
+          kycActionLabel: org.verification?.isVerified ? 'View KYC' : org.manualReview?.status && org.manualReview.status !== 'NONE' ? 'Manual Review' : pendingDocumentCount > 0 ? 'Review KYC' : 'KYC Pending',
+        },
+      };
+    });
 
-    res.json({ ok: true, count: organizations.length, total, organizations });
+    res.json({ ok: true, count: enriched.length, total, organizations: enriched });
   } catch (err) {
     next(err);
   }
@@ -351,7 +387,7 @@ router.patch('/organizations/:id', requirePermission('vendors.update'), async (r
     await recordAudit({
       ...auditContext(req),
       action: 'VENDOR_ORG_UPDATED',
-      targetResource: 'vendors',
+      targetType: 'vendors',
       targetId: organization._id,
       fromState,
       toState: {
@@ -393,7 +429,7 @@ router.post('/organizations/:id/flag', requirePermission('vendors.update'), asyn
     await recordAudit({
       ...auditContext(req),
       action: nextFlag ? 'VENDOR_FLAGGED' : 'VENDOR_UNFLAGGED',
-      targetResource: 'vendors',
+      targetType: 'vendors',
       targetId: organization._id,
       reason,
       toState: { isFlagged: organization.isFlagged, flagReason: organization.flagReason },
@@ -445,7 +481,7 @@ router.post('/organizations/:id/restrict', requirePermission('vendors.disable'),
     await recordAudit({
       ...auditContext(req),
       action: organization.isRestricted ? 'VENDOR_RESTRICTED' : 'VENDOR_UNRESTRICTED',
-      targetResource: 'vendors',
+      targetType: 'vendors',
       targetId: organization._id,
       reason,
       toState: {
@@ -473,27 +509,46 @@ router.delete('/organizations/:id', requirePermission('vendors.delete'), async (
       return res.status(404).json({ error: 'VENDOR_ORGANIZATION_NOT_FOUND' });
     }
 
-    // Clean up vendor docs
-    await VendorDocument.deleteMany({ vendor: organization._id });
+    const fromState = {
+      businessName: organization.businessName,
+      owner: organization.owner,
+      status: organization.status,
+      activationState: organization.activationState,
+      isRestricted: organization.isRestricted,
+    };
+    organization.status = 'SUSPENDED';
+    organization.activationState = 'REGISTERED';
+    organization.isCommerciallyActive = false;
+    organization.isRestricted = true;
+    organization.restrictionReason = req.body?.reason || 'Deactivated by admin. Record retained for audit and relationship integrity.';
+    organization.restrictedUntil = null;
+    await organization.save();
 
-    // Detach from owner if owner exists
     if (organization.owner) {
       await ExternalUser.findByIdAndUpdate(organization.owner, {
-        vendorOrganization: null,
+        status: 'SUSPENDED',
+        isRestricted: true,
+        restrictionReason: organization.restrictionReason,
       });
     }
 
-    await VendorOrganization.findByIdAndDelete(organization._id);
-
     await recordAudit({
       ...auditContext(req),
-      action: 'VENDOR_DELETED',
-      targetResource: 'vendors',
-      targetId: organization._id,
-      fromState: { businessName: organization.businessName, owner: organization.owner },
+      action: 'VENDOR_DEACTIVATED',
+      targetType: 'VendorOrganization',
+      targetId: String(organization._id),
+      fromState,
+      toState: {
+        status: organization.status,
+        activationState: organization.activationState,
+        isCommerciallyActive: organization.isCommerciallyActive,
+        isRestricted: organization.isRestricted,
+        restrictionReason: organization.restrictionReason,
+      },
+      reason: req.body?.reason || '',
     });
 
-    res.json({ ok: true, message: 'Vendor organization deleted successfully' });
+    res.json({ ok: true, message: 'Vendor organization deactivated and retained for audit.', organization });
   } catch (err) {
     next(err);
   }
@@ -502,7 +557,7 @@ router.delete('/organizations/:id', requirePermission('vendors.delete'), async (
 /**
  * Get vendor organization details and uploaded KYC documents for admin review
  */
-router.get('/organizations/:id/documents', requirePermission('users.read'), async (req, res, next) => {
+router.get('/organizations/:id/documents', requirePermission('vendors.read'), async (req, res, next) => {
   try {
     const organization = await VendorOrganization.findById(req.params.id).populate('owner', 'fullName email phone');
     if (!organization) {
@@ -535,12 +590,20 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
     }
 
     if (approved) {
-      if (document) {
-        document.status = 'VERIFIED';
-        document.verifiedAt = new Date();
-        document.notes = [document.notes, notes || 'Approved by Core admin.'].filter(Boolean).join(' ');
-        await document.save();
+      if (!document) {
+        return res.status(409).json({ error: 'NO_PENDING_KYC_DOCUMENT', message: 'A submitted KYC document is required before vendor verification can be approved.' });
       }
+      document.status = 'VERIFIED';
+      document.verifiedAt = new Date();
+      document.notes = [document.notes, notes || 'Approved by Core admin.'].filter(Boolean).join(' ');
+      document.manualReview = {
+        ...(document.manualReview?.toObject?.() || document.manualReview || {}),
+        required: false,
+        status: 'APPROVED',
+        reviewedBy: req.admin?._id || null,
+        reviewedAt: new Date(),
+      };
+      await document.save();
 
       organization.verification = {
         ...(organization.verification?.toObject?.() || organization.verification || {}),
@@ -551,10 +614,24 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
         documentRef: document?._id || organization.verification?.documentRef || null,
         notes: notes || 'Approved from Core admin verification panel.',
       };
+      organization.manualReview = {
+        ...(organization.manualReview?.toObject?.() || organization.manualReview || {}),
+        status: 'APPROVED',
+        reviewedBy: req.admin?._id || null,
+        reviewedAt: new Date(),
+        notes: notes || 'Approved from Core admin verification panel.',
+      };
     } else {
       if (document) {
         document.status = 'REJECTED';
         document.notes = [document.notes, notes || 'Rejected by Core admin.'].filter(Boolean).join(' ');
+        document.manualReview = {
+          ...(document.manualReview?.toObject?.() || document.manualReview || {}),
+          required: false,
+          status: 'REJECTED',
+          reviewedBy: req.admin?._id || null,
+          reviewedAt: new Date(),
+        };
         await document.save();
       }
 
@@ -569,6 +646,13 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
         organization.verification = {
           ...(organization.verification?.toObject?.() || organization.verification || {}),
           isVerified: false,
+          notes: notes || 'Rejected by Core admin.',
+        };
+        organization.manualReview = {
+          ...(organization.manualReview?.toObject?.() || organization.manualReview || {}),
+          status: 'REJECTED',
+          reviewedBy: req.admin?._id || null,
+          reviewedAt: new Date(),
           notes: notes || 'Rejected by Core admin.',
         };
       } else {
@@ -587,10 +671,60 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
   }
 });
 
+router.post('/organizations/:id/manual-review', requirePermission('vendors.approve'), async (req, res, next) => {
+  try {
+    const { status = 'IN_REVIEW', reason = '', documentId = null, notes = '' } = req.body || {};
+    const allowed = new Set(['NEEDS_REVIEW', 'IN_REVIEW', 'APPROVED', 'REJECTED']);
+    if (!allowed.has(status)) return res.status(400).json({ error: 'INVALID_REVIEW_STATUS' });
+    const organization = await VendorOrganization.findById(req.params.id);
+    if (!organization) return res.status(404).json({ error: 'VENDOR_ORGANIZATION_NOT_FOUND' });
+
+    let document = null;
+    if (documentId) {
+      document = await VendorDocument.findOne({ _id: documentId, vendor: organization._id });
+      if (!document) return res.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
+      document.manualReview = {
+        ...(document.manualReview?.toObject?.() || document.manualReview || {}),
+        required: ['NEEDS_REVIEW', 'IN_REVIEW'].includes(status),
+        status,
+        reason: reason || document.manualReview?.reason || '',
+        reviewedBy: ['APPROVED', 'REJECTED'].includes(status) ? req.admin?._id || null : document.manualReview?.reviewedBy || null,
+        reviewedAt: ['APPROVED', 'REJECTED'].includes(status) ? new Date() : document.manualReview?.reviewedAt || null,
+      };
+      await document.save();
+    }
+
+    organization.manualReview = {
+      ...(organization.manualReview?.toObject?.() || organization.manualReview || {}),
+      status,
+      reason: reason || organization.manualReview?.reason || 'Manual KYC review',
+      documentRef: document?._id || organization.manualReview?.documentRef || null,
+      requestedAt: organization.manualReview?.requestedAt || new Date(),
+      assignedTo: ['NEEDS_REVIEW', 'IN_REVIEW'].includes(status) ? req.admin?._id || null : organization.manualReview?.assignedTo || null,
+      reviewedBy: ['APPROVED', 'REJECTED'].includes(status) ? req.admin?._id || null : organization.manualReview?.reviewedBy || null,
+      reviewedAt: ['APPROVED', 'REJECTED'].includes(status) ? new Date() : organization.manualReview?.reviewedAt || null,
+      notes,
+    };
+    await organization.save();
+    await recordAudit({
+      ...auditContext(req),
+      action: 'VENDOR_KYC_MANUAL_REVIEW_UPDATED',
+      targetType: 'VendorOrganization',
+      targetId: String(organization._id),
+      reason,
+      toState: { manualReview: organization.manualReview },
+    });
+
+    res.json({ ok: true, organization, document, activation: await evaluateVendorActivation(organization._id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /**
  * Get detailed External User profile
  */
-router.get('/:id', requirePermission('users.read'), async (req, res, next) => {
+router.get('/:id', requireAnyPermission('customers.read', 'vendors.read'), async (req, res, next) => {
   try {
     const user = await ExternalUser.findById(req.params.id).select('-passwordHash');
     if (!user) {

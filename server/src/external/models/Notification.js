@@ -113,5 +113,6 @@ notificationSchema.index(
   { idempotencyKey: 1 },
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
+notificationSchema.index({ vendor: 1, createdAt: 1, _id: 1 });
 
 export const Notification = externalConn.model('Notification', notificationSchema);

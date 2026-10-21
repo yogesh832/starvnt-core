@@ -192,8 +192,8 @@ async function seedMaster() {
         totalAmount: 50000,
         pricing: { basePrice: 48000, travelFee: 2000, totalAmount: 50000 },
         bookingStatus: 'CONFIRMED',
-        paymentStatus: 'PAYMENT_VERIFIED',
-        executionStatus: 'SERVICE_SCHEDULED',
+        paymentStatus: 'PENDING',
+        executionStatus: 'NOT_STARTED',
         settlementStatus: 'NOT_ELIGIBLE',
       },
       {
@@ -209,8 +209,8 @@ async function seedMaster() {
         totalAmount: 52000,
         pricing: { basePrice: 50000, travelFee: 2000, totalAmount: 52000 },
         bookingStatus: 'CONFIRMED',
-        paymentStatus: 'PAYMENT_VERIFIED',
-        executionStatus: 'SERVICE_STARTED',
+        paymentStatus: 'PENDING',
+        executionStatus: 'NOT_STARTED',
         settlementStatus: 'NOT_ELIGIBLE',
       },
     ]);

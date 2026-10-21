@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { nativeAuthTransport } from "../../common/nativeAuthTransport.js";
 import {
   normalizeEmail,
   consumeVerifiedEmailOtp,
@@ -30,6 +31,7 @@ import {
 } from "../services/otp.service.js";
 
 const router = Router();
+router.use(nativeAuthTransport(config.refreshCookieName));
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -63,7 +65,7 @@ router.post("/dev-auth", async (req, res, next) => {
     if (!config.enableDevTools) {
       return res.status(404).json({ error: "NOT_FOUND" });
     }
-    const { accountType = "VENDOR", email: requestedEmail } = req.body || {};
+    const { accountType = "VENDOR", email: requestedEmail, blankProfile = false } = req.body || {};
     const targetType = String(accountType).toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "VENDOR";
     const email = requestedEmail
       ? String(requestedEmail).toLowerCase()
@@ -72,17 +74,8 @@ router.post("/dev-auth", async (req, res, next) => {
       : "customer@starvnt.com";
 
     let user = await ExternalUser.findOne({ email });
-    if (!user) {
-      // Auto-trigger seed script if test data is missing
-      try {
-        const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
-        await seedRealVendors();
-      } catch (seedErr) {
-        console.warn("Auto-seed error in dev-auth:", seedErr.message);
-      }
-      user = await ExternalUser.findOne({ email });
-    }
-
+    // Quick sign-in creates only the requested development identity. It must
+    // never reseed the shared vendor catalog as a side effect of a login.
     if (!user) {
       user = await ExternalUser.create({
         email,
@@ -99,7 +92,21 @@ router.post("/dev-auth", async (req, res, next) => {
     await user.save();
 
     if (targetType === "VENDOR") {
-      await ensureVendorOrganization(user, {
+      if (blankProfile === true && !user.vendorOrganization && !await VendorOrganization.exists({ owner: user._id })) {
+        const org = await VendorOrganization.create({
+          businessName: `${user.fullName}'s Studio`,
+          owner: user._id,
+          category: '',
+          location: '',
+          workingHours: null,
+          status: 'PENDING',
+          activationState: 'REGISTERED',
+          isProfileCompleted: false,
+          isCommerciallyActive: false,
+        });
+        user.vendorOrganization = org._id;
+        await user.save();
+      } else await ensureVendorOrganization(user, {
         businessName: "Dev StarVnt Studio",
         category: "Photography",
         city: "Kapkote"

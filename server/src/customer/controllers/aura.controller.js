@@ -1,11 +1,13 @@
 import * as aura from '../aura/aura.service.js';
 
-export const getSession = async (req, res) =>
+export const getSession = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   res.json(await aura.getSession(req.externalUser, req.params.sid, { eventId: req.query.eventId }));
+};
 
 export const chat = async (req, res, next) => {
   try {
-    const { sessionId, message, eventId, skipTopic, budgetRange, serviceLocation, stream } = req.body || {};
+    const { sessionId, message, eventId, switchEventId, skipTopic, budgetRange, serviceLocation, stream } = req.body || {};
     const wantsStream = Boolean(stream || req.query.stream === '1' || req.headers.accept?.includes('text/event-stream'));
 
     if (wantsStream) {
@@ -33,7 +35,7 @@ export const chat = async (req, res, next) => {
 
       const result = await aura.chat(
         req.externalUser,
-        { sessionId, message, eventId, skipTopic, budgetRange, serviceLocation },
+        { sessionId, message, eventId, switchEventId, skipTopic, budgetRange, serviceLocation },
         { onChunk, onStatus }
       );
 
@@ -42,7 +44,7 @@ export const chat = async (req, res, next) => {
         res.end();
       }
     } else {
-      res.json(await aura.chat(req.externalUser, { sessionId, message, eventId, skipTopic, budgetRange, serviceLocation }));
+      res.json(await aura.chat(req.externalUser, { sessionId, message, eventId, switchEventId, skipTopic, budgetRange, serviceLocation }));
     }
   } catch (err) {
     if (res.headersSent && !res.writableEnded) {

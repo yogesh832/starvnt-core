@@ -14,6 +14,8 @@ const opportunitySchema = new Schema(
     vendor: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', required: true, index: true },
     customer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
     vendorService: { type: Schema.Types.ObjectId, ref: 'VendorService', required: true },
+    customerEvent: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null, index: true },
+    customerRequirement: { type: Schema.Types.ObjectId, ref: 'EventRequirement', default: null },
     serviceName: { type: String, required: true },
     eventDate: { type: String, required: true, index: true }, // Format: YYYY-MM-DD
     serviceLocation: {

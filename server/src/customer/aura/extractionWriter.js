@@ -93,6 +93,7 @@ export async function writeExtraction({ customerId, event, extracted, yearStated
     ['catering', extracted.cateringCuisine && { cuisine: extracted.cateringCuisine }],
     ['decor', extracted.decorTheme && { theme: extracted.decorTheme }],
   ];
+  for (const row of extracted.serviceBriefs || []) prefs.push([row.category, { customerBrief: row.brief }]);
   for (const [category, p] of prefs) {
     if (!p) continue;
     const r = await core.mergePreferences(customerId, eventId, category, p);
@@ -100,10 +101,14 @@ export async function writeExtraction({ customerId, event, extracted, yearStated
   }
 
   const statements = [];
+  const provided = new Set(extracted.providedCategories || []);
+  for (const category of provided) {
+    if (category !== extracted.providedCategory) statements.push([category, { kind: 'provided', value: category === 'venue' ? extracted.venueName : null }]);
+  }
   if (extracted.providedCategory) statements.push([extracted.providedCategory, { kind: 'provided', value: extracted.providedValue }]);
   if (extracted.needsHelpCategory) statements.push([extracted.needsHelpCategory, { kind: 'needs_help' }]);
   for (const c of extracted.neededCategories || []) {
-    if (c !== extracted.providedCategory && c !== extracted.needsHelpCategory) statements.push([c, { kind: 'needed' }]);
+    if (!provided.has(c) && c !== extracted.providedCategory && c !== extracted.needsHelpCategory) statements.push([c, { kind: 'needed' }]);
   }
   for (const [category, st] of statements) {
     const r = await core.applyServiceStatement(customerId, eventId, category, st);

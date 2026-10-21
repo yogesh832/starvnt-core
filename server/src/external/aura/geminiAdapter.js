@@ -1,7 +1,8 @@
 import { GoogleGenAI, Type } from '@google/genai';
+import '../../config.js';
 import { extractReplyChunk } from '../../common/streamUtils.js';
 
-const TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS || 20000);
+const TIMEOUT_MS = Number(process.env.VENDOR_LLM_TIMEOUT_MS || process.env.LLM_TIMEOUT_MS || 40000);
 const ATTEMPTS = Number(process.env.LLM_ATTEMPTS || 1);
 
 const str = { type: Type.STRING, nullable: true };
@@ -65,19 +66,19 @@ function isRetryable(err) {
   return true;
 }
 
-export function createGeminiAdapter() {
+export function createGeminiAdapter({ client } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   const defaultModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
   const defaultThinking = process.env.GEMINI_THINKING_LEVEL || 'minimal';
 
-  if (!apiKey) {
+  if (!apiKey && !client) {
     return {
       async chat() {
         throw Object.assign(new Error('GEMINI_API_KEY is not set'), { code: 'LLM_NOT_CONFIGURED' });
       },
     };
   }
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = client || new GoogleGenAI({ apiKey });
 
   return {
     async chat({ systemPrompt, history = [], message, model, thinkingLevel, onChunk, onStatus }) {
@@ -106,6 +107,7 @@ export function createGeminiAdapter() {
         for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
         const controller = new AbortController();
         let timer;
+        let streamed = false;
         try {
           const requestPromise = (async () => {
             if (typeof onChunk === 'function') {
@@ -125,6 +127,7 @@ export function createGeminiAdapter() {
 
                 const { chunk: incrementalText, newLength } = extractReplyChunk(fullText, lastStreamedLength);
                 if (incrementalText) {
+                  streamed = true;
                   lastStreamedLength = newLength;
                   onChunk(incrementalText);
                 }
@@ -170,17 +173,23 @@ export function createGeminiAdapter() {
               reject(timeoutError());
             }, TIMEOUT_MS);
           });
-          return await Promise.race([requestPromise, deadline]);
+          const result = await Promise.race([requestPromise, deadline]);
+          if (!result.text) throw new Error('LLM returned an empty reply');
+          return result;
         } catch (err) {
           lastErr = err;
           console.warn(`[vendor-aura] Gemini attempt ${attempt} (${candidateModel}) failed:`, err?.message || err);
+          // A retry would append a second response to text already shown.
+          if (streamed) throw err;
           if (!isRetryable(err) || attempt === ATTEMPTS) break;
           await sleep(500 * 2 ** (attempt - 1));
         } finally {
           if (timer) clearTimeout(timer);
         }
         }
-        if (!isRetryable(lastErr)) break;
+        // A missing model can recover on another configured model. Authentication
+        // and invalid-request errors cannot be repaired by switching models.
+        if (!isRetryable(lastErr) && Number(lastErr?.status ?? lastErr?.code) !== 404) break;
       }
       throw lastErr;
     },
