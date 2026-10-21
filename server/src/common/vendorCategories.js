@@ -44,6 +44,7 @@ const normal = value => String(value || '').normalize('NFKC').toLowerCase().repl
 export const VENDOR_CATEGORY_VALUES = VENDOR_CATEGORIES.map(category => category.value);
 export function findVendorCategory(value) {
   const query = normal(value);
+  if (/^other\s*:/i.test(String(value || ''))) return VENDOR_CATEGORIES.find(category => category.key === 'Other');
   return VENDOR_CATEGORIES.find(category => [category.value, category.key, ...category.aliases].some(alias => normal(alias) === query)) || null;
 }
 export function searchVendorCategories(query) {
@@ -52,4 +53,15 @@ export function searchVendorCategories(query) {
     const text = normal([category.value, ...category.aliases].join(' '));
     return words.every(word => text.includes(word));
   });
+}
+
+// Persist an explicitly supplied unlisted service without losing its description.
+export function customVendorService(value) {
+  const match = String(value || '').match(/^other\s*:\s*(.*)$/i);
+  return match ? match[1].trim() : '';
+}
+export function vendorCategoryError(value) {
+  if (/^other(?:\s*:.*)?$/i.test(String(value || '').trim()) && !customVendorService(value)) return 'Please enter the service you provide under Other.';
+  if (String(value || '').length > 160) return 'Keep your service name within 150 characters.';
+  return null;
 }

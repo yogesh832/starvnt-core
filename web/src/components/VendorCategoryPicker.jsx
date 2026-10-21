@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { searchVendorCategories, VENDOR_CATEGORY_VALUES } from '../../../server/src/common/vendorCategories.js';
+import { customVendorService, searchVendorCategories, VENDOR_CATEGORY_VALUES } from '../../../server/src/common/vendorCategories.js';
 
 export default function VendorCategoryPicker({ value = '', onChange, required = false, disabled = false, label = 'Primary category', className = '' }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [active, setActive] = useState(0);
+  const other = value === 'Other' || /^Other\s*:/i.test(value);
   const input = useRef(null), root = useRef(null), list = useRef(null), listId = useId();
   const results = searchVendorCategories(query);
   const choices = value && !VENDOR_CATEGORY_VALUES.includes(value) && (!query || value.toLowerCase().includes(query.toLowerCase()))
@@ -24,7 +25,7 @@ export default function VendorCategoryPicker({ value = '', onChange, required = 
     <div className="relative">
       <input ref={input} role="combobox" aria-label={label} aria-required={required} aria-autocomplete="list" aria-expanded={open} aria-controls={listId}
         aria-activedescendant={open && choices[active] ? `${listId}-${active}` : undefined}
-        required={required} disabled={disabled} autoComplete="off" placeholder="Search or choose a category…" value={open ? query : value}
+        required={required} disabled={disabled} autoComplete="off" placeholder="Search or choose a category…" value={open ? query : other ? 'Other' : value}
         onClick={() => { if (!open) { setOpen(true); setQuery(''); } }}
         onChange={event => { setQuery(event.target.value); setOpen(true); }}
         onKeyDown={event => {
@@ -36,6 +37,13 @@ export default function VendorCategoryPicker({ value = '', onChange, required = 
         className={`w-full rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3.5 py-2.5 pr-9 text-sm text-navy dark:text-slate-100 outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50 ${className}`} />
       <span aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted">⌕</span>
     </div>
+    {other && <label className="mt-3 block text-sm text-navy dark:text-slate-100">
+      <span className="mb-1 block font-semibold">What service do you provide?</span>
+      <input aria-label="Your service" required disabled={disabled} maxLength={150} value={customVendorService(value)}
+        placeholder="e.g. Pet care at events" onChange={event => onChange(`Other: ${event.target.value}`)}
+        className="w-full rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/40" />
+      <span className="mt-1 block text-xs text-muted">Enter your service name manually so customers know what you offer.</span>
+    </label>}
     {open && <div className="absolute z-[80] mt-2 w-full min-w-0 overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-xl">
       <div className="border-b border-gray-100 dark:border-slate-700 px-3 py-2 text-xs text-muted dark:text-slate-400" role="status">{choices.length} matching {choices.length === 1 ? 'category' : 'categories'} · {VENDOR_CATEGORY_VALUES.length} available</div>
       <div ref={list} role="listbox" id={listId} aria-label="Vendor categories" className="max-h-[min(17rem,45dvh)] overflow-y-auto overscroll-contain p-1">

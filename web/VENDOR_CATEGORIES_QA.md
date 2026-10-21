@@ -31,3 +31,9 @@ All ten named services are available. The PDF does not enumerate a fixed 25-cate
 - Native: 98 tests passed, TypeScript passed, Android Hermes export passed. Native device interaction was not exercised in this review.
 - Browser: vendor signup at 390 x 844; 38 options, keyword pandit, keyboard Enter selection, unmatched query to Other, Escape, scroll and full-width field. Screenshot: `tmp/qa/web-review/vendor-category-picker.png`.
 - Browser verification did not submit signup or alter a vendor record.
+
+## Other service follow-up
+
+Selecting Other reveals a mandatory manual service-name field in both pickers. It persists as `Other: <vendor-entered name>` in the existing category string, requiring no schema migration. Empty Other values are rejected by auth, profile and service API writes, and Aura service actions. Discovery maps these explicit custom services to other_service; capability handling remains generic. Aura asks for the actual service and only saves a custom profile category when the service words occur in the vendor message.
+
+Follow-up checks: 125 server tests, mobile TypeScript, web build; browser verified required empty field and entered service text. Native device interaction remains unverified.

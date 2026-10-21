@@ -203,9 +203,9 @@ export function AuthScreen({ route, navigation }: any) {
         <AuthField label="Full name" icon="person-outline" placeholder="Aarav Mehta" {...field('fullName')} autoCapitalize="words" autoComplete="name" editable={!working}/>
         {vendor && <>
           <AuthField label="Brand name" icon="storefront-outline" placeholder="CineMade Studios" {...field('businessName')} autoCapitalize="words" editable={!working}/>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1.2 }}><VendorCategoryPicker label="Category" value={form.category} disabled={working} onChange={(category) => setForm(current => ({ ...current, category }))}/></View>
-            <View style={{ flex: 1 }}><AuthField label="City" icon="location-outline" placeholder="e.g. Mumbai" {...field('city')} autoCapitalize="words" editable={!working}/></View>
+          <View style={{ gap: 12 }}>
+            <View><VendorCategoryPicker label="Category" value={form.category} disabled={working} onChange={(category) => setForm(current => ({ ...current, category }))}/></View>
+            <View><AuthField label="City" icon="location-outline" placeholder="e.g. Mumbai" {...field('city')} autoCapitalize="words" editable={!working}/></View>
           </View>
         </>}
       </>}

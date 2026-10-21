@@ -1,3 +1,4 @@
+import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { Router } from "express";
 import { nativeAuthTransport } from "../../common/nativeAuthTransport.js";
 import {
@@ -146,6 +147,8 @@ function normalizePrimaryCategory(category) {
   if (category === undefined || category === null || category === "") return { value: "" };
   if (Array.isArray(category)) return { error: "PRIMARY_CATEGORY_SINGLE_ONLY" };
   const value = String(category).trim();
+  const error = vendorCategoryError(value);
+  if (error) return { error };
   if (/[|;]+/.test(value) || value.split(",").filter(Boolean).length > 1) {
     return { error: "PRIMARY_CATEGORY_SINGLE_ONLY" };
   }

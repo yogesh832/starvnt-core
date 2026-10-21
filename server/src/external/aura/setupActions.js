@@ -1,3 +1,4 @@
+import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { VendorService } from '../models/VendorService.js';
 import { VendorCapability } from '../models/VendorCapability.js';
 import { OperatingLocation } from '../models/OperatingLocation.js';
@@ -374,7 +375,8 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
     if (!name) return { error: 'the service name' };
     if (!(basePrice > 0) || !stated.has(Math.round(basePrice))) return { error: 'the base price' };
     const pricingType = PRICING_TYPES.includes(String(s.pricingType).toUpperCase()) ? String(s.pricingType).toUpperCase() : normalizePricingType(s.pricingType || String(said).split('\n').pop());
-    const category = str(s.category, 60) || vendor.category || 'Photography';
+    const category = str(s.category, 160) || vendor.category || 'Photography';
+    if (vendorCategoryError(category)) return { error: 'the actual service you provide under Other (please enter its name)' };
     return {
       action: { kind, service: { name, category, pricingType, basePrice: Math.round(basePrice), unit: UNITS[pricingType] } },
     };

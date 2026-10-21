@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { searchVendorCategories, VENDOR_CATEGORY_VALUES } from '../../server/src/common/vendorCategories.js';
+import { customVendorService, searchVendorCategories, VENDOR_CATEGORY_VALUES } from '../../server/src/common/vendorCategories.js';
 import { Icon, Txt, usePalette } from './ui';
 
 export function VendorCategoryPicker({ value = '', onChange, label = 'Primary category', disabled = false }: { value?: string; onChange: (value: string) => void; label?: string; disabled?: boolean }) {
   const c = usePalette(), [open, setOpen] = useState(false), [query, setQuery] = useState('');
+  const other = value === 'Other' || /^Other\s*:/i.test(value);
   const results = searchVendorCategories(query);
   const choices = value && !VENDOR_CATEGORY_VALUES.includes(value) && (!query || value.toLowerCase().includes(query.toLowerCase())) ? [{ value, key: value, planKey: '', aliases: [] }, ...results] : results;
   function select(category: string) { onChange(category); setOpen(false); setQuery(''); }
@@ -13,9 +14,15 @@ export function VendorCategoryPicker({ value = '', onChange, label = 'Primary ca
     <View style={{ gap: 7 }}><Txt size={12} bold>{label}</Txt>
       <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value || 'Choose category'}`} accessibilityState={{ disabled, expanded: open }} disabled={disabled}
         onPress={() => { setQuery(''); setOpen(true); }} style={{ minHeight: 50, borderWidth: 1, borderColor: c.line, backgroundColor: c.card, padding: 13, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 10, opacity: disabled ? .5 : 1 }}>
-        <Txt style={{ flex: 1, color: value ? c.ink : c.muted }}>{value || 'Search or choose a category'}</Txt><Icon name="chevron-down" size={17} />
+        <Txt style={{ flex: 1, color: value ? c.ink : c.muted }}>{other ? 'Other' : value || 'Search or choose a category'}</Txt><Icon name="chevron-down" size={17} />
       </Pressable>
     </View>
+    {other && <View style={{ gap: 7 }}><Txt bold size={12}>What service do you provide? *</Txt>
+      <TextInput accessibilityLabel="Your service" editable={!disabled} value={customVendorService(value)} maxLength={150}
+        onChangeText={text => onChange(`Other: ${text}`)} placeholder="e.g. Pet care at events" placeholderTextColor={c.muted}
+        style={{ minHeight: 50, color: c.ink, borderWidth: 1, borderColor: c.line, borderRadius: 14, padding: 13, backgroundColor: c.card }} />
+      <Txt muted size={12}>Enter your service name manually so customers know what you offer.</Txt>
+    </View>}
     <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0009' }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close category selection" onPress={() => setOpen(false)} style={StyleSheet.absoluteFill} />

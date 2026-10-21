@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { VENDOR_CATEGORIES, VENDOR_CATEGORY_VALUES, findVendorCategory, searchVendorCategories } from '../src/common/vendorCategories.js';
+import { VENDOR_CATEGORIES, VENDOR_CATEGORY_VALUES, findVendorCategory, searchVendorCategories, customVendorService, vendorCategoryError } from '../src/common/vendorCategories.js';
 import { CATEGORIES, categoriesMentioned, normalizeCategory } from '../src/customer/services/planCatalog.js';
 import { CATEGORY_DEFINITIONS, validateCategoryCapability } from '../src/external/utils/categoryWorkspaces.js';
 import { guardProfile } from '../src/external/aura/profileWriter.js';
@@ -15,7 +15,7 @@ test('every selectable vendor category reaches Core discovery, capabilities and 
     assert.ok(CATEGORIES.includes(category.planKey), category.value);
     assert.ok(CATEGORY_DEFINITIONS[category.key], category.key);
     assert.equal(validateCategoryCapability(category.value, {}).isValid, true, category.value);
-    assert.equal(guardProfile({ category: category.value }, `My primary category is ${category.value}`).category, category.value);
+    assert.equal(guardProfile({ category: category.value }, `My primary category is ${category.value}`).category, category.value === 'Other' ? undefined : category.value);
   }
 });
 
@@ -46,4 +46,15 @@ test('Aura never invents a selected primary category or conflates sound and DJ',
   assert.equal(guardProfile({}, 'I provide sound systems', { categoryMissing: true }).category, 'Sound & Audio');
   assert.equal(guardProfile({}, 'I am a DJ', { categoryMissing: true }).category, 'DJ & Music');
   assert.equal(guardProfile({}, 'Photography and Videography', { categoryMissing: true }).category, undefined);
+});
+
+test('Other requires an explicitly supplied service name and preserves it through Aura and discovery', () => {
+  assert.match(vendorCategoryError('Other'), /enter the service/);
+  assert.match(vendorCategoryError('Other:   '), /enter the service/);
+  assert.equal(vendorCategoryError('Other: Pet care at events'), null);
+  assert.equal(customVendorService('Other: Pet care at events'), 'Pet care at events');
+  assert.equal(normalizeCategory('Other: Pet care at events'), 'other_service');
+  assert.equal(guardProfile({category: 'Other: Pet care at events'}, 'I provide pet care at events').category, 'Other: Pet care at events');
+  assert.equal(guardProfile({category: 'Other: Pet care at events'}, 'Other').category, undefined);
+  assert.equal(guardProfile({category: 'Other'}, 'Other').category, undefined);
 });

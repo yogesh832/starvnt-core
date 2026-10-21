@@ -446,6 +446,7 @@ function contactQuestion(vendor) {
 /** Ask for exactly what the brand step still lacks (with the category choices when needed). */
 function brandQuestion(vendor) {
   const missing = missingBrand(vendor);
+  if (/^other\s*:?\s*$/i.test(vendor.category || '')) return 'You selected Other. What service do you provide? Please enter your service name manually.';
   if (!missing.length) return 'Please check your brand details on the Profile page.';
   const ask = missing[0] === 'category' ? "What's your main service category? For example photography, sound, catering or event coordination. You can also search the full category list in your profile." : `What's your ${missing[0]}?`;
   return `Still needed for your brand: ${missing.join(', ')}. ${ask}`;
@@ -463,7 +464,7 @@ export function withoutClaims(text) {
 function missingBrand(vendor) {
   const missing = [];
   if (isAutoBusinessName(vendor.businessName)) missing.push('business name');
-  if (!vendor.category) missing.push('category');
+  if (!vendor.category || /^other\s*:?\s*$/i.test(vendor.category)) missing.push('category');
   if (!vendor.location) missing.push('city');
   return missing;
 }

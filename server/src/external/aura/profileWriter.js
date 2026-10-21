@@ -1,4 +1,4 @@
-import { VENDOR_CATEGORIES, findVendorCategory } from '../../common/vendorCategories.js';
+import { VENDOR_CATEGORIES, findVendorCategory, customVendorService, vendorCategoryError } from '../../common/vendorCategories.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { CATEGORIES } from './vendorContext.js';
 
@@ -53,7 +53,10 @@ export function matchCategory(raw, message) {
   const text = String(message || '');
   const stated = ` ${tokens(text).join(' ')} `;
   const mentions = category => [category.value, category.key, ...category.aliases].some(alias => stated.includes(` ${tokens(alias).join(' ')} `));
+  const custom = customVendorService(raw);
+  if (custom && custom.length <= 150 && valueStatedIn(custom, text)) return `Other: ${custom}`;
   const chosen = findVendorCategory(raw);
+  if (chosen?.key === 'Other') return null; // Ask for the actual service before saving.
   if (chosen && mentions(chosen)) return chosen.value;
   if (!raw) {
     const matches = VENDOR_CATEGORIES.filter(mentions);
@@ -150,7 +153,7 @@ export async function applyProfileFromChat(vendor, extracted, message, { askedAb
   if (!saved.length) return { saved, activation: null };
 
   const hasBrand = Boolean(vendor.businessName && vendor.businessName.trim());
-  const hasCat = Boolean(vendor.category && vendor.category.trim());
+  const hasCat = Boolean(vendor.category && vendor.category.trim() && !vendorCategoryError(vendor.category));
   const hasLoc = Boolean(vendor.location && vendor.location.trim());
   vendor.isProfileCompleted = Boolean(hasBrand && hasCat && hasLoc);
   await vendor.save();
