@@ -1,6 +1,6 @@
 import AuraMark from '../../components/AuraMark.jsx';
 import { useEffect, useRef, useState } from 'react';
-import { createAuraLive, sameAuraValue } from '../../../../mobile/src/auraLive.ts';
+import { createAuraLive, sameAuraValue } from '../../../../shared/auraLive.ts';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import AuraActivity from '../../components/AuraActivity.jsx';

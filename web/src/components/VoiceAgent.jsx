@@ -2,7 +2,7 @@ import AuraMark from './AuraMark.jsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import { speakAura, stopAuraSpeaking, transcribeAuraAudio } from '../lib/voice.js';
-import { createVoiceActivity } from '../../../mobile/src/voiceActivity.ts';
+import { createVoiceActivity } from '../../../shared/voiceActivity.ts';
 
 /**
  * Voice agent (ElevenLabs-powered): a full-screen orb conversation.

@@ -8,7 +8,7 @@ import { customerApi, errorText } from './customerApi.js';
 import UnderstandingCard from './UnderstandingCard.jsx';
 import AuraEventMenu from './AuraEventMenu.jsx';
 import AuraVendorResults from './AuraVendorResults.jsx';
-import { createAuraLive, sameAuraValue } from '../../../../mobile/src/auraLive.ts';
+import { createAuraLive, sameAuraValue } from '../../../../shared/auraLive.ts';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
 import { stopAuraSpeaking, transcribeAuraAudio } from '../../lib/voice.js';
 

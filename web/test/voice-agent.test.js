@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { createVoiceActivity } from '../../mobile/src/voiceActivity.ts';
+import { createVoiceActivity } from '../../shared/voiceActivity.ts';
 
 function harness(onUtterance = async () => 'Your plan is ready.') {
   const slots = [], cleanups = [], calls = { stopSpeech: 0, record: 0, speech: [] };

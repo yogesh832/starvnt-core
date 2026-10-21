@@ -103,3 +103,10 @@ Local, ignored QA artifacts:
 - `tmp/qa/web-review/` — browser snapshots and screenshots
 
 The temporary draft guest-count change was restored. QA chat messages and ordinary event-edit history entries remain as test activity. No vendor catalogue reseeding, account permission changes, outgoing vendor messages, new payments or historical automation replay was performed.
+
+
+## Vercel build isolation — 21 October 2026
+
+Reproduced the deployment error in a clean checkout using web dependencies without Expo: Vite failed to resolve `extends: expo/tsconfig.base` while transforming shared helpers under `mobile/src`. Moved the unchanged live-card and speech-activity implementations into `shared/`, with an independent TypeScript configuration and native compatibility exports. Web now imports the platform-neutral modules directly.
+
+The same web-only production build passes without Expo installed. All 22 web tests, 98 mobile tests and mobile TypeScript checks pass. Android bundle export also passed (`tmp/qa/vercel-fix-native-export.log`); this is a bundling check, not a device runtime review. Logs: `tmp/qa/vercel-no-expo-before.log`, `vercel-no-expo-after.log`, `vercel-fix-web-tests.log`, `vercel-fix-mobile-tests.log`, and `vercel-fix-typecheck.log`. The existing bundle-size advisory remains.
