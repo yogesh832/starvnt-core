@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { VENDOR_CATEGORIES, VENDOR_CATEGORY_VALUES, findVendorCategory, searchVendorCategories, customVendorService, vendorCategoryError } from '../src/common/vendorCategories.js';
+import { VENDOR_CATEGORIES, VENDOR_CATEGORY_VALUES, findVendorCategory, searchVendorCategories, customVendorServiceInput, customVendorService, vendorCategoryError } from '../src/common/vendorCategories.js';
 import { CATEGORIES, categoriesMentioned, normalizeCategory } from '../src/customer/services/planCatalog.js';
 import { CATEGORY_DEFINITIONS, validateCategoryCapability } from '../src/external/utils/categoryWorkspaces.js';
 import { guardProfile } from '../src/external/aura/profileWriter.js';
@@ -57,4 +57,13 @@ test('Other requires an explicitly supplied service name and preserves it throug
   assert.equal(guardProfile({category: 'Other: Pet care at events'}, 'I provide pet care at events').category, 'Other: Pet care at events');
   assert.equal(guardProfile({category: 'Other: Pet care at events'}, 'Other').category, undefined);
   assert.equal(guardProfile({category: 'Other'}, 'Other').category, undefined);
+});
+
+test('custom service typing preserves spaces while validation trims only the final value', () => {
+  let category = 'Other';
+  for (const character of 'Pet care at events ') category = `Other: ${customVendorServiceInput(category)}${character}`;
+  assert.equal(customVendorServiceInput(category), 'Pet care at events ');
+  assert.equal(customVendorService(category), 'Pet care at events');
+  assert.equal(vendorCategoryError(category), null);
+  assert.match(vendorCategoryError('Other:    '), /enter the service/);
 });

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { customVendorService, searchVendorCategories, VENDOR_CATEGORY_VALUES } from '../../server/src/common/vendorCategories.js';
+import { customVendorServiceInput, searchVendorCategories, VENDOR_CATEGORY_VALUES } from '../../server/src/common/vendorCategories.js';
 import { Icon, Txt, usePalette } from './ui';
 
 export function VendorCategoryPicker({ value = '', onChange, label = 'Primary category', disabled = false }: { value?: string; onChange: (value: string) => void; label?: string; disabled?: boolean }) {
@@ -18,7 +18,7 @@ export function VendorCategoryPicker({ value = '', onChange, label = 'Primary ca
       </Pressable>
     </View>
     {other && <View style={{ gap: 7 }}><Txt bold size={12}>What service do you provide? *</Txt>
-      <TextInput accessibilityLabel="Your service" editable={!disabled} value={customVendorService(value)} maxLength={150}
+      <TextInput accessibilityLabel="Your service" editable={!disabled} value={customVendorServiceInput(value)} maxLength={150}
         onChangeText={text => onChange(`Other: ${text}`)} placeholder="e.g. Pet care at events" placeholderTextColor={c.muted}
         style={{ minHeight: 50, color: c.ink, borderWidth: 1, borderColor: c.line, borderRadius: 14, padding: 13, backgroundColor: c.card }} />
       <Txt muted size={12}>Enter your service name manually so customers know what you offer.</Txt>

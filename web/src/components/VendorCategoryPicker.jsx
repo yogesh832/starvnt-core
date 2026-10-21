@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { customVendorService, searchVendorCategories, VENDOR_CATEGORY_VALUES } from '../../../server/src/common/vendorCategories.js';
+import { customVendorServiceInput, searchVendorCategories, VENDOR_CATEGORY_VALUES } from '../../../server/src/common/vendorCategories.js';
 
 export default function VendorCategoryPicker({ value = '', onChange, required = false, disabled = false, label = 'Primary category', className = '' }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [active, setActive] = useState(0);
@@ -39,7 +39,7 @@ export default function VendorCategoryPicker({ value = '', onChange, required = 
     </div>
     {other && <label className="mt-3 block text-sm text-navy dark:text-slate-100">
       <span className="mb-1 block font-semibold">What service do you provide?</span>
-      <input aria-label="Your service" required disabled={disabled} maxLength={150} value={customVendorService(value)}
+      <input aria-label="Your service" required disabled={disabled} maxLength={150} value={customVendorServiceInput(value)}
         placeholder="e.g. Pet care at events" onChange={event => onChange(`Other: ${event.target.value}`)}
         className="w-full rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/40" />
       <span className="mt-1 block text-xs text-muted">Enter your service name manually so customers know what you offer.</span>

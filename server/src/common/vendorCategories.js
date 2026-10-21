@@ -56,9 +56,12 @@ export function searchVendorCategories(query) {
 }
 
 // Persist an explicitly supplied unlisted service without losing its description.
+export function customVendorServiceInput(value) {
+  const match = String(value || '').match(/^other\s*: ?(.*)$/i);
+  return match ? match[1] : '';
+}
 export function customVendorService(value) {
-  const match = String(value || '').match(/^other\s*:\s*(.*)$/i);
-  return match ? match[1].trim() : '';
+  return customVendorServiceInput(value).trim();
 }
 export function vendorCategoryError(value) {
   if (/^other(?:\s*:.*)?$/i.test(String(value || '').trim()) && !customVendorService(value)) return 'Please enter the service you provide under Other.';
