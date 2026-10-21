@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 
-export default function AuraEventMenu({ activeId, busy, onSwitch }) {
-  const [open, setOpen] = useState(false), [events, setEvents] = useState([]), [query, setQuery] = useState(''), [loading, setLoading] = useState(false), [error, setError] = useState(''), [attempt, setAttempt] = useState(0);
-  const trigger = useRef(null), panel = useRef(null), search = useRef(null);
+/** Aura's local sidebar; it never replaces the dashboard navigation. */
+export default function AuraEventMenu({ activeId, busy, onSwitch, onNew, open, onClose, triggerRef }) {
+  const [events, setEvents] = useState([]), [query, setQuery] = useState(''), [loading, setLoading] = useState(false), [error, setError] = useState(''), [attempt, setAttempt] = useState(0);
+  const panel = useRef(null), search = useRef(null);
   useEffect(() => {
     if (!open) return;
-    let active = true; setLoading(true); setError(''); search.current?.focus();
+    let active = true;
+    setLoading(true); setError('');
     customerApi.events().then(data => { if (active) setEvents(data.events || []); }).catch(e => { if (active) setError(errorText(e, "Couldn't load your events.")); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [open, attempt]);
+  useEffect(() => {
+    if (!open) return;
+    setQuery(''); search.current?.focus();
     const key = event => {
-      if (event.key === 'Escape') { event.stopPropagation(); setOpen(false); }
-      if (event.key === 'Tab') {
+      if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+      // Only the narrow, overlay sidebar traps focus; the docked sidebar is ordinary navigation.
+      if (event.key === 'Tab' && panel.current?.closest('.aura-chat-shell')?.clientWidth < 720) {
         const focusable = panel.current?.querySelectorAll('button:not(:disabled), input');
         if (!focusable?.length) return;
         const first = focusable[0], last = focusable[focusable.length - 1];
@@ -21,25 +28,27 @@ export default function AuraEventMenu({ activeId, busy, onSwitch }) {
       }
     };
     document.addEventListener('keydown', key);
-    return () => { active = false; document.removeEventListener('keydown', key); trigger.current?.focus(); };
-  }, [open, attempt]);
-  const filtered = events.filter(event => `${event.title} ${event.city || ''} ${event.eventType}`.toLowerCase().includes(query.toLowerCase()));
+    return () => { document.removeEventListener('keydown', key); triggerRef.current?.focus(); };
+  }, [open, onClose, triggerRef]);
+  const filtered = events.filter(event => `${event.title} ${event.city || ''} ${event.eventType || ''}`.toLowerCase().includes(query.toLowerCase()));
   return <>
-    <button ref={trigger} type="button" aria-label="Aura event menu" aria-haspopup="dialog" aria-expanded={open} onClick={() => { setQuery(''); setOpen(true); }} className="w-10 h-10 rounded-xl grid place-items-center text-navy dark:text-white hover:bg-lavender dark:hover:bg-white/10"><Icon name="menu" size={23} /></button>
-    {open && createPortal(<div className="fixed inset-0 z-[99990] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setOpen(false)}>
-      <section ref={panel} role="dialog" aria-modal="true" aria-labelledby="aura-event-menu-title" className="w-full max-w-md rounded-3xl bg-white dark:bg-[#161926] text-navy dark:text-slate-100 p-5 shadow-xl space-y-3" onClick={event => event.stopPropagation()}>
-        <div className="flex items-center justify-between"><h2 id="aura-event-menu-title" className="font-bold">Switch event</h2><button type="button" aria-label="Close event menu" onClick={() => setOpen(false)} className="h-11 w-11 grid place-items-center rounded-full hover:bg-black/5 dark:hover:bg-white/10"><Icon name="close" size={20} /></button></div>
-        <p className="text-xs text-muted dark:text-slate-400">Say “switch to my wedding” or choose below. Your event details stay saved.</p>
-        <input ref={search} aria-label="Find an event" placeholder="Search by name or city" value={query} onChange={event => setQuery(event.target.value)} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent p-3 text-sm" />
+    {open && <button type="button" className="aura-sidebar-backdrop" aria-label="Close Aura sidebar" tabIndex={-1} onClick={onClose} />}
+    <aside ref={panel} id="aura-chat-sidebar" aria-label="Aura conversations and events" aria-hidden={!open} inert={!open ? '' : undefined} className={`aura-chat-sidebar ${open ? 'aura-chat-sidebar--open' : ''}`}>
+      <div className="aura-chat-sidebar-inner">
+        <div className="flex items-center justify-between mb-3"><span className="text-sm font-extrabold">Aura+</span><button type="button" aria-label="Close Aura sidebar" title="Close sidebar" onClick={onClose} className="w-10 h-10 rounded-xl grid place-items-center hover:bg-primary/10"><Icon name="panelLeft" size={21} /></button></div>
+        <button type="button" disabled={busy} onClick={() => { onNew(); onClose(); }} className="flex items-center gap-3 w-full min-h-11 rounded-xl px-3 mb-4 text-sm font-semibold hover:bg-primary/10 disabled:opacity-50"><Icon name="edit" size={18} />New chat</button>
+        <label className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2.5"><Icon name="search" size={16} /><input ref={search} aria-label="Find an event" placeholder="Search your events" value={query} onChange={event => setQuery(event.target.value)} className="w-full min-w-0 bg-transparent text-xs outline-none" /></label>
+        <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-slate-400 mt-6 mb-3">Your events</h2>
+        <p className="text-[11px] text-muted dark:text-slate-400 mb-3">Choose an event, or ask Aura to switch.</p>
         {loading && <p role="status" className="text-xs text-muted">Loading your events…</p>}
         {error && <div role="alert" className="text-xs text-rose-500">{error}<button type="button" onClick={() => setAttempt(value => value + 1)} className="block min-h-11">Try again</button></div>}
-        <div className="space-y-2 overflow-y-auto max-h-[45dvh]">
-          {!loading && !error && !filtered.length && <p className="text-sm text-muted">{events.length ? 'No matching events.' : 'No saved events yet. Start planning with Aura.'}</p>}
-          {filtered.map(event => <button key={event.id} type="button" aria-current={event.id === activeId ? 'true' : undefined} disabled={busy || event.id === activeId} onClick={() => { onSwitch(event); setOpen(false); }} className={`block w-full text-left p-3 rounded-2xl border transition disabled:cursor-default ${event.id === activeId ? 'border-primary bg-primary/10' : 'border-gray-200 dark:border-gray-700 hover:border-primary'} ${busy ? 'opacity-50' : ''}`}>
-            <span className="block text-sm font-semibold">{event.title}</span><span className="block mt-1 text-[11px] text-muted dark:text-slate-400">{[event.city, event.eventDate || 'Date to be decided', event.id === activeId ? 'Current event' : event.status].filter(Boolean).join(' · ')}</span>
+        <div className="space-y-1">
+          {!loading && !error && !filtered.length && <p className="text-xs text-muted leading-relaxed">{events.length ? 'No matching events.' : 'No saved events yet. Start a new chat to plan one.'}</p>}
+          {filtered.map(event => <button key={event.id} type="button" aria-current={event.id === activeId ? 'true' : undefined} disabled={busy || event.id === activeId} onClick={() => { onSwitch(event); onClose(); }} className={`block w-full text-left p-3 rounded-xl transition disabled:cursor-default ${event.id === activeId ? 'bg-primary/15 text-primary dark:text-[#b4a6ff]' : 'hover:bg-primary/10'} ${busy ? 'opacity-50' : ''}`}>
+            <span className="block text-xs font-semibold break-words">{event.title}</span><span className="block mt-1 text-[10px] text-muted dark:text-slate-400">{[event.city, event.eventDate || 'Date to be decided', event.id === activeId ? 'Current event' : event.status].filter(Boolean).join(' · ')}</span>
           </button>)}
         </div>
-      </section>
-    </div>, document.body)}
+      </div>
+    </aside>
   </>;
 }

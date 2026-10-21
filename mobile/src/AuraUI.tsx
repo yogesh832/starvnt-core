@@ -1,4 +1,5 @@
 import { AuraMark } from './AuraMark';
+import Svg, { Rect, Path } from 'react-native-svg';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, AccessibilityInfo, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, TextInput, View } from 'react-native';
@@ -47,6 +48,9 @@ function Bubble({ mine = false, content, onOpenLink, children }: React.PropsWith
     </View>{children}</View>
   </View>;
 }
+function SidebarToggle({ color }: { color: string }) {
+  return <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.7}><Rect x={3} y={4} width={18} height={16} rx={3}/><Path d="M9 4v16"/></Svg>;
+}
 function WaveIcon() {
   return <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', height: 18 }}>{[7, 13, 18, 11, 6].map((height, i) => <View key={i} style={{ width: 2.5, height, borderRadius: 2, backgroundColor: '#fff' }} />)}</View>;
 }
@@ -71,15 +75,14 @@ export function AuraChatView({ messages, user, vendor, text, onChangeText, onSen
   // Keep voice inside the dashboard so its shared bottom navigation remains
   // visible. Losing focus unmounts the recorder/player and cancels the session.
   if (sheet === 'dictate') return <AuraVoice mode="dictate" onTranscription={value => { onChangeText([text.trim(), value].filter(Boolean).join(' ')); focusInput(); }} onUtterance={onVoiceMessage} onClose={() => setSheet(null)} onKeyboard={focusInput} />;
-  function newChat() { setSheet(null); onNew(); }
+  function newChat() { setMenuOpen(false); setSheet(null); onNew(); }
   return <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
     <StatusBar barStyle={c.dark ? 'light-content' : 'dark-content'} backgroundColor={c.bg} />
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: c.subtle }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Aura navigation menu" onPress={() => { setPickingEvent(false); setMenuOpen(true); }} style={{ minWidth: 40, minHeight: 40, justifyContent: 'center', alignItems: 'center' }}><Icon name="menu-outline" size={25} color={c.ink} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open Aura sidebar" accessibilityState={{ expanded: menuOpen }} onPress={() => { setPickingEvent(false); setMenuOpen(true); }} style={{ minWidth: 40, minHeight: 40, justifyContent: 'center', alignItems: 'center' }}><SidebarToggle color={c.ink} /></Pressable>
         <AuraMark size={28} />
         <Pressable accessibilityRole={eventTitle ? 'button' : undefined} disabled={!eventTitle} onPress={onOpenEvent} style={{ flex: 1 }}><Text bold size={14}>{eventTitle || 'Aura+'}</Text><Text size={10} color={c.muted}>{vendor ? 'Your business assistant' : 'Your event assistant'}</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="New Aura conversation" accessibilityState={{ disabled: unavailable }} disabled={unavailable} onPress={newChat} style={{ minHeight: 40, paddingHorizontal: 12, borderWidth: 1, borderColor: c.line, borderRadius: 12, justifyContent: 'center', opacity: unavailable ? .45 : 1 }}><Text bold size={11}>New chat</Text></Pressable>
       </View>
       <View style={{ width: '100%', maxWidth: 768, alignSelf: 'center', flex: 1 }}>
         <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 12, paddingVertical: 20, gap: 16, flexGrow: 1 }} onScroll={e => { const v = e.nativeEvent; nearBottom.current = v.contentSize.height - v.contentOffset.y - v.layoutMeasurement.height < 160; }} scrollEventThrottle={100} onContentSizeChange={() => { if (messages.length && nearBottom.current) scroll.current?.scrollToEnd({ animated: true }); }} refreshControl={<RefreshControl refreshing={loading} onRefresh={onRetry} tintColor={c.primary} />}>
@@ -101,7 +104,6 @@ export function AuraChatView({ messages, user, vendor, text, onChangeText, onSen
           {sheet === 'voice' && <AuraVoice compact dense={focused} expanded={voiceExpanded} onExpand={() => setVoiceExpanded(value => !value)} onController={onVoiceController} onUtterance={onVoiceMessage} onClose={() => setSheet(null)} onKeyboard={focusInput} />}
           {!!attachment && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.soft, borderWidth: 1, borderColor: c.line, borderRadius: 16, padding: 8 }}>{attachment.url && <Image source={{ uri: attachment.url }} style={{ width: 32, height: 32, borderRadius: 8 }} />}<View style={{ flex: 1 }}><Text size={11}>Attached Reference Media</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Remove attachment" onPress={onRemoveAttachment} style={styles.iconButton}><Icon name="close" size={18} color={c.danger} /></Pressable></View>}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: c.panel, borderWidth: 1, borderColor: focused ? c.chipLine : c.line, borderRadius: 28, padding: 5, paddingLeft: 6, boxShadow: c.dark ? undefined : '0px 4px 16px rgba(90,75,209,0.06)' }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="New Aura chat" disabled={unavailable} onPress={newChat} style={styles.iconButton}><Icon name="add-outline" color={c.muted} size={21} /></Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Attach reference image or video" accessibilityState={{ disabled: unavailable }} disabled={unavailable} onPress={onAttach} style={[styles.iconButton, { opacity: unavailable ? .4 : 1 }]}><Icon name="image-outline" color={c.muted} size={18} /></Pressable>
             <TextInput ref={input} accessibilityLabel="Message Aura" placeholder="Ask Aura+ anything" placeholderTextColor={c.muted} value={text} onChangeText={onChangeText} multiline maxLength={2000} editable={!unavailable} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 104, color: c.ink, fontFamily: 'Inter_400Regular', fontSize: 14, paddingHorizontal: 5, paddingVertical: 8 }} />
             <Pressable accessibilityRole="button" accessibilityLabel={sheet === 'voice' ? 'Switch to typing' : 'Dictate a message'} accessibilityState={{ disabled: unavailable }} disabled={unavailable} onPress={() => { if (sheet === 'voice') focusInput(); else setSheet('dictate'); }} style={[styles.iconButton, { opacity: unavailable ? .4 : 1 }]}><Icon name="mic-outline" color={c.muted} size={19} /></Pressable>
@@ -111,9 +113,10 @@ export function AuraChatView({ messages, user, vendor, text, onChangeText, onSen
         </View>
       </View>
     </KeyboardAvoidingView>
-    <Modal visible={menuOpen} transparent animationType="slide" onRequestClose={() => setMenuOpen(false)}><View style={{ flex: 1, backgroundColor: '#0008', justifyContent: 'flex-end' }}><Pressable accessibilityRole="button" accessibilityLabel="Close Aura menu" onPress={() => setMenuOpen(false)} style={StyleSheet.absoluteFill} /><SafeAreaView edges={['top', 'bottom']} style={{ maxHeight: '92%', padding: 20, gap: 10, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.line, backgroundColor: c.bg }}>
+    <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}><View style={{ flex: 1, backgroundColor: '#0008', flexDirection: 'row' }}><Pressable accessibilityRole="button" accessibilityLabel="Close Aura menu" onPress={() => setMenuOpen(false)} style={StyleSheet.absoluteFill} /><SafeAreaView edges={['top', 'bottom']} style={{ width: '86%', maxWidth: 320, height: '100%', padding: 16, borderRightWidth: 1, borderColor: c.line, backgroundColor: c.bg }}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 10 }}>
       {pickingEvent && !vendor ? <AuraEventPicker activeId={activeEventId} busy={unavailable} onBack={() => setPickingEvent(false)} onSelect={event => { setMenuOpen(false); onSwitchEvent?.(event); }} /> : <>
-        <Text size={18} bold>Aura+</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><Text size={18} bold>Aura+</Text><Pressable accessibilityRole="button" accessibilityLabel="Close Aura sidebar" onPress={() => setMenuOpen(false)} style={styles.iconButton}><SidebarToggle color={c.ink}/></Pressable></View>
+        <AuraRow title="New chat" icon="create-outline" disabled={unavailable} onPress={newChat} />
         {!!eventTitle && <Text size={12} color={c.muted}>Planning: {eventTitle}</Text>}
         {!vendor && <AuraRow title="Switch event" icon="swap-horizontal-outline" disabled={unavailable} onPress={() => setPickingEvent(true)} />}
         <AuraRow title="Home" icon="home-outline" onPress={() => go('Main', { screen: 'Overview' })} />
@@ -122,7 +125,7 @@ export function AuraChatView({ messages, user, vendor, text, onChangeText, onSen
         <AuraRow title="Your profile" icon="person-outline" onPress={() => go('Main', { screen: 'Me' })} />
         <AuraRow title="Close" onPress={() => setMenuOpen(false)} />
       </>}
-    </SafeAreaView></View></Modal>
+    </ScrollView></SafeAreaView></View></Modal>
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({ iconButton: { width: 38, height: 38, borderRadius: 20, alignItems: 'center', justifyContent: 'center', flexShrink: 0 } });

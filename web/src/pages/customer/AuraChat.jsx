@@ -7,6 +7,7 @@ import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import UnderstandingCard from './UnderstandingCard.jsx';
 import AuraEventMenu from './AuraEventMenu.jsx';
+import './auraSidebar.css';
 import AuraVendorResults from './AuraVendorResults.jsx';
 import { createAuraLive, sameAuraValue } from '../../../../shared/auraLive.ts';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
@@ -365,6 +366,9 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const key = sessionKey(user?.id, scopedEventId);
 
   const [sessionId, setSessionId] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarTrigger = useRef(null);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const [messages, setMessages] = useState([]);
   const [activeEvent, setActiveEvent] = useState(null);
   // activity state removed – AuraActivity is vendor-only
@@ -749,11 +753,13 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const displayError = error || liveError;
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-[#161926]">
+    <div className="aura-chat-shell flex h-full min-h-0 bg-white dark:bg-[#161926]">
+      <AuraEventMenu activeId={activeEvent?.id} busy={sending || loading} onSwitch={switchEvent} onNew={newChat} open={sidebarOpen} onClose={closeSidebar} triggerRef={sidebarTrigger} />
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
       {/* Header */}
       <div className="flex items-center gap-3 px-3 sm:px-6 py-3 border-b border-gray-100 dark:border-gray-800/80 bg-white/70 dark:bg-[#161926]/80 backdrop-blur-sm shrink-0">
+        <button ref={sidebarTrigger} type="button" aria-label={sidebarOpen ? 'Close Aura sidebar' : 'Open Aura sidebar'} title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'} aria-controls="aura-chat-sidebar" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(value => !value)} className="aura-sidebar-trigger w-10 h-10 shrink-0 rounded-xl grid place-items-center text-navy dark:text-slate-200 hover:bg-primary/10 transition"><Icon name="panelLeft" size={22} /></button>
         <Icon name="aura" size={30} />
-          <AuraEventMenu activeId={activeEvent?.id} busy={sending || loading} onSwitch={switchEvent} />
         <div className="min-w-0 flex-1">
           {activeEvent ? (
             <Link to={`/customer/events/${activeEvent.id}`} className="text-sm font-extrabold text-navy dark:text-white hover:text-primary dark:hover:text-[#a5b4fc] truncate block">{activeEvent.title}</Link>
@@ -762,7 +768,6 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
           )}
           <div className="text-[10px] text-muted dark:text-slate-400">Your event assistant</div>
         </div>
-        <button onClick={newChat} className="text-[11px] font-bold rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-navy dark:text-slate-200 hover:bg-lavender dark:hover:bg-white/10 shrink-0 transition">New chat</button>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto" onScroll={event => { const view = event.currentTarget; nearBottom.current = view.scrollHeight - view.scrollTop - view.clientHeight < 160; }}>
@@ -916,15 +921,6 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         <div className="flex items-center gap-1.5 bg-white dark:bg-[#1e2235] rounded-full shadow-lg shadow-primary/5 pl-2 pr-1.5 py-1.5 border border-gray-200/80 dark:border-gray-700 focus-within:border-primary/40 transition">
           <button
             type="button"
-            onClick={newChat}
-            className="w-9 h-9 grid place-items-center rounded-full text-ink/70 dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10 shrink-0 transition"
-            title="New chat"
-            aria-label="New chat"
-          >
-            <Icon name="plus" size={18} />
-          </button>
-          <button
-            type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={sending || loading || uploadingMedia}
             className="w-9 h-9 grid place-items-center rounded-full text-ink/70 dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10 shrink-0 transition cursor-pointer disabled:opacity-40"
@@ -1002,6 +998,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         <p className="text-[10px] text-muted dark:text-slate-400 text-center mt-1.5">You decide — Aura+ never books or pays without you.</p>
       </form>
 
+      </div>
       {/* Lightbox Zoom Modal */}
       {activeZoomImage && (
         <div className="fixed inset-0 z-60 bg-black/90 flex items-center justify-center p-4 cursor-pointer" onClick={() => setActiveZoomImage(null)}>
