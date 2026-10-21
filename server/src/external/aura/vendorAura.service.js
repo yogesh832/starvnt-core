@@ -185,6 +185,7 @@ export function nextStepText(activation, vendor, language = 'en') {
     coverage: !c.locations
       ? vendorCopy(language, 'locationQuestion')
       : vendorCopy(language, 'nextCoverage'),
+    availability: vendorCopy(language, 'nextAvailability'),
     portfolio: vendorCopy(language, 'nextPortfolio'),
   }[next.key];
   if (next.key === 'profile') {

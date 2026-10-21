@@ -1,4 +1,5 @@
 import { DEV_SHORTCUTS_ENABLED } from '../../../lib/devShortcuts.js';
+import { VENDOR_SETUP_STEPS } from '../../../../../server/src/common/vendorSetupSteps.js';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../../components/Icon.jsx';
@@ -1088,21 +1089,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
     documents: false,
   };
 
-  const isDocVerified = Boolean(
-    checklist.verified ||
-    checklist.documents ||
-    checklist.identityVerified ||
-    checklist.bankVerified
-  );
-
-  const completedStepsCount = [
-    checklist.profile,
-    checklist.services,
-    checklist.capabilities,
-    checklist.coverage,
-    checklist.portfolio,
-    isDocVerified,
-  ].filter(Boolean).length;
+  const isDocVerified = Boolean(checklist.verified);
+  const completedStepsCount = VENDOR_SETUP_STEPS.filter(step => step.done(checklist)).length;
 
   // Real KPI calculations
   const advanceReceived = bookings.reduce((sum, b) => sum + (Number(b.advancePaid) || 0), 0);
@@ -1297,8 +1285,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                 </h2>
                 <p className="text-xs text-muted dark:text-slate-300 max-w-2xl leading-relaxed">
                   {is100Percent
-                    ? 'All operational criteria (Service, Capability, Coverage, Portfolio, Documents & Base City) are verified. Your brand is actively routed to matching client requests.'
-                    : 'STARVNT requires profile and document completion before matching clients with your brand. Complete each section below: brand & city, services & pricing, gear capability, service coverage, portfolio projects, and document verification.'}
+                    ? 'All six operational steps are complete and identity plus bank verification have passed. Your brand can receive matching client requests.'
+                    : 'STARVNT requires profile and document completion before matching clients with your brand. Complete each section below: brand & city, services & pricing, gear capability, service coverage, operating availability, portfolio projects, and separate identity/bank verification.'}
                 </p>
               </div>
 
@@ -1375,7 +1363,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                 />
               </div>
 
-              {/* 6 Distinct Responsive Milestone Cards */}
+              {/* Six operational milestones and separate verification */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3.5 pt-3">
 
                 {/* Step 1: Brand & City */}
@@ -1396,7 +1384,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     </div>
                     <div className="font-extrabold text-xs text-navy truncate">1. Brand & City</div>
                     <p className="text-[11px] text-muted mt-1 leading-snug break-words">
-                      {checklist.profile ? `${vendorProfile?.businessName || 'Brand'} · ${vendorProfile?.city || 'City'}` : 'Configure company name, category, and base city.'}
+                      {checklist.profile ? `${vendorProfile?.businessName || 'Brand'} · ${vendorProfile?.city || vendorProfile?.location || 'City'}` : 'Configure company name, category, and base city.'}
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
@@ -1464,7 +1452,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     </div>
                     <div className="font-extrabold text-xs text-navy truncate">3. Capability & Gear</div>
                     <p className="text-[11px] text-muted mt-1 leading-snug break-words">
-                      {checklist.capabilities ? 'Equipment & crew capacity verified' : 'Declare equipment, crew capacity, and event formats.'}
+                      {checklist.capabilities ? 'Equipment & crew capacity declared' : 'Declare equipment, crew capacity, and event formats.'}
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
@@ -1548,7 +1536,12 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                   </div>
                 </div>
 
-                {/* Step 6: Document & KYC Verification */}
+                {/* Operational step 6, counted by Core separately from verification. */}
+                <div className="p-4 rounded-2xl border border-gray-200 bg-white text-navy shadow-xs flex flex-col justify-between">
+                  <div><div className="flex items-center justify-between mb-2"><span className="text-[10px] font-extrabold uppercase text-muted">Step 6</span><span className="text-[11px] font-bold">{checklist.availability ? 'Done' : 'Pending'}</span></div><div className="font-extrabold text-xs">6. Operating Availability</div><p className="text-[11px] text-muted mt-1">Set your working days and hours. Event conflicts use dated bookings and blockouts.</p></div>
+                  <Link to="/vendor/availability" className="text-xs font-bold text-primary mt-3">{checklist.availability ? 'View Availability' : 'Set Availability'} →</Link>
+                </div>
+                {/* Identity and bank verification do not count toward profile percentage. */}
                 <div className={`p-4 rounded-2xl border transition-all flex flex-col justify-between min-w-0 ${
                   isDocVerified
                     ? 'border-emerald-200 bg-emerald-50/50 text-emerald-900'
@@ -1556,7 +1549,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                 }`}>
                   <div className="min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-2">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">Step 6</span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">Verification</span>
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0 ${
                         isDocVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-muted'
                       }`}>
@@ -1564,9 +1557,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                         <span>{isDocVerified ? 'Done' : 'Pending'}</span>
                       </span>
                     </div>
-                    <div className="font-extrabold text-xs text-navy truncate">6. Document & KYC</div>
+                    <div className="font-extrabold text-xs text-navy truncate">Document & KYC</div>
                     <p className="text-[11px] text-muted mt-1 leading-snug break-words">
-                      {isDocVerified ? 'PAN, GSTIN & Bank account verified' : 'Submit PAN, GSTIN & bank account for verification.'}
+                      {isDocVerified ? 'Identity and bank account verified' : 'Verify your identity and bank account. Add GST details if registered.'}
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
@@ -1681,10 +1674,10 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                           <span>Inbound Enquiries Locked (Profile {completionPercentage}%)</span>
                         </div>
                         <p className="text-[11px] text-amber-800 leading-relaxed">
-                          STARVNT matching engine activates when your brand reaches 100% profile readiness. Complete your 5 onboarding steps to start receiving direct client requests.
+                          STARVNT matching engine activates when your brand reaches 100% profile readiness. Complete all six operational steps plus identity and bank verification to receive direct client requests.
                         </p>
                         <Link
-                          to={!checklist.profile ? '/vendor/profile' : '/vendor/services'}
+                          to={completionPercentage === 100 ? '/vendor/profile?tab=documents' : !checklist.profile ? '/vendor/profile' : '/vendor/services'}
                           className="inline-block text-xs font-bold text-primary underline"
                         >
                           Finish onboarding setup →

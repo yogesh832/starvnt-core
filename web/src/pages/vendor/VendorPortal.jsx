@@ -43,7 +43,7 @@ export default function VendorPortal() {
     setAuraOpen(true);
   }
 
-  // Profile setup status (same checklist as the dashboard's 5 onboarding steps).
+  // Profile setup status (same checklist as the dashboard's six operational steps).
   const [setup, setSetup] = useState(null);
   async function loadSetup() {
     try {

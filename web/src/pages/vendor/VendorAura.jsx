@@ -18,14 +18,8 @@ import { getAuraPrompts } from './vendorAuraPrompts.js';
  * category, city) during profile setup; everything else is done on the pages.
  */
 
-// Same 5 steps, order and checks as the dashboard onboarding (activation checklist).
-const SETUP_STEPS = [
-  { key: 'profile', title: 'Brand name, category & city', done: (c) => c.profile, to: '/vendor/profile', prompt: 'Help me set up my brand profile' },
-  { key: 'services', title: 'Add a service with a price', done: (c) => c.services, to: '/vendor/services', prompt: 'How do I add my first service?' },
-  { key: 'capabilities', title: 'Team & equipment', done: (c) => c.capabilities, to: '/vendor/services?action=gear', prompt: 'What should I add for team and equipment?' },
-  { key: 'coverage', title: 'Location & coverage area', done: (c) => c.locations && c.coverage, to: '/vendor/services?action=coverage', prompt: 'How do I set my location and coverage area?' },
-  { key: 'portfolio', title: 'Add a portfolio project', done: (c) => c.portfolio, to: '/vendor/portfolio', prompt: 'What should I put in my portfolio?' },
-];
+import { VENDOR_SETUP_STEPS } from '../../../../server/src/common/vendorSetupSteps.js';
+const SETUP_STEPS = VENDOR_SETUP_STEPS.map(step => ({ ...step, title: step.label }));
 
 const START_SETUP = 'Help me complete my profile setup';
 
@@ -44,7 +38,7 @@ function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
         <div className="min-w-0 flex-1 text-[11px] text-muted">
           <span className="font-extrabold text-navy">Profile {setup.percent}%</span>
           <span> · {doneCount}/{steps.length} done</span>
-          {!next ? <span> · active</span> : <span> · next: {nextLabel}</span>}
+          {!next ? <span>{setup.checklist.verified ? ' · ready for matching' : ' · verification pending'}</span> : <span> · next: {nextLabel}</span>}
         </div>
         {next ? (
           <div className="flex items-center gap-1 shrink-0">
@@ -64,6 +58,8 @@ function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
               Open
             </button>
           </div>
+        ) : !setup.checklist.verified ? (
+          <button onClick={() => onManual('/vendor/profile?tab=documents')} className="rounded-lg border border-amber-300 px-2 py-1 text-[10px] font-bold text-amber-800 shrink-0">Verify</button>
         ) : (
           <Icon name="check" size={14} className="text-emerald-600 shrink-0" />
         )}
@@ -239,7 +235,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
   const [activity, setActivity] = useState(null), [liveError, setLiveError] = useState('');
   const [mode, setModeState] = useState(readMode);
   const [setupExpanded, setSetupExpanded] = useState(true);
-  const setupIncomplete = Boolean(setup?.checklist) && setup.percent < 100;
+  const setupIncomplete = Boolean(setup?.checklist) && (setup.percent < 100 || !setup.checklist.verified);
   const listRef = useRef(null);
   const lastPromptId = useRef(null);
   const lastConversationRequest = useRef(null);
@@ -1129,7 +1125,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
             <div className="text-center pt-4">
               <div className="text-sm font-extrabold text-navy">Welcome! Let's set up your business.</div>
               <p className="text-xs text-muted mt-1 max-w-[290px] mx-auto">
-                Customers can find and book you once all 5 steps above are done. Just talk or type — I'll set up your brand, services
+                Complete all six profile steps plus identity and bank verification before customer matching. Just talk or type — I'll set up your brand, services
                 with prices, team &amp; gear, location and coverage (you confirm before I save). Or tap “Manually” on any step.
               </p>
               <button

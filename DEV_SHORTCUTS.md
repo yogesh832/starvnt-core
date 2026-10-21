@@ -13,6 +13,7 @@ User preference: Quick Auto-Fill is for development only. When the user requests
 ## Other entry points to audit in the requested future cleanup
 
 - Web `/auth-test`, `/test-auth`, `/api/test` routes and their developer workbench links (`web/src/App.jsx` and auth pages).
+- Specific test-account email/type form on `/auth-test` (`DevSingleClickAuth.jsx`), gated by `import.meta.env.DEV`; remove its local fields and submit handler with the other quick sign-in entries.
 - External and admin dev-auth endpoints and reseed utilities; `ENABLE_DEV_TOOLS` / `config.enableDevTools` gates.
 - Native Quick Test Auth entries and test account screens.
 - Development/master OTP bypasses in authentication services.

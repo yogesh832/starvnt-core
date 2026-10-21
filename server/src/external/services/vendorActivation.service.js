@@ -7,6 +7,7 @@ import { PortfolioItem } from '../models/PortfolioItem.js';
 import { VendorFinancialProfile } from '../models/VendorFinancialProfile.js';
 import { VendorDocument } from '../models/VendorDocument.js';
 import { VendorResource } from '../models/VendorResource.js';
+import { vendorVerification } from '../../common/vendorVerification.js';
 
 const REASON_LABELS = {
   PROFILE_INCOMPLETE: 'Brand profile details are incomplete',
@@ -69,22 +70,11 @@ export async function evaluateVendorActivation(vendorId) {
   // Bank verification is mandatory for vendor verification/commercial matching.
   const finProfile = await VendorFinancialProfile.findOne({ vendor: vendorId });
   const hasVerifiedDoc = await VendorDocument.exists({ vendor: vendorId, status: 'VERIFIED' });
-  const hasVerifiedIdentity =
-    finProfile?.pan?.verificationStatus === 'VERIFIED' ||
-    finProfile?.gst?.verificationStatus === 'VERIFIED' ||
-    finProfile?.gst?.isRegistered === false ||
-    Boolean(hasVerifiedDoc);
-  const hasVerifiedBank = finProfile?.bankAccount?.verificationStatus === 'VERIFIED';
+  const verification = vendorVerification(finProfile, Boolean(hasVerifiedDoc));
+  const hasVerifiedIdentity = verification.identityVerified;
+  const hasVerifiedBank = verification.bankVerified;
   const isFinancialVerified = hasVerifiedIdentity && hasVerifiedBank;
-  const identityVerificationSource = finProfile?.pan?.verificationStatus === 'VERIFIED'
-    ? 'PAN_VERIFICATION'
-    : finProfile?.gst?.verificationStatus === 'VERIFIED'
-    ? 'GST_VERIFICATION'
-    : finProfile?.gst?.isRegistered === false
-    ? 'GST_NOT_REGISTERED_DECLARATION'
-    : hasVerifiedDoc
-    ? 'ADMIN_APPROVED_DOCUMENT'
-    : 'NOT_VERIFIED';
+  const identityVerificationSource = verification.identitySource;
   const bankVerificationSource = hasVerifiedBank ? 'BANK_VERIFICATION' : 'NOT_VERIFIED';
 
   if (!hasVerifiedIdentity) {

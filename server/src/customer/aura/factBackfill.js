@@ -142,11 +142,12 @@ export function parseShortAnswer(text, askedTopic) {
   const t = text.trim().replace(/[.!]+$/, '');
   if (!t || t.includes('?') || /\d/.test(t) || t.split(/\s+/).length > 5) return null;
   if (/^(yes|no|haan|nahi|ok|okay|skip|not sure|help)/i.test(t)) return null;
+  if (/\b(?:roman|hindi|english|hinglish|bengali|bangla|urdu)\b/i.test(t) && /\b(?:mein|me|in|reply|speak|bolo|baat|answer)\b/i.test(t)) return null;
   const cleaned = t.replace(/^(it(?:'s| is)?|in|at|the venue is|venue is|area is)\s+/i, '').replace(/^(in|at)\s+/i, '').trim();
   return cleaned || null;
 }
 
-const CITY_STOPWORDS = new Set(['the', 'my', 'our', 'a', 'an', 'english', 'hindi', 'bengali', 'bangla', 'hinglish', 'morning', 'evening', 'afternoon', 'night', 'budget', 'india']);
+const CITY_STOPWORDS = new Set(['the', 'my', 'our', 'a', 'an', 'roman', 'english', 'hindi', 'bengali', 'bangla', 'hinglish', 'urdu', 'morning', 'evening', 'afternoon', 'night', 'budget', 'india']);
 
 /**
  * Capitalised words after "in" ("in Kolkata", "in New Delhi") or, in
@@ -154,6 +155,10 @@ const CITY_STOPWORDS = new Set(['the', 'my', 'our', 'a', 'an', 'english', 'hindi
  */
 export function parseCity(text) {
   const bad = (w) => MONTH_WORDS.has(w.toLowerCase()) || CITY_STOPWORDS.has(w.toLowerCase());
+  // A city followed by a stated Indian state is an address, even without "in".
+  // Do not let later language instructions ("Roman Hindi mein") become a place.
+  const stateAddress = /\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)[,\s]+(?:Uttarakhand|Uttar Pradesh|Himachal Pradesh|Madhya Pradesh|Andhra Pradesh|Arunachal Pradesh|West Bengal|Tamil Nadu|Maharashtra|Karnataka|Kerala|Gujarat|Rajasthan|Punjab|Haryana|Bihar|Jharkhand|Odisha|Assam|Goa|Telangana|Chhattisgarh|Sikkim|Meghalaya|Manipur|Mizoram|Nagaland|Tripura)\b/.exec(text);
+  if (stateAddress && stateAddress[1].split(/\s+/).every(word => !bad(word))) return stateAddress[1];
   const after = /\bin\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/g;
   let m;
   while ((m = after.exec(text))) {
@@ -186,10 +191,20 @@ export function parseStatedNeeds(text) {
 /** Multiple services explicitly handled by the customer, never guessed from a vendor result. */
 export function parseProvidedCategories(text) {
   const found = new Set();
-  for (const clause of text.split(/[.!\n;,]+|\b(?:bas|but|lekin)\b/i)) {
-    if (clause.includes('?') || HEDGE_RE.test(clause) || NEGATION_RE.test(clause)) continue;
-    if (/\b(?:already (?:have|arranged|booked)|(?:hum|ham|main|we)\s+(?:khud\s+)?(?:kar|kr|sambhal|handle|will handle|will do)|(?:arranged|sorted)\s*(?:hai|hain))\b/i.test(clause)) {
-      for (const category of categoriesMentioned(clause)) found.add(category);
+  const provided = /\b(?:already (?:have|arranged|booked)|(?:hum|ham|main|we)\s+(?:khud\s+)?(?:kar|kr|sambhal|handle|will handle|will do)|(?:maine|hamne|humne)\s+(?:khud\s+)?(?:arrange|book|kar|kr)|(?:arranged|sorted)\s*(?:hai|hain))\b/i;
+  for (const sentence of text.split(/[.!\n;]+|\b(?:bas|but|lekin)\b/i)) {
+    const clauses = sentence.split(',');
+    const safe = clause => !clause.includes('?') && !HEDGE_RE.test(clause) && !NEGATION_RE.test(clause);
+    for (let i=0;i<clauses.length;i++) {
+      if (!safe(clauses[i]) || !provided.test(clauses[i])) continue;
+      for (const category of categoriesMentioned(clauses[i])) found.add(category);
+      // A comma-separated list shares its explicit predicate, but a new need,
+      // denial, question or completed statement starts a different clause.
+      for (const direction of [-1,1]) for(let j=i+direction;j>=0&&j<clauses.length;j+=direction) {
+        const clause=clauses[j], categories=categoriesMentioned(clause);
+        if (!safe(clause)||NEED_RE.test(clause)||provided.test(clause)||!categories.length) break;
+        for(const category of categories) found.add(category);
+      }
     }
   }
   if (/\b(?:ghar|home)\s+(?:par|pe|mein|me)\b/i.test(text) && !/\?/.test(text)) found.add('venue');

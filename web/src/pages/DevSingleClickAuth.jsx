@@ -286,6 +286,8 @@ export default function DevSingleClickAuth() {
   const [authError, setAuthError] = useState('');
   const [copiedToken, setCopiedToken] = useState('');
   const [vendorCategoryFilter, setVendorCategoryFilter] = useState('ALL');
+  const [testEmail, setTestEmail] = useState('');
+  const [testAccountType, setTestAccountType] = useState('CUSTOMER');
 
   const externalToken = localStorage.getItem('starvnt_external_access_token') || '';
   const adminToken = localStorage.getItem('starvnt_admin_access_token') || '';
@@ -415,6 +417,15 @@ export default function DevSingleClickAuth() {
 
       {/* Main Single-Click Control Center */}
       <main className="max-w-6xl mx-auto w-full py-8 space-y-10">
+        {import.meta.env.DEV && <form onSubmit={event => { event.preventDefault(); if (testEmail.trim()) handleAuthLogin({ email: testEmail.trim(), accountType: testAccountType, blankProfile: testAccountType === 'VENDOR' }); }} className="rounded-2xl border border-sky-500/30 bg-slate-900 p-5 space-y-3">
+          <h2 className="font-bold text-white">Sign in to a specific test account</h2>
+          <p className="text-xs text-slate-400">Development only. Existing accounts retain their data; a new vendor starts with an empty profile.</p>
+          <div className="flex flex-wrap gap-3">
+            <input type="email" required aria-label="Test account email" placeholder="Test account email" value={testEmail} onChange={event => setTestEmail(event.target.value)} className="flex-1 min-w-48 rounded-xl bg-slate-950 text-white border border-slate-700 px-3 py-2.5" />
+            <select aria-label="Test account type" value={testAccountType} onChange={event => setTestAccountType(event.target.value)} className="rounded-xl bg-slate-950 text-white border border-slate-700 px-3 py-2.5"><option value="CUSTOMER">Customer</option><option value="VENDOR">Vendor</option></select>
+            <button type="submit" disabled={Boolean(loadingEmail)} className="rounded-xl bg-sky-600 text-white px-4 py-2.5 font-bold disabled:opacity-50">{loadingEmail === testEmail.trim() ? 'Signing in…' : 'Sign in to test account'}</button>
+          </div>
+        </form>}
         {/* Hero Section */}
         <div className="text-center space-y-3">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">
