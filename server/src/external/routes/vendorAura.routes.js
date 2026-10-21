@@ -41,7 +41,7 @@ router.get('/sessions/:sid', async (req, res, next) => {
 
 router.post('/chat', auraLimiter, async (req, res, next) => {
   try {
-    const { sessionId, message, page, confirm, stream } = req.body || {};
+    const { sessionId, message, page, confirm, stream, locationSelection } = req.body || {};
     const wantsStream = Boolean(stream || req.query.stream === '1' || req.headers.accept?.includes('text/event-stream'));
 
     if (wantsStream) {
@@ -68,7 +68,7 @@ router.post('/chat', auraLimiter, async (req, res, next) => {
       };
 
       const result = await chat(
-        { vendor: req.vendor, user: req.externalUser, sessionId, message, page, confirm },
+        { vendor: req.vendor, user: req.externalUser, sessionId, message, page, confirm, locationSelection },
         { onChunk, onStatus }
       );
 
@@ -77,7 +77,7 @@ router.post('/chat', auraLimiter, async (req, res, next) => {
         res.end();
       }
     } else {
-      res.json({ ok: true, ...(await chat({ vendor: req.vendor, user: req.externalUser, sessionId, message, page, confirm })) });
+      res.json({ ok: true, ...(await chat({ vendor: req.vendor, user: req.externalUser, sessionId, message, page, confirm, locationSelection })) });
     }
   } catch (err) {
     if (res.headersSent && !res.writableEnded) {

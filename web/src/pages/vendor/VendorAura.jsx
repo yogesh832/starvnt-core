@@ -1,3 +1,6 @@
+import VendorAuraLocation from '../../components/VendorAuraLocation.jsx';
+import { requestsVendorLocation, vendorCopy } from '../../../../server/src/common/vendorAuraUi.js';
+import { conversationLanguage } from '../../../../server/src/common/auraLanguage.js';
 import AuraMark from '../../components/AuraMark.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { createAuraLive, sameAuraValue } from '../../../../shared/auraLive.ts';
@@ -397,7 +400,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
     }
   }
 
-  async function send(text, { confirm } = {}) {
+  async function send(text, { confirm, locationSelection } = {}) {
     const message = String(text || '').trim();
     if (!message || sendingRef.current) return;
     const sync = live.current, expectedSession = sessionId; sync?.beginWrite(); sendingRef.current = true;
@@ -448,7 +451,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
         '/vendor/aura/chat',
         {
           method: 'POST',
-          body: { sessionId, message, page, ...(typeof confirm === 'boolean' ? { confirm } : {}) },
+          body: { sessionId, message, page, ...(typeof confirm === 'boolean' ? { confirm } : {}), ...(locationSelection ? {locationSelection} : {}) },
           signal: abortController.signal,
         },
         (event) => {
@@ -912,7 +915,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
     );
   }
 
-  const chips = getAuraPrompts({ page, setup, messages, pending, sending, steps: SETUP_STEPS });
+  const showingLocationPicker = !pending && !sending && messages.at(-1)?.role === 'model' && requestsVendorLocation(messages.at(-1)?.content);
+  const chips = showingLocationPicker ? [] : getAuraPrompts({ page, setup, messages, pending, sending, steps: SETUP_STEPS });
   const setupCard = setupIncomplete && (
     <SetupCard
       setup={setup}
@@ -1145,7 +1149,11 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
           ))}
           {messages.map((m, i) => {
             if (m.role === 'model' && !m.content) return null;
-            return <Bubble key={i} m={m} onAction={goTo} />;
+            return <div key={i} className="space-y-3"><Bubble m={m} onAction={goTo} />
+              {m.role === 'model' && i === messages.length - 1 && showingLocationPicker &&
+                <VendorAuraLocation key={`${sessionId}-${i}`} language={conversationLanguage('',messages)} disabled={sending}
+                  onSelect={location => send(`${vendorCopy(conversationLanguage('',messages),'useLocation')}: ${location.address}, ${location.city}`, {locationSelection:location})} />}
+            </div>;
           })}
           {pending && !sending && (
             <div className="ml-9 rounded-2xl border border-primary/30 bg-primary-soft/40 p-3">
@@ -1156,7 +1164,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
                   ? 'Revise Offer'
                   : pending.kind === 'create_quote'
                   ? 'Send Quotation'
-                  : 'Save this?'}
+                  : vendorCopy(conversationLanguage('',messages),'review')}
               </div>
               <div className="text-[12px] font-semibold text-navy mt-0.5">{pending.summary}</div>
               <div className="flex gap-2 mt-2.5">
@@ -1181,17 +1189,17 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
                     ? '✓ Send Revised Offer'
                     : pending.kind === 'create_quote'
                     ? '✓ Send Quote'
-                    : '✓ Save'}
+                    : `✓ ${vendorCopy(conversationLanguage('',messages),'save')}`}
                 </button>
                 <button
                   onClick={() => send('Cancel', { confirm: false })}
                   className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-1.5 hover:bg-lavender transition-colors"
                 >
-                  Cancel
+                  {vendorCopy(conversationLanguage('',messages),'cancel')}
                 </button>
               </div>
               <p className="text-[10px] text-muted mt-1.5">
-                Or reply “yes” / “haan” / “confirm” — or tell me what to change.
+                {vendorCopy(conversationLanguage('',messages),'confirm')}
               </p>
             </div>
           )}

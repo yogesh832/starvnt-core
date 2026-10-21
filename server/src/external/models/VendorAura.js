@@ -11,6 +11,7 @@ const vendorAuraSessionSchema = new Schema(
     user: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true },
     // A setup action Aura+ proposed and is waiting for the vendor to confirm (see setupActions.js).
     pending: { type: Schema.Types.Mixed, default: null },
+    language: { type: String, enum: ['en','hi','hinglish','bn'], default: 'en' },
   },
   { timestamps: true, collection: 'vendor_aura_sessions' }
 );

@@ -1,3 +1,4 @@
+import { describeVendorAction } from '../../common/vendorAuraUi.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { VendorService } from '../models/VendorService.js';
 import { VendorCapability } from '../models/VendorCapability.js';
@@ -591,7 +592,8 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
 }
 
 /** One-line summary the vendor confirms. */
-export function describeAction(a) {
+export function describeAction(a, language = 'en') {
+  if (language !== 'en') return describeVendorAction(a, language);
   if (a.kind === 'service') {
     const s = a.service;
     return `Add service “${s.name}” (${s.category}) — ${inr(s.basePrice)}${s.pricingType === 'FIXED' ? ' per event' : ` per ${s.unit}`}`;
@@ -667,7 +669,7 @@ export async function executeAction(vendor, a) {
   if (a.kind === 'location') {
     const l = a.location;
     const isPrimary = (await OperatingLocation.countDocuments({ vendor: vendorId })) === 0;
-    const loc = await OperatingLocation.create({ vendor: vendorId, ...l, state: l.state || 'West Bengal', coordinates: { lat: 0, lng: 0 }, isPrimary });
+    const loc = await OperatingLocation.create({ vendor: vendorId, ...l, state: l.state || '', coordinates: l.coordinates || { lat: 0, lng: 0 }, isPrimary });
     if (isPrimary || !vendor.location) {
       vendor.location = `${loc.locality ? `${loc.locality}, ` : ''}${loc.city}`;
       if (vendor.businessName && vendor.category) vendor.isProfileCompleted = true;

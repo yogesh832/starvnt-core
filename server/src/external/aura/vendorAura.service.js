@@ -1,3 +1,4 @@
+import { vendorCopy, normalizeVendorLocation, isVendorLocationSetupRequest } from '../../common/vendorAuraUi.js';
 import { VendorAuraSession, VendorAuraMessage } from '../models/VendorAura.js';
 import { VendorService } from '../models/VendorService.js';
 import { getLlmAdapter } from './llmAdapter.js';
@@ -27,13 +28,27 @@ const MAX_ACTIONS = 3;
 export const FALLBACK_REPLY = "Sorry, I can't answer right now. Please try again in a moment — your dashboard has the latest numbers.";
 
 /** Keep setup and settlement queries usable during a provider outage without inventing data or writes. */
-export function setupFallback(message, vendor, context, pending = null) {
+export function setupFallback(message, vendor, context, pending = null, language = 'en') {
+  const isSettlement = /\b(settle|settlement|settlements|payout|payouts|earning|earnings|kamai|hisaab|hisab|escrow|receivable|payment|payments|balance)\b/i.test(message);
+  if (language !== 'en') {
+    if (isSettlement && !pending) {
+      const parts = [vendorCopy(language,'offline')];
+      const values = context?.settlements;
+      if (values?.settledAmount != null) parts.push(`${vendorCopy(language,'settled')}: ₹${Number(values.settledAmount).toLocaleString('en-IN')}.`);
+      if (values?.pendingSettlementAmount != null) parts.push(`${vendorCopy(language,'pendingSettlement')}: ₹${Number(values.pendingSettlementAmount).toLocaleString('en-IN')}.`);
+      parts.push(vendorCopy(language,'paymentsPage'));
+      return {reply:parts.join(' '),actions:[{label:'Payments',to:'/vendor/payments'}]};
+    }
+    const nextKind = context?.profileSetup?.steps?.find(step => !step.done)?.kind;
+    const question = pending ? `${describeAction(pending, language)}\n${vendorCopy(language, 'confirm')}` : missingBrand(vendor).length ? brandQuestion(vendor,language) : vendorCopy(language, {services:'nextServices',capabilities:'nextCapabilities',coverage:'locationQuestion',portfolio:'nextPortfolio'}[nextKind] || 'got');
+    return {reply:`${vendorCopy(language,'offline')} ${question}`,actions:[]};
+  }
   if (pending) return {
     reply: `I couldn't reach Aura's chat service. Your confirmation is still pending: ${describeAction(pending)}. Say “yes” to confirm or “no” to cancel.`,
     actions: [],
   };
 
-  const isSettlement = /\b(settle|settlement|settlements|payout|payouts|earning|earnings|kamai|hisaab|hisab|escrow|receivable|payment|payments|balance)\b/i.test(message);
+
   if (isSettlement) {
     const s = context?.settlements;
     const settled = s?.settledAmount != null ? `₹${Number(s.settledAmount).toLocaleString('en-IN')}` : null;
@@ -110,7 +125,7 @@ function serialize(m) {
   return { role: m.role, content: m.content, actions: m.actions || [], createdAt: m.createdAt };
 }
 
-const pendingView = (p) => (p ? { kind: p.kind, summary: describeAction(p), isUpdate: Boolean(p.isUpdate) } : null);
+const pendingView = (p, language = 'en') => (p ? { kind: p.kind, summary: describeAction(p, language), isUpdate: Boolean(p.isUpdate) } : null);
 
 /** Conversation summaries are scoped before joining any message content. */
 export async function listSessions({ vendor }) {
@@ -145,11 +160,11 @@ export async function getSession({ vendor, sessionId }) {
   const activity = await vendorAuraActivity(vendor._id);
   if (!session) return { sessionId, messages: [], pending: null, activity };
   const messages = (await VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(100).lean()).reverse();
-  return { sessionId, messages: messages.map(serialize), pending: pendingView(session.pending), activity };
+  return { sessionId, messages: messages.map(serialize), pending: pendingView(session.pending, session.language), language: session.language, activity };
 }
 
 /** What Aura+ says after a setup step is saved: the next step, as a question it can act on. */
-function nextStepText(activation, vendor) {
+export function nextStepText(activation, vendor, language = 'en') {
   const setup = setupSummary(activation);
   const next = setup?.nextStep;
   if (!setup) return { text: '', actions: [], setup };
@@ -157,23 +172,23 @@ function nextStepText(activation, vendor) {
     const verified = Boolean(activation.checklist?.verified);
     return {
       text: verified
-        ? '\n🎉 Your profile setup is complete — you can now be matched with customers.'
-        : '\n🎉 All 5 setup steps are done. The last check is STARVNT verification (KYC documents) before customers can be matched with you.',
+        ? `\n🎉 ${vendorCopy(language, 'complete')}`
+        : `\n🎉 ${vendorCopy(language, 'verification')}`,
       actions: verified ? [] : [{ label: 'KYC documents', to: '/vendor/documents' }],
       setup,
     };
   }
   const c = activation.checklist;
   const ask = {
-    services: "Next: your first service. What service do you offer, and what's your base price?",
-    capabilities: 'Next: team & equipment. How many people are in your team, and what main equipment do you use?',
+    services: vendorCopy(language, 'nextServices'),
+    capabilities: vendorCopy(language, 'nextCapabilities'),
     coverage: !c.locations
-      ? 'Next: your studio / office location. Which area and city is it in?'
-      : 'Next: coverage area. How far (in km) from your base do you travel for events?',
-    portfolio: `Everything I can set up is done ✅. Only your portfolio is left — it needs photo/video uploads, so add it from the Portfolio page whenever you like.${contactQuestion(vendor)}`,
+      ? vendorCopy(language, 'locationQuestion')
+      : vendorCopy(language, 'nextCoverage'),
+    portfolio: vendorCopy(language, 'nextPortfolio'),
   }[next.key];
   if (next.key === 'profile') {
-    return { text: `\n${brandQuestion(vendor)}`, actions: [], setup };
+    return { text: `\n${brandQuestion(vendor, language)}`, actions: [], setup };
   }
   return {
     text: `\n${ask}`,
@@ -182,15 +197,15 @@ function nextStepText(activation, vendor) {
   };
 }
 
-async function saveTurn(sessionId, text, reply, actions, pending) {
+async function saveTurn(sessionId, text, reply, actions, pending, language = 'en') {
   await VendorAuraMessage.insertMany([
     { session: sessionId, role: 'user', content: text },
     { session: sessionId, role: 'model', content: reply, actions },
   ]);
-  await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date(), pending: pending ?? null } });
+  await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date(), pending: pending ?? null, language } });
 }
 
-export async function chat({ vendor, user, sessionId, message, page, confirm }, options = {}) {
+export async function chat({ vendor, user, sessionId, message, page, confirm, locationSelection }, options = {}) {
   const tracker = createPerformanceTracker();
   const text = typeof message === 'string' ? message.trim() : '';
   if (!text) throw httpError(400, 'MESSAGE_REQUIRED');
@@ -198,6 +213,18 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   if (!isValidSessionId(sessionId)) throw httpError(400, 'INVALID_SESSION_ID');
 
   const session = await ensureSession(sessionId, vendor._id, user._id);
+  const recent = await VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(HISTORY).lean();
+  const history = recent.reverse().map(m => ({role:m.role,content:m.content}));
+  const language = conversationLanguage(text, history, session.language);
+  if (locationSelection !== undefined) {
+    const location = normalizeVendorLocation(locationSelection);
+    if (!location) throw httpError(400, 'INVALID_LOCATION_SELECTION');
+    const pending = {kind:'location',location};
+    const reply = `📝 ${describeAction(pending, language)}\n${vendorCopy(language, 'confirm')}`;
+    await saveTurn(sessionId, text, reply, [], pending, language);
+    return {reply, actions:[], language, pending:pendingView(pending,language), fallback:false,profileUpdated:false};
+  }
+
 
   // ── A setup action is waiting for "yes" / "no" (button or words/voice) ──────
   if (session.pending) {
@@ -223,14 +250,15 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
           actions = [{ label: 'View Quotes', to: '/vendor/quotes' }];
         } else {
           const activation = result;
-          const next = nextStepText(activation, vendor);
+          const next = nextStepText(activation, vendor, language);
           setup = next.setup;
-          reply = `✅ Saved — ${describeAction(session.pending)}.${next.text}`;
+          reply = `✅ ${vendorCopy(language, 'saved')} — ${describeAction(session.pending, language)}.${next.text}`;
           actions = next.actions;
         }
+        if (language !== 'en' && ['block_date','revise_quote','create_quote'].includes(session.pending.kind)) reply = `✅ ${vendorCopy(language,'saved')} — ${describeAction(session.pending,language)}.`;
       } catch (err) {
         console.warn('[vendor-aura] setup action failed:', err?.message || err);
-        reply = "Sorry, I couldn't save that. Please try again, or do it from the page below.";
+        reply = vendorCopy(language, 'failed');
         if (session.pending.kind === 'block_date') {
           actions = [{ label: 'Availability', to: '/vendor/availability' }];
         } else if (session.pending.kind === 'revise_quote' || session.pending.kind === 'create_quote') {
@@ -239,7 +267,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
           actions = [{ label: 'Open Services', to: '/vendor/services' }];
         }
       }
-      await saveTurn(sessionId, text, reply, actions, null);
+      await saveTurn(sessionId, text, reply, actions, null, language);
       console.log('\n' + '═'.repeat(70));
       console.log(`[Aura Vendor Chat ✓ Confirmed Action]`);
       console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
@@ -250,8 +278,8 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
       return { reply, actions, fallback: false, profileUpdated: Boolean(setup), setup, pending: null };
     }
     if (answer === false) {
-      const reply = "Okay, I didn't save it. Tell me what to change, or ask me anything else.";
-      await saveTurn(sessionId, text, reply, [], null);
+      const reply = vendorCopy(language, 'cancelled');
+      await saveTurn(sessionId, text, reply, [], null, language);
       console.log('\n' + '═'.repeat(70));
       console.log(`[Aura Vendor Chat ✗ Cancelled Action]`);
       console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
@@ -267,26 +295,28 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
     }
   }
 
+  if (isVendorLocationSetupRequest(text)) {
+    const reply = vendorCopy(language, 'locationQuestion');
+    await saveTurn(sessionId, text, reply, [], null, language);
+    return {reply, actions:[], language, pending:null, fallback:false,profileUpdated:false};
+  }
+
   tracker.markContextStart();
   if (options.onStatus) options.onStatus('context_retrieval');
-  const [activity, recent] = await Promise.all([
-    vendorAuraActivity(vendor._id),
-    VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(HISTORY).lean(),
-  ]);
-  const history = recent.reverse().map((m) => ({ role: m.role, content: m.content }));
-  const operational = activityAnswer(text, activity, conversationLanguage(text, history));
+  const activity = await vendorAuraActivity(vendor._id);
+  const operational = activityAnswer(text, activity, language);
   if (operational) {
     tracker.markContextEnd();
-    await saveTurn(sessionId, text, operational.reply, operational.actions, session.pending);
-    return { ...operational, activity, pending: pendingView(session.pending), fallback: false, profileUpdated: false };
+    await saveTurn(sessionId, text, operational.reply, operational.actions, session.pending, language);
+    return { ...operational, activity, pending: pendingView(session.pending, language), language, fallback: false, profileUpdated: false };
   }
   const context = await buildVendorContext(vendor, { page: typeof page === 'string' ? page : null });
   context.activity = activity;
-  const enquiry = enquiryAnswer(text, context, conversationLanguage(text, history));
+  const enquiry = enquiryAnswer(text, context, language);
   if (enquiry) {
     tracker.markContextEnd();
-    await saveTurn(sessionId, text, enquiry.reply, enquiry.actions, session.pending);
-    return { ...enquiry, activity, pending: pendingView(session.pending), fallback: false, profileUpdated: false };
+    await saveTurn(sessionId, text, enquiry.reply, enquiry.actions, session.pending, language);
+    return { ...enquiry, activity, pending: pendingView(session.pending, language), language, fallback: false, profileUpdated: false };
   }
   context.waitingForConfirmation = session.pending ? describeAction(session.pending) : null;
   tracker.markContextEnd();
@@ -303,7 +333,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   tracker.markGeminiStart();
   try {
     const res = await getLlmAdapter().chat({
-        systemPrompt: `${buildVendorSystemPrompt(context)}\n\n${auraLanguageInstruction(conversationLanguage(text, history))}`,
+        systemPrompt: `${buildVendorSystemPrompt(context)}\n\n${auraLanguageInstruction(language)}`,
       history,
       message: text,
       model: route.model,
@@ -329,7 +359,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   }
   tracker.markGenerationEnd();
   if (fallback) {
-    ({ reply, actions } = setupFallback(text, vendor, context, session.pending));
+    ({ reply, actions } = setupFallback(text, vendor, context, session.pending, language));
   }
 
   // Brand basics: save what the vendor stated, then say exactly what was saved
@@ -368,10 +398,12 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   // questions and any "I saved it" claims are dropped — only the server reports saves.
   if (saved.length || proposal || missingForProposal) {
     const head = fallback ? '' : withoutClaims(withoutQuestions(reply));
-    const parts = [head || (proposal ? 'Great, here is what I will do:' : 'Got it!')];
-    if (saved.length) parts.push(`\n✅ Saved to your profile — ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}.`);
+    const parts = [head || (proposal ? vendorCopy(language, 'proposal') : vendorCopy(language, 'got'))];
+    if (saved.length) parts.push(`\n✅ ${vendorCopy(language, 'saved')} — ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}.`);
     if (proposal) {
-      if (proposal.kind === 'block_date') {
+      if (language !== 'en' && ['block_date','revise_quote','create_quote'].includes(proposal.kind)) {
+        parts.push(`\n📝 ${describeAction(proposal, language)}\n${vendorCopy(language, proposal.kind === 'block_date' ? 'confirm' : 'confirmQuote')}`);
+      } else if (proposal.kind === 'block_date') {
         const actionVerb = proposal.isUpdate ? 'update' : 'block';
         const confirmBtn = proposal.isUpdate ? '✓ Confirm Update' : '✓ Confirm Block';
         parts.push(`\n📝 ${describeAction(proposal)}\nShall I ${actionVerb} this date? Click “${confirmBtn}” or say “yes” to confirm, or “cancel”.`);
@@ -383,15 +415,15 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
         parts.push(`\n📝 ${describeAction(proposal)}\nShall I send this quotation? Click “✓ Send Quote” or say “yes” to confirm, or “cancel”.`);
         actions = dedupeActions([{ label: 'Quotes', to: '/vendor/quotes' }, ...actions]).slice(0, MAX_ACTIONS);
       } else {
-        parts.push(`\n📝 ${describeAction(proposal)}\nShall I save this? Say “yes” to save or “no” to cancel.`);
+        parts.push(`\n📝 ${describeAction(proposal, language)}\n${vendorCopy(language, 'confirm')}`);
       }
     } else if (missingForProposal) {
-      parts.push(`I still need ${missingForProposal} — what is it?`);
+      parts.push(language === 'en' ? `I still need ${missingForProposal} — what is it?` : language === 'hi' ? `अभी ${missingForProposal} चाहिए। कृपया बताइए।` : language === 'bn' ? `এখনও ${missingForProposal} দরকার। দয়া করে বলুন।` : `Abhi ${missingForProposal} chahiye. Kripya bataiye.`);
     } else if (missingBrand(vendor).length) {
-      parts.push(brandQuestion(vendor));
+      parts.push(brandQuestion(vendor, language));
       setup = setupSummary(activation);
     } else {
-      const next = nextStepText(activation, vendor);
+      const next = nextStepText(activation, vendor, language);
       setup = next.setup;
       parts.push(next.text.trim());
       actions = dedupeActions([...next.actions, ...actions]).slice(0, MAX_ACTIONS);
@@ -400,7 +432,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
     reply = parts.filter(Boolean).join('\n');
   }
 
-  await saveTurn(sessionId, text, reply, actions, pending);
+  await saveTurn(sessionId, text, reply, actions, pending, language);
 
   const metrics = tracker.getMetrics();
   console.log('\n' + '═'.repeat(70));
@@ -430,7 +462,8 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
     fallback,
     profileUpdated: saved.length > 0,
     setup,
-    pending: pendingView(pending),
+    pending: pendingView(pending, language),
+    language,
     metrics,
     model: route.model,
     thinkingLevel: route.thinkingLevel,
@@ -444,7 +477,13 @@ function contactQuestion(vendor) {
 }
 
 /** Ask for exactly what the brand step still lacks (with the category choices when needed). */
-function brandQuestion(vendor) {
+function brandQuestion(vendor, language = 'en') {
+  if (language !== 'en') {
+    const missing = missingBrand(vendor);
+    if (missing[0] === 'city') return vendorCopy(language, 'locationQuestion');
+    if (missing[0] === 'category') return language === 'hi' ? 'आपकी मुख्य सर्विस क्या है?' : language === 'bn' ? 'আপনার প্রধান পরিষেবা কী?' : 'Aapki main service kya hai?';
+    return language === 'hi' ? 'आपके बिज़नेस का नाम क्या है?' : language === 'bn' ? 'আপনার ব্যবসার নাম কী?' : 'Aapke business ka naam kya hai?';
+  }
   const missing = missingBrand(vendor);
   if (/^other\s*:?\s*$/i.test(vendor.category || '')) return 'You selected Other. What service do you provide? Please enter your service name manually.';
   if (!missing.length) return 'Please check your brand details on the Profile page.';
