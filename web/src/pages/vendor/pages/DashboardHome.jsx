@@ -1,3 +1,4 @@
+import { DEV_SHORTCUTS_ENABLED } from '../../../lib/devShortcuts.js';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../../components/Icon.jsx';
@@ -906,7 +907,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
     }
   }
 
+  // DEV_SHORTCUT: sample-data helper; remove with the button during dev-shortcut cleanup.
   async function handleQuickCompleteProfile() {
+    if (!DEV_SHORTCUTS_ENABLED) return;
     setCompletingProfile(true);
     try {
       const category = vendorProfile?.category || 'Cinematic Production';
@@ -1321,7 +1324,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     <span>Complete Details</span>
                   </Link>
                 )}
-                {!is100Percent && (
+                {DEV_SHORTCUTS_ENABLED && !is100Percent && (
                   <button
                     onClick={handleQuickCompleteProfile}
                     disabled={completingProfile}
