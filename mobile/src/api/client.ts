@@ -10,6 +10,7 @@ export class ApiError extends Error {
   constructor(status: number, data: Data) {
     const supportEmail = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || "support@starvnt.com";
     const userMessage =
+      (typeof data.error === "string" && /^(EMAIL_OTP_|SMTP_EMAIL_|RESEND_EMAIL_)/.test(data.error) && typeof data.message === "string" ? data.message : null) ||
       messages[data.error] ||
       (status >= 500
         ? `There is a temporary issue on the STARVNT server. Please try again later or reach out to support at ${supportEmail}.`

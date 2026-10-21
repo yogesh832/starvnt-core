@@ -88,6 +88,7 @@ export default function ExternalLogin() {
   // Phone OTP States
   const [otpSent, setOtpSent] = useState(false);
   const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailDeliveryNotice, setEmailDeliveryNotice] = useState("");
   const [emailOtpVerified, setEmailOtpVerified] = useState(false);
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const [timer, setTimer] = useState(0);
@@ -209,6 +210,7 @@ export default function ExternalLogin() {
               ? form.city?.trim() || undefined
               : undefined,
         });
+        setEmailDeliveryNotice(otpRes?.message || "OTP requested. Inbox delivery is not confirmed. Check Spam or request a new code if it does not arrive.");
         setPasswordSetupRequired(Boolean(otpRes?.requiresPasswordSetup));
         setEmailOtpSent(true);
         return;
@@ -265,7 +267,7 @@ export default function ExternalLogin() {
           "Email delivery login failed. Please check the mail provider settings.",
       };
       setError(
-        map[err.data?.error] ||
+        err.data?.message || map[err.data?.error] ||
           err.message ||
           "Something went wrong. Please try again.",
       );
@@ -813,6 +815,7 @@ export default function ExternalLogin() {
               </div>
 
               {/* Error Banner */}
+              {authMethod === "EMAIL" && emailOtpSent && !emailOtpVerified && emailDeliveryNotice && <p role="status" className="mb-3 rounded-xl bg-primary/10 p-3 text-sm text-ink dark:text-slate-200">{emailDeliveryNotice}</p>}
               {error && (
                 <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5 flex items-start gap-2 animate-fade">
                   <svg
@@ -918,7 +921,7 @@ export default function ExternalLogin() {
                     >
                       <div className="p-3 bg-lavender rounded-xl border border-primary/20 flex items-center justify-between">
                         <div className="text-xs">
-                          <span className="text-muted">OTP sent to: </span>
+                          <span className="text-muted">OTP requested for: </span>
                           <b className="text-navy">{form.email}</b>
                         </div>
                         <button
@@ -1147,7 +1150,7 @@ export default function ExternalLogin() {
                     >
                       <div className="p-3 bg-lavender/50 rounded-2xl border border-primary/20 flex items-center justify-between">
                         <div className="text-xs">
-                          <span className="text-muted">OTP sent to: </span>
+                          <span className="text-muted">OTP requested for: </span>
                           <b className="text-navy">{form.phone}</b>
                         </div>
                         <button

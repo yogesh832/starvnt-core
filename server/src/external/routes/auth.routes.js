@@ -608,29 +608,33 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
       expiresInSeconds: result.expiresInSeconds,
       requiresPasswordSetup,
       authProvider: existingUser?.authProvider,
-      message: "OTP sent successfully",
+      delivery: result.delivery,
+      message: result.message,
     });
   } catch (err) {
     if (err.message === "INVALID_EMAIL_ADDRESS") {
       return res.status(400).json({ error: "INVALID_EMAIL_ADDRESS" });
     }
-    if (
-      err.message === "EMAIL_OTP_NOT_CONFIGURED" ||
-      err.message === "SMTP_EMAIL_NOT_CONFIGURED"
-    ) {
-      return res.status(503).json({ error: "EMAIL_OTP_NOT_CONFIGURED" });
+    const emailErrors = {
+      EMAIL_OTP_RECIPIENT_REJECTED: [502, 'The email provider rejected this recipient. Check your email address or use another address.'],
+      EMAIL_OTP_PROVIDER_UNAVAILABLE: [503, 'The email provider could not be reached. Please try again shortly.'],
+      EMAIL_OTP_NOT_CONFIGURED: [503, 'Email verification is unavailable because the sender is not configured. Please contact support.'],
+      SMTP_EMAIL_NOT_CONFIGURED: [503, 'Email verification is unavailable because the sender is not configured. Please contact support.'],
+      SMTP_EMAIL_AUTH_FAILED: [502, 'The email provider rejected the sender login. Please contact support.'],
+    };
+    if (emailErrors[err.message]) {
+      const [status, message] = emailErrors[err.message];
+      return res.status(status).json({ error: err.message, message });
     }
-    if (err.message === "SMTP_EMAIL_AUTH_FAILED") {
-      return res.status(502).json({ error: "SMTP_EMAIL_AUTH_FAILED" });
-    }
+
     if (err.message.startsWith("RESEND_EMAIL_SEND_FAILED")) {
-      return res.status(502).json({ error: "RESEND_EMAIL_SEND_FAILED" });
+      return res.status(502).json({ error: "RESEND_EMAIL_SEND_FAILED", message: "The email provider rejected the send request. Please contact support to check the sender domain, permissions or sending quota." });
     }
     if (
       err.message.startsWith("EMAIL_OTP_SEND_FAILED") ||
       err.message.startsWith("SMTP_EMAIL_SEND_FAILED")
     ) {
-      return res.status(502).json({ error: "EMAIL_OTP_SEND_FAILED" });
+      return res.status(502).json({ error: "EMAIL_OTP_SEND_FAILED", message: "The email provider did not accept the OTP request. Please try again shortly." });
     }
     next(err);
   }

@@ -31,6 +31,7 @@ export function AuthScreen({ route, navigation }: any) {
     });
     const action = useAction();
     const [resendAt, setResendAt] = useState(0);
+    const [emailDeliveryNotice, setEmailDeliveryNotice] = useState("");
     const [seconds, setSeconds] = useState(0);
     useEffect(() => {
         const tick = () => setSeconds(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
@@ -88,6 +89,7 @@ export function AuthScreen({ route, navigation }: any) {
                         }
                         : {}),
                 });
+                setEmailDeliveryNotice(result.message || "OTP requested. Inbox delivery is not confirmed. Check Spam or request a new code if it does not arrive.");
                 setNeedsPassword(!!result.requiresPasswordSetup || mode === "reset");
             }
             setResendAt(Date.now() + 30000);
@@ -194,8 +196,9 @@ export function AuthScreen({ route, navigation }: any) {
     </>}
     {verifying && <View style={{ gap: 10 }}>
       <AuthText bold size={25}>{method === 'phone' ? 'Verify your mobile number' : 'Verify your email'}</AuthText>
-      <AuthText size={16} color="#c5d3e9">We've sent a 6-digit code to</AuthText>
+      <AuthText size={16} color="#c5d3e9">{method === 'phone' ? "We've sent a 6-digit code to" : 'OTP requested for'}</AuthText>
       <AuthText size={16}>{method === 'phone' ? form.phone : form.email}</AuthText>
+      {method === 'email' && !!emailDeliveryNotice && <AuthText color="#c5d3e9">{emailDeliveryNotice}</AuthText>}
     </View>}
     {!isAdmin && phase === 'password' && <View style={{ gap: 8 }}><AuthText bold size={25}>{needsPassword || register ? 'Set your password' : 'Welcome back'}</AuthText><AuthText color="#c5d3e9">{needsPassword || register ? 'Secure your account to continue.' : 'Enter your password to access your workspace.'}</AuthText></View>}
     <View style={{ gap: 15 }}>

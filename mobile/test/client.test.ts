@@ -270,3 +270,9 @@ test('Quick Auth replaces an old saved session with memory-only refresh and stil
   assert.equal(requests.at(-1)?.refreshToken, 'rotated-temporary');
   assert.equal(await api.refresh(), null);
 });
+
+test("email provider failures show the API's actionable message on mobile", () => {
+  const message = 'The email provider rejected this recipient. Check your email address or use another address.';
+  assert.equal(new ApiError(502, {error: 'EMAIL_OTP_RECIPIENT_REJECTED', message}).message, message);
+  assert.match(new ApiError(503, {error:'EMAIL_OTP_NOT_CONFIGURED'}).message, /temporarily unavailable/);
+});
