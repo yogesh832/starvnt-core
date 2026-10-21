@@ -610,7 +610,7 @@ export default function VendorPortal() {
           </NavLink>
 
           <button type="button" aria-label="Aura+" aria-pressed={auraOpen} onClick={(event) => { event.stopPropagation(); setAuraOpen((open) => !open); }} className="aura-nav-button relative flex min-w-0 flex-1 flex-col items-center -mt-5 text-[10px] font-bold text-primary dark:text-[#c4b5fd]">
-            <AuraMark variant="orb" size={60} state={auraOpen ? 'active' : 'idle'} />
+            <AuraMark variant="orb" motion size={60} state={auraOpen ? 'active' : 'idle'} />
             <span>Aura+</span>
           </button>
 

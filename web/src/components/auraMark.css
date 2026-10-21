@@ -10,3 +10,19 @@ html.dark .aura-mark-art { filter:drop-shadow(0 0 7px #a56dff55); }
 @keyframes aura-breathe { 50% { filter:drop-shadow(0 0 15px #a56dff99); } }
 @keyframes aura-think { 50% { transform:rotate(7deg) scale(.96); filter:drop-shadow(0 0 14px #a56dff99); } }
 @media (prefers-reduced-motion:reduce) { .aura-mark .aura-mark-art { animation:none; transition:none; transform:none; } }
+
+/* Navigation motion is continuous in idle and active states; the central star stays upright. */
+.aura-mark--motion .aura-mark-art { animation:aura-nav-float 5s ease-in-out infinite; }
+.aura-nav-orbit { position:absolute; inset:0; width:100%; height:100%; overflow:visible; animation:aura-nav-orbit-turn 14s linear infinite; filter:drop-shadow(0 0 3px #a970ff); }
+.aura-nav-orbit-trail { animation:aura-nav-orbit-glide 5s linear infinite; }
+.aura-nav-sparkle { position:absolute; width:13%; height:13%; background:linear-gradient(135deg,#e8fcff,#5beaff 30%,#c580ff 75%); clip-path:polygon(50% 0,63% 36%,100% 50%,63% 64%,50% 100%,37% 64%,0 50%,37% 36%); animation:aura-nav-twinkle 3.6s ease-in-out infinite; }
+.aura-nav-sparkle--0 { left:1%; top:36%; }
+.aura-nav-sparkle--1 { right:17%; top:0; width:11%; height:11%; animation-delay:-1.2s; }
+.aura-nav-sparkle--2 { right:3%; bottom:15%; width:15%; height:15%; animation-delay:-2.4s; }
+@keyframes aura-nav-float { 0%,100% { transform:translateY(0) rotate(-2deg); } 50% { transform:translateY(-2px) rotate(2deg); } }
+@keyframes aura-nav-orbit-turn { to { transform:rotate(360deg); } }
+@keyframes aura-nav-orbit-glide { to { stroke-dashoffset:-213; } }
+@keyframes aura-nav-twinkle { 0%,100% { opacity:.5; transform:scale(.75) rotate(-8deg); } 50% { opacity:1; transform:scale(1.2) rotate(8deg); } }
+@media (prefers-reduced-motion:reduce) {
+  .aura-mark--motion .aura-mark-art,.aura-mark--motion .aura-nav-orbit,.aura-mark--motion .aura-nav-orbit-trail,.aura-mark--motion .aura-nav-sparkle { animation:none; transform:none; }
+}

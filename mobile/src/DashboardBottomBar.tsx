@@ -25,7 +25,7 @@ export function DashboardBottomBar({ workspace, state, navigation }: { workspace
           if (root.routes[root.index].name === 'Main') navigation.navigate('Main', { screen: tab.name });
           else navigation.dispatch({ ...StackActions.popTo('Main', { screen: tab.name }), target: root.key });
         }} style={({ pressed }) => ({ flex: 1, minHeight: 60, paddingVertical: 7, gap: 3, alignItems: 'center', justifyContent: 'center', opacity: pressed ? .6 : 1 })}>
-          {tab.name === 'AuraTab' ? <View style={{ marginTop: -24, marginBottom: -6 }}><AuraMark variant="orb" size={60} /></View> : <Icon name={active ? (tab.activeIcon || tab.icon) : tab.icon} size={23} color={color} />}
+          {tab.name === 'AuraTab' ? <View style={{ marginTop: -24, marginBottom: -6 }}><AuraMark variant="orb" motion size={60} /></View> : <Icon name={active ? (tab.activeIcon || tab.icon) : tab.icon} size={23} color={color} />}
           <Txt size={10} bold={active || tab.name === 'AuraTab'} style={{ color: tab.name === 'AuraTab' ? c.accent : color }}>{tab.title}</Txt>
         </Pressable>;
       })}

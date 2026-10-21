@@ -366,7 +366,7 @@ function Shell() {
           {MOBILE_NAV.map((n) =>
             n.key === 'aura' ? (
               <button key={n.key} onClick={() => navigate(n.to)} aria-current={tab === 'aura' ? 'page' : undefined} className="aura-nav-button relative flex flex-col items-center -mt-5 text-[10px] font-semibold text-primary dark:text-[#c4b5fd]">
-                <AuraMark variant="orb" size={60} state={tab === 'aura' ? 'active' : 'idle'} />
+                <AuraMark variant="orb" motion size={60} state={tab === 'aura' ? 'active' : 'idle'} />
                 {n.label}
               </button>
             ) : (
