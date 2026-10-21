@@ -1,17 +1,17 @@
 type Workspace = 'customer' | 'vendor' | 'admin';
-export type DashboardTab = { name: string; title: string; icon: string };
+export type DashboardTab = { name: string; title: string; icon: string; activeIcon?: string };
 export function dashboardTabs(workspace: Workspace): DashboardTab[] {
   if (workspace === 'admin') return [
-    { name: 'Overview', title: 'Overview', icon: 'grid-outline' },
-    { name: 'CoreUpdates', title: 'Updates', icon: 'notifications-outline' },
-    { name: 'Me', title: 'Account', icon: 'person-outline' },
+    { name: 'Overview', title: 'Overview', icon: 'grid-outline', activeIcon: 'grid' },
+    { name: 'CoreUpdates', title: 'Updates', icon: 'notifications-outline', activeIcon: 'notifications' },
+    { name: 'Me', title: 'Account', icon: 'person-outline', activeIcon: 'person' },
   ];
   return [
-    { name: 'Overview', title: workspace === 'vendor' ? 'Overview' : 'Home', icon: 'grid-outline' },
-    { name: workspace === 'vendor' ? 'Work' : 'Events', title: workspace === 'vendor' ? 'Workspace' : 'Events', icon: workspace === 'vendor' ? 'briefcase-outline' : 'calendar-outline' },
-    { name: 'AuraTab', title: 'Aura+', icon: 'flash' },
-    { name: 'Updates', title: 'Updates', icon: 'chatbubbles-outline' },
-    { name: 'Me', title: workspace === 'vendor' ? 'Account' : 'Me', icon: 'person-outline' },
+    { name: 'Overview', title: workspace === 'vendor' ? 'Overview' : 'Home', icon: 'grid-outline', activeIcon: 'grid' },
+    { name: workspace === 'vendor' ? 'Work' : 'Events', title: workspace === 'vendor' ? 'Workspace' : 'Events', icon: workspace === 'vendor' ? 'briefcase-outline' : 'calendar-outline', activeIcon: workspace === 'vendor' ? 'briefcase' : 'calendar' },
+    { name: 'AuraTab', title: 'Aura+', icon: 'flash', activeIcon: 'flash' },
+    { name: 'Updates', title: 'Updates', icon: 'chatbubbles-outline', activeIcon: 'chatbubbles' },
+    { name: 'Me', title: workspace === 'vendor' ? 'Account' : 'Me', icon: 'person-outline', activeIcon: 'person' },
   ];
 }
 type Route = { name: string; params?: Record<string, any>; state?: NavState };

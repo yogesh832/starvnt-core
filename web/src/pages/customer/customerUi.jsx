@@ -192,15 +192,15 @@ export function StepTracker({ steps = [] }) {
     <ol className="flex items-start">
       {steps.map((s, i) => (
         <li key={s.key} className="flex-1 flex flex-col items-center text-center relative min-w-0">
-          {i > 0 && <span className={`absolute top-3 right-1/2 w-full h-0.5 ${s.state === 'upcoming' ? 'bg-gray-200 dark:bg-gray-700' : 'bg-primary'}`} />}
+          {i > 0 && <span className={`customer-step-line absolute top-3 right-1/2 w-full h-0.5 ${s.state === 'upcoming' ? 'bg-gray-200 dark:bg-gray-700' : 'bg-primary'}`} />}
           <span
-            className={`relative z-10 w-6 h-6 rounded-full grid place-items-center text-[10px] font-bold transition ${
+            className={`customer-step-dot relative z-10 w-6 h-6 rounded-full grid place-items-center text-[10px] font-bold transition ${
               s.state === 'done' ? 'bg-primary text-white shadow-xs' : s.state === 'current' ? 'bg-white dark:bg-[#161926] border-2 border-primary text-primary shadow-xs' : 'bg-gray-100 dark:bg-gray-800 text-muted dark:text-slate-400'
             }`}
           >
             {s.state === 'done' ? <Icon name="check" size={11} /> : i + 1}
           </span>
-          <span className={`text-[9px] sm:text-[10px] mt-1 font-semibold truncate max-w-full ${s.state === 'upcoming' ? 'text-muted dark:text-slate-400' : 'text-navy dark:text-white'}`}>{s.label}</span>
+          <span className={`customer-step-label text-[9px] sm:text-[10px] mt-1 font-semibold truncate max-w-full ${s.state === 'upcoming' ? 'text-muted dark:text-slate-400' : 'text-navy dark:text-white'}`}>{s.label}</span>
         </li>
       ))}
     </ol>
@@ -403,7 +403,7 @@ export function CustomerLoadingScreen({ title = 'Loading your workspace', detail
       <div className="w-full max-w-3xl bg-white rounded-3xl shadow-sm border border-gray-100 p-5 sm:p-6">
         <div className="flex items-center gap-3">
           <span className="w-11 h-11 rounded-2xl bg-primary-soft text-primary grid place-items-center shrink-0">
-            <Icon name="bolt" size={18} />
+            <Icon name="aura" size={18} />
           </span>
           <div className="min-w-0">
             <div className="text-sm font-extrabold text-navy">{title}</div>
@@ -429,22 +429,43 @@ export function CustomerLoadingScreen({ title = 'Loading your workspace', detail
   );
 }
 
-export function CustomerErrorScreen({ title = 'Could not load this screen', message = 'Please try again.', onRetry, action }) {
+export function CustomerErrorScreen({
+  title = "We couldn't load this screen",
+  message = "There is a temporary issue on the STARVNT server. Please try again in a moment, or reach out to our customer care team at support@starvnt.com.",
+  onRetry,
+  action,
+}) {
+  const supportEmail = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPPORT_EMAIL) || 'support@starvnt.com';
+
   return (
     <div className="min-h-[60vh] grid place-items-center px-4">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-sm border border-red-100 p-6 text-center">
-        <div className="w-12 h-12 mx-auto rounded-2xl bg-red-50 text-red-500 grid place-items-center">
+      <div className="w-full max-w-md bg-white dark:bg-[#161926] rounded-3xl shadow-sm border border-red-100 dark:border-red-950/40 p-6 text-center">
+        <div className="w-12 h-12 mx-auto rounded-2xl bg-red-50 dark:bg-red-950/40 text-red-500 grid place-items-center">
           <Icon name="help" size={20} />
         </div>
-        <div className="mt-3 text-base font-extrabold text-navy">{title}</div>
-        <p className="text-xs text-muted mt-1 leading-relaxed">{message}</p>
-        <div className="mt-5 flex flex-wrap justify-center gap-2">
+        <div className="mt-3 text-base font-extrabold text-navy dark:text-white">{title}</div>
+        <p className="text-xs text-muted dark:text-slate-400 mt-2 leading-relaxed">{message}</p>
+        <div className="mt-5 flex flex-wrap justify-center items-center gap-2">
           {onRetry && (
-            <button type="button" onClick={onRetry} className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5">
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 hover:brightness-110 transition shadow-sm shadow-primary/20"
+            >
               Try again
             </button>
           )}
+          <a
+            href={`mailto:${supportEmail}?subject=Issue%20Report%20-%20STARVNT&body=Hi%20STARVNT%20Customer%20Support,%0A%0AI'm%20experiencing%20an%20issue%20with%20my%20workspace:%0A`}
+            className="rounded-xl border border-gray-200 dark:border-gray-700 bg-lavender/50 dark:bg-white/5 text-navy dark:text-slate-200 text-xs font-bold px-4 py-2.5 hover:bg-lavender dark:hover:bg-white/10 transition inline-flex items-center gap-1.5"
+          >
+            <Icon name="mail" size={13} />
+            Contact Support
+          </a>
           {action}
+        </div>
+        <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 text-[11px] text-muted dark:text-slate-400">
+          Customer Care: <a href={`mailto:${supportEmail}`} className="text-primary hover:underline font-semibold">{supportEmail}</a>
         </div>
       </div>
     </div>

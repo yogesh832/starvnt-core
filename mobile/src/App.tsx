@@ -6,7 +6,7 @@ import { NotificationSettings } from "./screens/NotificationSettings";
 import { CircleScreen } from "./screens/CustomerWorkspace";
 import { VendorQuote } from "./screens/VendorQuote";
 import { CustomerBookingScreen } from "./screens/CustomerBooking";
-import { StatusBar, Pressable, Text, View, KeyboardAvoidingView, Platform } from "react-native";
+import { StatusBar, Pressable, Text, View, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";

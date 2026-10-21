@@ -79,3 +79,46 @@ still reports its existing large-bundle warning.
 No live spoken noise or audible speaker assessment was possible in this emulator
 session: host audio was disabled. The noise checks use simulated meter samples;
 microphone-only mute/playback sequencing additionally uses mocked audio hardware.
+
+## Aura event switching
+
+On the native Android customer account, opened the hamburger menu and searchable
+event list, selected an existing corporate event, and verified Aura's title and
+plan changed. Entering “Switch to my birthday” with two matching birthdays showed
+both dated choices and kept the corporate event active until selection. No new
+events were created by these navigation checks. Screenshots include
+`../tmp/native-ui/aura-switch-event-list.png`,
+`../tmp/native-ui/aura-switched-corporate.png`, and
+`../tmp/native-ui/aura-switch-ambiguous-birthdays.png`.
+
+133 regression tests passed, including the actual server switching pipeline with
+isolated repositories, ownership validation, persisted selection after reload,
+previous-event navigation, Hindi/Hinglish matching and ambiguous spoken choices.
+TypeScript, web production build and Android/iOS bundle export passed. These
+command checks do not claim live microphone or audible output verification.
+
+## Aura vendor catalogue truth
+
+Entered “Show photography prices in Kapkote” in native Android Aura and verified
+stored vendor names, exact listed amounts, review values and unconfirmed vendor
+availability in service cards. **Show all 6 services** exposes the full matching
+result beyond the initial three cards. The dashboard bottom navigation remained
+visible. Screenshot: `../tmp/native-ui/aura-api-vendor-results.png`.
+
+Live authenticated API queries returned 35 services from 26 vendors for Kapkote,
+six photography services, four catering services and the event-planning service.
+The catering query calculated the stored ₹450/guest rate as ₹45,000 for 100
+guests. Queries reported no created event and no fact writes. The password login
+from the supplied test-account document succeeded. No accounts, vendor statuses
+or verification flags were changed during catalogue validation.
+
+## Live card refresh
+
+145 regression tests passed, including stale-read fences, foreground resumption,
+stable expanded cards, search persistence, updated vendor rates and long histories.
+The actual shared synchronizer was also tested against authenticated local APIs:
+temporarily changed an existing test draft from 120 to 121 guests, and the catering
+card changed from ₹54,000 to ₹54,450 without another message. The original guest
+count was restored and the live card returned to ₹54,000. This run took about six
+seconds including API/network time; the background check interval is two seconds.
+No booking/payment action was performed.

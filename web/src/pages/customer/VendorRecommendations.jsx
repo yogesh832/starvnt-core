@@ -164,7 +164,7 @@ export function CompareModal({ onClose, onSelectVendor }) {
         {/* Why is Premium Moments better banner */}
         <div className="mt-5 p-4 rounded-2xl bg-primary-soft/60 border border-primary/20 flex items-start gap-3">
           <div className="w-6 h-6 rounded-full bg-primary text-white grid place-items-center text-xs shrink-0 mt-0.5">
-            <Icon name="bolt" size={13} />
+            <Icon name="aura" size={13} />
           </div>
           <div>
             <div className="text-xs font-bold text-primary">Why is Premium Moments better?</div>

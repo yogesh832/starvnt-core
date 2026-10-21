@@ -31,6 +31,7 @@ router.get('/sessions', async (req, res, next) => {
 });
 
 router.get('/sessions/:sid', async (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     res.json({ ok: true, ...(await getSession({ vendor: req.vendor, sessionId: req.params.sid })) });
   } catch (err) {

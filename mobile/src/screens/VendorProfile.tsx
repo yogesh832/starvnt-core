@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Image, Linking, Platform } from "react-native";
+import { Image, Linking, Platform, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { external } from "../api/runtime";
@@ -10,6 +10,7 @@ import {
   confirm,
   ErrorNotice,
   Field,
+  Icon,
   Pill,
   Txt,
   Page,
@@ -153,10 +154,17 @@ export function VendorProfile() {
             <Pill>LISTING LINKED</Pill>
             <Txt muted>{r.data.vendor.googlePlaceId}</Txt>
             {r.data.googleRating && (
-              <Txt>
-                ★ {r.data.googleRating.rating} ·{" "}
-                {r.data.googleRating.reviewCount} Google reviews
-              </Txt>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+              >
+                <Icon name="star" size={15} color="#f59e0b" />
+                <Txt bold size={14}>
+                  {r.data.googleRating.rating}
+                </Txt>
+                <Txt muted size={13}>
+                  · {r.data.googleRating.reviewCount} Google reviews
+                </Txt>
+              </View>
             )}
             <Button
               title="Unlink listing"

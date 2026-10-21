@@ -488,7 +488,7 @@ export function ReviewsPage() {
                 Reviews are strictly verified from completed client bookings. When clients experience your service and confirm delivery, their authenticated ratings and feedback will appear here.
               </p>
               <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-primary bg-primary-soft/50 px-3 py-1.5 rounded-xl">
-                <Icon name="bolt" size={13} className="text-primary shrink-0" />
+                <Icon name="aura" size={13} className="text-primary shrink-0" />
                 <span>Tip: High verified ratings boost your placement in Aura+ client match rankings.</span>
               </div>
             </Card>

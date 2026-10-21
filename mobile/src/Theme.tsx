@@ -59,5 +59,5 @@ export function ThemeProvider({ children }: React.PropsWithChildren) {
 export const useTheme = () => useContext(Context);
 export function usePalette() {
   const { mode } = useTheme();
-  return { ...brand[mode], dark: mode === "dark" };
+  return { ...brand[mode], dark: mode === "dark", success: mode === "dark" ? "#6ee7b7" : "#059669" };
 }

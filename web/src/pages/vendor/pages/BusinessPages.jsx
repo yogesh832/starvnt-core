@@ -2780,7 +2780,7 @@ export function VendorFinancialOnboardingCard() {
         await loadFinancialData();
       } else {
         setFeedbackType("error");
-        setFeedback(`Could not save GST: ${res.error || "API error"}`);
+        setFeedback(`Could not save GST: ${res.message || res.error || "Please try again later or contact support@starvnt.com."}`);
       }
     } catch (err) {
       setFeedbackType("error");
@@ -2807,7 +2807,7 @@ export function VendorFinancialOnboardingCard() {
         await loadFinancialData();
       } else {
         setFeedbackType("error");
-        setFeedback(`Could not save bank details: ${res.error || "API error"}`);
+        setFeedback(`Could not save bank details: ${res.message || res.error || "Please check your details and try again, or reach out to support@starvnt.com."}`);
       }
     } catch (err) {
       setFeedbackType("error");

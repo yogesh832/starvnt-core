@@ -5,6 +5,7 @@ import { customerApi, errorText } from './customerApi.js';
 import { ArtTile, AvailabilityPill, BackLink, DemoBadge, DetailSkeleton, PriceText, RatingText, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
 import SelectOptionButton from './SelectOptionButton.jsx';
+import { workingHoursLabel } from './workingHours.js';
 
 function Line({ label, value }) {
   return (
@@ -463,12 +464,11 @@ function WorkingHoursSection({ hours }) {
       <SectionHeader icon="calendar" title="Working Hours" />
       <div className="space-y-1">
         {days.map(d => {
-          const info = hours[d];
           const isToday = d === today;
           return (
             <div key={d} className={`flex justify-between text-xs py-1 ${isToday ? 'font-bold text-primary' : 'text-ink/70'}`}>
               <span className="capitalize">{d}{isToday ? ' (Today)' : ''}</span>
-              <span>{info?.isOpen ? info.hours || 'Open' : 'Closed'}</span>
+              <span>{workingHoursLabel(hours, d)}</span>
             </div>
           );
         })}

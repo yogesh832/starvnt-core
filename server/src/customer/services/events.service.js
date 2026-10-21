@@ -39,6 +39,8 @@ import { serviceDetailsJsonSchema, serviceFields, validateDetails, validateServi
 import { computeEventSummary, eventSteps, attentionFor } from './summary.js';
 import { customerHistory } from './history.service.js';
 import { customerFinancialTruth } from '../../common/financialTruth.service.js';
+import { Opportunity } from '../../external/models/Opportunity.js';
+import { serviceRequirementSummary } from './enquiryBrief.js';
 
 const EDITABLE_STATUSES = ['draft', 'planning'];
 // Arranged elsewhere or reset: an earlier option choice no longer applies.
@@ -401,8 +403,11 @@ export async function mergePreferences(customerId, eventId, category, preference
   if (CLOSED_EVENT_STATUSES.includes(event.status)) return { applied: false, reason: 'event_closed' };
   const existing = await reqRepo.findRequirement(event._id, cat);
   if (existing && LOCKED_REQUIREMENT_STATUSES.includes(existing.status)) return { applied: false, reason: 'locked' };
-  const { changed } = await reqRepo.upsertRequirement(event._id, cat, { preferences, source: existing?.source ?? 'customer' });
+  const { changed, row } = await reqRepo.upsertRequirement(event._id, cat, { preferences, source: existing?.source ?? 'customer' });
   if (changed) {
+    // Keep an unanswered enquiry in step with the customer's amended brief.
+    // Answered quotes, contracts and prices are deliberately outside this write.
+    if (row.selectedOptionId) await Opportunity.updateMany({ customer: customerId, customerEvent: event._id, customerRequirement: row._id, status: { $in: ['NEW', 'VIEWED'] } }, { $set: { requiredCapability: serviceRequirementSummary(row, { packageName: row.selectedOption?.packageName }, event) } });
     await eventsRepo.appendHistory({ eventId: event._id, actorType, actorId, action: 'preferences_updated', details: { category: cat, keys: Object.keys(preferences) } });
   }
   return { applied: changed };

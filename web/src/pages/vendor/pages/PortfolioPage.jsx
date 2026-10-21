@@ -1406,7 +1406,7 @@ export default function PortfolioPage() {
               onClick={handleQuickFillDemo}
               className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-primary/10 via-lavender to-primary/10 border border-primary/20 text-primary font-bold text-xs flex items-center justify-center gap-2 hover:bg-primary/20 transition shadow-2xs"
             >
-              <Icon name="bolt" size={13} />
+              <Icon name="aura" size={13} />
               <span>1-Click Suggestion (Multi-Media Demo with Photos + Video)</span>
             </button>
 

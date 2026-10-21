@@ -144,7 +144,7 @@ function AskCard({ onOpenAura }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="w-6 h-6 rounded-lg bg-primary text-white grid place-items-center">
-              <Icon name="bolt" size={13} />
+              <Icon name="aura" size={13} />
             </span>
             <div className="font-bold text-sm text-navy">Ask STARVNT anything</div>
           </div>
@@ -408,7 +408,7 @@ function ExecutionCard() {
       </div>
       <div className="mt-3 bg-lavender/60 rounded-xl p-3 flex gap-2.5">
         <div className="w-7 h-7 rounded-full bg-primary text-white grid place-items-center shrink-0">
-          <Icon name="bolt" size={12} />
+          <Icon name="aura" size={12} />
         </div>
         <div>
           <p className="text-[11px] leading-snug text-ink/80">"Your photography team is scheduled and will arrive by <b>9:30 AM</b>. I'll keep you posted on the day."</p>
@@ -438,7 +438,7 @@ export function HomeView({ firstName, events, onOpenEvent, onOpenAura, onOpenUpd
           You don't have any events set up yet. Let's create your first celebration.
         </p>
         <button onClick={onOpenAura} className="bg-primary hover:bg-primary-dark text-white font-bold text-sm px-6 py-3 rounded-2xl shadow-sm shadow-primary/30 transition flex items-center gap-2">
-          <Icon name="bolt" size={16} />
+          <Icon name="aura" size={16} />
           Plan an Event
         </button>
       </div>

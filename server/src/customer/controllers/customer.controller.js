@@ -6,6 +6,7 @@ import * as circleSvc from '../services/circle.service.js';
 import * as threadMessages from '../services/threadMessages.service.js';
 import * as library from '../services/library.service.js';
 import { customerFinancialTruth } from '../../common/financialTruth.service.js';
+import { deleteDraftEvent } from '../services/deleteEvent.service.js';
 
 const me = (req) => req.externalUser._id;
 export const readThreadMessages = async (req, res) => res.json(await threadMessages.readCustomerThread(me(req), req.params.threadId));
@@ -17,6 +18,7 @@ export const patchProfile = async (req, res) => res.json({ profile: await profil
 export const planOptions = async (req, res) => res.json(events.planOptions(req.query.eventType));
 
 export const listEvents = async (req, res) => res.json({ events: await events.listEvents(me(req)) });
+export const deleteEvent = async (req, res) => res.json(await deleteDraftEvent(me(req), req.params.id));
 export const getEvent = async (req, res) => res.json(await events.eventDetail(me(req), req.params.id));
 export const patchEvent = async (req, res) => {
   await events.patchEvent(me(req), req.params.id, req.body, { actorType: 'customer', actorId: me(req) });

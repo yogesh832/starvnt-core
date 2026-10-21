@@ -12,6 +12,11 @@ import { badRequest, notFound } from '../utils/http.js';
 
 export const demoListingsEnabled = () => process.env.NODE_ENV !== 'production';
 
+export async function catalogLocationHint(message) {
+  const normalized = ` ${String(message).toLocaleLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')} `;
+  return (await catalogRepo.catalogPlaces()).sort((a, b) => b.length - a.length).find(place => normalized.includes(` ${place.toLocaleLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')} `)) || null;
+}
+
 const vsId = (id) => `vs_${id}`;
 const demoId = (ref) => `demo_${ref}`;
 const GOOGLE_DISTANCE_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_DISTANCE_MATRIX_API_KEY || '';
@@ -395,4 +400,18 @@ export async function compactOptionsFor(event, categories) {
       );
   }
   return out;
+}
+
+/** The same eligible catalogue/availability as customer discovery, without Aura's old top-three limit. */
+export async function auraCatalogOptions(event) {
+  return (await withAvailability((await allOptions(event)).filter(option => !option.isDemo), event)).map(option => ({
+    id: option.id, vendorId: option.vendorId || null, category: option.category,
+    service: categoryLabel(option.category), vendor: option.vendorName,
+    package: option.packageName, price: option.price,
+    basePrice: option.basePrice ?? null, pricingType: option.pricingType || null, unit: option.unit || null,
+    location: option.vendorLocation || option.location?.city || null,
+    availability: option.availability, requiresVendorConfirmation: !!option.requiresVendorConfirmation,
+    isDemo: !!option.isDemo, rating: option.rating ?? null, reviewCount: option.reviewCount || 0,
+    conditionalCharges: option.mayApply || [],
+  }));
 }

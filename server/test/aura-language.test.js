@@ -37,3 +37,9 @@ test('customer and vendor prompts use feminine Aura speech without assigning cus
     assert.match(prompt, /gender/);
   }
 });
+
+test('multiword area and factual answers do not reset Roman Hindi to English', () => {
+  const history = [{ role: 'user', content: 'mere bhai ka birthday hai' }, { role: 'model', content: 'Kis ilaake mein hai?' }];
+  for (const answer of ['kapkote bazar ke paas', 'Near The Golden Palace', '15 november shaam 6 baje']) assert.equal(conversationLanguage(answer, history), 'hinglish');
+  assert.equal(conversationLanguage('Can you find me another photographer?', history), 'en');
+});

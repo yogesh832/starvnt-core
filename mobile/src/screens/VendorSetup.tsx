@@ -11,11 +11,13 @@ import {
   ErrorNotice,
   Field,
   human,
+  Icon,
   id,
   Page,
   Pill,
   Txt,
   useAction,
+  usePalette,
   useResource,
 } from "../ui";
 
@@ -60,6 +62,7 @@ export function VendorSetup({ route }: any) {
   const r = useResource(external, config.path);
   const services = useResource(external, "/vendor/services");
   const a = useAction();
+  const c = usePalette();
   const [form, setForm] = useState<Data>({
     name: "",
     label: "",
@@ -239,10 +242,20 @@ export function VendorSetup({ route }: any) {
                 }
               }}
             >
-              <Txt bold>
-                {form.vendorServiceId === id(s) ? "✓ " : ""}
-                {s.name}
-              </Txt>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+              >
+                <Icon
+                  name={
+                    form.vendorServiceId === id(s)
+                      ? "checkmark-circle"
+                      : "ellipse-outline"
+                  }
+                  size={18}
+                  color={form.vendorServiceId === id(s) ? c.accent : c.muted}
+                />
+                <Txt bold style={{ flex: 1 }}>{s.name}</Txt>
+              </View>
             </Card>
           ))}
           {!services.data.services?.length && (

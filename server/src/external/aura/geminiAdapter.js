@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import '../../config.js';
 import { extractReplyChunk } from '../../common/streamUtils.js';
 
-const TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS || 20000);
+const TIMEOUT_MS = Number(process.env.VENDOR_LLM_TIMEOUT_MS || process.env.LLM_TIMEOUT_MS || 40000);
 const ATTEMPTS = Number(process.env.LLM_ATTEMPTS || 1);
 
 const str = { type: Type.STRING, nullable: true };

@@ -306,7 +306,7 @@ export default function Quotes() {
             className="rounded-xl border border-primary/30 bg-primary-soft/50 text-primary text-xs font-bold px-3 py-2.5 inline-flex items-center gap-1.5 hover:bg-primary hover:text-white transition cursor-pointer"
             title="Ask Aura for quote insights"
           >
-            <Icon name="bolt" size={14} /> Ask Aura
+            <Icon name="aura" size={14} /> Ask Aura
           </button>
           <a
             href="/vendor/enquiries"
@@ -545,7 +545,7 @@ export default function Quotes() {
                                 onClick={(e) => openRevision(q, e)}
                                 className="text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 rounded-xl px-3 py-1.5 shadow-xs transition cursor-pointer inline-flex items-center gap-1"
                               >
-                                <Icon name="bolt" size={13} /> Revise offer
+                                <Icon name="aura" size={13} /> Revise offer
                               </button>
                             ) : (
                               <button
@@ -830,7 +830,7 @@ export default function Quotes() {
                 onClick={(e) => askAuraAboutQuote(viewingQuote, e)}
                 className="py-2.5 px-3 rounded-xl border border-primary/30 bg-primary-soft/60 text-primary text-xs font-bold hover:bg-primary hover:text-white transition cursor-pointer inline-flex items-center gap-1"
               >
-                <Icon name="bolt" size={13} /> Ask Aura to Advise
+                <Icon name="aura" size={13} /> Ask Aura to Advise
               </button>
 
               {normalizeStatus(viewingQuote.status) === 'Draft' && (
@@ -853,7 +853,7 @@ export default function Quotes() {
                   }}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark transition shadow-md shadow-primary/25 cursor-pointer inline-flex items-center justify-center gap-1"
                 >
-                  <Icon name="bolt" size={13} /> Revise Offer
+                  <Icon name="aura" size={13} /> Revise Offer
                 </button>
               )}
             </div>

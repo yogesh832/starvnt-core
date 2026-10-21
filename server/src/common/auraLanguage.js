@@ -12,7 +12,9 @@ export function conversationLanguage(message = '', history = []) {
     else if (HINDI.test(text)) language = 'hi';
     else if (HINGLISH.test(text)) {
       if (!/^(haan|nahi|nahin|ji|haan ji)[.!\s]*$/i.test(text)) language = 'hinglish';
-    } else if (text.trim().split(/\s+/).length >= 4) language = 'en';
+    // Place names and short factual fragments can contain four or more words
+    // without being an English language switch ("kapkote bazar ke paas").
+    } else if (/\b(i(?:'m| am| would| want| need| have| will)|we (?:are|want|need|have|will)|(?:can|could|would) you|please (?:find|show|help|tell)|(?:show|find|tell|recommend) (?:me|us)|(?:it|this|that) (?:is|will|should))\b/i.test(text)) language = 'en';
   }
   return language;
 }

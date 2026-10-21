@@ -1,4 +1,5 @@
 import { IdempotencyKey } from '../../admin/models/IdempotencyKey.js';
+import { reconcileConfirmedPayment } from './paymentConfirmed.js';
 
 // Handler registry for domain events
 const HANDLERS = new Map();
@@ -48,6 +49,19 @@ export async function withIdempotency(key, scope, operationFn) {
 }
 
 // ── Built-in Handlers per Spec §12, §17 ────────────────────────────────────
+
+registerEventHandler('PAYMENT_CONFIRMED', async (payload) => {
+  // Loaded at execution time to avoid the commerce -> outbox -> dispatcher cycle.
+  const [repository, commerce] = await Promise.all([
+    import('../../customer/repositories/commerce.repo.js'),
+    import('../../customer/services/commerce.service.js'),
+  ]);
+  return reconcileConfirmedPayment(payload, {
+    getPayment: repository.getPayment,
+    findBooking: repository.findBookingForReservation,
+    confirmBooking: commerce.confirmBookingFor,
+  });
+});
 
 /**
  * QUOTE_APPROVED Handler:

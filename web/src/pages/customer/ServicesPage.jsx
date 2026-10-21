@@ -316,7 +316,7 @@ function CategoryOptions({ eventId, category }) {
       )}
 
       <div className="rounded-2xl p-4 bg-white dark:bg-[#161926] border border-gray-100 dark:border-gray-800 shadow-sm flex items-center gap-3">
-        <span className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0"><Icon name="bolt" size={14} /></span>
+        <span className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0"><Icon name="aura" size={14} /></span>
         <div className="flex-1 min-w-0 text-xs"><b className="text-navy dark:text-white">Not sure which to pick?</b> <span className="text-muted dark:text-slate-400">Aura+ can explain the differences.</span></div>
         <Link
           to={`/customer/aura?event=${eventId}&ask=${encodeURIComponent(`Which ${label.toLowerCase()} option should I pick?`)}`}

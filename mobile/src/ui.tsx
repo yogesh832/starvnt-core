@@ -1,8 +1,11 @@
-import React, { useCallback, useRef, useState } from "react";
+import { AuraMark } from './AuraMark';
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -69,6 +72,7 @@ export function Icon({
   size?: number;
 }) {
   const c = usePalette();
+  if (name === "aura") return <AuraMark size={size} />;
   return <Ionicons name={name} size={size} color={color || c.accent} />;
 }
 export function Button({
@@ -306,34 +310,44 @@ export function MultiChoice({
         {label}
       </Txt>
       <View style={styles.wrap}>
-        {values.map((v) => (
-          <Pressable
-            key={v}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: selected.includes(v) }}
-            onPress={() =>
-              onChange(
-                selected.includes(v)
-                  ? selected.filter((s) => s !== v)
-                  : [...selected, v],
-              )
-            }
-            style={{
-              minHeight: 44,
-              justifyContent: "center",
-              padding: 12,
-              borderRadius: 13,
-              backgroundColor: selected.includes(v) ? c.soft : c.card,
-              borderWidth: 1,
-              borderColor: c.line,
-            }}
-          >
-            <Txt size={13}>
-              {selected.includes(v) ? "✓ " : ""}
-              {labels[v] || v}
-            </Txt>
-          </Pressable>
-        ))}
+        {values.map((v) => {
+          const isSelected = selected.includes(v);
+          return (
+            <Pressable
+              key={v}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isSelected }}
+              onPress={() =>
+                onChange(
+                  isSelected
+                    ? selected.filter((s) => s !== v)
+                    : [...selected, v],
+                )
+              }
+              style={{
+                minHeight: 44,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: 13,
+                backgroundColor: isSelected ? c.soft : c.card,
+                borderWidth: 1,
+                borderColor: isSelected ? c.accent : c.line,
+              }}
+            >
+              <Icon
+                name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                size={18}
+                color={isSelected ? c.accent : c.muted}
+              />
+              <Txt size={13}>
+                {labels[v] || v}
+              </Txt>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -363,7 +377,9 @@ export function ErrorNotice({
   retry?: () => void;
 }) {
   const c = usePalette();
-  return message ? (
+  if (!message) return null;
+  const supportEmail = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || "support@starvnt.com";
+  return (
     <View
       accessibilityRole="alert"
       style={{
@@ -371,14 +387,227 @@ export function ErrorNotice({
         borderRadius: 16,
         borderWidth: 1,
         borderColor: c.danger,
+        backgroundColor: c.card,
         gap: 12,
       }}
     >
-      <Txt style={{ color: c.danger }}>{message}</Txt>
-      {retry && <Button title="Try again" onPress={retry} secondary />}
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+        <Icon name="alert-circle" size={20} color={c.danger} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <Txt bold size={14} style={{ color: c.danger }}>
+            Something interrupted this request
+          </Txt>
+          <Txt size={13} style={{ color: c.ink, lineHeight: 18 }}>
+            {message}
+          </Txt>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        {retry && <Button title="Try again" onPress={retry} secondary />}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            void Linking.openURL(`mailto:${supportEmail}?subject=Support%20Request%20-%20STARVNT&body=Hi%20STARVNT%20Support,%0A%0AI%20experienced%20an%20issue:%20${encodeURIComponent(message)}%0A`);
+          }}
+          style={({ pressed }) => ({
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 10,
+            backgroundColor: c.soft,
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Txt size={12} bold style={{ color: c.accent }}>
+            Contact Support
+          </Txt>
+        </Pressable>
+      </View>
     </View>
-  ) : null;
+  );
 }
+export function SkeletonBox({
+  width = "100%",
+  height = 20,
+  borderRadius = 8,
+  style,
+}: {
+  width?: number | string;
+  height?: number | string;
+  borderRadius?: number;
+  style?: any;
+}) {
+  const c = usePalette();
+  const opacity = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.85,
+          duration: 850,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.35,
+          duration: 850,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          width: width as any,
+          height: height as any,
+          borderRadius,
+          backgroundColor: c.line,
+          opacity,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+export function SkeletonCard({
+  lines = 3,
+  hasAvatar = false,
+  style,
+}: {
+  lines?: number;
+  hasAvatar?: boolean;
+  style?: any;
+}) {
+  const c = usePalette();
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: c.card,
+          borderWidth: 1,
+          borderColor: c.line,
+          borderRadius: 20,
+          padding: 16,
+          gap: 12,
+        },
+        style,
+      ]}
+    >
+      {hasAvatar ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <SkeletonBox width={46} height={46} borderRadius={23} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <SkeletonBox width="60%" height={16} />
+            <SkeletonBox width="40%" height={12} />
+          </View>
+        </View>
+      ) : (
+        <View style={{ gap: 6 }}>
+          <SkeletonBox width="50%" height={18} />
+          <SkeletonBox width="30%" height={12} />
+        </View>
+      )}
+      <View style={{ gap: 8, marginTop: 4 }}>
+        {Array.from({ length: lines }).map((_, i) => (
+          <SkeletonBox
+            key={i}
+            width={i === lines - 1 ? "65%" : "100%"}
+            height={13}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export function SkeletonRow({ style }: { style?: any }) {
+  const c = usePalette();
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: c.card,
+          borderWidth: 1,
+          borderColor: c.line,
+          borderRadius: 18,
+          padding: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+        },
+        style,
+      ]}
+    >
+      <SkeletonBox width={38} height={38} borderRadius={12} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <SkeletonBox width="70%" height={15} />
+        <SkeletonBox width="45%" height={11} />
+      </View>
+      <SkeletonBox width={16} height={16} borderRadius={8} />
+    </View>
+  );
+}
+
+export function SkeletonStats() {
+  const c = usePalette();
+  return (
+    <View style={styles.wrap}>
+      {[0, 1].map((key) => (
+        <View
+          key={key}
+          style={{
+            flexGrow: 1,
+            flexBasis: "43%",
+            backgroundColor: c.card,
+            borderWidth: 1,
+            borderColor: c.line,
+            borderRadius: 20,
+            padding: 17,
+            gap: 10,
+          }}
+        >
+          <SkeletonBox width="50%" height={12} />
+          <SkeletonBox width="75%" height={24} borderRadius={6} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function LoadingScroller({
+  message = "Getting everything ready…",
+}: {
+  message?: string;
+}) {
+  const c = usePalette();
+  return (
+    <View style={{ gap: 16, width: "100%", paddingVertical: 8 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          paddingVertical: 6,
+        }}
+      >
+        <ActivityIndicator size="small" color={c.accent} />
+        <Txt muted size={13} style={{ textAlign: "center" }}>
+          {message}
+        </Txt>
+      </View>
+      <SkeletonStats />
+      <SkeletonCard lines={3} />
+      <SkeletonRow />
+      <SkeletonRow />
+    </View>
+  );
+}
+
 export function Page({
   children,
   title,
@@ -419,6 +648,9 @@ export function Page({
               refreshing={refreshing}
               onRefresh={refresh}
               tintColor={c.accent}
+              colors={[c.accent, "#7b5cf0", "#9b6dff"]}
+              progressBackgroundColor={c.card}
+              progressViewOffset={Platform.OS === "android" ? 16 : 0}
             />
           ) : undefined
         }
@@ -433,12 +665,7 @@ export function Page({
         )}
         <ErrorNotice message={error} retry={refresh} />
         {loading ? (
-          <View style={{ paddingVertical: 60, gap: 15 }}>
-            <ActivityIndicator size="large" color={c.accent} />
-            <Txt muted style={{ textAlign: "center" }}>
-              Getting everything ready…
-            </Txt>
-          </View>
+          <LoadingScroller />
         ) : error ? null : (
           children
         )}
@@ -457,10 +684,22 @@ export function MenuRow({
   icon?: any;
   onPress: () => void;
 }) {
+  const c = usePalette();
   return (
     <Card onPress={onPress}>
       <View style={styles.row}>
-        <Icon name={icon} />
+        <View
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 12,
+            backgroundColor: c.soft,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Icon name={icon} size={20} />
+        </View>
         <View style={{ flex: 1, gap: 4 }}>
           <Txt bold>{title}</Txt>
           {subtitle && (
@@ -469,7 +708,7 @@ export function MenuRow({
             </Txt>
           )}
         </View>
-        <Icon name="chevron-forward" size={17} />
+        <Icon name="chevron-forward" size={17} color={c.muted} />
       </View>
     </Card>
   );
@@ -503,7 +742,7 @@ export function Stats({ items }: { items: [string, string | number][] }) {
     </View>
   );
 }
-export function useResource(api: Client, path: string, pollMs = 0) {
+export function useResource(api: Client, path: string, pollMs = 0, enabled = true) {
   const [snapshot, setSnapshot] = useState({ api, path, data: {} as Data });
   const current = snapshot.api === api && snapshot.path === path;
   const [loading, setLoading] = useState(true);
@@ -537,6 +776,7 @@ export function useResource(api: Client, path: string, pollMs = 0) {
   );
   useFocusEffect(
     useCallback(() => {
+      if (!enabled) { serial.current++; setLoading(false); return; }
       void load();
       const timer = pollMs
         ? setInterval(() => {
@@ -547,7 +787,7 @@ export function useResource(api: Client, path: string, pollMs = 0) {
         serial.current++;
         if (timer) clearInterval(timer);
       };
-    }, [load, pollMs]),
+    }, [load, pollMs, enabled]),
   );
   return {
     data: current ? snapshot.data : {},

@@ -56,10 +56,10 @@ const SEEDED_VENDORS = [
     owner: 'Chef Sanjeev Verma',
     email: 'catering@starvnt.com',
     location: 'Kapkote, Uttarakhand',
-    badge: 'Verified 100% Live',
-    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    badge: null,
+    badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
     icon: 'services',
-    pricing: '₹650 / plate',
+    pricing: null,
   },
   {
     id: 'v5',
@@ -291,7 +291,7 @@ export default function DevSingleClickAuth() {
   const adminToken = localStorage.getItem('starvnt_admin_access_token') || '';
 
   // 1-Click Auth Execution
-  const handleAuthLogin = async ({ email, accountType, role }) => {
+  const handleAuthLogin = async ({ email, accountType, role, blankProfile = false }) => {
     const targetKey = email || accountType;
     setLoadingEmail(targetKey);
     setAuthError('');
@@ -302,6 +302,8 @@ export default function DevSingleClickAuth() {
       if (accountType === 'ADMIN') {
         const res = await fetch(`${apiBase}/api/admin/auth/dev-auth`, {
           method: 'POST',
+          credentials: 'include',
+          signal: AbortSignal.timeout(20000),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, role }),
         });
@@ -320,8 +322,10 @@ export default function DevSingleClickAuth() {
       } else {
         const res = await fetch(`${apiBase}/api/auth/dev-auth`, {
           method: 'POST',
+          credentials: 'include',
+          signal: AbortSignal.timeout(20000),
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accountType, email }),
+          body: JSON.stringify({ accountType, email, blankProfile }),
         });
 
         if (!res.ok) {
@@ -366,12 +370,12 @@ export default function DevSingleClickAuth() {
   };
 
   const handleClearAllSessions = async () => {
+    try { await externalLogout(); } catch {}
+    try { await adminLogout(); } catch {}
     localStorage.removeItem('starvnt_external_access_token');
     localStorage.removeItem('starvnt_admin_access_token');
     externalApi.setToken(null);
     adminApi.setToken(null);
-    try { await externalLogout(); } catch {}
-    try { await adminLogout(); } catch {}
     window.location.reload();
   };
 
@@ -520,6 +524,16 @@ export default function DevSingleClickAuth() {
           </div>
         </section>
 
+        <section className="rounded-2xl border border-violet-500/40 bg-slate-900 p-5 space-y-3">
+          <h2 className="font-bold text-white">Fresh vendor — Aura onboarding test</h2>
+          <p className="text-sm text-slate-300">vendor-onboarding-test@starvnt.com · Starts with an empty business profile. Subsequent logins preserve your onboarding progress.</p>
+          <button
+            disabled={loadingEmail === 'vendor-onboarding-test@starvnt.com'}
+            onClick={() => handleAuthLogin({ email: 'vendor-onboarding-test@starvnt.com', accountType: 'VENDOR', blankProfile: true })}
+            className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+          >{loadingEmail === 'vendor-onboarding-test@starvnt.com' ? 'Logging in...' : '1-Click fresh vendor'}</button>
+        </section>
+
         {/* SECTION 3: 15 WORKING VENDORS ACROSS CATEGORIES & STATES */}
         <section className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-3">
@@ -563,9 +577,9 @@ export default function DevSingleClickAuth() {
                       <Icon name={v.icon} size={11} />
                       <span>{v.category}</span>
                     </span>
-                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border ${v.badgeColor}`}>
+                    {v.badge && <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded border ${v.badgeColor}`}>
                       {v.badge}
-                    </span>
+                    </span>}
                   </div>
 
                   <div>
@@ -578,7 +592,7 @@ export default function DevSingleClickAuth() {
 
                   <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
                     <span>📍 {v.location}</span>
-                    <span className="text-sky-400 font-bold">{v.pricing}</span>
+                    {v.pricing && <span className="text-sky-400 font-bold">{v.pricing}</span>}
                   </div>
                 </div>
 

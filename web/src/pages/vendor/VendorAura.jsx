@@ -1,6 +1,9 @@
+import AuraMark from '../../components/AuraMark.jsx';
 import { useEffect, useRef, useState } from 'react';
+import { createAuraLive, sameAuraValue } from '../../../../mobile/src/auraLive.ts';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
+import AuraActivity from '../../components/AuraActivity.jsx';
 import { externalApi } from '../../lib/api.js';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
 import { stopAuraSpeaking, transcribeAuraAudio } from '../../lib/voice.js';
@@ -152,7 +155,7 @@ function Bubble({ m, onAction }) {
     <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
       {!mine && (
         <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0 mt-0.5">
-          <Icon name="bolt" size={13} />
+          <Icon name="aura" size={13} />
         </span>
       )}
       <div className={`min-w-0 max-w-[85%] ${mine ? 'items-end' : 'items-start'} flex flex-col gap-1.5 [overflow-wrap:anywhere]`}>
@@ -221,13 +224,16 @@ function clampPanelPosition(pos, width, height) {
 export default function VendorAura({ open, onClose, page, userId, prompt, setup, conversationRequest }) {
   const navigate = useNavigate();
   const [sessionId, setSessionId] = useState(() => readSession(userId));
+  const currentSession = useRef(sessionId); currentSession.current = sessionId;
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [showThinkingStatus, setShowThinkingStatus] = useState(false);
   const [statusMessage, setStatusMessage] = useState(STATUS_MESSAGES[0]);
   const [error, setError] = useState('');
+  const live = useRef(null), sendingRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
+  const [activity, setActivity] = useState(null), [liveError, setLiveError] = useState('');
   const [mode, setModeState] = useState(readMode);
   const [setupExpanded, setSetupExpanded] = useState(true);
   const setupIncomplete = Boolean(setup?.checklist) && setup.percent < 100;
@@ -265,25 +271,32 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
     if (prompt?.text) setMode('aura');
   }, [prompt]);
 
-  // Load the conversation the first time the panel opens (and after "New chat").
+  // Refresh visible cards without replacing an in-flight voice/text turn.
   useEffect(() => {
-    if (!open || loaded) return;
-    let cancelled = false;
-    externalApi
-      .call(`/vendor/aura/sessions/${encodeURIComponent(sessionId)}`)
-      .then((res) => {
-        if (cancelled) return;
-        setMessages(res.messages || []);
-        setPending(res.pending || null);
-      })
-      .catch(() => {
-        /* a fresh session simply starts empty */
-      })
-      .finally(() => !cancelled && setLoaded(true));
+    if (!open || mode !== 'aura') return;
+    const sync = createAuraLive({
+      read: async () => {
+        const request = new AbortController(), timeout = setTimeout(() => request.abort(), 15000);
+        try { return await externalApi.call(`/vendor/aura/sessions/${encodeURIComponent(sessionId)}`, { signal: request.signal }); }
+        finally { clearTimeout(timeout); }
+      },
+      apply: snapshot => {
+        setActivity(previous => sameAuraValue(previous, snapshot.activity || null) ? previous : snapshot.activity || null);
+        setMessages(previous => sameAuraValue(previous, snapshot.messages || []) ? previous : snapshot.messages || []);
+        setPending(previous => sameAuraValue(previous, snapshot.pending || null) ? previous : snapshot.pending || null);
+      },
+      onSuccess: () => { setLoaded(true); setLiveError(''); }, onError: () => { setLoaded(true); setLiveError('Live activity could not refresh. Retrying automatically.'); },
+    });
+    live.current = sync;
+    if (sendingRef.current) sync.beginWrite();
+    const visible = () => { if (document.visibilityState === 'hidden') sync.stop(); else { sync.start(); void sync.refresh(); } };
+    if (document.visibilityState !== 'hidden') sync.start();
+    document.addEventListener('visibilitychange', visible); window.addEventListener('focus', visible); window.addEventListener('online', visible);
     return () => {
-      cancelled = true;
+      sync.stop(); if (live.current === sync) live.current = null;
+      document.removeEventListener('visibilitychange', visible); window.removeEventListener('focus', visible); window.removeEventListener('online', visible);
     };
-  }, [open, loaded, sessionId]);
+  }, [open, mode, sessionId]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
@@ -386,7 +399,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
 
   async function send(text, { confirm } = {}) {
     const message = String(text || '').trim();
-    if (!message || sending) return;
+    if (!message || sendingRef.current) return;
+    const sync = live.current, expectedSession = sessionId; sync?.beginWrite(); sendingRef.current = true;
     setError('');
     setInput('');
     setSending(true);
@@ -418,7 +432,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
 
     timeoutTimer = setTimeout(() => {
       abortController.abort();
-    }, 25000);
+    }, 55000);
 
     const cleanupTimers = () => {
       if (thinkingTimer) clearTimeout(thinkingTimer);
@@ -438,6 +452,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
           signal: abortController.signal,
         },
         (event) => {
+          if (currentSession.current !== expectedSession) return;
           if (event.type === 'status') {
             if (event.message) setStatusMessage(event.message);
           } else if (event.type === 'chunk') {
@@ -479,6 +494,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
       );
 
       cleanupTimers();
+      if (currentSession.current !== expectedSession) return null;
       setShowThinkingStatus(false);
       setSending(false);
 
@@ -491,6 +507,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
       return accumulatedText;
     } catch (err) {
       cleanupTimers();
+      if (currentSession.current !== expectedSession) return null;
       setShowThinkingStatus(false);
       setSending(false);
 
@@ -510,6 +527,9 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
         setError(ERRORS[err?.data?.error] || err?.message || 'Aura+ could not reply. Please try again.');
       }
       return null;
+    } finally {
+      if (currentSession.current === expectedSession) { sendingRef.current = false; if (live.current !== sync) live.current?.endWrite(); }
+      sync?.endWrite();
     }
   }
 
@@ -531,9 +551,12 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
   }, [open, loaded, prompt]);
 
   function newChat() {
+    setActivity(null);
     agent.end();
+    live.current?.stop(); live.current = null; sendingRef.current = false; setSending(false); setShowThinkingStatus(false);
 
     const sid = newId();
+    currentSession.current = sid;
     writeSession(userId, sid);
     setSessionId(sid);
     setMessages([]);
@@ -878,7 +901,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
         title="Open Aura+"
         aria-label="Open Aura+"
       >
-        <Icon name="bolt" size={18} />
+        <AuraMark variant="orb" size={52} />
         {pending && (
           <span
             className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white animate-pulse"
@@ -941,7 +964,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
       <aside
         id="vendor-aura-panel"
         style={panelStyle}
-        className={`vendor-aura-panel fixed z-50 inset-0 w-screen h-[100dvh] max-h-[100dvh] rounded-none lg:w-auto lg:h-auto lg:max-h-none lg:rounded-3xl lg:inset-auto bg-white shadow-2xl border-0 lg:border lg:border-gray-100 flex flex-col overflow-hidden isolate transition-all duration-200 ease-out ${
+        className={`vendor-aura-panel fixed z-50 inset-x-0 top-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] w-screen h-auto max-h-[calc(100dvh-4.5rem-env(safe-area-inset-bottom))] rounded-none lg:w-auto lg:h-auto lg:max-h-none lg:rounded-3xl lg:inset-auto bg-white shadow-2xl border-0 lg:border lg:border-gray-100 flex flex-col overflow-hidden isolate transition-all duration-200 ease-out ${
           isDragging
             ? 'select-none transition-none shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] ring-2 ring-primary/40'
             : isResizing
@@ -996,7 +1019,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
           className="aura-header relative flex items-center gap-3 px-4 py-3 border-b border-gray-100 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing bg-white/95"
         >
           <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-sm shrink-0">
-            <Icon name="bolt" size={18} />
+            <Icon name="aura" size={18} />
           </span>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-extrabold text-navy leading-tight">Aura+</div>
@@ -1046,7 +1069,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
         <div className="px-4 pt-3 shrink-0" role="tablist">
           <div className="grid grid-cols-2 gap-1 rounded-2xl bg-lavender/70 p-1">
             {[
-              ['aura', 'Ask Aura', 'bolt'],
+              ['aura', 'Ask Aura', 'aura'],
               ['manual', 'Ask manually', 'edit'],
             ].map(([key, label, icon]) => (
               <button
@@ -1097,6 +1120,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
           </div>
         ) : (
         <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
+          <AuraActivity activity={activity} />
           {messages.length === 0 && !sending && (setupIncomplete ? (
             <div className="text-center pt-4">
               <div className="text-sm font-extrabold text-navy">Welcome! Let's set up your business.</div>
@@ -1108,7 +1132,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
                 onClick={() => setupWithAura(START_SETUP)}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-4 py-2 shadow-md shadow-primary/25"
               >
-                <Icon name="bolt" size={13} /> Start setup with Aura
+                <Icon name="aura" size={13} /> Start setup with Aura
               </button>
             </div>
           ) : (
@@ -1174,7 +1198,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
           {sending && showThinkingStatus && (
             <div className="flex gap-2 items-center text-[11px] text-muted pl-1">
               <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0">
-                <Icon name="bolt" size={13} />
+                <Icon name="aura" size={13} />
               </span>
               <span className="flex items-center gap-1.5 font-medium">
                 <span className="w-2 h-2 rounded-full bg-primary animate-ping shrink-0" />
@@ -1193,6 +1217,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
         <div className="min-w-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 border-t border-gray-100 shrink-0 space-y-2">
           <VoiceAgentOverlay agent={agent} compact title="Aura+" />
           {error && <div className="text-[11px] text-red-500 px-1">{error}</div>}
+          {liveError && <p role="status" className="text-[11px] text-amber-600 px-1">{liveError}</p>}
           <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pb-0.5" aria-label="Suggested questions">
             {chips.map((c) => (
               <button

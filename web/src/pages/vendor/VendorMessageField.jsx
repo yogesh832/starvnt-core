@@ -55,7 +55,7 @@ export default function VendorMessageField({ value, onChange, context, label = '
         <label htmlFor={id} className="text-xs font-bold text-navy">{label}</label>
         <div className="flex items-center gap-1.5">
           <button type="button" disabled={disabled} onClick={() => editor.current?.focus()} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-bold text-navy hover:bg-lavender disabled:opacity-50"><Icon name="edit" size={12} />Edit</button>
-          <button type="button" disabled={disabled || !context?.id || drafting} onClick={() => setShowAura((open) => !open)} aria-expanded={showAura} className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary-soft px-2.5 py-1.5 text-[11px] font-bold text-primary disabled:opacity-50"><Icon name="bolt" size={12} />{drafting ? 'Writing…' : 'Write with Aura'}</button>
+          <button type="button" disabled={disabled || !context?.id || drafting} onClick={() => setShowAura((open) => !open)} aria-expanded={showAura} className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary-soft px-2.5 py-1.5 text-[11px] font-bold text-primary disabled:opacity-50"><Icon name="aura" size={12} />{drafting ? 'Writing…' : 'Write with Aura'}</button>
         </div>
       </div>
       {showAura && <div className="rounded-xl border border-gray-200 bg-lavender p-3 space-y-2">

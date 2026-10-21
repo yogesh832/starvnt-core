@@ -144,8 +144,10 @@ export function EditForm({ event, onCancel, onSaved }) {
  * ✓ known · amber "assumed – please check" · "Not specified", plus what is
  * still missing and what Aura+ only suggests.
  */
-export default function UnderstandingCard({ understanding, event, onChanged, onAsk }) {
-  const [editing, setEditing] = useState(false);
+export default function UnderstandingCard({ understanding, event, onChanged, onAsk, initialEditing = false, editing: controlledEditing, onEditingChange }) {
+  const [localEditing, setLocalEditing] = useState(initialEditing);
+  const editing = controlledEditing ?? localEditing;
+  const setEditing = value => { const next = typeof value === 'function' ? value(editing) : value; if (onEditingChange) onEditingChange(next); else setLocalEditing(next); };
   const [collapsed, setCollapsed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -159,6 +161,8 @@ export default function UnderstandingCard({ understanding, event, onChanged, onA
         <div className="flex-1 min-w-0">
           <div className="text-sm font-extrabold text-navy">Your event plan is ready</div>
           <div className="text-[11px] text-muted truncate">{event.title}</div>
+          <div className="text-[11px] text-muted mt-1">{[event.eventDate ? formatDate(event.eventDate) : 'Date not specified', event.city, event.guestCount != null ? `${event.guestCount} guests` : null].filter(Boolean).join(' · ')}</div>
+          {(event.budget != null || event.budgetRangeLabel) && <div className="text-[11px] text-muted mt-1">Budget: {event.budget != null ? formatINR(event.budget) : event.budgetRangeLabel}</div>}
         </div>
         <Link to={`/customer/events/${event.id}`} className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2 shrink-0">Open event →</Link>
       </div>

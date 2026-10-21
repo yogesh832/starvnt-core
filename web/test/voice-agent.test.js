@@ -18,7 +18,7 @@ function harness(onUtterance = async () => 'Your plan is ready.') {
     stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['a'.repeat(800)]) }); void this.onstop?.(); }
   }
   const stream = () => ({ active: true, getTracks: () => [{ stop() {} }] });
-  const code = readFileSync(new URL('../src/components/VoiceAgent.jsx', import.meta.url), 'utf8').split('export const voiceAgentSupported')[1].split('const ORB_CSS')[0];
+  const code = readFileSync(new URL('../src/components/VoiceAgent.jsx', import.meta.url), 'utf8').split('export const voiceAgentSupported')[1].split('export function VoiceOrb')[0];
   const create = new Function(...Object.keys(hooks), 'window', 'navigator', 'MediaRecorder', 'speakAura', 'stopAuraSpeaking', 'transcribeAuraAudio', 'requestAnimationFrame', 'cancelAnimationFrame', 'createVoiceActivity', `const voiceAgentSupported ${code.replace('export function useVoiceAgent', 'function useVoiceAgent')}; return useVoiceAgent;`);
   const useAgent = create(...Object.values(hooks), {}, { mediaDevices: { getUserMedia: async () => stream() } }, Recorder,
     (text, callbacks) => { calls.speech.push({ text, ...callbacks }); callbacks.onStart(); }, () => { calls.stopSpeech++; }, async () => 'Plan my wedding', () => 1, () => {}, createVoiceActivity);

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node --experimental-strip-types --test test/*.test.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"

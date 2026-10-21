@@ -30,6 +30,7 @@ customerRouter.get('/events', h(c.listEvents));
 customerRouter.post('/events', h(c.createEvent));
 customerRouter.get('/events/:id', h(c.getEvent));
 customerRouter.patch('/events/:id', h(c.patchEvent));
+customerRouter.delete('/events/:id', h(c.deleteEvent));
 customerRouter.post('/events/:id/confirm', h(c.confirmEvent));
 customerRouter.get('/events/:id/dashboard', h(c.dashboard));
 customerRouter.get('/events/:id/financial-truth', h(c.financialTruth));

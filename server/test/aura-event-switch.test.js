@@ -20,6 +20,10 @@ test('ambiguous names ask for clarification and ordinal answers preserve the off
   assert.equal(resolveEventSwitch('second one', events, { pendingIds: ['a', 'c'] }).event._id, 'c');
   assert.equal(resolveEventSwitch('Delhi', events, { pendingIds: ['a', 'c'] }).event._id, 'a');
   assert.equal(resolveEventSwitch('दूसरा वाला', events, { pendingIds: ['a', 'c'] }).event._id, 'c');
+  assert.equal(resolveEventSwitch('2nd one', events, { pendingIds: ['a', 'c'] }).event._id, 'c');
+  assert.equal(resolveEventSwitch('two', events, { pendingIds: ['a', 'c'] }).event._id, 'c');
+  assert.equal(resolveEventSwitch('keep current event', events, { pendingIds: ['a', 'c'], currentId: 'b' }).event._id, 'b');
+  assert.equal(resolveEventSwitch('30', events, { pendingIds: ['a', 'c'] }).kind, 'choose');
   assert.equal(resolveEventSwitch('My birthday', events, { pendingIds: ['b', 'c'] }).event._id, 'b');
 });
 test('listing and unknown names return owned choices; previous event and manual selection are deterministic', () => {

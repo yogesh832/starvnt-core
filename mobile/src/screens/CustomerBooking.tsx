@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Image, Linking } from "react-native";
+import { Image, Linking, View } from "react-native";
 import type { Data } from "../api/client";
 import { external } from "../api/runtime";
 import { completionEvidence } from "../completionEvidence";
@@ -12,12 +12,14 @@ import {
   ErrorNotice,
   Field,
   human,
+  Icon,
   id,
   money,
   Page,
   Pill,
   Txt,
   useAction,
+  usePalette,
   useResource,
 } from "../ui";
 
@@ -43,6 +45,7 @@ function CustomerBookingBody({ route, navigation }: any) {
     booking?.completionEvidence || booking?.evidence,
   );
   const a = useAction();
+  const c = usePalette();
   const [acknowledged, setAcknowledged] = useState("no");
   const [notes, setNotes] = useState("");
   const canVerify =
@@ -103,10 +106,19 @@ function CustomerBookingBody({ route, navigation }: any) {
             <Card>
               <Txt bold>Vendor's checklist</Txt>
               {evidence.checklist.map((check, index) => (
-                <Txt key={index}>
-                  {check.checked ? "✓" : "○"}{" "}
-                  {check.item || check.label || "Deliverable"}
-                </Txt>
+                <View
+                  key={index}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <Icon
+                    name={check.checked ? "checkmark-circle" : "ellipse-outline"}
+                    size={17}
+                    color={check.checked ? c.success : c.muted}
+                  />
+                  <Txt style={{ flex: 1 }}>
+                    {check.item || check.label || "Deliverable"}
+                  </Txt>
+                </View>
               ))}
             </Card>
           )}

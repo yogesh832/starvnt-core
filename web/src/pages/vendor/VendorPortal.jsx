@@ -1,3 +1,4 @@
+import AuraMark from '../../components/AuraMark.jsx';
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
@@ -409,7 +410,7 @@ export default function VendorPortal() {
               className="hidden lg:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-gradient-to-r from-primary to-[#9b6dff] text-white text-xs font-bold shadow-md shadow-primary/25 hover:opacity-95 transition shrink-0"
               title="Ask Aura+"
             >
-              <Icon name="bolt" size={15} />
+              <Icon name="aura" size={15} />
               Aura+
             </button>
 
@@ -573,7 +574,8 @@ export default function VendorPortal() {
 
         {/* Mobile Bottom Navigation Bar (Phone Screens) */}
         <div
-          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-[#161926]/95 backdrop-blur-md border-t border-gray-200/80 dark:border-gray-800 px-2 pt-1.5 flex items-center justify-around shadow-lg"
+          onClick={() => setAuraOpen(false)}
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white/95 dark:bg-[#161926]/95 backdrop-blur-md border-t border-gray-200/80 dark:border-gray-800 px-2 pt-1.5 flex items-center justify-around shadow-lg"
           style={{ paddingBottom: 'calc(0.375rem + env(safe-area-inset-bottom))' }}
         >
           <NavLink
@@ -607,6 +609,11 @@ export default function VendorPortal() {
             <span>Leads</span>
           </NavLink>
 
+          <button type="button" aria-label="Aura+" aria-pressed={auraOpen} onClick={(event) => { event.stopPropagation(); setAuraOpen((open) => !open); }} className="aura-nav-button relative flex min-w-0 flex-1 flex-col items-center -mt-5 text-[10px] font-bold text-primary dark:text-[#c4b5fd]">
+            <AuraMark variant="orb" size={60} state={auraOpen ? 'active' : 'idle'} />
+            <span>Aura+</span>
+          </button>
+
           <NavLink
             to="bookings"
             className={({ isActive }) =>
@@ -626,18 +633,6 @@ export default function VendorPortal() {
             <span>Bookings</span>
           </NavLink>
 
-          <NavLink
-            to="calendar"
-            className={({ isActive }) =>
-              `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
-              }`
-            }
-          >
-            <Icon name="calendar" size={19} />
-            <span>Calendar</span>
-          </NavLink>
-
           <button
             onClick={() => setNavOpen(true)}
             className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white transition cursor-pointer"
@@ -647,16 +642,6 @@ export default function VendorPortal() {
           </button>
         </div>
 
-        {/* Mobile Aura+ button, above the bottom navigation */}
-        {!auraOpen && (
-          <button
-            onClick={() => setAuraOpen(true)}
-            className="lg:hidden fixed right-4 bottom-16 z-30 w-11 h-11 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/30 border-2 border-white dark:border-[#161926] hover:scale-105 transition cursor-pointer"
-            aria-label="Ask Aura+"
-          >
-            <Icon name="bolt" size={18} />
-          </button>
-        )}
       </div>
 
       <VendorAura open={auraOpen} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} setup={setup} conversationRequest={auraConversationRequest} />

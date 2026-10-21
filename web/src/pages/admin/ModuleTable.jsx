@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { adminApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { StatusChip } from '../../components/ui.jsx';
@@ -7,6 +7,7 @@ import EventWorkspace from './EventWorkspace.jsx';
 import CouponModal from './CouponModal.jsx';
 import BookingDetailModal from './BookingDetailModal.jsx';
 import VendorKycModal from './VendorKycModal.jsx';
+import { couponStatus } from './couponStatus.js';
 import {
   VendorEditModal,
   CustomerEditModal,
@@ -34,14 +35,14 @@ const MODULE_DATA = {
   },
   vendors: {
     title: 'Vendors', add: null,
-    tabs: ['All', 'Verified', 'Pending', 'Manual Review', 'Flagged', 'Suspended', 'Rejected'], filters: ['Category', 'Location'],
+    tabs: ['All', 'Verified', 'Pending', 'Manual Review', 'Flagged', 'Suspended', 'Rejected'], filters: [],
     columns: ['Business', 'Contact', 'Category', 'Location', 'KYC', 'Status'],
     rows: [],
     total: 0, pages: 1,
   },
   events: {
-    title: 'Events', add: '+ Create Event',
-    tabs: ['All', 'Draft', 'Planning', 'Confirmed', 'In Progress', 'Completed', 'Cancelled'], filters: ['Event Type'],
+    title: 'Events', add: null,
+    tabs: ['All', 'Draft', 'Planning', 'Confirmed', 'In Progress', 'Completed', 'Cancelled'], filters: [],
     columns: ['Event Name', 'Customer', 'Date', 'Location', 'Status'],
     rows: [],
     total: 0, pages: 1,
@@ -93,7 +94,7 @@ const MODULE_DATA = {
 
   coupons: {
     title: 'Coupons', add: '+ Add Coupon',
-    tabs: ['All', 'Active', 'Expired'], filters: ['Discount Type'],
+    tabs: ['All', 'Active', 'Expired'], filters: [],
     columns: ['Code', 'Type', 'Value', 'Min Order', 'Valid Until', 'Usage', 'Status'],
     rows: [],
     total: 0, pages: 1,
@@ -187,6 +188,7 @@ function SettingEditModal({ setting, onClose, onSaved }) {
 }
 
 export default function ModuleTable({ kind, embedded = false }) {
+  const navigate = useNavigate();
   const m = MODULE_DATA[kind];
   const [searchParams, setSearchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
@@ -380,7 +382,7 @@ export default function ModuleTable({ kind, embedded = false }) {
               '₹' + (c.minOrderAmount || 0),
               c.validUntil ? new Date(c.validUntil).toLocaleDateString() : 'Never',
               `${c.usageCount || 0} / ${c.usageLimit || '∞'}`,
-              c.isActive ? 'Active' : 'Inactive',
+              couponStatus(c),
             ]);
           }
           if (kind === 'automation' && res.events) {
@@ -653,13 +655,12 @@ export default function ModuleTable({ kind, embedded = false }) {
             </button>
           ))}
           {m.filters.map((f) => (
-            <button
+            <span
               key={f}
-              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium bg-white rounded-full px-3.5 py-1.5 text-ink/60 hover:bg-lavender transition"
+              className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium bg-white rounded-full px-3.5 py-1.5 text-ink/60"
             >
               <span>{f}</span>
-              <Icon name="chevronDown" size={11} className="text-muted" />
-            </button>
+            </span>
           ))}
         </div>
       )}
@@ -999,10 +1000,17 @@ export default function ModuleTable({ kind, embedded = false }) {
                               Reject
                             </button>
                           </div>
-                        ) : (
-                          <button className="p-1 rounded-lg hover:bg-lavender text-muted hover:text-navy inline-flex items-center justify-center cursor-pointer" aria-label="More actions">
-                            <Icon name="dotsVertical" size={15} strokeWidth={2.5} />
+                        ) : ['events', 'reports', 'automation'].includes(kind) ? (
+                          <button type="button" onClick={(e) => {
+                            e.stopPropagation();
+                            if (kind === 'events') setSelectedEventWorkspace(apiData.raw[i]);
+                            if (kind === 'reports') handleReportExport();
+                            if (kind === 'automation') navigate('/admin/operations');
+                          }} className="rounded-xl bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary">
+                            {kind === 'reports' ? 'Export summary' : 'View'}
                           </button>
+                        ) : (
+                          <span className="text-muted">—</span>
                         )}
                       </td>
                     </tr>

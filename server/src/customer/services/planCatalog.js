@@ -91,30 +91,32 @@ export const CATEGORY_LABELS = {
   special_effects: 'Special effects',
   live_streaming: 'Live streaming',
   cake: 'Cake',
+  event_planning: 'Event planning',
 };
 
 export const CATEGORIES = Object.keys(CATEGORY_LABELS);
 
 // Anything a customer or the model might say, mapped to one category.
 const CATEGORY_SYNONYMS = {
-  venue: ['venue', 'venues', 'hall', 'banquet', 'banquet hall', 'lawn', 'marriage hall'],
-  catering: ['catering', 'caterer', 'caterers', 'food', 'khana'],
-  photography: ['photography', 'photographer', 'photographers', 'photo', 'photos', 'videography', 'videographer', 'cinematic production', 'cinematography', 'wedding film'],
-  decor: ['decor', 'decoration', 'decorations', 'decorator', 'decorators', 'sajawat'],
-  makeup: ['makeup', 'make-up', 'make up', 'makeup artist', 'bridal makeup', 'mua'],
-  sound: ['sound', 'sound system', 'audio', 'speakers'],
+  venue: ['venue', 'venues', 'hall', 'banquet', 'banquet hall', 'lawn', 'marriage hall', 'वेन्यू', 'बैंक्वेट'],
+  catering: ['catering', 'caterer', 'caterers', 'food', 'khana', 'कैटरिंग', 'कैटरर', 'खाना'],
+  photography: ['photography', 'photographer', 'photographers', 'photo', 'photos', 'videography', 'videographer', 'cinematic production', 'cinematography', 'wedding film', 'फोटोग्राफी', 'फोटोग्राफर'],
+  decor: ['decor', 'decoration', 'decorations', 'decorator', 'decorators', 'sajawat', 'सजावट', 'डेकोरेशन'],
+  makeup: ['makeup', 'make-up', 'make up', 'makeup artist', 'bridal makeup', 'mua', 'मेकअप'],
+  sound: ['sound', 'sound system', 'audio', 'speakers', 'dj', 'dj & music', 'dj and music', 'डीजे', 'साउंड'],
   ceremony: ['ceremony', 'religious ceremony', 'officiant', 'purohit', 'pandit', 'priest', 'pastor', 'imam', 'nikah', 'granthi', 'monk', 'jain priest', 'interfaith officiant', 'pujari'],
   corporate_production: ['corporate production', 'production', 'conference production', 'av', 'audio visual', 'stage production', 'mice', 'exhibition'],
   transport: ['transport', 'transportation', 'cab', 'cabs', 'car', 'cars', 'shuttle', 'bus'],
   accommodation: ['accommodation', 'hotel', 'hotels', 'stay', 'rooms'],
   hospitality: ['hospitality', 'guest management'],
   invitation: ['invitation', 'invitations', 'invite', 'invites', 'invitation cards', 'wedding cards'],
-  anchor: ['anchor', 'host', 'emcee', 'mc'],
-  entertainment: ['entertainment', 'dj', 'dj & music', 'dj and music', 'band', 'music', 'magic show', 'magician', 'dancers'],
+  anchor: ['anchor', 'host', 'emcee', 'mc', 'एंकर'],
+  entertainment: ['entertainment', 'band', 'music', 'magic show', 'magician', 'dancers', 'मनोरंजन', 'लाइव बैंड'],
   photo_booth: ['photo booth', 'photobooth', 'photo_booth'],
   special_effects: ['special effects', 'special_effects', 'fireworks', 'pyro', 'cold pyro'],
   live_streaming: ['live streaming', 'live stream', 'livestream', 'live_streaming'],
   cake: ['cake', 'cakes', 'bakery'],
+  event_planning: ['event planning', 'event planner', 'event planners', 'wedding planner', 'planner', 'इवेंट प्लानर', 'वेडिंग प्लानर', 'प्लानर'],
 };
 
 const SYNONYM_LOOKUP = new Map();

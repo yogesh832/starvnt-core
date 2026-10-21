@@ -1,3 +1,4 @@
+import { AuraMark } from './AuraMark';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, AccessibilityInfo, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, TextInput, View } from 'react-native';
@@ -24,8 +25,7 @@ export function AuraPanel({ children }: React.PropsWithChildren) {
   return <AuraReveal><View style={{ backgroundColor: c.panel, borderWidth: 1, borderColor: c.subtle, borderRadius: 24, padding: 16, gap: 12 }}>{children}</View></AuraReveal>;
 }
 export function AuraAvatar({ size = 32 }: { size?: number }) {
-  const c = useAuraPalette();
-  return <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}><AuthGradient colors={[c.primary, '#9b6dff']} /><Icon name="flash" size={size * .43} color="#fff" /></View>;
+  return <AuraMark size={size} />;
 }
 export function AuraRow({ title, icon, onPress, disabled = false, trailing }: { title: string; icon?: string; onPress: () => void; disabled?: boolean; trailing?: string }) {
   const c = useAuraPalette();
@@ -77,6 +77,7 @@ export function AuraChatView({ messages, user, vendor, text, onChangeText, onSen
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: c.subtle }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Aura navigation menu" onPress={() => { setPickingEvent(false); setMenuOpen(true); }} style={{ minWidth: 40, minHeight: 40, justifyContent: 'center', alignItems: 'center' }}><Icon name="menu-outline" size={25} color={c.ink} /></Pressable>
+        <AuraMark size={28} />
         <Pressable accessibilityRole={eventTitle ? 'button' : undefined} disabled={!eventTitle} onPress={onOpenEvent} style={{ flex: 1 }}><Text bold size={14}>{eventTitle || 'Aura+'}</Text><Text size={10} color={c.muted}>{vendor ? 'Your business assistant' : 'Your event assistant'}</Text></Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="New Aura conversation" accessibilityState={{ disabled: unavailable }} disabled={unavailable} onPress={newChat} style={{ minHeight: 40, paddingHorizontal: 12, borderWidth: 1, borderColor: c.line, borderRadius: 12, justifyContent: 'center', opacity: unavailable ? .45 : 1 }}><Text bold size={11}>New chat</Text></Pressable>
       </View>

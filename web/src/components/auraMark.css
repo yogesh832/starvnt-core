@@ -1,0 +1,12 @@
+.aura-mark { display:inline-grid; place-items:center; position:relative; flex-shrink:0; vertical-align:middle; isolation:isolate; pointer-events:none; }
+.aura-mark-art { display:block; width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 2px 5px #7344f033); transition:filter .25s,transform .25s; }
+.aura-mark--orb .aura-mark-art { filter:drop-shadow(0 3px 7px #7546eb40); }
+html.dark .aura-mark-art { filter:drop-shadow(0 0 7px #a56dff55); }
+.aura-mark[data-state="active"] .aura-mark-art, button:hover > .aura-mark--orb .aura-mark-art { filter:drop-shadow(0 0 10px #985cff80); transform:translateY(-1px) scale(1.04); }
+.aura-mark[data-state="listening"] .aura-mark-art,.aura-mark[data-state="speaking"] .aura-mark-art { animation:aura-breathe 2.4s ease-in-out infinite; transform:scale(calc(1 + var(--aura-energy) * .16)); }
+.aura-mark[data-state="thinking"] .aura-mark-art { animation:aura-think 2.2s ease-in-out infinite; }
+.aura-nav-button { min-height:48px; min-width:48px; }
+.aura-nav-button[aria-current="page"]::after,.aura-nav-button[aria-pressed="true"]::after { content:''; height:3px; width:22px; border-radius:10px; background:linear-gradient(90deg,#bba0ff,#7545ff); margin-top:3px; }
+@keyframes aura-breathe { 50% { filter:drop-shadow(0 0 15px #a56dff99); } }
+@keyframes aura-think { 50% { transform:rotate(7deg) scale(.96); filter:drop-shadow(0 0 14px #a56dff99); } }
+@media (prefers-reduced-motion:reduce) { .aura-mark .aura-mark-art { animation:none; transition:none; transform:none; } }

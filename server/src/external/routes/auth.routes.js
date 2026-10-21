@@ -65,7 +65,7 @@ router.post("/dev-auth", async (req, res, next) => {
     if (!config.enableDevTools) {
       return res.status(404).json({ error: "NOT_FOUND" });
     }
-    const { accountType = "VENDOR", email: requestedEmail } = req.body || {};
+    const { accountType = "VENDOR", email: requestedEmail, blankProfile = false } = req.body || {};
     const targetType = String(accountType).toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "VENDOR";
     const email = requestedEmail
       ? String(requestedEmail).toLowerCase()
@@ -92,7 +92,21 @@ router.post("/dev-auth", async (req, res, next) => {
     await user.save();
 
     if (targetType === "VENDOR") {
-      await ensureVendorOrganization(user, {
+      if (blankProfile === true && !user.vendorOrganization && !await VendorOrganization.exists({ owner: user._id })) {
+        const org = await VendorOrganization.create({
+          businessName: `${user.fullName}'s Studio`,
+          owner: user._id,
+          category: '',
+          location: '',
+          workingHours: null,
+          status: 'PENDING',
+          activationState: 'REGISTERED',
+          isProfileCompleted: false,
+          isCommerciallyActive: false,
+        });
+        user.vendorOrganization = org._id;
+        await user.save();
+      } else await ensureVendorOrganization(user, {
         businessName: "Dev StarVnt Studio",
         category: "Photography",
         city: "Kapkote"
@@ -117,6 +131,9 @@ router.post("/dev-auth", async (req, res, next) => {
 
 router.post("/reseed", async (req, res, next) => {
   try {
+    if (!config.enableDevTools) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
     const { seedRealVendors } = await import("../../../scripts/seed-real-vendors.js");
     await seedRealVendors();
     res.json({ ok: true, message: "Real vendors re-seeded successfully!" });

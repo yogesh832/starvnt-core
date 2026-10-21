@@ -10,6 +10,7 @@ import ModuleTable from './ModuleTable.jsx';
 import UsersAccess from './UsersAccess.jsx';
 import AuditLogs from './AuditLogs.jsx';
 import Notifications from './Notifications.jsx';
+import Operations from './Operations.jsx';
 import { loadAdminNotifications, notificationReadKey } from '../../lib/adminNotifications.js';
 
 /**
@@ -338,7 +339,7 @@ export default function AdminShell() {
               <Route path="events" element={<ModuleTable kind="events" />} />
               <Route path="bookings" element={<ModuleTable kind="bookings" />} />
               <Route path="payments" element={<ModuleTable kind="payments" />} />
-              <Route path="operations" element={<ModuleTable kind="operations" />} />
+              <Route path="operations" element={<Operations />} />
               <Route path="reports" element={<ModuleTable kind="reports" />} />
               <Route path="automation" element={<ModuleTable kind="automation" />} />
               <Route path="coupons" element={<ModuleTable kind="coupons" />} />

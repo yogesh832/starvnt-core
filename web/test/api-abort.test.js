@@ -35,3 +35,33 @@ test('voice cancellation survives a web session refresh and retry', async t => {
   const response = await api.raw('/ai/voice', { method: 'POST', body: { text: 'Hello' }, signal: controller.signal });
   assert.equal(await response.text(), 'audio'); assert.equal(voices, 2);
 });
+
+test('a refresh started before logout cannot restore its token', async t => {
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; });
+  let respond;
+  globalThis.fetch = () => new Promise(resolve => { respond = resolve; });
+  const api = makeApi('https://test.invalid/api', 'https://test.invalid/refresh');
+  api.setToken('old-token');
+  const pending = api.refresh();
+  api.setToken(null);
+  respond(new Response(JSON.stringify({ accessToken: 'late-token' })));
+  assert.equal(await pending, null);
+  assert.equal(api.getToken(), null);
+  assert.equal(await api.refresh(), null);
+});
+
+test('an old unauthorized request cannot clear a new sign-in or start a refresh after logout', async t => {
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; });
+  let respond, calls = 0;
+  globalThis.fetch = () => { calls++; return new Promise(resolve => { respond = resolve; }); };
+  const api = makeApi('https://test.invalid/api', 'https://test.invalid/refresh');
+  api.setToken('old-token');
+  const pending = api.raw('/customer/profile');
+  api.setToken('new-token');
+  respond(new Response('{}', { status: 401 }));
+  await assert.rejects(pending);
+  assert.equal(api.getToken(), 'new-token');
+  assert.equal(calls, 1);
+});

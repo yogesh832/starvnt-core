@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 
@@ -25,7 +26,7 @@ export default function AuraEventMenu({ activeId, busy, onSwitch }) {
   const filtered = events.filter(event => `${event.title} ${event.city || ''} ${event.eventType}`.toLowerCase().includes(query.toLowerCase()));
   return <>
     <button ref={trigger} type="button" aria-label="Aura event menu" aria-haspopup="dialog" aria-expanded={open} onClick={() => { setQuery(''); setOpen(true); }} className="w-10 h-10 rounded-xl grid place-items-center text-navy dark:text-white hover:bg-lavender dark:hover:bg-white/10"><Icon name="menu" size={23} /></button>
-    {open && <div className="fixed inset-0 z-[99990] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setOpen(false)}>
+    {open && createPortal(<div className="fixed inset-0 z-[99990] flex items-end sm:items-center justify-center bg-black/50 p-3" onClick={() => setOpen(false)}>
       <section ref={panel} role="dialog" aria-modal="true" aria-labelledby="aura-event-menu-title" className="w-full max-w-md rounded-3xl bg-white dark:bg-[#161926] text-navy dark:text-slate-100 p-5 shadow-xl space-y-3" onClick={event => event.stopPropagation()}>
         <div className="flex items-center justify-between"><h2 id="aura-event-menu-title" className="font-bold">Switch event</h2><button type="button" aria-label="Close event menu" onClick={() => setOpen(false)} className="h-11 w-11 grid place-items-center rounded-full hover:bg-black/5 dark:hover:bg-white/10"><Icon name="close" size={20} /></button></div>
         <p className="text-xs text-muted dark:text-slate-400">Say “switch to my wedding” or choose below. Your event details stay saved.</p>
@@ -39,6 +40,6 @@ export default function AuraEventMenu({ activeId, busy, onSwitch }) {
           </button>)}
         </div>
       </section>
-    </div>}
+    </div>, document.body)}
   </>;
 }

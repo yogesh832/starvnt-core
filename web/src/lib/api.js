@@ -8,12 +8,16 @@ export function makeApi(base, refreshPath, options = {}) {
   const loginRedirectPath = options.loginRedirectPath || null;
   let token = null;
   let refreshing = null;
+  let generation = 0;
+  let sessionBlocked = false;
 
   if (storageKey && typeof window !== "undefined") {
     token = window.localStorage.getItem(storageKey);
   }
 
   const setToken = (t) => {
+    generation += 1;
+    sessionBlocked = !t;
     token = t;
     if (!storageKey || typeof window === "undefined") return;
     if (t) {
@@ -24,13 +28,15 @@ export function makeApi(base, refreshPath, options = {}) {
   };
 
   async function refresh() {
+    if (sessionBlocked) return null;
+    const startedGeneration = generation;
     refreshing =
       refreshing ||
       fetch(refreshPath, { method: "POST", credentials: "include" })
         .then(async (r) => {
           if (!r.ok) return null;
           const data = await r.json();
-          if (!data || !data.accessToken) return null;
+          if (!data || !data.accessToken || generation !== startedGeneration) return null;
           setToken(data.accessToken);
           return data;
         })
@@ -43,6 +49,7 @@ export function makeApi(base, refreshPath, options = {}) {
 
   /** Low-level request: supports JSON, FormData, Blob and string bodies; returns the Response. */
   async function raw(path, { method = "GET", body, headers = {}, signal } = {}, retry = true) {
+    const requestGeneration = generation;
     const hasBody = body !== undefined && body !== null;
     const isJsonBody = hasBody && !(body instanceof FormData) && !(body instanceof Blob) && typeof body !== "string";
     const res = await fetch(`${base}${path}`, {
@@ -57,7 +64,7 @@ export function makeApi(base, refreshPath, options = {}) {
       body: hasBody ? (isJsonBody ? JSON.stringify(body) : body) : undefined,
     });
 
-    if (res.status === 401 && retry) {
+    if (res.status === 401 && retry && requestGeneration === generation) {
       const refreshed = await refresh();
       if (refreshed) return raw(path, { method, body, headers, signal }, false);
     }
@@ -70,7 +77,7 @@ export function makeApi(base, refreshPath, options = {}) {
       // - The request was an auth endpoint (/login, /auth/login, /auth/refresh, etc.)
       // - The user is already on a login page (/login or /admin/login)
       // Only redirect if a protected app route returned 401 and loginRedirectPath is configured.
-      if (res.status === 401) {
+      if (res.status === 401 && requestGeneration === generation) {
         setToken(null);
         const isAuthEndpoint = /\/auth\/(login|refresh|me|verify|otp)/i.test(path) || /\/login/i.test(path);
         const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
@@ -136,15 +143,16 @@ export function makeApi(base, refreshPath, options = {}) {
 }
 
 export function friendlyApiMessage(code, status) {
+  const supportEmail = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPPORT_EMAIL) || 'support@starvnt.com';
   const messages = {
     UNAUTHENTICATED: "Your session has expired. Please sign in again.",
     SESSION_REVOKED: "Your session has expired. Please sign in again.",
-    ACCOUNT_DISABLED_OR_MISSING: "This account is not available. Please contact support.",
+    ACCOUNT_DISABLED_OR_MISSING: `This account is not available. Please contact customer support at ${supportEmail}.`,
     FORBIDDEN: "You do not have permission to perform this action.",
     NO_VENDOR_ORGANIZATION: "Your vendor workspace is not ready yet. Please complete vendor setup.",
     ACCOUNT_TYPE_MISMATCH: "This account belongs to the other login tab. Please switch Customer/Vendor and try again.",
-    CLOUDINARY_NOT_CONFIGURED: "Media storage is not configured. Add the Cloudinary API key on the server and restart it.",
-    MEDIA_UPLOAD_FAILED: "Media upload failed. Please check Cloudinary settings or try a smaller file.",
+    CLOUDINARY_NOT_CONFIGURED: `Media storage is temporarily unavailable. Please try again shortly or contact support at ${supportEmail}.`,
+    MEDIA_UPLOAD_FAILED: `We couldn't upload your file. Please try a smaller file or reach out to support at ${supportEmail}.`,
     PRIMARY_CATEGORY_SINGLE_ONLY: "Choose exactly one primary category. Add secondary services separately.",
     RATE_LIMITED: "Too many attempts. Please wait a few minutes and try again.",
     COUPON_INVALID: "This coupon code is not valid.",
@@ -154,7 +162,13 @@ export function friendlyApiMessage(code, status) {
     COUPON_MIN_ORDER_NOT_MET: "This order does not meet the coupon minimum amount.",
     COUPON_NO_DISCOUNT: "This coupon does not reduce this payment.",
   };
-  return messages[code] || (status ? `Request failed (${status}). Please try again.` : "Request failed. Please try again.");
+  if (messages[code]) return messages[code];
+  if (status && status >= 500) {
+    return `There is a temporary issue on the STARVNT server. Please try again in a few moments or contact support at ${supportEmail}.`;
+  }
+  return status
+    ? `We couldn't complete this action (Status ${status}). Please try again or reach out to support at ${supportEmail}.`
+    : `Something went wrong on our side. Please try again later or contact support at ${supportEmail}.`;
 }
 
 /** Backend base URL — direct calls keep auth and OTP requests consistent. */

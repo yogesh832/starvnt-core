@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Image, Linking, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from '@react-navigation/native';
+import { AppState, Image, Linking, View } from "react-native";
+import { createAuraLive, sameAuraValue } from '../auraLive';
 import { attachedMessage, messageLinks } from "../messageMedia";
 import { pickUpload } from "../api/upload";
 import { vendorDestination } from "../vendorDestination";
@@ -7,6 +9,7 @@ import { EventDateField } from "../EventFields";
 import { AuraPlan } from "../AuraPlan";
 import { AuraChatView, AuraPanel, AuraRow } from '../AuraUI';
 import { AuraQuestion } from '../AuraQuestion';
+import { AuraVendors } from '../AuraVendors';
 import type { AuraVoiceSubmit } from '../AuraVoice';
 import { AuraButton as AuthButton, AuraText as AuthText } from '../AuraTheme';
 import { auraChoice, conversationContext } from "../auraChoices";
@@ -278,6 +281,8 @@ function ConversationScreen({ route, navigation }: any) {
   const [local, setLocal] = useState<Data[]>([]);
   const [outgoing, setOutgoing] = useState('');
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const live = useRef<ReturnType<typeof createAuraLive<Data>> | null>(null);
+  const [liveLoading, setLiveLoading] = useState(kind === 'aura'), [liveError, setLiveError] = useState('');
   const voiceController = useRef<AuraVoiceSubmit | null>(null);
   const sending = useRef(false);
   const [activeEvent, setActiveEvent] = useState(eventId);
@@ -289,6 +294,7 @@ function ConversationScreen({ route, navigation }: any) {
   const [showDraft, setShowDraft] = useState(false);
   const [nextQuestion, setNextQuestion] = useState<Data | null>(null);
   const [switchChoices, setSwitchChoices] = useState<Data[]>([]);
+  const [vendorSuggestions, setVendorSuggestions] = useState<Data[]>([]), [vendorSearch, setVendorSearch] = useState<Data | null>(null);
   const [answerDate, setAnswerDate] = useState("");
   // Customer Aura sessions are caller-generated and backed by the same server session store.
   const [sessionId, setSessionId] = useState(
@@ -306,33 +312,46 @@ function ConversationScreen({ route, navigation }: any) {
         : vendor
           ? `/vendor/aura/sessions/${encodeURIComponent(sessionId)}`
           : `/aura/sessions/${encodeURIComponent(sessionId)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ""}`;
-  const r = useResource(external, readPath, kind === "aura" ? 0 : 20000);
+  const r = useResource(external, readPath, kind === "aura" ? 0 : 20000, kind !== 'aura');
   const stored: Data[] =
     kind === "aura"
       ? r.data.messages || r.data.session?.messages || []
       : r.data.messages || r.data.thread?.messages || [];
-  useEffect(() => {
-    if (kind === "aura") {
-      setLocal(r.data.messages || r.data.session?.messages || []);
-      setPending(r.data.pending || null);
-      setNextQuestion(r.data.nextQuestion || null);
-      setSwitchChoices(r.data.eventChoices || []);
-      setPlanEvent(r.data.activeEvent || null);
-      setUnderstanding(r.data.understanding || null);
-      if (r.data.activeEvent?.id) setActiveEvent(r.data.activeEvent.id);
-    }
-  }, [r.data, kind]);
+  function applyAuraSnapshot(data: Data, includeMessages = true) {
+    const retain = <T,>(previous: T, next: T) => sameAuraValue(previous, next) ? previous : next;
+    if (includeMessages) setLocal(previous => retain(previous, data.messages || data.session?.messages || []));
+    setPending(previous => retain(previous, data.pending || null));
+    setNextQuestion(previous => retain(previous, data.nextQuestion || null));
+    setSwitchChoices(previous => retain(previous, data.eventChoices || []));
+    setVendorSuggestions(previous => retain(previous, data.vendorSuggestions || []));
+    setVendorSearch(previous => retain(previous, data.vendorSearch || null));
+    setPlanEvent(previous => retain(previous, data.activeEvent || null));
+    setUnderstanding(previous => retain(previous, data.understanding || null));
+    setActiveEvent(data.activeEvent?.id);
+  }
+  const applySnapshot = useRef(applyAuraSnapshot); applySnapshot.current = applyAuraSnapshot;
+  useFocusEffect(useCallback(() => {
+    if (kind !== 'aura') return;
+    const sync = createAuraLive<Data>({ read: () => external.call(readPath), apply: data => applySnapshot.current(data), onSuccess: () => { setLiveLoading(false); setLiveError(''); }, onError: error => { setLiveLoading(false); setLiveError((error as Error).message || 'Live cards could not refresh. Please try again.'); } });
+    live.current = sync;
+    if (AppState.currentState !== 'background') sync.start();
+    const app = AppState.addEventListener('change', state => { if (state === 'active') sync.start(); else sync.stop(); });
+    return () => { sync.stop(); app.remove(); if (live.current === sync) live.current = null; };
+  }, [kind, readPath]));
   const messages = kind === "aura" ? local : stored;
   async function send(override?: string, confirmation?: boolean, choiceBody: Data = {}) {
     if (sending.current) throw new Error('Aura is still replying. Please wait a moment.');
     sending.current = true;
-    try { return await performSend(override, confirmation, choiceBody); }
-    finally { sending.current = false; }
+    const sync = live.current;
+    if (kind === 'aura') sync?.beginWrite();
+    try { return await performSend(override, confirmation, choiceBody, sync); }
+    finally { sending.current = false; if (kind === 'aura') sync?.endWrite(); }
   }
   async function performSend(
     override?: string,
     confirmation?: boolean,
     choiceBody: Data = {},
+    expectedLive: typeof live.current = live.current,
   ) {
     const message =
       kind === "aura"
@@ -358,11 +377,8 @@ function ConversationScreen({ route, navigation }: any) {
         },
       ); } finally { setOutgoing(''); }
       spokenAnswer = [data.reply, data.message?.content, data.message, data.text].find(value => typeof value === 'string' && value.trim()) || 'Your plan has been updated.';
-      setPending(data.pending || null);
-      setNextQuestion(data.nextQuestion || null);
-      setSwitchChoices(data.eventChoices || []);
-      if (data.activeEvent) setPlanEvent(data.activeEvent);
-      if ("understanding" in data) setUnderstanding(data.understanding);
+      if (live.current !== expectedLive) return spokenAnswer;
+      applyAuraSnapshot(data, false);
       const nextEvent = data.createdEventId || data.activeEvent?.id;
       if (nextEvent) {
         setActiveEvent(nextEvent);
@@ -420,8 +436,8 @@ function ConversationScreen({ route, navigation }: any) {
     attachment={attachment} onRemoveAttachment={() => setAttachment(null)}
     onAttach={() => { void a.run(async () => { const media = await pickUpload(false, ['image/*', 'video/*']); if (media) setAttachment(media); }); }}
     messages={[...messages, ...(outgoing ? [{ role: 'user', content: outgoing }] : [])].map(m => ({ ...m, actions: (m.actions || []).map((action: Data) => ({ ...action, target: typeof action.to === 'string' ? vendorDestination(action.to) : null })) }))}
-    text={text} onChangeText={setText} busy={a.busy || voiceBusy} loading={r.loading}
-    error={a.error || r.error} onRetry={() => { void r.refresh(); }}
+    text={text} onChangeText={setText} busy={a.busy || voiceBusy} loading={liveLoading}
+    error={a.error || liveError} onRetry={() => { void live.current?.refresh(); }}
     onSend={sendFromUi}
     onHistory={() => navigation.navigate('AuraHistory')}
     onVoiceController={submit => { voiceController.current = submit; }}
@@ -432,16 +448,18 @@ function ConversationScreen({ route, navigation }: any) {
     onOpenLink={url => { void a.run(async () => { await Linking.openURL(url); }); }}
     onNew={() => navigation.setParams({ sessionId: undefined, newChatKey: String(Date.now()) })}
   >
+    {!vendor && <AuraVendors key={`${activeEvent || 'new'}-${vendorSearch?.query || 'catalog'}`} rows={vendorSuggestions} search={vendorSearch} eventId={activeEvent} navigation={navigation} />}
     {!vendor && switchChoices.length > 0 && <AuraPanel><AuthText bold size={13}>Your events</AuthText>{switchChoices.map(event => <AuraRow key={id(event)} title={[event.title, event.city, event.date || 'Date to be decided'].filter(Boolean).join(' · ')} disabled={a.busy || voiceBusy} onPress={() => sendFromUi(`Switch to ${event.title}`, { switchEventId: id(event) })} />)}</AuraPanel>}
     {!vendor && messages.length > 0 && nextQuestion && <AuraQuestion key={`${sessionId}-${nextQuestion.topic || nextQuestion.question}`} question={nextQuestion} showQuestion={!String([...messages].reverse().find(m => m.role !== 'user')?.content || '').includes(nextQuestion.question || '')} busy={a.busy || voiceBusy} onPrefill={setText} onSend={sendFromUi} />}
-    {!vendor && <AuraPlan event={planEvent} understanding={understanding} navigation={navigation} busy={a.busy || voiceBusy}
+    {!vendor && <AuraPlan key={activeEvent || 'new'} event={planEvent} understanding={understanding} navigation={navigation} busy={a.busy || voiceBusy}
       onAsk={sendFromUi}
       onConfirm={() => { void a.run(async () => {
         if (!planEvent || !understanding?.canConfirm) return;
-        const detail = await external.call(`/customer/events/${encodeURIComponent(id(planEvent))}/confirm`, 'POST');
-        setPlanEvent(detail.event || planEvent);
-        setUnderstanding(detail.understanding || null);
-        setNextQuestion(null);
+        live.current?.beginWrite();
+        try {
+          const detail = await external.call(`/customer/events/${encodeURIComponent(id(planEvent))}/confirm`, 'POST');
+          setPlanEvent(detail.event || planEvent); setUnderstanding(detail.understanding || null); setNextQuestion(null);
+        } finally { live.current?.endWrite(); }
       }); }} />}
     {vendor && pending && <AuraPanel><AuthText bold>Review Aura's proposed change</AuthText><AuthText>{pending.summary || pending.question || 'Apply the change described in the conversation?'}</AuthText>
       <AuthButton title="Confirm change" busy={a.busy || voiceBusy} onPress={() => { void a.run(() => send('Confirm this change', true)); }} />

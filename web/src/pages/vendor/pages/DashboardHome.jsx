@@ -619,11 +619,11 @@ function AskAuraCard({ onAsk }) {
     <div className="rounded-3xl p-4 sm:p-5 bg-gradient-to-br from-primary via-[#7b5cf0] to-[#b18cff] text-white shadow-lg shadow-primary/20">
       <div className="flex items-center gap-2">
         <span className="w-8 h-8 rounded-xl bg-white/20 grid place-items-center">
-          <Icon name="bolt" size={15} />
+          <Icon name="aura" size={15} />
         </span>
         <div>
           <div className="text-sm font-extrabold">Ask Aura+</div>
-          <div className="text-[11px] text-white/80">Enquiries, quotes, bookings, payments — pooch lo, main batata hoon.</div>
+          <div className="text-[11px] text-white/80">Enquiries, quotes, bookings, payments — pooch lo, main batati hoon.</div>
         </div>
       </div>
       <form onSubmit={submit} className="mt-3 flex items-center gap-2 bg-white rounded-2xl px-3 py-1.5">
@@ -1327,7 +1327,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     disabled={completingProfile}
                     className="rounded-xl bg-white hover:bg-lavender text-navy text-xs font-bold px-3.5 sm:px-4 py-2.5 border border-gray-200 shadow-xs transition disabled:opacity-60 inline-flex items-center gap-1.5"
                   >
-                    <Icon name="bolt" size={13} />
+                    <Icon name="aura" size={13} />
                     <span>{completingProfile ? 'Verifying...' : 'Quick Auto-Fill'}</span>
                   </button>
                 )}

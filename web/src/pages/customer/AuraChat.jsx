@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
+// AuraActivity is vendor-only; removed from the customer chat.
 import MapLocationPicker from '../../components/MapLocationPicker.jsx';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import UnderstandingCard from './UnderstandingCard.jsx';
 import AuraEventMenu from './AuraEventMenu.jsx';
+import AuraVendorResults from './AuraVendorResults.jsx';
+import { createAuraLive, sameAuraValue } from '../../../../mobile/src/auraLive.ts';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
 import { stopAuraSpeaking, transcribeAuraAudio } from '../../lib/voice.js';
 
@@ -91,7 +94,7 @@ function Bubble({ from, children, onZoomImage }) {
     <div className={`flex ${from === 'user' ? 'justify-end' : 'gap-2.5'}`}>
       {from !== 'user' && (
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs shrink-0 mt-0.5 shadow-xs">
-          <Icon name="bolt" size={13} />
+          <Icon name="aura" size={13} />
         </div>
       )}
       <div
@@ -358,13 +361,16 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const [params, setParams] = useSearchParams();
   // Embedded (home workspace) chats are scoped by prop and never read or write the URL.
   const scopedEventId = embedded ? embeddedEventId : params.get('event');
+  const requestedSession = embedded ? null : params.get('session');
   const key = sessionKey(user?.id, scopedEventId);
 
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [activeEvent, setActiveEvent] = useState(null);
+  // activity state removed – AuraActivity is vendor-only
   const activeEventRef = useRef(null);
   const [switchChoices, setSwitchChoices] = useState([]);
+  const [vendorSuggestions, setVendorSuggestions] = useState([]), [vendorSearch, setVendorSearch] = useState(null);
   const [understanding, setUnderstanding] = useState(null);
   const [nextQ, setNextQ] = useState(null);
   const [input, setInput] = useState('');
@@ -379,8 +385,12 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const [statusMessage, setStatusMessage] = useState(STATUS_MESSAGES[0]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [liveError, setLiveError] = useState('');
+  const live = useRef(null), sendingRef = useRef(false);
+  const failedSend = useRef(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const bottomRef = useRef(null);
+  const nearBottom = useRef(true);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const askedRef = useRef(false);
@@ -411,17 +421,26 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   });
 
   const applyState = useCallback((s) => {
+    const failed = failedSend.current;
+    if (failed && s.messages?.some((message, index) => message.role === 'user' && message.content === failed.text && new Date(message.createdAt).getTime() >= failed.startedAt - 2000 && s.messages[index + 1]?.role === 'model')) {
+      failedSend.current = null;
+      setError('');
+      setInput(value => value === failed.text ? '' : value);
+    }
     activeEventRef.current = s.activeEvent || null;
-    setActiveEvent(s.activeEvent || null);
-    setUnderstanding(s.understanding || null);
-    setNextQ(s.nextQuestion || null);
-    setSwitchChoices(s.eventChoices || []);
+    const retain = (previous, next) => sameAuraValue(previous, next) ? previous : next;
+    // activity is vendor-only; skip it in customer chat
+    setActiveEvent(previous => retain(previous, s.activeEvent || null));
+    setUnderstanding(previous => retain(previous, s.understanding || null));
+    setNextQ(previous => retain(previous, s.nextQuestion || null));
+    setSwitchChoices(previous => retain(previous, s.eventChoices || []));
+    setVendorSuggestions(previous => retain(previous, s.vendorSuggestions || [])); setVendorSearch(previous => retain(previous, s.vendorSearch || null));
   }, []);
 
   // Load (or start) the session for this event scope; history comes from the server.
   useEffect(() => {
     let cancelled = false;
-    const urlSession = !embedded ? params.get('session') : null;
+    const urlSession = requestedSession;
     let sid = urlSession || readSession(key);
     const fresh = !embedded && params.get('new') === '1';
     if (fresh || !sid) {
@@ -438,29 +457,48 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
     setSessionId(sid);
     setLoading(true);
     setError('');
-    customerApi
-      .auraSession(sid, scopedEventId)
-      .then((s) => {
+    const sync = createAuraLive({
+      read: async () => {
+        const request = new AbortController(), timeout = setTimeout(() => request.abort(), 15000);
+        try { return await customerApi.auraSession(sid, scopedEventId, { signal: request.signal }); }
+        finally { clearTimeout(timeout); }
+      },
+      apply: snapshot => {
         if (cancelled) return;
-        setMessages(s.messages || []);
-        applyState(s);
-      })
-      .catch((err) => !cancelled && setError(errorText(err, "Couldn't load this conversation.")))
-      .finally(() => !cancelled && setLoading(false));
+        setMessages(previous => sameAuraValue(previous, snapshot.messages || []) ? previous : snapshot.messages || []);
+        applyState(snapshot);
+      },
+      onSuccess: () => { if (!cancelled) { setLoading(false); setLiveError(''); } },
+      onError: error => { if (!cancelled) { setLoading(false); setLiveError(errorText(error, 'Live cards could not refresh. Please try again.')); } },
+    });
+    live.current = sync;
+    const visible = () => {
+      if (document.visibilityState === 'hidden') sync.stop();
+      else { sync.start(); void sync.refresh(); }
+    };
+    if (document.visibilityState !== 'hidden') sync.start();
+    window.addEventListener('focus', visible); window.addEventListener('online', visible); document.addEventListener('visibilitychange', visible);
     return () => {
       cancelled = true;
+      sync.stop(); if (live.current === sync) live.current = null;
+      window.removeEventListener('focus', visible); window.removeEventListener('online', visible); document.removeEventListener('visibilitychange', visible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, loadAttempt]);
+  }, [key, loadAttempt, requestedSession]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (nearBottom.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, understanding, sending]);
 
   const send = useCallback(
     async (text, extra = {}) => {
       const msg = (text ?? '').trim();
-      if (!msg || !sessionId || sending) return;
+      if (!msg || !sessionId || sendingRef.current || !live.current) return;
+      sendingRef.current = true;
+      const startedAt = Date.now();
+      failedSend.current = null;
+      nearBottom.current = true;
+      const sync = live.current; sync?.beginWrite();
       setInput('');
       setError('');
       setSending(true);
@@ -492,10 +530,10 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         }
       }, CHAT_THINKING_STATUS_DELAY_MS);
 
-      // 25s safety timeout
+      // Leave room for the bounded model call plus context and durable writes.
       timeoutTimer = setTimeout(() => {
         abortController.abort();
-      }, 25000);
+      }, 45000);
 
       const cleanupTimers = () => {
         if (thinkingTimer) clearTimeout(thinkingTimer);
@@ -510,6 +548,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         await customerApi.auraChatStream(
           { sessionId, message: msg, eventId: activeEventRef.current?.id || scopedEventId || undefined, ...extra },
           (event) => {
+            if (live.current !== sync) return;
             if (event.type === 'status') {
               if (event.message) setStatusMessage(event.message);
             } else if (event.type === 'chunk') {
@@ -548,6 +587,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         );
 
         cleanupTimers();
+        if (live.current !== sync) return null;
         setShowThinkingStatus(false);
         setSending(false);
 
@@ -559,6 +599,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         return accumulatedText;
       } catch (err) {
         cleanupTimers();
+        if (live.current !== sync) return null;
         setShowThinkingStatus(false);
         setSending(false);
 
@@ -575,11 +616,12 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         });
 
         if (!accumulatedText) {
+          failedSend.current = { text: msg, startedAt };
           setInput(msg);
-          setError(errorText(err, "Aura+ couldn't reply. Please try again."));
+          setError(err?.name === 'AbortError' || /signal.*abort/i.test(err?.message || '') ? 'Aura is taking longer than expected. Checking whether your reply was saved…' : errorText(err, "Aura+ couldn't reply. Please try again."));
         }
         return null;
-      }
+      } finally { if (live.current === sync) sendingRef.current = false; sync?.endWrite(); }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sessionId, sending, scopedEventId, applyState, onEventChanged, user?.id]
@@ -638,6 +680,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
     };
     setSavingStructured(true);
     setError('');
+    const sync = live.current; sync?.beginWrite();
     try {
       await customerApi.patchEvent(activeEvent.id, payload);
       const refreshed = await customerApi.auraSession(sessionId, activeEvent.id);
@@ -653,11 +696,15 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
       setError(errorText(err, "Couldn't save this location. Please try again."));
     } finally {
       setSavingStructured(false);
+      sync?.endWrite();
     }
   }
 
   function newChat() {
+    // activity cleared on new chat – vendor-only, no-op here
     if (agent.open) agent.end();
+    live.current?.stop();
+    live.current = null; sendingRef.current = false; setSending(false); setShowThinkingStatus(false);
     const sid = newSessionId();
     writeSession(sessionKey(user?.id, null), sid);
     askedRef.current = false;
@@ -665,24 +712,32 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
       writeSession(key, sid);
       setSessionId(sid);
       setMessages([]);
+      applyState({});
+      setLoadAttempt(value => value + 1);
     } else if (scopedEventId) navigate('/customer/aura');
     else {
+      const next = new URLSearchParams(params); next.delete('session'); next.delete('new'); setParams(next, { replace: true });
       setSessionId(sid);
       setMessages([]);
       applyState({});
+      setLoadAttempt(value => value + 1);
     }
   }
 
   function onCardChanged(detail) {
+    live.current?.invalidate();
+    activeEventRef.current = detail.event;
     setActiveEvent(detail.event);
     setUnderstanding(detail.understanding);
     if (detail.event?.status !== 'draft') setNextQ(null);
+    void live.current?.refresh();
+    onEventChanged?.(detail);
   }
 
   const chips = (() => {
     if (sending || loading) return [];
-    if (messages.length === 0) return agent.open ? [] : QUICK_PROMPTS.map((p) => ({ label: p, message: p }));
     if (nextQ?.options?.length) return nextQ.options;
+    if (messages.length === 0 && !activeEvent && !nextQ?.topic) return agent.open ? [] : QUICK_PROMPTS.map((p) => ({ label: p, message: p }));
     if (activeEvent && activeEvent.status !== 'draft') return EVENT_PROMPTS.map((p) => ({ label: p, message: p }));
     return [];
   })();
@@ -691,12 +746,14 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   const showDatePicker = nextQ?.topic === 'event.date';
   const showLocationPicker = ['event.city', 'event.area'].includes(nextQ?.topic);
   const showAnswerPanel = chips.length > 0 || showDatePicker || showLocationPicker;
+  const displayError = error || liveError;
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-white dark:bg-[#161926]">
       {/* Header */}
       <div className="flex items-center gap-3 px-3 sm:px-6 py-3 border-b border-gray-100 dark:border-gray-800/80 bg-white/70 dark:bg-[#161926]/80 backdrop-blur-sm shrink-0">
-        <AuraEventMenu activeId={activeEvent?.id} busy={sending || loading} onSwitch={switchEvent} />
+        <Icon name="aura" size={30} />
+          <AuraEventMenu activeId={activeEvent?.id} busy={sending || loading} onSwitch={switchEvent} />
         <div className="min-w-0 flex-1">
           {activeEvent ? (
             <Link to={`/customer/events/${activeEvent.id}`} className="text-sm font-extrabold text-navy dark:text-white hover:text-primary dark:hover:text-[#a5b4fc] truncate block">{activeEvent.title}</Link>
@@ -708,7 +765,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         <button onClick={newChat} className="text-[11px] font-bold rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-navy dark:text-slate-200 hover:bg-lavender dark:hover:bg-white/10 shrink-0 transition">New chat</button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto" onScroll={event => { const view = event.currentTarget; nearBottom.current = view.scrollHeight - view.scrollTop - view.clientHeight < 160; }}>
         <Bubble from="model">Hi{firstName ? ` ${firstName}` : ''}! 👋 What are you planning? Tell me in your own words. I'll figure out the rest.</Bubble>
 
         {loading && <AuraLoadingState />}
@@ -719,9 +776,12 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
 
         {switchChoices.length > 0 && <div className="pl-10 space-y-2 aura-card-reveal"><div className="text-xs font-semibold text-navy dark:text-slate-100">Your events</div>{switchChoices.map(event => <button key={event.id} type="button" disabled={sending || loading} onClick={() => switchEvent(event)} className="block w-full max-w-xl text-left rounded-2xl border border-primary/25 p-3 text-primary dark:text-[#a5b4fc] hover:bg-primary/10 disabled:opacity-50"><span className="block text-xs font-semibold">{event.title}</span><span className="block text-[10px] mt-1">{[event.city, event.date || 'Date to be decided'].filter(Boolean).join(' · ')}</span></button>)}</div>}
 
+        {/* AuraActivity removed – it is vendor-only and should not appear in the customer chat */}
+        {!!vendorSuggestions.length && <div className="pl-10"><AuraVendorResults key={`${activeEvent?.id || 'new'}-${vendorSearch?.query || 'catalog'}`} rows={vendorSuggestions} search={vendorSearch} eventId={activeEvent?.id} /></div>}
+
         {understanding?.showUnderstandingCard && activeEvent && (
           <div className="pl-10 aura-card-reveal">
-            <UnderstandingCard understanding={understanding} event={activeEvent} onChanged={onCardChanged} onAsk={(t) => sendInteractive(t)} />
+            <UnderstandingCard key={activeEvent.id} understanding={understanding} event={activeEvent} onChanged={onCardChanged} onAsk={(t) => sendInteractive(t)} />
           </div>
         )}
 
@@ -731,10 +791,10 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
             <span>{statusMessage}</span>
           </div>
         )}
-        {error && !loading && messages.length === 0 ? (
-          <AuraErrorState message={error} onRetry={() => setLoadAttempt((n) => n + 1)} />
-        ) : error ? (
-          <div className="pl-10 text-[11px] text-red-500 dark:text-red-400">{error}</div>
+        {displayError && !loading && messages.length === 0 ? (
+          <AuraErrorState message={displayError} onRetry={() => setLoadAttempt((n) => n + 1)} />
+        ) : displayError ? (
+          <div className="pl-10 text-[11px] text-red-500 dark:text-red-400">{displayError}</div>
         ) : null}
 
         {showAnswerPanel && (

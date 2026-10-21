@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, TextInputProps, View } from 'react-native';
+import type { TextProps } from 'react-native';
 import { useTheme } from './Theme';
 
 /** Colors from web/theme.css and customer/AuraChat.jsx. */
@@ -16,9 +17,9 @@ export function useAuraPalette() {
     amber: dark ? '#fcd34d' : '#b45309', amberBg: dark ? '#332b22' : '#fffbeb',
   };
 }
-export function AuraText({ children, size = 13, bold = false, color }: React.PropsWithChildren<{ size?: number; bold?: boolean; color?: string }>) {
+export function AuraText({ children, size = 13, bold = false, color, style }: React.PropsWithChildren<{ size?: number; bold?: boolean; color?: string; style?: TextProps['style'] }>) {
   const c = useAuraPalette();
-  return <Text style={{ color: color || c.ink, fontSize: size, lineHeight: size * 1.5, fontFamily: bold ? 'Inter_700Bold' : 'Inter_400Regular' }}>{children}</Text>;
+  return <Text style={[{ color: color || c.ink, fontSize: size, lineHeight: size * 1.5, fontFamily: bold ? 'Inter_700Bold' : 'Inter_400Regular' }, style]}>{children}</Text>;
 }
 export function AuraButton({ title, onPress, busy = false, disabled = false, secondary = false }: { title: string; onPress: () => void; busy?: boolean; disabled?: boolean; secondary?: boolean }) {
   const c = useAuraPalette();

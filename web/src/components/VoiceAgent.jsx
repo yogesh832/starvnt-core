@@ -1,3 +1,4 @@
+import AuraMark from './AuraMark.jsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from './Icon.jsx';
 import { speakAura, stopAuraSpeaking, transcribeAuraAudio } from '../lib/voice.js';
@@ -400,60 +401,9 @@ export function useVoiceAgent({ onUtterance, lang = 'en-IN' }) {
   return { supported: voiceAgentSupported, open, expanded, toggleExpanded: () => setExpanded(value => !value), status, muted, transcript, reply, error, level, start, end, toggleMute, interrupt, submit };
 }
 
-const ORB_CSS = `
-@keyframes va-spin { to { transform: rotate(360deg); } }
-@keyframes va-spin-rev { to { transform: rotate(-360deg); } }
-@keyframes va-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
-`;
-
-/** The animated orb: swirling gradient sphere that grows with the voice level. */
+/** Shared Aura identity responds to the existing voice state and microphone level. */
 export function VoiceOrb({ status = 'idle', level = 0, size = 220 }) {
-  const scale = status === 'listening' || status === 'speaking' ? 1 + level * 0.22 : 1;
-  const speed = status === 'thinking' ? '2.2s' : status === 'speaking' ? '5s' : '9s';
-  return (
-    <div className="relative grid place-items-center" style={{ width: size, height: size }}>
-      <style>{ORB_CSS}</style>
-      {/* glow */}
-      <div
-        className="absolute inset-0 rounded-full blur-3xl transition-opacity duration-500"
-        style={{
-          background: 'radial-gradient(circle, rgba(124,92,240,0.55), rgba(56,189,248,0.25) 55%, transparent 70%)',
-          opacity: status === 'idle' ? 0.45 : 0.9,
-          transform: `scale(${1.05 + level * 0.35})`,
-        }}
-      />
-      {/* sphere */}
-      <div
-        className="relative rounded-full overflow-hidden shadow-2xl transition-transform duration-150 ease-out"
-        style={{
-          width: size * 0.78,
-          height: size * 0.78,
-          transform: `scale(${scale})`,
-          animation: status === 'idle' ? 'va-breathe 4s ease-in-out infinite' : undefined,
-          boxShadow: '0 20px 60px -15px rgba(91,63,214,0.6), inset 0 -10px 30px rgba(0,0,0,0.15)',
-        }}
-      >
-        <div
-          className="absolute -inset-1/4"
-          style={{
-            background: 'conic-gradient(from 0deg, #7b5cf0, #38bdf8, #a78bfa, #f0abfc, #6366f1, #22d3ee, #7b5cf0)',
-            animation: `va-spin ${speed} linear infinite`,
-            filter: 'blur(18px)',
-          }}
-        />
-        <div
-          className="absolute -inset-1/4 mix-blend-screen opacity-70"
-          style={{
-            background: 'conic-gradient(from 90deg, transparent, #ffffff99, transparent 30%, #c4b5fd, transparent 60%)',
-            animation: `va-spin-rev ${status === 'thinking' ? '1.6s' : '7s'} linear infinite`,
-            filter: 'blur(22px)',
-          }}
-        />
-        {/* glassy highlight */}
-        <div className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle at 32% 28%, rgba(255,255,255,0.75), rgba(255,255,255,0) 38%)' }} />
-      </div>
-    </div>
-  );
+  return <AuraMark variant="orb" state={status} level={level} size={size} />;
 }
 
 const STATUS_TEXT = {

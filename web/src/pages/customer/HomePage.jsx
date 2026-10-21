@@ -9,12 +9,8 @@ import {
   CHART_COLORS,
   DemoBadge,
   Donut,
-  EventStatusPill,
   PriceText,
-  ProgressRing,
   RatingText,
-  StepTracker,
-  categoryIcon,
   useLoad,
 } from './customerUi.jsx';
 import { attentionLink, budgetText, formatDate, formatINR, planStatus } from './format.js';
@@ -22,6 +18,8 @@ import { useCurrentEvent } from './currentEvent.jsx';
 import { milestones } from './EventHistoryPage.jsx';
 import AuraChat from './AuraChat.jsx';
 import SelectOptionButton from './SelectOptionButton.jsx';
+import CustomerHero from './CustomerHero.jsx';
+import EventSummary from './CustomerEventSummary.jsx';
 
 const TONE = { amber: 'text-amber-600 dark:text-amber-400', emerald: 'text-emerald-600 dark:text-emerald-400', primary: 'text-primary dark:text-[#a5b4fc]', muted: 'text-muted dark:text-slate-400' };
 const card = 'bg-white dark:bg-[#151827] rounded-3xl shadow-sm border border-gray-100/70 dark:border-white/10';
@@ -200,18 +198,7 @@ function ShopComingSoonCard() {
 function Welcome({ firstName, onEventChanged }) {
   return (
     <div className="max-w-6xl mx-auto space-y-5">
-      <section className="relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-[#5a4bd1] via-[#6d52e6] to-[#9b6dff] text-white shadow-xl shadow-primary/20">
-        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10" />
-        <div className="absolute right-24 -bottom-20 w-48 h-48 rounded-full bg-white/10" />
-        <div className="relative max-w-2xl">
-          <div className="text-sm text-white/90">Welcome, {firstName} 👋</div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold mt-1">Tell us what you're planning.</h1>
-          <p className="text-sm text-white/90 mt-1">We'll handle the rest — you stay in charge of every decision.</p>
-          <div className="mt-5 text-ink">
-            <AskBox chips={["My daughter's wedding", 'Plan my birthday', 'Corporate event for 300 people', 'Arrange a Puja']} />
-          </div>
-        </div>
-      </section>
+      <CustomerHero firstName={firstName} />
       <div className="grid lg:grid-cols-[1fr_320px] gap-5 items-start">
         <div className={`${card} h-[520px] overflow-hidden flex flex-col`}>
           <AuraChat firstName={firstName} embedded onEventChanged={onEventChanged} />
@@ -223,7 +210,7 @@ function Welcome({ firstName, onEventChanged }) {
             <div className="text-[11px] text-muted dark:text-slate-400 mt-0.5">Event, full location, budget and services in one form.</div>
           </Link>
           <Link to="/customer/aura?new=1" className={`${card} p-5 block hover:shadow-md transition`}>
-            <div className="text-2xl">✨</div>
+            <Icon name="aura" size={30} />
             <div className="text-sm font-extrabold text-navy dark:text-white mt-1">Plan with Aura+</div>
             <div className="text-[11px] text-muted dark:text-slate-400 mt-0.5">Describe it in your own words; Aura+ asks only what's missing.</div>
           </Link>
@@ -231,62 +218,6 @@ function Welcome({ firstName, onEventChanged }) {
         </div>
       </div>
     </div>
-  );
-}
-
-/* ── Event summary card (top right) ───────────────────────────────────── */
-function EventSummary({ event, summary, steps, payments }) {
-  const paid = payments.filter((p) => p.status === 'verified').reduce((s, p) => s + p.amount, 0);
-  const tiles = summary.items.filter((i) => i.tier === 'essential').slice(0, 4);
-  const meta = [event.eventDate && formatDate(event.eventDate), event.locationLabel, event.guestCount && `${event.guestCount} guests`, budgetText(event)].filter(Boolean);
-  return (
-    <section className={`${card} p-4 sm:p-5`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-extrabold text-navy dark:text-white truncate">{event.title}</h2>
-            <EventStatusPill status={event.status} />
-          </div>
-          <div className="text-[11px] text-muted dark:text-slate-400 mt-1">{meta.length ? meta.join(' · ') : 'Details not added yet'}</div>
-        </div>
-        <Link to={`/customer/events/${event.id}`} className="text-[11px] font-bold rounded-xl border border-gray-200 dark:border-gray-700 px-2.5 py-1 text-navy dark:text-slate-200 hover:bg-lavender dark:hover:bg-white/10 shrink-0 inline-flex items-center gap-1 transition">
-          <Icon name="edit" size={11} /> Edit
-        </Link>
-      </div>
-      <div className="mt-4"><StepTracker steps={steps} /></div>
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        {tiles.map((i) => {
-          const s = planStatus(i);
-          return (
-            <Link
-              key={i.category}
-              to={['missing', 'pending'].includes(i.status) ? `/customer/events/${event.id}/services?category=${i.category}` : `/customer/events/${event.id}/requirements`}
-              className="rounded-2xl bg-lavender/60 dark:bg-white/5 p-2.5 flex items-center gap-2 hover:bg-primary-soft dark:hover:bg-primary/20 transition min-w-0 border border-transparent"
-            >
-              <span className="w-8 h-8 rounded-xl bg-white dark:bg-[#1e2235] text-primary dark:text-[#a5b4fc] grid place-items-center shrink-0 shadow-xs"><Icon name={categoryIcon(i.category)} size={14} /></span>
-              <div className="min-w-0">
-                <div className="text-[11px] font-bold text-navy dark:text-white truncate">{i.label}</div>
-                <div className={`text-[10px] truncate ${TONE[s.tone]}`}>{['missing', 'pending'].includes(i.status) && !i.selectedOption ? (i.optionCount ? `${i.optionCount} option${i.optionCount > 1 ? 's' : ''}` : 'No options yet') : s.text}</div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-      <div className="grid grid-cols-3 gap-2 mt-2">
-        <Link to={`/customer/events/${event.id}/bookings`} className="rounded-2xl bg-lavender/60 dark:bg-white/5 p-2.5 hover:bg-primary-soft dark:hover:bg-primary/20 transition border border-transparent">
-          <div className="text-[10px] text-muted dark:text-slate-400 font-medium">Payment</div>
-          <div className="text-xs font-extrabold text-navy dark:text-white mt-0.5">{paid ? `${formatINR(paid)} paid` : 'Nothing paid yet'}</div>
-        </Link>
-        <div className="rounded-2xl bg-lavender/60 dark:bg-white/5 p-2 flex items-center gap-2 border border-transparent">
-          <ProgressRing percent={summary.progressPercent} size={46} label="" />
-          <div className="text-[10px] text-muted dark:text-slate-400 leading-tight font-medium">Event readiness</div>
-        </div>
-        <Link to={`/customer/aura?event=${event.id}`} className="rounded-2xl bg-gradient-to-br from-primary-soft to-white dark:from-primary/20 dark:to-[#161926] p-2.5 hover:shadow-md transition border border-primary/10">
-          <div className="text-[10px] font-bold text-primary dark:text-[#a5b4fc]">Your Event Assistant</div>
-          <div className="text-[10px] text-muted dark:text-slate-400 leading-tight mt-0.5">Aura+ is with you throughout</div>
-        </Link>
-      </div>
-    </section>
   );
 }
 
@@ -460,7 +391,7 @@ function AuraShortcut({ firstName, event, chips }) {
     <section className={`${card} p-4 sm:p-5 overflow-hidden`}>
       <div className="flex items-start gap-3">
         <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0 shadow-lg shadow-primary/25">
-          <Icon name="bolt" size={18} />
+          <Icon name="aura" size={18} />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
@@ -499,29 +430,14 @@ function Workspace({ firstName, event }) {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-5">
-      {/* Row 1: current event + Aura command */}
-      <div className="grid xl:grid-cols-12 gap-5 items-stretch">
-        <div className="xl:col-span-8">
-          <EventSummary event={ev} summary={summary} steps={steps} payments={payments} />
-        </div>
-        <section className="xl:col-span-4 relative overflow-hidden rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-[#4f46e5] via-[#6d52e6] to-[#9b6dff] text-white shadow-xl shadow-primary/20">
-          <div className="relative z-10">
-            <div className="text-xs font-bold text-white/80 uppercase tracking-wide">Aura+ command</div>
-            <h1 className="text-xl sm:text-2xl font-extrabold mt-1 leading-tight text-white">
-              Welcome back, {firstName}.
-            </h1>
-            <p className="text-xs sm:text-sm text-white/85 mt-1">
-              Ask what is missing, compare vendors, or continue this event.
-            </p>
-            <div className="mt-4 text-ink">
-              <AskBox eventId={ev.id} placeholder="Ask STARVNT anything..." chips={chips} />
-            </div>
-          </div>
-        </section>
+      <CustomerHero firstName={firstName} eventId={ev.id} />
+      <div className="customer-overview-grid">
+        <EventSummary event={ev} summary={summary} steps={steps} payments={payments} />
+        <section className="customer-budget-panel"><h2>Budget overview</h2><BudgetOverview event={ev} summary={summary} /></section>
       </div>
 
       {/* Row 2: event plan + budget */}
-      <div className="grid lg:grid-cols-12 gap-5 items-start">
+      <div>
         <Section title="Your event plan" className="lg:col-span-8" action={<Link to={`/customer/events/${ev.id}/requirements`} className="text-[11px] font-bold text-primary dark:text-[#a5b4fc]">View all</Link>}>
           {planTiles.length === 0 ? (
             <p className="text-xs text-muted dark:text-slate-400">{ev.status === 'draft' ? 'Your plan is built when you confirm the event details.' : 'No services in the plan yet.'}</p>
@@ -547,9 +463,6 @@ function Workspace({ firstName, event }) {
               })}
             </div>
           )}
-        </Section>
-        <Section title="Budget overview" className="lg:col-span-4">
-          <BudgetOverview event={ev} summary={summary} />
         </Section>
       </div>
 

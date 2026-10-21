@@ -9,6 +9,7 @@ import { serializeEvent, serializeRequirement } from './understanding.js';
 import { categoryLabel, normalizeCategory } from './planCatalog.js';
 import { CLOSED_EVENT_STATUSES, LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
 import { badRequest, conflict, notFound, HttpError } from '../utils/http.js';
+import { serviceRequirementSummary } from './enquiryBrief.js';
 
 /**
  * Customer decision + quote (Blueprint §6, phase 8).
@@ -27,20 +28,6 @@ function eventServiceLocation(event) {
     city: event?.city || location.city || '',
     coordinates: location.coordinates || undefined,
   };
-}
-
-function serviceRequirementSummary(requirement, option, event) {
-  const parts = [
-    option.packageName,
-    requirement?.specialRequirements,
-    requirement?.preferences && Object.keys(requirement.preferences || {}).length
-      ? Object.entries(requirement.preferences)
-          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-          .join(' | ')
-      : '',
-    event?.guestCount ? `${event.guestCount} guests` : '',
-  ].filter(Boolean);
-  return parts.join(' · ') || 'Customer selected this vendor option and requested a formal quote.';
 }
 
 async function createVendorOpportunityForSelection({ customerId, event, requirement, option, optionId }) {

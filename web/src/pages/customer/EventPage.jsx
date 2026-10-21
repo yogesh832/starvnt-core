@@ -1,22 +1,20 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import {
   AskBox,
   BackLink,
   Empty,
-  EventMeta,
-  EventStatusPill,
   ProgressBar,
   ProgressRing,
-  StepTracker,
   Tabs,
   categoryIcon,
   DetailSkeleton,
   useLoad,
 } from './customerUi.jsx';
 import UnderstandingCard, { EditForm } from './UnderstandingCard.jsx';
+import CustomerEventSummary from './CustomerEventSummary.jsx';
 import { attentionLink, formatINR, planStatus } from './format.js';
 
 const TONE = { amber: 'text-amber-600', emerald: 'text-emerald-600', primary: 'text-primary', muted: 'text-muted' };
@@ -72,29 +70,6 @@ function FinancialPicture({ truth, eventId }) {
   );
 }
 
-function Cover({ event, onEdit, editable }) {
-  return (
-    <section className="rounded-3xl p-5 bg-gradient-to-br from-primary to-[#9b6dff] text-white shadow-lg shadow-primary/20">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] text-white/80">{event.eventTypeLabel}</div>
-          <h1 className="text-xl font-extrabold truncate">{event.title}</h1>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="bg-white rounded-full"><EventStatusPill status={event.status} /></span>
-          {editable && (
-            <button onClick={onEdit} className="text-[11px] font-bold bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1 inline-flex items-center gap-1">
-              <Icon name="edit" size={11} /> Edit
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="mt-2 [&_*]:text-white/90"><EventMeta event={event} /></div>
-      <LocationDetails event={event} />
-    </section>
-  );
-}
-
 /** The parts of the event location beyond the one-line label — only those given. */
 function LocationDetails({ event }) {
   const l = event.location || {};
@@ -111,8 +86,8 @@ function LocationDetails({ event }) {
     <dl className="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
       {lines.map(([k, v]) => (
         <div key={k} className="min-w-0">
-          <dt className="text-white/70 inline">{k}: </dt>
-          <dd className="inline text-white/95">{v}</dd>
+          <dt className="text-muted dark:text-slate-400 inline">{k}: </dt>
+          <dd className="inline text-navy dark:text-slate-200">{v}</dd>
         </div>
       ))}
     </dl>
@@ -204,9 +179,10 @@ function BudgetCard({ eventId, budget }) {
 
 export default function EventPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { data, error, loading, reload } = useLoad(() => customerApi.dashboard(id), [id]);
   const [tab, setTab] = useState('plan');
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => searchParams.get('edit') === '1');
 
   if (loading && !data) return <DetailSkeleton />;
   if (error) {
@@ -223,8 +199,8 @@ export default function EventPage() {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <BackLink to="/customer/events">All events</BackLink>
-        <Cover event={event} />
-        <UnderstandingCard understanding={understanding} event={event} onChanged={reload} />
+        <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={() => setEditing(true)}><LocationDetails event={event} /></CustomerEventSummary>
+        <UnderstandingCard understanding={understanding} event={event} onChanged={reload} editing={editing} onEditingChange={setEditing} />
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <div className="text-sm font-bold text-navy mb-2">Tell Aura+ more</div>
           <AskBox eventId={event.id} placeholder="e.g. We need a photographer and the venue is…" />
@@ -237,7 +213,7 @@ export default function EventPage() {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <BackLink to="/customer/events">All events</BackLink>
-        <Cover event={event} />
+        <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments}><LocationDetails event={event} /></CustomerEventSummary>
         <div className="bg-white rounded-3xl shadow-sm p-6 text-center">
           <div className="text-3xl">🎉</div>
           <div className="mt-2 text-lg font-extrabold text-navy">Your {event.eventTypeLabel?.toLowerCase()} is complete</div>
@@ -254,7 +230,7 @@ export default function EventPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <BackLink to="/customer/events">All events</BackLink>
-      <Cover event={event} editable={editable} onEdit={() => setEditing((v) => !v)} />
+      <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={editable ? () => setEditing(value => !value) : undefined}><LocationDetails event={event} /></CustomerEventSummary>
       {event.status === 'in_progress' && (
         <Link to={`/customer/events/${event.id}/event-day`} className="flex items-center gap-2 rounded-2xl bg-red-50 text-red-600 px-4 py-3 text-sm font-bold">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> Your event is live — follow it on Event day →
@@ -280,7 +256,6 @@ export default function EventPage() {
               </div>
               <ProgressRing percent={summary.progressPercent} />
             </div>
-            <div className="mt-4"><StepTracker steps={steps} /></div>
           </div>
 
           <FinancialPicture truth={financialTruth} eventId={event.id} />

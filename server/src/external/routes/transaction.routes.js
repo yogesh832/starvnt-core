@@ -434,6 +434,21 @@ router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VEN
 
 // ── QUOTE LIFECYCLE (Spec §9, Golden Test G) ──────────────────────────────
 
+router.post('/vendor/opportunities/:id/decline', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'INVALID_OPPORTUNITY_ID' });
+    const vendor = req.externalUser.vendorOrganization;
+    if (!vendor) return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+    const opportunity = await Opportunity.findOneAndUpdate(
+      { _id: req.params.id, vendor, status: { $in: ['NEW', 'VIEWED', 'DECLINED'] } },
+      { $set: { status: 'DECLINED' } },
+      { new: true },
+    );
+    if (!opportunity) return res.status(409).json({ error: 'OPPORTUNITY_NOT_ACTIONABLE', message: 'This enquiry is no longer available to decline.' });
+    res.json({ ok: true, status: opportunity.status });
+  } catch (error) { next(error); }
+});
+
 /**
  * Retrieves quotes for the authenticated user (vendor or customer).
  */

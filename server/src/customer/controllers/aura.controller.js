@@ -1,7 +1,9 @@
 import * as aura from '../aura/aura.service.js';
 
-export const getSession = async (req, res) =>
+export const getSession = async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   res.json(await aura.getSession(req.externalUser, req.params.sid, { eventId: req.query.eventId }));
+};
 
 export const chat = async (req, res, next) => {
   try {

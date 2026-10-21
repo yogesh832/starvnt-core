@@ -146,7 +146,7 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
     Payment.find({ event: event._id }).lean(),
     Booking.find({ event: event._id }).lean(),
     CustomerQuote.find({ event: event._id }).sort({ createdAt: -1 }).lean(),
-    CoreBooking.find({ customerId }).sort({ createdAt: -1 }).lean().catch(() => []),
+    CoreBooking.find({ customerId }).sort({ createdAt: -1 }).lean(),
   ]);
 
   const { totalBudget, budgetType } = eventBudget(event);
@@ -154,9 +154,9 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
   const confirmedCustomerBookings = customerBookings.filter((b) => b.status !== 'cancelled');
   const bookingCategories = new Set(confirmedCustomerBookings.map((b) => String(b.category || '').toLowerCase()));
   const matchedCoreBookings = coreBookings.filter((b) => {
-    if (b.customerEvent && String(b.customerEvent) === String(event._id)) return true;
-    const category = String(b.category || '').toLowerCase();
-    return category && bookingCategories.has(category);
+    if (b.customerEvent) return String(b.customerEvent) === String(event._id);
+    // Legacy contracts need a quote link; a shared category does not identify an event.
+    return Boolean(b.quoteId) && reservations.some(r => String(r.quote) === String(b.quoteId));
   });
 
   const customerBookingCommitted = confirmedCustomerBookings.reduce((sum, b) => sum + bookingAmount(b), 0);

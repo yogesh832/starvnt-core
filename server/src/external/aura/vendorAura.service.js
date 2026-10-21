@@ -8,6 +8,9 @@ import { buildVendorSystemPrompt } from './vendorSystemPrompt.js';
 import { classifyAuraRequest } from '../../common/auraRouter.js';
 import { createPerformanceTracker } from '../../common/streamUtils.js';
 import { conversationLanguage, auraLanguageInstruction } from '../../common/auraLanguage.js';
+import { vendorAuraActivity } from '../../common/auraActivity.service.js';
+import { activityAnswer } from '../../common/auraActivityAnswer.js';
+import { enquiryAnswer } from './enquiryAnswer.js';
 
 /**
  * Vendor Aura+ chat. It answers from the vendor's own data and suggests pages.
@@ -139,9 +142,10 @@ export async function listSessions({ vendor }) {
 export async function getSession({ vendor, sessionId }) {
   if (!isValidSessionId(sessionId)) throw httpError(400, 'INVALID_SESSION_ID');
   const session = await ownedSession(sessionId, vendor._id);
-  if (!session) return { sessionId, messages: [], pending: null };
-  const messages = await VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: 1, _id: 1 }).limit(100).lean();
-  return { sessionId, messages: messages.map(serialize), pending: pendingView(session.pending) };
+  const activity = await vendorAuraActivity(vendor._id);
+  if (!session) return { sessionId, messages: [], pending: null, activity };
+  const messages = (await VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(100).lean()).reverse();
+  return { sessionId, messages: messages.map(serialize), pending: pendingView(session.pending), activity };
 }
 
 /** What Aura+ says after a setup step is saved: the next step, as a question it can act on. */
@@ -236,11 +240,25 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
         }
       }
       await saveTurn(sessionId, text, reply, actions, null);
+      console.log('\n' + '═'.repeat(70));
+      console.log(`[Aura Vendor Chat ✓ Confirmed Action]`);
+      console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
+      console.log(`💬 Session  : ${sessionId}`);
+      console.log(`📩 Message  : "${text}"`);
+      console.log(`🤖 Aura Rep : "${reply}"`);
+      console.log('═'.repeat(70) + '\n');
       return { reply, actions, fallback: false, profileUpdated: Boolean(setup), setup, pending: null };
     }
     if (answer === false) {
       const reply = "Okay, I didn't save it. Tell me what to change, or ask me anything else.";
       await saveTurn(sessionId, text, reply, [], null);
+      console.log('\n' + '═'.repeat(70));
+      console.log(`[Aura Vendor Chat ✗ Cancelled Action]`);
+      console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
+      console.log(`💬 Session  : ${sessionId}`);
+      console.log(`📩 Message  : "${text}"`);
+      console.log(`🤖 Aura Rep : "${reply}"`);
+      console.log('═'.repeat(70) + '\n');
       return { reply, actions: [], fallback: false, profileUpdated: false, setup: null, pending: null };
     }
     if (!isMessageRelevantToPending(session.pending, text)) {
@@ -251,12 +269,26 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
 
   tracker.markContextStart();
   if (options.onStatus) options.onStatus('context_retrieval');
-  const [context, recent] = await Promise.all([
-    buildVendorContext(vendor, { page: typeof page === 'string' ? page : null }),
+  const [activity, recent] = await Promise.all([
+    vendorAuraActivity(vendor._id),
     VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(HISTORY).lean(),
   ]);
-  context.waitingForConfirmation = session.pending ? describeAction(session.pending) : null;
   const history = recent.reverse().map((m) => ({ role: m.role, content: m.content }));
+  const operational = activityAnswer(text, activity, conversationLanguage(text, history));
+  if (operational) {
+    tracker.markContextEnd();
+    await saveTurn(sessionId, text, operational.reply, operational.actions, session.pending);
+    return { ...operational, activity, pending: pendingView(session.pending), fallback: false, profileUpdated: false };
+  }
+  const context = await buildVendorContext(vendor, { page: typeof page === 'string' ? page : null });
+  context.activity = activity;
+  const enquiry = enquiryAnswer(text, context, conversationLanguage(text, history));
+  if (enquiry) {
+    tracker.markContextEnd();
+    await saveTurn(sessionId, text, enquiry.reply, enquiry.actions, session.pending);
+    return { ...enquiry, activity, pending: pendingView(session.pending), fallback: false, profileUpdated: false };
+  }
+  context.waitingForConfirmation = session.pending ? describeAction(session.pending) : null;
   tracker.markContextEnd();
 
   const route = classifyAuraRequest(text, { intent: 'VENDOR_ASSISTANT' });
@@ -369,6 +401,29 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
   }
 
   await saveTurn(sessionId, text, reply, actions, pending);
+
+  const metrics = tracker.getMetrics();
+  console.log('\n' + '═'.repeat(70));
+  console.log(`[Aura Vendor Chat]`);
+  console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
+  console.log(`📁 Category : ${vendor.category || 'N/A'} | Page: ${page || 'N/A'}`);
+  console.log(`💬 Session  : ${sessionId}`);
+  console.log(`📩 Msg      : "${text}"`);
+  if (saved.length) {
+    console.log(`💾 Saved    : ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}`);
+  }
+  if (proposal) {
+    console.log(`📝 Proposed : ${describeAction(proposal)}`);
+  }
+  console.log(`🤖 Aura (${route.model}${fallback ? ' [FALLBACK]' : ''}):\n"${reply}"`);
+  if (actions?.length) {
+    console.log(`🔗 Actions  : ${actions.map((a) => `${a.label} (${a.to})`).join(', ')}`);
+  }
+  if (metrics?.totalDurationMs) {
+    console.log(`⏱️ Perf     : Total ${metrics.totalDurationMs}ms | FirstToken ${metrics.firstTokenMs || 'N/A'}ms`);
+  }
+  console.log('═'.repeat(70) + '\n');
+
   return {
     reply,
     actions,
@@ -376,7 +431,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm }, 
     profileUpdated: saved.length > 0,
     setup,
     pending: pendingView(pending),
-    metrics: tracker.getMetrics(),
+    metrics,
     model: route.model,
     thinkingLevel: route.thinkingLevel,
   };

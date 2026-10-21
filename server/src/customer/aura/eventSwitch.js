@@ -15,7 +15,16 @@ export function resolveEventSwitch(text, events, { currentId, previousId, pendin
   if (!command && !pending.length) return null;
   const value = normalized(text);
   if (pending.length) {
-    const ordinal = /^(?:the )?(1|first|पहला|पहले|pehla)(?: one| event| वाला| wale| wala)?$/.test(value) ? 0 : /^(?:the )?(2|second|दूसरा|दूसरे|doosra|dusra)(?: one| event| वाला| wale| wala)?$/.test(value) ? 1 : /^(?:the )?(3|third|तीसरा|teesra)(?: one| event| वाला| wale| wala)?$/.test(value) ? 2 : -1;
+    if (/^(cancel|never mind|stay here|keep (?:the )?current event|रहने दो|यही इवेंट|rehne do)$/.test(value)) {
+      const current = events.find(event => id(event) === String(currentId));
+      if (current) return { kind: 'switch', event: current };
+    }
+    const choice = value.replace(/^(the |number |option )/, '').replace(/ (one|event|वाला|wale|wala)$/, '');
+    const ordinalWords = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+    const hindiOrdinals = { पहला: 0, पहले: 0, pehla: 0, एक: 0, दूसरा: 1, दूसरे: 1, doosra: 1, dusra: 1, दो: 1, तीसरा: 2, teesra: 2, तीन: 2, चौथा: 3, chautha: 3, चार: 3, पाँचवाँ: 4, पाँच: 4 };
+    const numeric = choice.match(/^(\d+)(?:st|nd|rd|th)?$/);
+    const cardinal = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'].indexOf(choice);
+    const ordinal = numeric ? Number(numeric[1]) - 1 : hindiOrdinals[choice] ?? (cardinal >= 0 ? cardinal : ordinalWords.indexOf(choice));
     if (ordinal >= 0 && pending[ordinal]) return { kind: 'switch', event: pending[ordinal] };
   }
   if (command && /\b(previous|back|wapas)\b|पिछल|वापस/iu.test(text) && previousId) {
@@ -41,6 +50,7 @@ export function resolveEventSwitch(text, events, { currentId, previousId, pendin
   if (!matches.length && command && /\b(other|another|next)\b|दूसरे इवेंट|दूसरा इवेंट/iu.test(text)) matches = candidates.filter(event => id(event) !== String(currentId));
   if (matches.length === 1) return { kind: 'switch', event: matches[0] };
   if (matches.length > 1) return { kind: 'choose', events: matches };
+  if (!command && pending.length) return { kind: 'choose', events: pending, notFound: true };
   if (!command) return null;
   return { kind: 'choose', events, notFound: !LIST.test(text) };
 }

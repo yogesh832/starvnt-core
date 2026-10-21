@@ -144,6 +144,7 @@ const auraSessionSchema = new Schema(
     event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null },
     previousEvent: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null },
     switchChoices: [{ type: Schema.Types.ObjectId, ref: 'CustomerEvent' }],
+    catalogSearch: { type: Schema.Types.Mixed, default: null },
   },
   { timestamps: true, collection: 'customer_aura_sessions' }
 );

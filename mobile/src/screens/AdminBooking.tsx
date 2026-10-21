@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { View } from "react-native";
 import { internal } from "../api/runtime";
 import { useSession } from "../auth/Session";
 import type { Data } from "../api/client";
@@ -9,6 +10,7 @@ import {
   Choice,
   ErrorNotice,
   Field,
+  Icon,
   Page,
   Pill,
   Stats,
@@ -19,6 +21,7 @@ import {
   id,
   money,
   useAction,
+  usePalette,
   useResource,
 } from "../ui";
 
@@ -29,6 +32,7 @@ export function AdminBooking({ route, navigation }: any) {
   );
   const { can } = useSession();
   const a = useAction();
+  const c = usePalette();
   const [tab, setTab] = useState("overview");
   const [reason, setReason] = useState("");
   const [reference, setReference] = useState("");
@@ -156,9 +160,17 @@ export function AdminBooking({ route, navigation }: any) {
               <Txt muted>{date(item.submittedAt)}</Txt>
               {item.notes && <Txt>{item.notes}</Txt>}
               {(item.checklist || []).map((check: Data, i: number) => (
-                <Txt key={i}>
-                  {check.checked ? "✓" : "○"} {check.item}
-                </Txt>
+                <View
+                  key={i}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <Icon
+                    name={check.checked ? "checkmark-circle" : "ellipse-outline"}
+                    size={17}
+                    color={check.checked ? c.success : c.muted}
+                  />
+                  <Txt style={{ flex: 1 }}>{check.item}</Txt>
+                </View>
               ))}
               {item.deliverablesUrl && (
                 <Button

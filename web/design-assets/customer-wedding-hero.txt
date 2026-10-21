@@ -1,0 +1,7 @@
+Asset: web/public/images/customer-wedding-hero.jpg
+Created with the built-in imagegen tool for this project. This is a new matching photo asset, not the original photograph embedded in the supplied UI mockup.
+Original generated PNG: C:/Users/Hp/.codex/generated_images/01a147f4-7929-74f1-b0c1-8b4af154db5b/exec-90e405de-3784-44bf-9207-627d86efe4fa.png
+JPEG exported at quality 88 for the website. Glass, gradients, decorative circles and interface elements are rendered separately in CSS/SVG.
+
+Generation prompt:
+Create one production website photographic hero background asset, wide landscape 1536x864. NO text, logos, lettering, user interfaces, cards, frames or icons. A luxurious intimate Indian wedding reception under ivory chiffon drapes, warm golden fairy lights, peach blush pink and soft lavender floral garlands framing elegant fabric canopy, banquet table at right with gold chairs, candles and floral arrangements, warm evening garden lighting, rich photographic realism. Composition: left 45% is quiet dim defocused navy-violet garden space for overlaid heading; actual decorated reception and canopy on the right 55%, canopy sweeping from upper right, pink flowers above, warm amber bulbs, soft purple ambient uplighting. Close editorial architectural wedding photograph, no people. Match a premium event planner dashboard using electric violet and midnight blue gradients. No graphic overlays; preserve photographic venue detail especially right half. This is a background photo asset only.

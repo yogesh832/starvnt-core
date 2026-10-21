@@ -48,10 +48,10 @@ export default function SelectOptionButton({ eventId, eventStatus, option, selec
       <button
         disabled={busy || Boolean(reason)}
         onClick={() => run(option.id)}
-        title={reason || 'Choose this option'}
+        title={reason || (option.isDemo ? 'Choose this option' : 'Select this service and send the vendor an enquiry')}
         className={`rounded-xl bg-primary hover:bg-primary-dark text-white font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${size}`}
       >
-        {busy ? 'Selecting...' : extended ? 'Request confirmation' : 'Select'}
+        {busy ? 'Selecting...' : extended ? 'Request confirmation' : option.isDemo ? 'Select' : 'Select & enquire'}
       </button>
       {(error || (reason && !compact)) && <span className="text-[10px] text-muted dark:text-slate-400">{error || reason}</span>}
     </div>

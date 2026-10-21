@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Image, Linking } from "react-native";
+import { Image, Linking, View } from "react-native";
 import { external } from "../api/runtime";
 import { pickUploads } from "../api/upload";
 import type { Data } from "../api/client";
@@ -11,6 +11,7 @@ import {
   Empty,
   ErrorNotice,
   Field,
+  Icon,
   MultiChoice,
   Page,
   Pill,
@@ -21,6 +22,7 @@ import {
   id,
   money,
   useAction,
+  usePalette,
   useResource,
 } from "../ui";
 
@@ -37,6 +39,7 @@ function VendorBookingBody({ route, navigation }: any) {
   const initial: Data = route.params.booking;
   const r = useResource(external, "/vendor/bookings");
   const a = useAction();
+  const c = usePalette();
   const booking: Data | undefined = (r.data.bookings || []).find(
     (row: Data) => id(row) === id(initial),
   );
@@ -154,9 +157,19 @@ function VendorBookingBody({ route, navigation }: any) {
               </Txt>
               {entry.notes && <Txt>{entry.notes}</Txt>}
               {(entry.checklist || []).map((item: Data, i: number) => (
-                <Txt key={i} size={13}>
-                  {item.checked ? "✓" : "○"} {item.item}
-                </Txt>
+                <View
+                  key={i}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <Icon
+                    name={item.checked ? "checkmark-circle" : "ellipse-outline"}
+                    size={17}
+                    color={item.checked ? c.success : c.muted}
+                  />
+                  <Txt key={i} size={13} style={{ flex: 1 }}>
+                    {item.item}
+                  </Txt>
+                </View>
               ))}
               {entry.deliverablesUrl && (
                 <Button

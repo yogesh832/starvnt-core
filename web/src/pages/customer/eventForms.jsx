@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Icon from '../../components/Icon.jsx';
 import { customerApi } from './customerApi.js';
 
 /**

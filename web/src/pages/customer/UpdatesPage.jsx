@@ -833,7 +833,7 @@ export default function UpdatesPage({ onRead }) {
             to="/customer/aura?new=1"
             className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/30 bg-primary-soft/30 dark:bg-primary/10 hover:bg-primary-soft/60 dark:hover:bg-primary/20 text-primary dark:text-[#a5b4fc] text-xs font-bold py-3.5 transition"
           >
-            <Icon name="bolt" size={16} />
+            <Icon name="aura" size={16} />
             <span>+ Start a New Aura+ Planning Session</span>
           </Link>
           {auraConversations.length === 0 ? (
@@ -855,7 +855,7 @@ export default function UpdatesPage({ onRead }) {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0 shadow-xs">
-                        <Icon name="bolt" size={16} />
+                        <Icon name="aura" size={16} />
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-bold text-navy dark:text-white group-hover:text-primary dark:group-hover:text-[#a5b4fc] transition truncate">

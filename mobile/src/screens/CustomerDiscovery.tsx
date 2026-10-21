@@ -17,6 +17,7 @@ import {
   ErrorNotice,
   Field,
   human,
+  Icon,
   id,
   money,
   Page,
@@ -92,6 +93,7 @@ export function SelectOption({
 }
 
 export function OptionFacts({ option }: { option: Data }) {
+  const c = usePalette();
   const availability = optionAvailability(option);
   const rec = option.recommendation || {};
   return (
@@ -103,9 +105,15 @@ export function OptionFacts({ option }: { option: Data }) {
       <Txt muted>{human(availability)}</Txt>
       {!!option.vendorLocation && <Txt muted>{option.vendorLocation}</Txt>}
       {option.rating != null && (
-        <Txt>
-          ★ {option.rating} · {option.reviewCount ?? 0} reviews
-        </Txt>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <Icon name="star" size={15} color="#f59e0b" />
+          <Txt bold size={14}>
+            {option.rating}
+          </Txt>
+          <Txt muted size={13}>
+            · {option.reviewCount ?? 0} reviews
+          </Txt>
+        </View>
       )}
       {option.requiresVendorConfirmation && (
         <Pill>
@@ -128,7 +136,13 @@ export function OptionFacts({ option }: { option: Data }) {
             </Txt>
           )}
           {(rec.whyBest || []).map((text: string) => (
-            <Txt key={text}>✓ {text}</Txt>
+            <View
+              key={text}
+              style={{ flexDirection: "row", alignItems: "center", gap: 7 }}
+            >
+              <Icon name="checkmark-circle" size={15} color={c.success} />
+              <Txt style={{ flex: 1 }}>{text}</Txt>
+            </View>
           ))}
           {(rec.whyNot || []).map((text: string) => (
             <Txt muted key={text}>
@@ -138,7 +152,13 @@ export function OptionFacts({ option }: { option: Data }) {
         </Card>
       )}
       {(option.includes || option.inclusions || []).map((text: string) => (
-        <Txt key={text}>✓ {text}</Txt>
+        <View
+          key={text}
+          style={{ flexDirection: "row", alignItems: "center", gap: 7 }}
+        >
+          <Icon name="checkmark-circle" size={15} color={c.success} />
+          <Txt style={{ flex: 1 }}>{text}</Txt>
+        </View>
       ))}
     </View>
   );

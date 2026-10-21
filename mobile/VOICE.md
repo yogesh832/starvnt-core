@@ -14,6 +14,49 @@ Replies use only ElevenLabs through the authenticated `POST /api/ai/voice` route
 
 Customer follow-up questions and optional suggestions follow Hindi/Hinglish conversation language even after short dates, numbers and place names. Aura uses feminine first-person Hindi/Hinglish verbs. Prompts request concise conversational replies without reading the UI choices aloud. Unknown facts and booking confirmations remain controlled by the backend.
 
+## Switching events
+
+The Aura hamburger menu includes **Switch event** with search, date/city details,
+and a current-event marker. Opening this menu keeps an active voice session alive.
+Selecting an event changes the shared server session's active event; subsequent
+messages use the new event instead of the original screen scope.
+
+Voice and text use the same commands: “switch to my birthday”, “switch to my
+wedding in Delhi”, “show my events”, or “go back to the previous event”. Hindi
+and Hinglish navigation are supported, such as “जन्मदिन वाले इवेंट पर चलो” and
+“birthday wale event pe chalo”. Ambiguous names show matching events; answer with
+the name, city, or “second one”. These commands select only customer-owned events
+and bypass fact extraction, so switching does not create drafts or edit details.
+
+## Catalogue truth
+
+Aura discovery uses the same eligible Vendor OS services and coverage/calendar
+checks as customer discovery. Draft and no-event conversations can browse the
+catalogue; requirement status no longer hides categories, and results are not
+limited to three services. All matching rows are returned; cards initially show
+three with **Show all** for the rest. Event planning services are included.
+
+Vendor lookup questions use a server-generated answer from catalogue records,
+without model-generated vendor/price claims. Fixed totals and per-person rates
+remain distinct; missing dates, unknown totals, booked/blocked calendars and
+extended coverage are labelled. Questions do not create events or change event
+facts. A city mentioned for a search is transient search scope. No matching data
+produces an explicit empty result. The same response/cards power web and mobile,
+and the existing ElevenLabs voice route reads that grounded response.
+
+## Live cards
+
+Aura checks for updated server snapshots every two seconds while the screen is
+visible (request duration and network latency add to this interval). It refreshes
+on foreground/focus and after a completed chat or confirmation. Background/hidden
+screens stop checking. Failed refreshes retry with bounded backoff.
+
+Reads started before a voice/text write are discarded, preventing stale cards from
+overwriting the saved reply or switched event. Saved catalogue searches survive
+follow-up messages; changed event details recheck prices, coverage and calendars.
+Expanded results and draft input survive refreshes. Confirmed event cards also
+display the current date, city, guest count and budget.
+
 ## Validation
 
 - Expo 57's default `expo/fetch` rejects legacy `{ uri, name, type }` multipart parts before making an HTTP request. Native voice and document uploads now append `expo-file-system` `File` objects. A regression test runs the installed SDK encoder against the authenticated voice HTTP route, reproducing the old failure and verifying the replacement sends the exact file bytes and MIME type.

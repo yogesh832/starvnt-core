@@ -5,6 +5,7 @@ export const customerApi = {
   profile: () => externalApi.call('/customer/profile'),
   planOptions: (eventType) => externalApi.call(`/customer/plan-options${eventType ? `?eventType=${encodeURIComponent(eventType)}` : ''}`),
   events: () => externalApi.call('/customer/events'),
+  deleteEvent: (id) => externalApi.call(`/customer/events/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   event: (id) => externalApi.call(`/customer/events/${id}`),
   patchEvent: (id, body) => externalApi.call(`/customer/events/${id}`, { method: 'PATCH', body }),
   confirmEvent: (id) => externalApi.call(`/customer/events/${id}/confirm`, { method: 'POST' }),
@@ -72,8 +73,8 @@ export const customerApi = {
     externalApi.call(`/customer/bookings/${bookingId}/verify-completion`, { method: 'POST', body: { notes } }),
   cancelBooking: (bookingId) => externalApi.call(`/customer/bookings/${bookingId}`, { method: 'DELETE' }),
   patchProfile: (body) => externalApi.call('/customer/profile', { method: 'PATCH', body }),
-  auraSession: (sid, eventId) =>
-    externalApi.call(`/aura/sessions/${encodeURIComponent(sid)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`),
+  auraSession: (sid, eventId, options = {}) =>
+    externalApi.call(`/aura/sessions/${encodeURIComponent(sid)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`, options),
   auraChat: (body) => externalApi.call('/aura/chat', { method: 'POST', body }),
   auraChatStream: (body, onEvent, signal) => externalApi.stream('/aura/chat', { method: 'POST', body, signal }, onEvent),
   uploadMedia: (file, filename, mediaType = 'IMAGE') =>

@@ -64,7 +64,9 @@ function describe(row) {
     case 'event_created_manually':
       return { group: 'planning', text: `${EVENT_TYPE_LABELS[d.eventType] || 'Event'} plan created from your details` };
     case 'quote_accepted':
-      return { group: 'booking', text: `Quote accepted — ${d.itemCount} service${d.itemCount === 1 ? '' : 's'} on hold for 48 hours` };
+      return { group: 'booking', text: Number.isInteger(d.itemCount) && d.itemCount > 0
+        ? `Quote accepted — ${d.itemCount} service${d.itemCount === 1 ? '' : 's'} on hold for 48 hours`
+        : `Vendor quote accepted${d.vendorName ? ` — ${d.vendorName}` : ''}` };
     case 'payment_verified':
       return { group: 'booking', text: `Payment of ${inr(d.amount)} verified` };
     case 'payment_failed':

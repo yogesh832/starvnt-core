@@ -34,6 +34,8 @@ export default function Enquiries() {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [declining, setDeclining] = useState(null);
 
   useEffect(() => {
     async function loadLiveOpportunities() {
@@ -45,6 +47,8 @@ export default function Enquiries() {
             id: o._id,
             dbId: o._id,
             customerId: o.customer?._id || o.customer,
+            customerName: o.customer?.fullName || o.customerName || 'Customer enquiry',
+            eventType: o.eventType || o.eventName || 'Event enquiry',
             serviceId: o.vendorService,
             service: o.serviceName,
             status: o.status === 'NEW' ? 'New' : o.status,
@@ -52,13 +56,13 @@ export default function Enquiries() {
             date: o.eventDate,
             location: `${o.serviceLocation?.address || ''} ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Venue'}`.trim(),
             guests: o.guestCount || 'As required',
-            capability: o.requiredCapability || 'Standard Service Execution',
-            coverage: `Serves ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Zone'} (Verified)`,
-            availability: o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED' ? 'Extended distance - confirmation required' : 'Eligible slot verified',
+            capability: o.requiredCapability || 'Requirements not specified',
+            coverage: o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED' ? 'Extended coverage needs confirmation' : 'Standard coverage match',
+            availability: o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED' ? 'Extended distance - confirmation required' : 'Not confirmed by vendor',
             travel: o.estimatedTravel || 'Local Transit',
-            travelCost: o.travelCost ? `₹${Number(o.travelCost).toLocaleString()}` : 'Included',
+            travelCost: o.travelCost ? `₹${Number(o.travelCost).toLocaleString()}` : 'No additional travel cost recorded',
             basePrice: o.basePrice || 0,
-            fit: o.fit || 95,
+            fit: Number.isFinite(o.fit) ? o.fit : null,
             coverageStatus: o.coverageStatus,
             extendedService: o.extendedService || null,
           }));
@@ -67,6 +71,7 @@ export default function Enquiries() {
         }
       } catch (err) {
         console.warn('[Enquiries] Load error:', err.message);
+        setFeedback(`Notice: ${err.message}`);
       } finally {
         setLoading(false);
       }
@@ -76,16 +81,35 @@ export default function Enquiries() {
 
   function handleOpenQuoteModal(opp) {
     setQuoteModalOpp(opp);
-    setBasePrice(opp.basePrice || 48000);
-    setTravelFee(parseInt(opp.travelCost?.replace(/[^0-9]/g, '')) || 2000);
+    setBasePrice(opp.basePrice || 0);
+    setTravelFee(Number(opp.travelCost?.replace(/[^0-9.]/g, '')) || 0);
     setEquipmentFee(0);
     setSetupFee(0);
     setAdditionalFee(0);
     setNotes('');
   }
 
+  async function declineOpportunity(opportunity) {
+    if (declining) return;
+    setDeclining(opportunity.id);
+    try {
+      await externalApi.call(`/vendor/opportunities/${opportunity.dbId}/decline`, { method: 'POST' });
+      setOpportunities((rows) => rows.map((row) => row.id === opportunity.id ? { ...row, status: 'DECLINED' } : row));
+      setFeedback('Enquiry declined. This status is saved.');
+    } catch (error) {
+      setFeedback(`Notice: ${error.message}`);
+    } finally {
+      setDeclining(null);
+    }
+  }
+
   async function handleSendQuote() {
     if (!quoteModalOpp) return;
+    const amounts = [basePrice, travelFee, equipmentFee, setupFee, additionalFee].map(Number);
+    if (amounts.some((amount) => !Number.isFinite(amount) || amount < 0) || amounts.reduce((sum, amount) => sum + amount, 0) <= 0) {
+      setFeedback('Notice: Add a valid positive quote total. Fees cannot be negative.');
+      return;
+    }
     setSubmitting(true);
     try {
       const totalAmount = Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee);
@@ -129,9 +153,12 @@ export default function Enquiries() {
       title="Enquiries & Structured Opportunities"
       sub="Pre-qualified opportunities with service, location, date, guests, capability, coverage, availability, and travel."
       action={
-        <button className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2.5">
-          Filters <Icon name="chevronDown" size={13} />
-        </button>
+        <select aria-label="Filter enquiries by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border border-gray-200 bg-white text-navy text-sm px-3 py-2.5">
+          <option value="ALL">All enquiries</option>
+          <option value="NEW">New</option>
+          <option value="RESPONDED">Responded</option>
+          <option value="DECLINED">Declined</option>
+        </select>
       }
     >
       {feedback && (
@@ -142,7 +169,8 @@ export default function Enquiries() {
       )}
 
       <div className="space-y-4">
-        {opportunities.map((o) => (
+        {!loading && opportunities.length > 0 && !opportunities.some((o) => statusFilter === 'ALL' || o.status.toUpperCase() === statusFilter) && <Card><p className="text-sm text-muted">No enquiries match this status.</p></Card>}
+        {opportunities.filter((o) => statusFilter === 'ALL' || o.status.toUpperCase() === statusFilter).map((o) => (
           <Card key={o.id} className="!p-0 overflow-hidden border border-gray-100 hover:border-gray-200 transition">
             <button
               onClick={() => setExpanded(expanded === o.id ? null : o.id)}
@@ -172,10 +200,10 @@ export default function Enquiries() {
                   </div>
                 )}
               </div>
-              <div className="text-center shrink-0 ml-2">
+              {o.fit != null && <div className="text-center shrink-0 ml-2">
                 <div className="text-lg font-extrabold text-primary">{o.fit}%</div>
                 <div className="text-[9px] text-muted font-bold uppercase">match</div>
-              </div>
+              </div>}
               <Icon
                 name="chevronDown"
                 size={16}
@@ -210,7 +238,7 @@ export default function Enquiries() {
                   ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-gray-100">
-                  {['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED', 'Quote Sent'].includes(o.status) ? (
+                  {['DECLINED', 'EXPIRED'].includes(o.status) ? <span className="text-xs text-muted">This enquiry is {o.status.toLowerCase()}.</span> : ['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED', 'Quote Sent'].includes(o.status) ? (
                     <>
                       <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-extrabold px-4 py-2.5 shadow-2xs">
                         <Icon name="check" size={14} className="text-emerald-600" />
@@ -242,7 +270,8 @@ export default function Enquiries() {
                         Ask a question
                       </button>
                       <button
-                        onClick={() => setOpportunities((prev) => prev.filter((item) => item.id !== o.id))}
+                        disabled={Boolean(declining)}
+                        onClick={() => declineOpportunity(o)}
                         className="rounded-xl text-xs font-semibold px-4 py-2.5 text-muted hover:text-red-500 transition cursor-pointer"
                       >
                         Decline

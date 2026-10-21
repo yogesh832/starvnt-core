@@ -113,10 +113,15 @@ export function createGeminiAdapter() {
       };
 
       let lastErr;
+      // One budget for the entire turn, not a fresh timeout for each model.
+      // Otherwise fallback attempts can outlive the browser's request deadline.
+      const turnDeadline = Date.now() + TIMEOUT_MS;
       const models = modelCandidates(selectedModel, defaultModel);
       for (const candidateModel of models) {
         const candidateThinking = candidateModel === selectedModel ? selectedThinking : defaultThinking;
         for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+        const remainingMs = turnDeadline - Date.now();
+        if (remainingMs <= 0) throw lastErr || timeoutError();
         const controller = new AbortController();
         let timer;
         try {
@@ -177,14 +182,16 @@ export function createGeminiAdapter() {
             timer = setTimeout(() => {
               controller.abort();
               reject(timeoutError());
-            }, TIMEOUT_MS);
+            }, remainingMs);
           });
           return await Promise.race([requestPromise, deadline]);
         } catch (err) {
           lastErr = err;
           console.warn(`[aura] Gemini attempt ${attempt} (${candidateModel}) failed:`, err?.message || err);
           if (!isRetryable(err) || attempt === ATTEMPTS) break;
-          await sleep(500 * 2 ** (attempt - 1));
+          const retryDelay = 500 * 2 ** (attempt - 1);
+          if (Date.now() + retryDelay >= turnDeadline) break;
+          await sleep(retryDelay);
         } finally {
           if (timer) clearTimeout(timer);
         }

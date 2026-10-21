@@ -8,13 +8,16 @@ export class ApiError extends Error {
   status: number;
   data: Data;
   constructor(status: number, data: Data) {
-    super(
-      data.message ||
-        messages[data.error] ||
-        String(data.error || "Request failed")
-          .replaceAll("_", " ")
-          .toLowerCase(),
-    );
+    const supportEmail = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || "support@starvnt.com";
+    const userMessage =
+      messages[data.error] ||
+      (status >= 500
+        ? `There is a temporary issue on the STARVNT server. Please try again later or reach out to support at ${supportEmail}.`
+        : data.message ||
+          String(data.error || "Request failed")
+            .replaceAll("_", " ")
+            .toLowerCase());
+    super(userMessage);
     this.status = status;
     this.data = data;
   }
@@ -28,6 +31,8 @@ const messages: Record<string, string> = {
   EMAIL_OTP_NOT_CONFIGURED: "Email verification is temporarily unavailable.",
   ACCOUNT_TYPE_MISMATCH: "Choose the other account type and try again.",
   UNAUTHENTICATED: "Your session has expired. Please sign in again.",
+  SESSION_REVOKED: "Your session has expired. Please sign in again.",
+  ACCOUNT_DISABLED_OR_MISSING: "This account is not available. Please contact customer support at support@starvnt.com.",
 };
 
 export function createClient(

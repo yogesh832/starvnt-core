@@ -135,9 +135,10 @@ export function ExternalAuthProvider({ children }) {
   }
 
   async function logout() {
-    await externalApi.call("/auth/logout", { method: "POST" }).catch(() => {});
+    const request = externalApi.raw("/auth/logout", { method: "POST" }, false);
     externalApi.setToken(null);
     setUser(null);
+    await request.catch(() => {});
   }
 
   return (
