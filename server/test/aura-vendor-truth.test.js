@@ -5,6 +5,12 @@ import { transformSync } from 'esbuild';
 import * as plan from '../src/customer/services/planCatalog.js';
 import { isVendorRequest, isCatalogLookupOnly, selectVendorRows, vendorPrice, vendorTruthReply } from '../src/customer/aura/vendorTruth.js';
 
+test('a named vendor request is not mistaken for an unavailable named package', () => {
+  const rows=[{vendor:'QA Kumaon Catering',package:'Catering',category:'catering',price:42000},{vendor:'Other Caterer',package:'Lunch Buffet',category:'catering',price:30000}];
+  assert.deepEqual(selectVendorRows(rows,'QA Kumaon Catering ka Catering package dikhao'),[rows[0]]);
+  assert.deepEqual(selectVendorRows(rows,'QA Kumaon Catering ka Premium Gold package dikhao'),[]);
+});
+
 function load(path, modules) {
   const module = { exports: {} };
   const code = transformSync(readFileSync(new URL(path, import.meta.url), 'utf8'), { format: 'cjs' }).code;
