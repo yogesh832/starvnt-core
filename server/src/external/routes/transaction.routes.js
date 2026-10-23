@@ -18,6 +18,7 @@ import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.
 import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
 import * as razorpay from '../../customer/services/payments/razorpay.js';
 import { validateCouponForPayment, recordCouponUsageOnce } from '../../customer/services/coupon.service.js';
+import { vendorQuoteScope, quoteEventMismatch, reuseAcceptedReservation } from '../../common/vendorQuoteScope.js';
 
 const router = express.Router();
 const ADVANCE_PERCENTAGE = 30;
@@ -689,22 +690,28 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
       .populate('vendor', 'businessName category location');
     if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND', message: 'Quote not found.' });
 
-    // Locate customer's event
-    let event = null;
-    if (req.body?.eventId) {
-      event = await CustomerEvent.findOne({ _id: req.body.eventId, customer: req.externalUser._id });
+    // Anchor acceptance to the enquiry's owned event before considering input.
+    const linkedOpportunity = quote.opportunity ? await Opportunity.findOne({ _id: quote.opportunity, customer: req.externalUser._id, vendor: quote.vendor?._id || quote.vendor }).lean() : null;
+    if (quoteEventMismatch(linkedOpportunity?.customerEvent, req.body?.eventId)) {
+      return res.status(409).json({ error: 'QUOTE_EVENT_MISMATCH', message: 'This quote belongs to a different event.' });
     }
-    if (!event && quote.opportunity) {
-      const opp = await Opportunity.findById(quote.opportunity).lean();
-      if (opp?.customerEvent) {
-        event = await CustomerEvent.findOne({ _id: opp.customerEvent, customer: req.externalUser._id });
-      }
+    let event = null;
+    const eventId = linkedOpportunity?.customerEvent || req.body?.eventId;
+    if (eventId) {
+      if (!mongoose.isValidObjectId(eventId)) return res.status(404).json({ error: 'EVENT_NOT_FOUND' });
+      event = await CustomerEvent.findOne({ _id: eventId, customer: req.externalUser._id });
+      if (!event) return res.status(404).json({ error: 'EVENT_NOT_FOUND' });
     }
     if (!event) {
       event = await CustomerEvent.findOne({
         customer: req.externalUser._id,
         status: { $in: ['draft', 'planning'] },
       }).sort({ updatedAt: -1 });
+    }
+    if (!event) return res.status(400).json({ error: 'EVENT_REQUIRED', message: 'Choose an event before accepting this quote.' });
+    const acceptedReservation = quote.status === 'APPROVED' ? await Reservation.findOne({ event: event._id, customer: req.externalUser._id, quote: quote._id }) : null;
+    if (reuseAcceptedReservation(quote, acceptedReservation)) {
+      return res.json({ ok: true, quote: quoteForCustomer(quote), eventId: event._id, reservationId: acceptedReservation._id });
     }
 
     if (quote.status === 'SUBMITTED') {
@@ -1003,7 +1010,7 @@ router.get('/vendor/quotes', requireExternalAuth, requireAccountType('VENDOR'), 
 /**
  * Creates a new Quote proposal (DRAFT or SUBMITTED).
  */
-router.post('/quotes', requireExternalAuth, async (req, res, next) => {
+router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
   try {
     const {
       opportunityId,
@@ -1027,6 +1034,12 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
       return res.status(400).json({ error: 'VENDOR_ID_REQUIRED' });
     }
 
+    const scope = await vendorQuoteScope({ vendorId: resolvedVendorId, opportunityId, vendorServiceId, customerId }, {
+      findOpportunity: (id, vendor) => mongoose.isValidObjectId(id) ? Opportunity.findOne({ _id: id, vendor }).lean() : null,
+      findService: (id, vendor) => mongoose.isValidObjectId(id) ? VendorService.findOne({ _id: id, vendor }).lean() : null,
+    });
+    if (scope.error) return res.status(scope.status).json({ error: scope.error });
+
     const normalizedPricing = normalizePricingBreakdown(pricingBreakdown);
     if (!normalizedPricing.basePrice || !normalizedPricing.totalAmount) {
       return res.status(400).json({
@@ -1038,8 +1051,8 @@ router.post('/quotes', requireExternalAuth, async (req, res, next) => {
     const quote = await createQuote({
       opportunityId,
       vendorId: resolvedVendorId,
-      customerId: customerId || req.externalUser._id,
-      vendorServiceId,
+      customerId: scope.customerId,
+      vendorServiceId: scope.vendorServiceId,
       serviceName: serviceName || 'Event Service',
       eventDate,
       serviceLocation,

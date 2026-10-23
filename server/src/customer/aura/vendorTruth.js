@@ -12,7 +12,7 @@ export function isVendorRequest(text) {
 export const isCatalogLookupOnly = text => {
   const planning = parseStatedEventType(text) && (parseDate(text) || parseGuests(text) || parseBudget(text));
   const enquiry = /enquir|inquir|quote/i.test(text) && /bhej|send|contact|kaise|how|aage/i.test(text);
-  return !planning && isVendorRequest(text) && (enquiry || /\b(show|list|find|recommend|suggest|compare|which|what|how much|pricing|prices?|rates?|cost|available|availability)\b|दिखा|कौन|कितन|कीमत|रेट|उपलब्ध|ढूँढ|dhoondh/iu.test(text));
+  return !planning && isVendorRequest(text) && (enquiry || /\b(show|list|find|recommend|suggest|compare|which|what|how much|pricing|prices?|rates?|cost|available|availability)\b|दिखा|कौन|कितन|कीमत|रेट|उपलब्ध|ढूँढ|dhoondh|dikhao|dikhaiye/iu.test(text));
 };
 export const scopeMatchesEvent = (scope, event) => !!event && ['city', 'eventDate', 'guestCount'].every(key => String(scope?.[key] ?? '').toLowerCase() === String(event[key] ?? '').toLowerCase());
 
@@ -36,7 +36,10 @@ export function selectVendorRows(rows, message) {
   // A named package that has left the live catalogue must not broaden into
   // unrelated vendors on the next poll (for example after eligibility changes).
   const packagePhrase = /(.{0,100})\bpackage\b/i.exec(message)?.[1] || '';
-  const specificPackage = packagePhrase.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 1 && !generic.has(word) && !['aur', 'wala', 'wali', 'hazaar', 'ka', 'ki', 'ke', 'ko', 'hai', 'me', 'mujhe'].includes(word)).length >= 2;
+  // A named vendor is not a named package. Otherwise "Kumaon Catering ka
+  // catering package" is incorrectly rejected when its package is just Catering.
+  const vendorWords = new Set(named.flatMap(row => row.vendor.toLowerCase().split(/[^\p{L}\p{N}]+/u)));
+  const specificPackage = packagePhrase.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 1 && !generic.has(word) && !vendorWords.has(word) && !['aur', 'wala', 'wali', 'hazaar', 'ka', 'ki', 'ke', 'ko', 'hai', 'me', 'mujhe'].includes(word)).length >= 2;
   if (specificPackage && !packageMatches.length) return [];
   return (packageWithinNamed.length ? packageWithinNamed : named.length ? named : packageMatches.length ? packageMatches : categories.length ? rows.filter(row => categories.includes(row.category)) : rows).sort((a, b) => Number(a.isDemo) - Number(b.isDemo) || Number(['booked', 'blocked'].includes(a.availability)) - Number(['booked', 'blocked'].includes(b.availability)) || (a.price ?? Infinity) - (b.price ?? Infinity));
 }

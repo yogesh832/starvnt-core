@@ -43,3 +43,19 @@ test('multiword area and factual answers do not reset Roman Hindi to English', (
   for (const answer of ['kapkote bazar ke paas', 'Near The Golden Palace', '15 november shaam 6 baje']) assert.equal(conversationLanguage(answer, history), 'hinglish');
   assert.equal(conversationLanguage('Can you find me another photographer?', history), 'en');
 });
+
+test('reported English Tent House conversation ignores earlier assistant language drift', () => {
+  const history = [
+    {role:'user',content:'Help me complete my profile setup'},
+    {role:'model',content:'What service do you offer?'},
+    {role:'user',content:'i had already mention i have my own Tent House'},
+    {role:'model',content:'Got it. What is the base price?'},
+    {role:'user',content:'How do I set my location and coverage area?'},
+    {role:'model',content:'Main aapki location aur coverage area set karne mein madad kar sakti hoon.'},
+  ];
+  assert.equal(conversationLanguage('base price is 30k',history),'en');
+  assert.equal(conversationLanguage('Yes, save it',[...history,{role:'model',content:'मैंने कीमत नोट कर ली है।'}]),'en');
+  assert.equal(conversationLanguage('30k',[],'hinglish'),'hinglish');
+  assert.equal(conversationLanguage('Yes, save it',[],'hi'),'hi');
+  assert.equal(conversationLanguage('Please reply in English',[],'hi'),'en');
+});

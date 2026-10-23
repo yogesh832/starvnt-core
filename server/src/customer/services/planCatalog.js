@@ -1,3 +1,4 @@
+import { VENDOR_CATEGORIES, findVendorCategory } from '../../common/vendorCategories.js';
 /**
  * Event plan templates, category labels and budget ranges (Blueprint §3).
  * Code constants: templates are suggestions (RECOMMENDED), never business state.
@@ -92,6 +93,7 @@ export const CATEGORY_LABELS = {
   live_streaming: 'Live streaming',
   cake: 'Cake',
   event_planning: 'Event planning',
+  ...Object.fromEntries(VENDOR_CATEGORIES.filter(category => !['photography', 'decor', 'makeup', 'venue', 'catering', 'sound', 'ceremony', 'corporate_production', 'transport', 'accommodation', 'hospitality', 'invitation', 'anchor', 'entertainment', 'photo_booth', 'special_effects', 'live_streaming', 'cake', 'event_planning'].includes(category.planKey)).map(category => [category.planKey, category.value])),
 };
 
 export const CATEGORIES = Object.keys(CATEGORY_LABELS);
@@ -100,24 +102,29 @@ export const CATEGORIES = Object.keys(CATEGORY_LABELS);
 const CATEGORY_SYNONYMS = {
   venue: ['venue', 'venues', 'hall', 'banquet', 'banquet hall', 'lawn', 'marriage hall', 'वेन्यू', 'बैंक्वेट'],
   catering: ['catering', 'caterer', 'caterers', 'food', 'khana', 'कैटरिंग', 'कैटरर', 'खाना'],
-  photography: ['photography', 'photographer', 'photographers', 'photo', 'photos', 'videography', 'videographer', 'cinematic production', 'cinematography', 'wedding film', 'फोटोग्राफी', 'फोटोग्राफर'],
+  photography: ['photography', 'photographer', 'photographers', 'photo', 'photos', 'फोटोग्राफी', 'फोटोग्राफर'],
   decor: ['decor', 'decoration', 'decorations', 'decorator', 'decorators', 'sajawat', 'सजावट', 'डेकोरेशन'],
   makeup: ['makeup', 'make-up', 'make up', 'makeup artist', 'bridal makeup', 'mua', 'मेकअप'],
-  sound: ['sound', 'sound system', 'audio', 'speakers', 'dj', 'dj & music', 'dj and music', 'डीजे', 'साउंड'],
+  sound: ['sound', 'sound system', 'audio', 'speakers', 'dj production', 'साउंड'],
   ceremony: ['ceremony', 'religious ceremony', 'officiant', 'purohit', 'pandit', 'priest', 'pastor', 'imam', 'nikah', 'granthi', 'monk', 'jain priest', 'interfaith officiant', 'pujari'],
-  corporate_production: ['corporate production', 'production', 'conference production', 'av', 'audio visual', 'stage production', 'mice', 'exhibition'],
+  corporate_production: ['corporate production', 'conference production', 'av', 'audio visual', 'stage production', 'mice', 'exhibition'],
   transport: ['transport', 'transportation', 'cab', 'cabs', 'car', 'cars', 'shuttle', 'bus'],
   accommodation: ['accommodation', 'hotel', 'hotels', 'stay', 'rooms'],
   hospitality: ['hospitality', 'guest management'],
   invitation: ['invitation', 'invitations', 'invite', 'invites', 'invitation cards', 'wedding cards'],
   anchor: ['anchor', 'host', 'emcee', 'mc', 'एंकर'],
-  entertainment: ['entertainment', 'band', 'music', 'magic show', 'magician', 'dancers', 'मनोरंजन', 'लाइव बैंड'],
+  entertainment: ['entertainment', 'magic show', 'magician', 'मनोरंजन', 'लाइव बैंड'],
   photo_booth: ['photo booth', 'photobooth', 'photo_booth'],
   special_effects: ['special effects', 'special_effects', 'fireworks', 'pyro', 'cold pyro'],
   live_streaming: ['live streaming', 'live stream', 'livestream', 'live_streaming'],
   cake: ['cake', 'cakes', 'bakery'],
   event_planning: ['event planning', 'event planner', 'event planners', 'wedding planner', 'planner', 'इवेंट प्लानर', 'वेडिंग प्लानर', 'प्लानर'],
 };
+
+// Keep the broader catalogue in discovery and Aura, with distinct service identities.
+for (const category of VENDOR_CATEGORIES) {
+  CATEGORY_SYNONYMS[category.planKey] = [...new Set([...(CATEGORY_SYNONYMS[category.planKey] || []), category.value.toLowerCase().replace(/&/g, ' '), ...category.aliases])];
+}
 
 const SYNONYM_LOOKUP = new Map();
 for (const [category, words] of Object.entries(CATEGORY_SYNONYMS)) {
@@ -128,6 +135,8 @@ for (const [category, words] of Object.entries(CATEGORY_SYNONYMS)) {
 /** Normalise any category word to a known category, or null (unknown ones are dropped). */
 export function normalizeCategory(value) {
   if (!value || typeof value !== 'string') return null;
+  const known = findVendorCategory(value);
+  if (known) return known.planKey;
   const key = value.toLowerCase().trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
   return SYNONYM_LOOKUP.get(key) || SYNONYM_LOOKUP.get(key.replace(/ /g, '_')) || null;
 }
@@ -138,6 +147,7 @@ export function categoriesMentioned(text) {
   const lower = ` ${text.toLowerCase().replace(/[^a-z0-9ऀ-෿\s-]/g, ' ').replace(/\s+/g, ' ')} `;
   const found = new Set();
   for (const [word, category] of SYNONYM_LOOKUP) {
+    if (category === 'other_service') continue; // A generic word such as 'other' is not a service request.
     const needle = ` ${word.replace(/_/g, ' ')} `;
     if (lower.includes(needle)) found.add(category);
   }

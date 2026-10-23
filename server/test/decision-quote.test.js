@@ -97,8 +97,9 @@ test('quote snapshots selections, supersedes older drafts and survives price cha
   await select(token, ev, 'photography', ids.live).expect(200);
   await select(token, ev, 'catering', 'demo_cat_01').expect(200);
   const q1 = (await request(app).post(quotes).set(auth(token)).expect(201)).body.quote;
+  const catering = await models.DemoListing.findOne({ externalRef: 'cat_01' }).lean();
   assert.equal(q1.status, 'draft');
-  assert.equal(q1.total, 48000 + 450000);
+  assert.equal(q1.total, 48000 + catering.price);
   assert.equal(q1.includesDemo, true);
   assert.ok(new Date(q1.validUntil) - Date.now() > 6.9 * 86400000);
 
@@ -109,8 +110,8 @@ test('quote snapshots selections, supersedes older drafts and survives price cha
   // Later price change never alters the quote.
   await models.DemoListing.updateOne({ externalRef: 'cat_01' }, { $set: { price: 999999 } });
   const again = await request(app).get(`/api/customer/quotes/${q1.id}`).set(auth(token)).expect(200);
-  assert.equal(again.body.quote.total, 498000);
-  await models.DemoListing.updateOne({ externalRef: 'cat_01' }, { $set: { price: 450000 } });
+  assert.equal(again.body.quote.total, q1.total);
+  await models.DemoListing.updateOne({ externalRef: 'cat_01' }, { $set: { price: catering.price } });
 
   const q2 = (await request(app).post(quotes).set(auth(token)).expect(201)).body.quote;
   const list = await request(app).get(quotes).set(auth(token)).expect(200);

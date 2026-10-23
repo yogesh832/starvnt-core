@@ -1,3 +1,4 @@
+import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { Router } from "express";
 import { nativeAuthTransport } from "../../common/nativeAuthTransport.js";
 import {
@@ -146,6 +147,8 @@ function normalizePrimaryCategory(category) {
   if (category === undefined || category === null || category === "") return { value: "" };
   if (Array.isArray(category)) return { error: "PRIMARY_CATEGORY_SINGLE_ONLY" };
   const value = String(category).trim();
+  const error = vendorCategoryError(value);
+  if (error) return { error };
   if (/[|;]+/.test(value) || value.split(",").filter(Boolean).length > 1) {
     return { error: "PRIMARY_CATEGORY_SINGLE_ONLY" };
   }
@@ -190,24 +193,6 @@ function issueTokens(user, session) {
 
 function resolveExistingAccountType(user) {
   return user.accountType || userRoles(user)[0] || "CUSTOMER";
-}
-
-function resolveExistingSignInSurface(user, requestedSurface) {
-  const primarySurface = resolveExistingAccountType(user);
-  if (!requestedSurface || requestedSurface === primarySurface) {
-    return { signInAs: primarySurface };
-  }
-  const roles = userRoles(user);
-  if (roles.includes(requestedSurface)) {
-    return { signInAs: requestedSurface };
-  }
-  return {
-    error: "ACCOUNT_SURFACE_COLLISION",
-    message:
-      "This Google identity is already linked to a different STARVNT account surface. Sign in to the existing surface first, then explicitly switch or link the vendor/customer surface.",
-    existingAccountType: primarySurface,
-    requestedAccountType: requestedSurface,
-  };
 }
 
 function grantRole(user, role) {
@@ -452,19 +437,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
-      const requestedSurface = accountType === "VENDOR" ? "VENDOR" : accountType === "CUSTOMER" ? "CUSTOMER" : null;
-      const surfaceResolution = resolveExistingSignInSurface(user, requestedSurface);
-      if (surfaceResolution.error) {
-        return res.status(409).json(surfaceResolution);
-      }
-      signInAs = surfaceResolution.signInAs;
-      await prepareAccountType(user, signInAs, {
-        businessName,
-        brandName,
-        category: normalizedCategory.value,
-        city,
-        location,
-      });
+      signInAs = resolveExistingAccountType(user);
       user.lastLoginAt = new Date();
       await user.save();
     } else {
@@ -605,29 +578,33 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
       expiresInSeconds: result.expiresInSeconds,
       requiresPasswordSetup,
       authProvider: existingUser?.authProvider,
-      message: "OTP sent successfully",
+      delivery: result.delivery,
+      message: result.message,
     });
   } catch (err) {
     if (err.message === "INVALID_EMAIL_ADDRESS") {
       return res.status(400).json({ error: "INVALID_EMAIL_ADDRESS" });
     }
-    if (
-      err.message === "EMAIL_OTP_NOT_CONFIGURED" ||
-      err.message === "SMTP_EMAIL_NOT_CONFIGURED"
-    ) {
-      return res.status(503).json({ error: "EMAIL_OTP_NOT_CONFIGURED" });
+    const emailErrors = {
+      EMAIL_OTP_RECIPIENT_REJECTED: [502, 'The email provider rejected this recipient. Check your email address or use another address.'],
+      EMAIL_OTP_PROVIDER_UNAVAILABLE: [503, 'The email provider could not be reached. Please try again shortly.'],
+      EMAIL_OTP_NOT_CONFIGURED: [503, 'Email verification is unavailable because the sender is not configured. Please contact support.'],
+      SMTP_EMAIL_NOT_CONFIGURED: [503, 'Email verification is unavailable because the sender is not configured. Please contact support.'],
+      SMTP_EMAIL_AUTH_FAILED: [502, 'The email provider rejected the sender login. Please contact support.'],
+    };
+    if (emailErrors[err.message]) {
+      const [status, message] = emailErrors[err.message];
+      return res.status(status).json({ error: err.message, message });
     }
-    if (err.message === "SMTP_EMAIL_AUTH_FAILED") {
-      return res.status(502).json({ error: "SMTP_EMAIL_AUTH_FAILED" });
-    }
+
     if (err.message.startsWith("RESEND_EMAIL_SEND_FAILED")) {
-      return res.status(502).json({ error: "RESEND_EMAIL_SEND_FAILED" });
+      return res.status(502).json({ error: "RESEND_EMAIL_SEND_FAILED", message: "The email provider rejected the send request. Please contact support to check the sender domain, permissions or sending quota." });
     }
     if (
       err.message.startsWith("EMAIL_OTP_SEND_FAILED") ||
       err.message.startsWith("SMTP_EMAIL_SEND_FAILED")
     ) {
-      return res.status(502).json({ error: "EMAIL_OTP_SEND_FAILED" });
+      return res.status(502).json({ error: "EMAIL_OTP_SEND_FAILED", message: "The email provider did not accept the OTP request. Please try again shortly." });
     }
     next(err);
   }
@@ -987,11 +964,10 @@ router.post("/refresh", async (req, res, next) => {
         .json({ ok: false, error: "ACCOUNT_DISABLED_OR_MISSING" });
     }
 
-    // Rotate: revoke old session and preserve active surface.
-    // If the session had a specific accountType, respect it so user stays on their active portal.
+    // Rotate using the DB-owned surface, healing legacy wrong-tab sessions.
     session.revokedAt = new Date();
     await session.save();
-    const fresh = await createSession(user, req, session.accountType || resolveExistingAccountType(user));
+    const fresh = await createSession(user, req, resolveExistingAccountType(user));
     res.cookie(
       config.refreshCookieName,
       fresh.refreshToken,
@@ -1006,7 +982,7 @@ router.post("/refresh", async (req, res, next) => {
   }
 });
 
-// ── Switch Surface (Customer <-> Vendor for same identity) ───────────────────
+// ── Confirm the identity's existing surface without converting the account ──
 router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
   try {
     const { targetSurface } = req.body || {};
@@ -1014,10 +990,10 @@ router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
       return res.status(400).json({ error: "INVALID_SURFACE" });
     }
     const user = req.externalUser;
-    grantRole(user, targetSurface);
-    await prepareAccountType(user, targetSurface);
-    user.accountType = targetSurface;
-    await user.save();
+    const accountType = resolveExistingAccountType(user);
+    if (targetSurface !== accountType) {
+      return res.status(403).json({ error: "ACCOUNT_TYPE_MISMATCH", accountType });
+    }
 
     const { session, refreshToken } = await createSession(user, req, targetSurface);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());

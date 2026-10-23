@@ -121,10 +121,13 @@ test('requirements: customer rules, locks, closed events, add service', async ()
   const locked = await request(app).patch(url('catering')).set(auth(token)).send({ status: 'missing' }).expect(409);
   assert.equal(locked.body.error, 'REQUIREMENT_LOCKED');
 
-  // Adding a service by a synonym creates the row once.
+  // DJ is its own service, separate from the essential sound equipment row.
   r = await request(app).patch(url('dj')).set(auth(token)).send({ status: 'pending' }).expect(200);
-  assert.equal(r.body.requirement.category, 'sound');
-  assert.equal(r.body.requirement.tier, 'essential');
+  assert.equal(r.body.requirement.category, 'dj');
+  assert.equal(r.body.requirement.tier, 'custom');
+  await request(app).patch(url('dj')).set(auth(token)).send({ status: 'pending' }).expect(200);
+  assert.equal(await models.EventRequirement.countDocuments({ event: ev._id, category: 'dj' }), 1);
+  assert.ok(await models.EventRequirement.exists({ event: ev._id, category: 'sound' }));
 
   await models.CustomerEvent.updateOne({ _id: ev._id }, { $set: { status: 'completed' } });
   const closed = await request(app).patch(url('photography')).set(auth(token)).send({ status: 'missing' }).expect(400);

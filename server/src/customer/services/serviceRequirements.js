@@ -1,3 +1,4 @@
+import { VENDOR_CATEGORIES } from '../../common/vendorCategories.js';
 import { CATEGORY_DEFINITIONS } from '../../external/utils/categoryWorkspaces.js';
 import { badRequest } from '../utils/http.js';
 
@@ -13,13 +14,15 @@ import { badRequest } from '../utils/http.js';
 
 // Customer plan category → Vendor OS category key.
 export const VENDOR_CATEGORY = {
+  ...Object.fromEntries(VENDOR_CATEGORIES.map(category => [category.planKey, category.key])),
   photography: 'Photography',
   makeup: 'Makeup',
   venue: 'Venue',
   catering: 'Catering',
   decor: 'Decoration',
-  sound: 'DJ_Production',
-  entertainment: 'DJ_Production',
+  sound: 'Sound',
+  dj: 'DJ',
+  entertainment: 'Entertainment',
   transport: 'Transport',
   accommodation: 'Hotel',
   ceremony: 'Religious_Services',
@@ -45,6 +48,24 @@ function definitions(category, eventType) {
         { key: 'styles', label: 'Style', type: 'multiselect', options: styles('photography').filter((s) => wedding || s !== 'Pre-wedding') },
         { key: 'multipleLocations', label: 'Coverage at more than one location?', type: 'select', options: YES_NO },
       ];
+    case 'videography':
+    case 'cinematic_production':
+      return [
+        { key: 'coverageHours', label: 'Video coverage (hours)', type: 'number', min: 1, max: 72 },
+        { key: 'videographers', label: 'Number of videographers', type: 'number', min: 1, max: 20 },
+        { key: 'videoFormat', label: 'Video format', type: 'select', options: ['Highlight video', 'Full event', 'Cinematic film', 'Short reels'] },
+        { key: 'drone', label: 'Drone coverage requested?', type: 'select', options: YES_NO },
+      ];
+    case 'dj':
+      return [
+        { key: 'genres', label: 'Music preference', type: 'text', max: 200 },
+        { key: 'durationHours', label: 'DJ performance (hours)', type: 'number', min: 1, max: 24 },
+        { key: 'soundIncluded', label: 'Sound equipment required?', type: 'select', options: YES_NO },
+      ];
+    case 'event_planning':
+      return [{ key: 'planningScope', label: 'Planning scope', type: 'select', options: ['Full planning', 'Partial planning', 'Destination planning'] }];
+    case 'event_coordination':
+      return [{ key: 'coordinationHours', label: 'On-site coordination (hours)', type: 'number', min: 1, max: 168 }, { key: 'handover', label: 'Plan / vendor handover notes', type: 'text', max: 300 }];
     case 'catering':
       return [
         { key: 'cuisines', label: 'Cuisine', type: 'multiselect', options: styles('catering') },

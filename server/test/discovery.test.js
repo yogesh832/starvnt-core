@@ -70,12 +70,21 @@ async function plannedWedding(user, token, facts = {}) {
 }
 
 test('demo seed is idempotent and refuses production', async () => {
+  const original = await models.DemoListing.findOne({ externalRef: 'pho_02' }).lean();
+  await models.DemoListing.updateOne({ _id: original._id }, { $set: { description: 'Edited development listing' } });
   const again = await seedDemoListings();
   assert.equal(again.inserted, 0);
+  assert.equal(again.removed, 0);
+  const preserved = await models.DemoListing.findById(original._id).lean();
+  assert.equal(preserved.description, 'Edited development listing');
+  await models.DemoListing.updateOne({ _id: original._id }, { $set: { description: original.description } });
   const prev = process.env.NODE_ENV;
-  process.env.NODE_ENV = 'production';
-  await assert.rejects(seedDemoListings(), /production/);
-  process.env.NODE_ENV = prev;
+  try {
+    process.env.NODE_ENV = 'production';
+    await assert.rejects(seedDemoListings(), /production/);
+  } finally {
+    process.env.NODE_ENV = prev;
+  }
 });
 
 test('open categories with option counts', async () => {
@@ -84,7 +93,8 @@ test('open categories with option counts', async () => {
   const r = await request(app).get(`/api/customer/events/${ev._id}/services`).set(auth(token)).expect(200);
   const photo = r.body.categories.find((c) => c.category === 'photography');
   // live + busy + hourly (real) + demo photography rows; the unverified vendor never counts.
-  assert.equal(photo.optionCount, 6);
+  const demos = await models.DemoListing.countDocuments({ category: 'photography', isActive: true });
+  assert.equal(photo.optionCount, 3 + demos);
   assert.equal(photo.lowestPrice, 30000);
 });
 
@@ -120,7 +130,8 @@ test('details, ownership and unknown options', async () => {
 
   const demo = await request(app).get(`${base}/demo_pho_02`).set(auth(token)).expect(200);
   assert.deepEqual(demo.body.option.costBreakdown, { base: 56000, travel: 4000, additional: 4000 });
-  assert.match(demo.body.option.description, /not a real vendor/);
+  assert.equal(demo.body.option.isDemo, true);
+  assert.match(demo.body.option.description, /development.*only/i);
   const real = await request(app).get(`${base}/${ids.live}`).set(auth(token)).expect(200);
   assert.equal(real.body.option.mayApply[0].amount, 3000);
 

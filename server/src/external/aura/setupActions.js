@@ -1,3 +1,5 @@
+import { describeVendorAction } from '../../common/vendorAuraUi.js';
+import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { VendorService } from '../models/VendorService.js';
 import { VendorCapability } from '../models/VendorCapability.js';
 import { OperatingLocation } from '../models/OperatingLocation.js';
@@ -374,7 +376,8 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
     if (!name) return { error: 'the service name' };
     if (!(basePrice > 0) || !stated.has(Math.round(basePrice))) return { error: 'the base price' };
     const pricingType = PRICING_TYPES.includes(String(s.pricingType).toUpperCase()) ? String(s.pricingType).toUpperCase() : normalizePricingType(s.pricingType || String(said).split('\n').pop());
-    const category = str(s.category, 60) || vendor.category || 'Photography';
+    const category = str(s.category, 160) || vendor.category || 'Photography';
+    if (vendorCategoryError(category)) return { error: 'the actual service you provide under Other (please enter its name)' };
     return {
       action: { kind, service: { name, category, pricingType, basePrice: Math.round(basePrice), unit: UNITS[pricingType] } },
     };
@@ -589,7 +592,8 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
 }
 
 /** One-line summary the vendor confirms. */
-export function describeAction(a) {
+export function describeAction(a, language = 'en') {
+  if (language !== 'en') return describeVendorAction(a, language);
   if (a.kind === 'service') {
     const s = a.service;
     return `Add service “${s.name}” (${s.category}) — ${inr(s.basePrice)}${s.pricingType === 'FIXED' ? ' per event' : ` per ${s.unit}`}`;
@@ -665,7 +669,7 @@ export async function executeAction(vendor, a) {
   if (a.kind === 'location') {
     const l = a.location;
     const isPrimary = (await OperatingLocation.countDocuments({ vendor: vendorId })) === 0;
-    const loc = await OperatingLocation.create({ vendor: vendorId, ...l, state: l.state || 'West Bengal', coordinates: { lat: 0, lng: 0 }, isPrimary });
+    const loc = await OperatingLocation.create({ vendor: vendorId, ...l, state: l.state || '', coordinates: l.coordinates || { lat: 0, lng: 0 }, isPrimary });
     if (isPrimary || !vendor.location) {
       vendor.location = `${loc.locality ? `${loc.locality}, ` : ''}${loc.city}`;
       if (vendor.businessName && vendor.category) vendor.isProfileCompleted = true;

@@ -33,9 +33,8 @@ export async function requireExternalAuth(req, res, next) {
       return res.status(401).json({ error: 'SESSION_REVOKED' });
     }
 
-    // Active surface comes from the session (the tab chosen at sign-in), not the
-    // user document. $locals is never persisted, so a later user.save() can't flip it.
-    user.$locals.activeAccountType = session.accountType || user.accountType;
+    // A historical wrong-tab session must not grant another account surface.
+    user.$locals.activeAccountType = user.accountType;
     req.externalUser = user;
     req.externalSession = session;
     next();

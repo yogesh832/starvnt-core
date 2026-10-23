@@ -79,7 +79,8 @@ test('setup summary follows the dashboard checklist order', () => {
   });
   assert.equal(s.percent, 40);
   assert.equal(s.complete, false);
-  assert.deepEqual(s.steps.map((x) => x.done), [true, true, false, false, false]);
+  assert.deepEqual(s.steps.map((x) => x.key), ['profile', 'services', 'capabilities', 'coverage', 'availability', 'portfolio']);
+  assert.deepEqual(s.steps.map((x) => x.done), [true, true, false, false, false, false]);
   assert.equal(s.nextStep.key, 'capabilities');
   assert.equal(setupSummary(null), null);
   assert.ok(isAutoBusinessName("sourav kumar's Studio"));

@@ -102,7 +102,7 @@ test("real native auth routes rotate, scope, revoke, and reject replay without a
   assert.notEqual(external.refreshToken, "external-original");
   assert.equal(
     verifyExternalAccessToken(external.accessToken).accountType,
-    "VENDOR",
+    "CUSTOMER",
   );
   assert.equal(
     (await post("external", "refresh", "external-original")).error,

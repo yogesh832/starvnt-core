@@ -58,7 +58,7 @@ async function sendViaResend({ to, otp, type }) {
 
   const resend = new Resend(config.resendApiKey);
   const mail = buildOtpMail({ otp, type });
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: `StarVnt Entertainment <${config.resendSenderEmail}>`,
     to: [to],
     subject: mail.subject,
@@ -72,8 +72,8 @@ async function sendViaResend({ to, otp, type }) {
     throw err;
   }
 
-  console.log("[Resend Email OTP] Accepted for delivery:", to);
-  return true;
+  if (!data?.id) throw Object.assign(new Error('Email provider did not acknowledge the message.'), { provider: 'resend' });
+  return { provider: 'resend', status: 'accepted', messageId: data.id, inboxConfirmed: false };
 }
 
 async function sendViaSmtp({ to, otp, type }) {
@@ -90,6 +90,9 @@ async function sendViaSmtp({ to, otp, type }) {
     host: config.emailServerHost,
     port: config.emailServerPort,
     secure: config.emailServerPort === 465,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth: {
       user: config.emailServerUser,
       pass: config.emailServerPassword,
@@ -97,15 +100,18 @@ async function sendViaSmtp({ to, otp, type }) {
   });
   const mail = buildOtpMail({ otp, type });
 
-  await transporter.sendMail({
+  const result = await transporter.sendMail({
     from: `STARVNT <${config.emailFrom}>`,
     to,
     subject: mail.subject,
     text: mail.text,
     html: mail.html,
   });
-  console.log("[SMTP Email OTP] Accepted for delivery:", to);
-  return true;
+  const address = value => normalizeEmail(typeof value === 'string' ? value : value?.address);
+  const accepted = (result.accepted || []).some(value => address(value) === normalizeEmail(to));
+  const rejected = [...(result.rejected || []), ...(result.pending || [])].some(value => address(value) === normalizeEmail(to));
+  if (!accepted || rejected) throw Object.assign(new Error('SMTP_RECIPIENT_NOT_ACCEPTED'), { code: 'EENVELOPE' });
+  return { provider: 'smtp', status: 'accepted', messageId: result.messageId || null, inboxConfirmed: false };
 }
 
 /**
@@ -137,18 +143,22 @@ export async function sendEmailOtp(email, type = "signup") {
     throw new Error("EMAIL_OTP_NOT_CONFIGURED");
   }
 
+  let delivery;
   try {
     const sentWithResend = await sendViaResend({ to: normalized, otp, type });
     if (!sentWithResend) {
       const sentWithSmtp = await sendViaSmtp({ to: normalized, otp, type });
       if (!sentWithSmtp) throw new Error("EMAIL_OTP_NOT_CONFIGURED");
-    }
+      delivery = sentWithSmtp;
+    } else delivery = sentWithResend;
   } catch (err) {
     await OtpVerification.deleteMany({ phone: normalized });
     console.error("[Email OTP] Send failed:", err.message);
     if (err.message === "EMAIL_OTP_NOT_CONFIGURED") {
       throw err;
     }
+    if (err.code === 'EENVELOPE' || err.responseCode === 550 || err.responseCode === 553) throw new Error('EMAIL_OTP_RECIPIENT_REJECTED');
+    if (['ETIMEDOUT', 'ECONNECTION', 'ECONNRESET', 'EDNS', 'ESOCKET'].includes(err.code)) throw new Error('EMAIL_OTP_PROVIDER_UNAVAILABLE');
     if (err.code === "EAUTH") {
       throw new Error("SMTP_EMAIL_AUTH_FAILED");
     }
@@ -161,6 +171,8 @@ export async function sendEmailOtp(email, type = "signup") {
   return {
     email: normalized,
     emailSent: true,
+    delivery,
+    message: "Your email provider accepted the OTP request. Inbox delivery is not yet confirmed. Check Spam as well; if it does not arrive, request a new code.",
     expiresInSeconds: 600,
   };
 }

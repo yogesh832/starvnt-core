@@ -1,3 +1,4 @@
+import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { Router } from 'express';
 import { requireExternalAuth, requireAccountType } from '../middleware/requireExternalAuth.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
@@ -55,6 +56,8 @@ function normalizePrimaryCategory(category) {
   if (category === undefined || category === null) return { value: undefined };
   if (Array.isArray(category)) return { error: 'PRIMARY_CATEGORY_SINGLE_ONLY' };
   const value = String(category).trim();
+  const error = vendorCategoryError(value);
+  if (error) return { error };
   if (!value) return { value: '' };
   if (/[|;]+/.test(value) || value.split(',').filter(Boolean).length > 1) {
     return { error: 'PRIMARY_CATEGORY_SINGLE_ONLY' };
@@ -280,6 +283,7 @@ router.get('/services', async (req, res, next) => {
 router.post('/services', async (req, res, next) => {
   try {
     const { name, category, pricing, leadTimeDays, cancellationPolicy, deliverables, status } = req.body || {};
+    if (vendorCategoryError(category)) return res.status(400).json({ error: vendorCategoryError(category) });
     if (!name || !category || !pricing || pricing.basePrice === undefined) {
       return res.status(400).json({ error: 'MISSING_SERVICE_FIELDS' });
     }
@@ -316,6 +320,7 @@ router.put('/services/:id', async (req, res, next) => {
     }
 
     const { name, category, pricing, leadTimeDays, status } = req.body || {};
+    if (vendorCategoryError(category)) return res.status(400).json({ error: vendorCategoryError(category) });
     if (name) service.name = name;
     if (category) service.category = category;
     if (pricing) service.pricing = { ...service.pricing, ...pricing };

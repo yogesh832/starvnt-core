@@ -151,6 +151,8 @@ test('unavailable vendor finance/readiness stays unknown and zero payable amount
   modules['../../admin/models/CoreBooking.js'] = { CoreBooking: { find: () => query([{ serviceName: 'Test contract', totalAmount: 100, settlementDetails: { vendorPayable: 0 } }]) } };
   modules['../services/vendorActivation.service.js'] = { evaluateVendorActivation: async () => { throw Error('readiness unavailable'); } };
   modules['../../common/financialTruth.service.js'] = { vendorFinancialTruth: async () => { throw Error('finance unavailable'); } };
+  modules['../../common/vendorCategories.js'] = await import('../src/common/vendorCategories.js');
+  modules['../../common/vendorSetupSteps.js'] = await import('../src/common/vendorSetupSteps.js');
   const code = transformSync(readFileSync(new URL('../src/external/aura/vendorContext.js', import.meta.url), 'utf8'), { format: 'cjs', loader: 'js' }).code;
   const module = { exports: {} };
   new Function('require', 'module', 'exports', code)(name => { assert.ok(modules[name], name); return modules[name]; }, module, module.exports);

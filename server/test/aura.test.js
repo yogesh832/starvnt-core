@@ -90,7 +90,7 @@ test('hallucination guards drop values the customer never said', async () => {
     },
   ]);
   await chat(token, { sessionId: s, message: "It's my son's birthday" }).expect(200);
-  const r = await chat(token, { sessionId: s, message: 'The venue is Kisan Palace. Maybe a DJ. We need photography. Can you help?' }).expect(200);
+  const r = await chat(token, { sessionId: s, message: 'The venue is Kisan Palace. Maybe a sound system. We need photography. Can you help?' }).expect(200);
   // The model's "Kisan Palace Gardens" is dropped; only the literal "Kisan Palace" is kept.
   assert.deepEqual(r.body.understanding.services.provided.map((p) => p.value), ['Kisan Palace']);
   assert.equal(r.body.understanding.facts.location.venueName, 'Kisan Palace');
@@ -158,11 +158,35 @@ test('chip validation and LLM failure fallback', async () => {
   const s = sid();
   scriptLlm([new Error('quota'), { text: 'ok', extracted: {} }]);
   // LLM down: the fallback parser still captures literal facts, but creates no event without a type.
-  const r = await chat(token, { sessionId: s, message: 'For 200 guests' }).expect(200);
+  const r = await chat(token, { sessionId: s, message: 'Can you help me plan for 200 guests?' }).expect(200);
   assert.match(r.body.reply, /trouble/);
   assert.equal(r.body.activeEvent, null);
   await chat(token, { sessionId: s, message: 'x', skipTopic: 'drop table' }).expect(400);
   await chat(token, { sessionId: s, message: 'x', skipTopic: 'event.budget' }).expect(400); // no event yet
   await chat(token, { sessionId: s, message: '' }).expect(400);
   await request(app).post('/api/aura/chat').send({ sessionId: s, message: 'hi' }).expect(401);
+});
+
+test('model outage still saves literal facts on the owned event', async () => {
+  const { user, token } = await makeUser();
+  const event = await models.CustomerEvent.create({ customer: user._id, eventType: 'birthday', title: 'Birthday', status: 'draft' });
+  const llm = scriptLlm([new Error('provider unavailable')]);
+  const r = await chat(token, {
+    sessionId: sid(), eventId: String(event._id), message: 'Can you help me plan for 200 guests?',
+  }).expect(200);
+  assert.equal(llm.calls.length, 1);
+  assert.match(r.body.reply, /trouble/);
+  assert.equal(r.body.activeEvent.guestCount, 200);
+  assert.equal((await models.CustomerEvent.findById(event._id).lean()).guestCount, 200);
+  assert.ok(r.body.nextQuestion?.question);
+});
+
+test('literal facts avoid the model and do not report a false outage', async () => {
+  const { user, token } = await makeUser();
+  const event = await models.CustomerEvent.create({ customer: user._id, eventType: 'birthday', title: 'Birthday', status: 'draft' });
+  const llm = scriptLlm([new Error('must not be called')]);
+  const r = await chat(token, { sessionId: sid(), eventId: String(event._id), message: 'For 200 guests' }).expect(200);
+  assert.equal(llm.calls.length, 0);
+  assert.doesNotMatch(r.body.reply, /trouble|unavailable/i);
+  assert.equal(r.body.activeEvent.guestCount, 200);
 });

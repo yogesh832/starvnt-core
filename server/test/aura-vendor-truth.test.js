@@ -5,6 +5,12 @@ import { transformSync } from 'esbuild';
 import * as plan from '../src/customer/services/planCatalog.js';
 import { isVendorRequest, isCatalogLookupOnly, selectVendorRows, vendorPrice, vendorTruthReply } from '../src/customer/aura/vendorTruth.js';
 
+test('a named vendor request is not mistaken for an unavailable named package', () => {
+  const rows=[{vendor:'QA Kumaon Catering',package:'Catering',category:'catering',price:42000},{vendor:'Other Caterer',package:'Lunch Buffet',category:'catering',price:30000}];
+  assert.deepEqual(selectVendorRows(rows,'QA Kumaon Catering ka Catering package dikhao'),[rows[0]]);
+  assert.deepEqual(selectVendorRows(rows,'QA Kumaon Catering ka Premium Gold package dikhao'),[]);
+});
+
 function load(path, modules) {
   const module = { exports: {} };
   const code = transformSync(readFileSync(new URL(path, import.meta.url), 'utf8'), { format: 'cjs' }).code;
@@ -53,7 +59,7 @@ test('vendor results use exact stored names and amounts, distinguish base rates,
   assert.match(reply, /Availability needs an event date/);
   assert.equal(selectVendorRows(rows, 'Show photographers').length, 1);
   assert.equal(selectVendorRows(rows, 'फोटोग्राफर दिखाओ').length, 1);
-  assert.deepEqual(plan.categoriesMentioned('Show DJ prices'), ['sound']);
+  assert.deepEqual(plan.categoriesMentioned('Show DJ prices'), ['dj']);
   assert.match(vendorPrice({ ...rows[0], requiresVendorConfirmation: true }), /needs vendor confirmation/);
   assert.match(vendorTruthReply([], { city: 'Kapkote' }), /no matching active services/);
 });

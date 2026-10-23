@@ -2,26 +2,30 @@ const HINDI = /[\u0900-\u097f]/;
 const HINGLISH = /\b(mujhe|mera|meri|mere|hamara|humara|shaadi|shadi|chahiye|karna|karni|karo|batao|kitne|kitna|kaise|kahan|hain|nahi|nahin|haan|hoga|hogi|aap|hai|kripya|madad|karein|intezaam|jaankari)\b/i;
 
 /** Short facts and chip answers retain the conversation language. */
-export function conversationLanguage(message = '', history = []) {
+export function conversationLanguage(message = '', history = [], preferredLanguage = null) {
   const previousReply = [...history].reverse().find(m => m.role !== 'user')?.content || '';
-  let language = /[\u0980-\u09ff]/.test(previousReply) ? 'bn' : HINDI.test(previousReply) ? 'hi' : HINGLISH.test(previousReply) ? 'hinglish' : 'en';
+  let language = preferredLanguage || (/[\u0980-\u09ff]/.test(previousReply) ? 'bn' : HINDI.test(previousReply) ? 'hi' : HINGLISH.test(previousReply) ? 'hinglish' : 'en');
   for (const text of [...history.filter(m => m.role === 'user').map(m => String(m.content || '')), message]) {
     if (!text.trim()) continue;
-    if (/\b(in english|english (please|mein|me)|reply.*english|speak.*english)\b/i.test(text)) language = 'en';
-    else if (/[\u0980-\u09ff]/.test(text)) language = 'bn';
-    else if (HINDI.test(text)) language = 'hi';
+    const explicitRoman = /\b(?:roman (?:hindi|script)|hinglish)\b/i.test(text);
+    const explicitHindi = /\b(?:in hindi|hindi please)\b/i.test(text);
+    if (explicitRoman) { language = 'hinglish'; continue; }
+    if (explicitHindi) { language = 'hi'; continue; }
+    if (/\b(in english|english (please|mein|me)|reply.*english|speak.*english)\b/i.test(text)) { language = 'en'; }
+    else if (/[\u0980-\u09ff]/.test(text)) { language = 'bn'; }
+    else if (HINDI.test(text)) { language = 'hi'; }
     else if (HINGLISH.test(text)) {
-      if (!/^(haan|nahi|nahin|ji|haan ji)[.!\s]*$/i.test(text)) language = 'hinglish';
+      if (!/^(haan|nahi|nahin|ji|haan ji)[.!\s]*$/i.test(text)) { language = 'hinglish'; }
     // Place names and short factual fragments can contain four or more words
     // without being an English language switch ("kapkote bazar ke paas").
-    } else if (/\b(i(?:'m| am| would| want| need| have| will)|we (?:are|want|need|have|will)|(?:can|could|would) you|please (?:find|show|help|tell)|(?:show|find|tell|recommend) (?:me|us)|(?:it|this|that) (?:is|will|should))\b/i.test(text)) language = 'en';
+    } else if (/\b(i(?:'m| am| would| want| need| have| had| will| offer)|we (?:are|want|need|have|will)|(?:can|could|would) you|how (?:do|can|should) (?:i|we)|help me|please (?:find|show|help|tell)|(?:show|find|tell|recommend) (?:me|us)|(?:it|this|that) (?:is|will|should))\b/i.test(text)) { language = 'en'; }
   }
   return language;
 }
 
 export function auraLanguageInstruction(language) {
   const label = { hi: 'Hindi in Devanagari script', bn: 'Bengali', hinglish: 'Roman-script Hinglish', en: 'English' }[language] || 'English';
-  return `Continue in ${label}, including the next question. Short dates, numbers, place names and yes/no answers do not change the conversation language. Aura is a feminine speaker: use feminine first-person Hindi/Hinglish forms ("मैं मदद कर सकती हूँ", "मैं देख रही हूँ", "main madad kar sakti hoon", "main dekh rahi hoon"). Do not infer or change the customer's gender. English remains natural and gender-neutral.`;
+  return `Continue in ${label}, including the next question, confirmations, action labels and saved-result follow-ups. This language is chosen from the user's messages and overrides language mistakes in earlier assistant replies. Preserve the selected script; do not alternate Roman Hindi and Devanagari. Short dates, numbers, place names and yes/no answers do not change the conversation language. Aura is a feminine speaker: use feminine first-person Hindi/Hinglish forms ("मैं मदद कर सकती हूँ", "मैं देख रही हूँ", "main madad kar sakti hoon", "main dekh rahi hoon"). Do not infer or change the customer's gender. English remains natural and gender-neutral.`;
 }
 
 const categories = {

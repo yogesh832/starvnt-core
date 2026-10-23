@@ -14,6 +14,7 @@ let VendorOrganization;
 let hashPassword;
 let generateRefreshToken;
 let hashRefreshToken;
+let signExternalAccessToken;
 let config;
 const PASSWORD = 'secret123';
 
@@ -23,7 +24,7 @@ before(async () => {
   ({ ExternalSession } = await import('../src/external/models/ExternalSession.js'));
   ({ VendorOrganization } = await import('../src/external/models/VendorOrganization.js'));
   ({ hashPassword } = await import('../src/external/utils/password.js'));
-  ({ generateRefreshToken, hashRefreshToken } = await import('../src/external/utils/tokens.js'));
+  ({ generateRefreshToken, hashRefreshToken, signExternalAccessToken } = await import('../src/external/utils/tokens.js'));
   ({ config } = await import('../src/config.js'));
 });
 after(teardown);
@@ -106,7 +107,7 @@ test('no tab sent (old clients) signs in as the primary type', async () => {
   assert.equal(res.body.user.accountType, 'VENDOR');
 });
 
-test('refresh keeps the surface the session signed in as', async () => {
+test('refresh keeps the primary DB-owned surface', async () => {
   const u = await account('CUSTOMER');
   const res = await login(u.email, 'CUSTOMER');
   const cookie = res.headers['set-cookie'];
@@ -122,12 +123,18 @@ test('refresh heals an old wrong-tab vendor session back to the primary customer
   await u.save();
 
   const refreshToken = generateRefreshToken();
-  await ExternalSession.create({
+  const oldSession = await ExternalSession.create({
     user: u._id,
     refreshTokenHash: hashRefreshToken(refreshToken),
     expiresAt: new Date(Date.now() + 86400000),
     accountType: 'VENDOR',
   });
+
+  // An already-issued access token cannot use the polluted surface either.
+  const oldAccessToken = signExternalAccessToken(u, oldSession._id, 'VENDOR');
+  const oldAuth = { Authorization: `Bearer ${oldAccessToken}` };
+  await request(app).get('/api/vendor/me').set(oldAuth).expect(403);
+  await request(app).get('/api/customer/me').set(oldAuth).expect(200);
 
   const refreshed = await request(app)
     .post('/api/auth/refresh')
