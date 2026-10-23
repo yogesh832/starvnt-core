@@ -195,24 +195,6 @@ function resolveExistingAccountType(user) {
   return user.accountType || userRoles(user)[0] || "CUSTOMER";
 }
 
-function resolveExistingSignInSurface(user, requestedSurface) {
-  const primarySurface = resolveExistingAccountType(user);
-  if (!requestedSurface || requestedSurface === primarySurface) {
-    return { signInAs: primarySurface };
-  }
-  const roles = userRoles(user);
-  if (roles.includes(requestedSurface)) {
-    return { signInAs: requestedSurface };
-  }
-  return {
-    error: "ACCOUNT_SURFACE_COLLISION",
-    message:
-      "This Google identity is already linked to a different STARVNT account surface. Sign in to the existing surface first, then explicitly switch or link the vendor/customer surface.",
-    existingAccountType: primarySurface,
-    requestedAccountType: requestedSurface,
-  };
-}
-
 function grantRole(user, role) {
   const roles = userRoles(user);
   if (!roles.includes(role)) roles.push(role);
@@ -455,19 +437,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
-      const requestedSurface = accountType === "VENDOR" ? "VENDOR" : accountType === "CUSTOMER" ? "CUSTOMER" : null;
-      const surfaceResolution = resolveExistingSignInSurface(user, requestedSurface);
-      if (surfaceResolution.error) {
-        return res.status(409).json(surfaceResolution);
-      }
-      signInAs = surfaceResolution.signInAs;
-      await prepareAccountType(user, signInAs, {
-        businessName,
-        brandName,
-        category: normalizedCategory.value,
-        city,
-        location,
-      });
+      signInAs = resolveExistingAccountType(user);
       user.lastLoginAt = new Date();
       await user.save();
     } else {
@@ -994,11 +964,10 @@ router.post("/refresh", async (req, res, next) => {
         .json({ ok: false, error: "ACCOUNT_DISABLED_OR_MISSING" });
     }
 
-    // Rotate: revoke old session and preserve active surface.
-    // If the session had a specific accountType, respect it so user stays on their active portal.
+    // Rotate using the DB-owned surface, healing legacy wrong-tab sessions.
     session.revokedAt = new Date();
     await session.save();
-    const fresh = await createSession(user, req, session.accountType || resolveExistingAccountType(user));
+    const fresh = await createSession(user, req, resolveExistingAccountType(user));
     res.cookie(
       config.refreshCookieName,
       fresh.refreshToken,
@@ -1013,7 +982,7 @@ router.post("/refresh", async (req, res, next) => {
   }
 });
 
-// ── Switch Surface (Customer <-> Vendor for same identity) ───────────────────
+// ── Confirm the identity's existing surface without converting the account ──
 router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
   try {
     const { targetSurface } = req.body || {};
@@ -1021,10 +990,10 @@ router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
       return res.status(400).json({ error: "INVALID_SURFACE" });
     }
     const user = req.externalUser;
-    grantRole(user, targetSurface);
-    await prepareAccountType(user, targetSurface);
-    user.accountType = targetSurface;
-    await user.save();
+    const accountType = resolveExistingAccountType(user);
+    if (targetSurface !== accountType) {
+      return res.status(403).json({ error: "ACCOUNT_TYPE_MISMATCH", accountType });
+    }
 
     const { session, refreshToken } = await createSession(user, req, targetSurface);
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());

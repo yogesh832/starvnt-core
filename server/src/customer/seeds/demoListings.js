@@ -899,12 +899,17 @@ export const DEMO_LISTINGS = [
   };
 });
 
-/** Reset and reseed demo listings only. Development/staging helper, never production. */
+/** Add missing demos without deleting existing listings or changing their IDs. */
 export async function seedDemoListings() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Refusing to seed demo listings when NODE_ENV=production');
   }
-  const removed = await DemoListing.deleteMany({});
-  const inserted = await DemoListing.insertMany(DEMO_LISTINGS, { ordered: true });
-  return { inserted: inserted.length, removed: removed.deletedCount || 0, total: DEMO_LISTINGS.length };
+  const result = await DemoListing.bulkWrite(DEMO_LISTINGS.map((listing) => ({
+    updateOne: {
+      filter: { externalRef: listing.externalRef },
+      update: { $setOnInsert: listing },
+      upsert: true,
+    },
+  })));
+  return { inserted: result.upsertedCount, removed: 0, total: DEMO_LISTINGS.length };
 }

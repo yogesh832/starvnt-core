@@ -22,7 +22,7 @@ const SKIP_TOPIC_RE = /^(event|requirement|location)\.[a-z_]+$/;
 const MAX_MESSAGE = 2000;
 
 const FALLBACK_REPLY =
-  "Sorry, I'm having trouble thinking right now. I've kept what you told me — please check the card, or try again in a moment.";
+  "I'm having trouble reaching the planning assistant right now. Please check your event card or try again in a moment.";
 const WEAK_REPLY_RE = /^(pata nahi|i don't know|not sure|main abhi|sorry,? i('| a)m having trouble|sorry,? i can('|no)t|please check the (card|plan))/i;
 
 async function ownedSession(customerId, sessionId) {
@@ -266,6 +266,7 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
 
   // 5. LLM
   let reply = '';
+  let llmUnavailable = false;
   let rawExtracted = {};
   const literal = backfillFacts(text, {}, { askedTopic });
   const literalOnly = !/[?？]|\b(why|how|should|explain|suggest|recommend|kya|kyon|kyu|kaise|batao|batayein)\b/i.test(text) && Object.values(literal).some(value => value != null && value !== '' && (!Array.isArray(value) || value.length));
@@ -287,6 +288,7 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
     rawExtracted = out.extracted || {};
   } catch (err) {
     console.warn('[aura] LLM unavailable:', err?.message || err);
+    llmUnavailable = true;
     reply = '';
   }
   tracker.markGenerationEnd();
@@ -380,7 +382,13 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
     if (scope) await auraRepo.setCatalogSearch(sessionId, rememberCatalog(session.catalogSearch.query, scope, after.activeEvent));
   }
   after.nextQuestion = localizeAuraQuestion(after.nextQuestion, language, after.activeEvent);
-  if (isWeakReply(reply)) {
+  if (llmUnavailable && !vendorRequest) {
+    reply = language === 'hi'
+      ? 'अभी प्लानिंग असिस्टेंट से संपर्क करने में परेशानी हो रही है। कृपया अपना इवेंट कार्ड जाँच लें या थोड़ी देर में फिर कोशिश करें।'
+      : language === 'hinglish'
+        ? 'Abhi planning assistant se sampark karne mein dikkat aa rahi hai. Apna event card check kar lein ya thodi der mein phir koshish karein.'
+        : FALLBACK_REPLY;
+  } else if (isWeakReply(reply)) {
     reply = deterministicReply({ activeEvent: after.activeEvent, extracted: x, text, language });
   }
   reply = composeReply(reply || deterministicReply({ activeEvent: after.activeEvent, extracted: x, text, language }), {

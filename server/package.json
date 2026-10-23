@@ -31,5 +31,9 @@
     "nodemailer": "^10.0.10",
     "openai": "^7.21.0",
     "resend": "^6.28.1"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.4.3",
+    "supertest": "^7.3.1"
   }
 }
