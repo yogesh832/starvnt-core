@@ -48,6 +48,14 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 .expo/
+
+# Secrets / credentials
+mobile/credentials.json
+mobile/credentials/
+
+# Java keystore files
+*.jks
+*.keystore
 mobile/android/
 mobile/ios/
 mobile/google-services.json

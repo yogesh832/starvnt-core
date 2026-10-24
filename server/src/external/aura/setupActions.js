@@ -385,10 +385,12 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
 
   if (kind === 'capability') {
     const c = raw.capability || {};
-    const teamSize = Number(c.teamSize) || numberBefore(said, 'log|logon|people|persons?|members?|jan|crew|team|photographers?|staff');
-    if (!(teamSize >= 1 && teamSize <= 500) || !stated.has(teamSize)) return { error: 'your team size' };
     const service = pickService(services, c.serviceName);
     if (!service) return { error: 'a service first (add one before team & gear)' };
+    const savedService = context.services?.find(s => s.id === String(service._id));
+    const savedTeam = Number(savedService?.capabilities?.[0]?.teamSize);
+    const teamSize = Number(c.teamSize) || numberBefore(said, 'log|logon|people|persons?|members?|jan|crew|team|photographers?|staff') || savedTeam;
+    if (!(teamSize >= 1 && teamSize <= 500) || (!stated.has(teamSize) && teamSize !== savedTeam)) return { error: 'your team size' };
     return {
       action: {
         kind,

@@ -63,10 +63,10 @@ function activationStepList(activation) {
     {
       key: "coverage",
       label: "Coverage and travel",
-      detail: "Operating hub plus service coverage radius/localities",
+      detail: checklist.coverage && !checklist.locations ? "Coverage saved. Add your operating location pin/address." : checklist.locations && !checklist.coverage ? "Operating location saved. Set your service radius/localities." : "Operating hub plus service coverage radius/localities",
       done: Boolean(checklist.locations && checklist.coverage),
-      href: "/vendor/services?action=coverage",
-      action: "Set coverage",
+      href: checklist.coverage && !checklist.locations ? "/vendor/profile?tab=locations" : "/vendor/services?action=coverage",
+      action: checklist.coverage && !checklist.locations ? "Add operating location" : "Set coverage",
     },
     {
       key: "availability",
@@ -604,7 +604,7 @@ export function ServicesPage() {
         setSearchParams({});
       }
       setCoverageFeedback(
-        "Operating radius, coverage area and transit policy saved to database. Step 4 is verified!",
+        "Service radius, coverage area and travel policy saved. Your operating location is checked separately in the setup checklist.",
       );
       setTimeout(() => setCoverageFeedback(""), 5000);
       await loadServices();
@@ -815,7 +815,7 @@ export function ServicesPage() {
                         <div className="space-y-1 text-[11px]">
                           <div>
                             <span className="font-semibold text-muted">
-                              Operating Base & Radius:{" "}
+                              Service Coverage & Radius:{" "}
                             </span>
                             <span className="font-bold text-navy">
                               {primaryCov.radiusKm || 40} km radius from{" "}
@@ -840,7 +840,7 @@ export function ServicesPage() {
                             >
                               {primaryCov.outstationAllowed
                                 ? "Outstation Events Permitted"
-                                : "Base Metropolitan Area Only"}
+                                : "Outstation travel not enabled"}
                             </span>
                           </div>
                         </div>

@@ -100,6 +100,10 @@ export const config = {
   resendApiKey: process.env.RESEND_API_KEY || process.env.RESEND_KEY || "",
   resendSenderEmail: process.env.RESEND_SENDER_EMAIL || "no-reply@starvnt.com",
 
+  // Store-review access is limited to one external customer identity.
+  appReviewEmail: (process.env.APP_REVIEW_EMAIL || "").trim().toLowerCase(),
+  appReviewOtp: process.env.APP_REVIEW_OTP || "",
+
   // ── Production keep-alive for Render free instances ──
   keepAliveUrl:
     process.env.KEEP_ALIVE_URL ||

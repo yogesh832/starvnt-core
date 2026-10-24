@@ -6,12 +6,13 @@ const config: ExpoConfig = {
   slug: "starvnt",
   owner: "yogesh832",
   scheme: "starvnt",
-  version: "1.0.0",
+version: "1.0.1",
   icon: "./assets/brand/starvnt-icon.png",
   orientation: "default",
   userInterfaceStyle: "automatic",
   ios: { supportsTablet: true, bundleIdentifier: "com.starvnt.mobile" },
   android: {
+    versionCode: 2,
     ...(process.env.GOOGLE_SERVICES_JSON
       ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
       : {}),

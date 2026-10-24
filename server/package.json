@@ -13,6 +13,7 @@
     "seed:vendor": "node scripts/seed-vendor.js",
     "seed:vendors": "node scripts/seed-real-vendors.js",
     "seed:customer-demo": "node scripts/seed-customer-demo.js",
+    "seed:app-review": "node scripts/create-app-review-account.js",
     "backup:db": "node scripts/backup-db.js"
   },
   "dependencies": {

@@ -265,6 +265,25 @@ export function EventScreen({ route, navigation }: any) {
         />
       )}
       <ErrorNotice message={a.error} />
+      {e.status === "draft" && (
+        <Button
+          title="Delete draft event"
+          danger
+          busy={a.busy}
+          onPress={() =>
+            confirm(
+              `Delete ${e.title || "this draft event"}?`,
+              "This permanently deletes its plan and linked Aura conversations. It cannot be undone.",
+              () => {
+                void a.run(async () => {
+                  await external.call(eventPath(eventId), "DELETE");
+                  navigation.goBack();
+                });
+              },
+            )
+          }
+        />
+      )}
       {sections.map(([title, section, icon]) => (
         <MenuRow
           key={section}

@@ -617,6 +617,9 @@ router.post("/password/set", authLimiter, async (req, res, next) => {
     if (!email || !otp || !password) {
       return res.status(400).json({ error: "EMAIL_OTP_PASSWORD_REQUIRED" });
     }
+    if (config.appReviewEmail && normalizeEmail(email) === config.appReviewEmail) {
+      return res.status(403).json({ error: "REVIEW_ACCOUNT_PASSWORD_RESET_DISABLED" });
+    }
 
     const issues = passwordIssues(password);
     if (issues.length) {

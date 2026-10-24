@@ -2,6 +2,9 @@ import { Opportunity } from '../models/Opportunity.js';
 import { Quote } from '../models/Quote.js';
 import { VendorBlockout } from '../models/VendorBlockout.js';
 import { VendorService } from '../models/VendorService.js';
+import { VendorCapability } from '../models/VendorCapability.js';
+import { OperatingLocation } from '../models/OperatingLocation.js';
+import { ServiceCoverage } from '../models/ServiceCoverage.js';
 import { VendorReview } from '../models/VendorReview.js';
 import { VendorDocument } from '../models/VendorDocument.js';
 import { Notification } from '../models/Notification.js';
@@ -91,6 +94,12 @@ async function fetchGoogleRating(googlePlaceId, businessName) {
 
 export async function buildVendorContext(vendor, { page = null } = {}) {
   const vendorId = vendor._id;
+  // Read on every turn: form/map edits supersede the conversation's older setup state.
+  const [capabilities, operatingLocations, coverages] = await Promise.all([
+    VendorCapability.find({ vendor: vendorId }).lean(),
+    OperatingLocation.find({ vendor: vendorId }).sort({ isPrimary: -1 }).lean(),
+    ServiceCoverage.find({ vendor: vendorId }).lean(),
+  ]);
   const now = new Date();
   const today = isoDay(now);
   const in60 = isoDay(new Date(now.getTime() + 60 * 86400000));
@@ -228,12 +237,16 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
     },
     blockedDates: blockouts.map((b) => ({ date: b.date, allDay: b.allDay, from: b.allDay ? null : b.startTime, to: b.allDay ? null : b.endTime, reason: b.reason })),
     services: services.map((s) => ({
+      id: String(s._id),
       name: s.name,
       category: s.category,
       status: String(s.status).toLowerCase(),
       price: s.pricing?.basePrice ?? null,
       pricing: s.pricing ? `${String(s.pricing.pricingType).toLowerCase()} per ${s.pricing.unit}` : null,
+      capabilities: capabilities.filter(c => String(c.vendorService) === String(s._id)).map(c => ({ teamSize: c.teamSize, equipment: c.equipment, styles: c.styles, format: c.format, simultaneousEventLimit: c.simultaneousEventLimit })),
+      coverage: coverages.filter(c => String(c.vendorService) === String(s._id)).map(c => ({ city: c.city, state: c.state, radiusKm: c.radiusKm, localities: c.localities, outstationAllowed: c.outstationAllowed })),
     })),
+    operatingLocations: operatingLocations.map(l => ({ label: l.label, address: l.address, locality: l.locality, city: l.city, state: l.state, coordinates: l.coordinates, isPrimary: l.isPrimary })),
     googleBusiness: googleRating ? {
       connected: true,
       source: googleRating.source,

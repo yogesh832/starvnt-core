@@ -1,6 +1,6 @@
 {
   "name": "starvnt-core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "STARVNT — dual-domain identity & authorization architecture (MERN). One unified backend server hosting the External (Customer/Vendor) and Internal (Admin/Super Admin) identity domains on separate databases; three separate frontend portal experiences.",
   "workspaces": [
@@ -12,6 +12,7 @@
     "dev:mobile": "npm run start -w mobile",
     "mobile:android": "npm run android -w mobile",
     "mobile:ios": "npm run ios -w mobile",
+    "mobile:ios:simulator": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/scripts/ios-simulator.ps1",
     "check:mobile": "npm run typecheck -w mobile && npm run test -w mobile",
     "dev": "npm run dev -w server",
     "dev:web": "npm run dev -w web",

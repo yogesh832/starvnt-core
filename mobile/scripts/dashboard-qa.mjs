@@ -505,6 +505,25 @@ try {
       assert.equal(qaDb.adminConn.name, "starvnt_test_admin");
     });
     if (qaDb?.adminConn?.name === "starvnt_test_admin") {
+      const { createDraftEvent } =
+        await import("../../server/src/customer/services/events.service.js");
+      const draftToDelete = await check("Customer creates disposable draft", () =>
+        createDraftEvent(customer.data.user.id || customer.data.user._id, {
+          title: `Mobile QA draft ${run}`,
+          eventType: "birthday",
+          eventDate: "2027-10-19",
+          city: "Pune",
+        }),
+      );
+      if (draftToDelete) {
+        await check("Customer deletes an unconfirmed draft", async () => {
+          const draftId = draftToDelete.id || draftToDelete._id;
+          const deleted = await customer.api.call(`/customer/events/${draftId}`, "DELETE");
+          assert.equal(deleted.deletedEventId, String(draftId));
+          const events = await customer.api.call("/customer/events");
+          assert.ok(!events.events.some((item) => String(item.id || item._id) === String(draftId)));
+        });
+      }
       const { CoreBooking } =
         await import("../../server/src/admin/models/CoreBooking.js");
       const profile = await vendor.api.call("/vendor/profile");
@@ -520,6 +539,24 @@ try {
           customerEvent: event.id || event._id,
           serviceName: `QA linked enquiry ${run}`,
           eventDate: "2027-10-20",
+        });
+        const declinedOpportunity = await Opportunity.create({
+          vendor: profile.vendor._id,
+          customer: customer.data.user.id || customer.data.user._id,
+          vendorService: service._id,
+          customerEvent: event.id || event._id,
+          serviceName: `QA declined enquiry ${run}`,
+          eventDate: "2027-10-20",
+          status: "NEW",
+        });
+        await check("Vendor declines an enquiry", async () => {
+          const result = await vendor.api.call(
+            `/vendor/opportunities/${declinedOpportunity._id}/decline`,
+            "POST",
+          );
+          assert.equal(result.status, "DECLINED");
+          const saved = await Opportunity.findById(declinedOpportunity._id).lean();
+          assert.equal(saved.status, "DECLINED");
         });
         await Quote.updateOne(
           { _id: quote._id },

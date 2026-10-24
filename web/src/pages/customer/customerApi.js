@@ -77,10 +77,18 @@ export const customerApi = {
     externalApi.call(`/aura/sessions/${encodeURIComponent(sid)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`, options),
   auraChat: (body) => externalApi.call('/aura/chat', { method: 'POST', body }),
   auraChatStream: (body, onEvent, signal) => externalApi.stream('/aura/chat', { method: 'POST', body, signal }, onEvent),
-  uploadMedia: (file, filename, mediaType = 'IMAGE') =>
-    externalApi.call('/media/upload', {
+  uploadMedia: (file, filename, mediaType = 'IMAGE') => {
+    if (file instanceof Blob) {
+      const body = new FormData();
+      body.append('file', file, filename || file.name || 'attachment');
+      body.append('mediaType', mediaType === 'VIDEO' || file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE');
+      return externalApi.call('/media/upload', { method: 'POST', body });
+    }
+    return externalApi.call('/media/upload', {
+      method: 'POST',
       body: { file, filename, mediaType },
-    }),
+    });
+  },
 };
 
 /** Human message for an API error. */

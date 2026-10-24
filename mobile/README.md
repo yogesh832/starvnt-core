@@ -14,6 +14,8 @@ Guests start on the public homepage, using the web landing page's copy, planning
 
 ## Run
 
+For native iOS testing from Windows using a hosted simulator, see [IOS_TESTING.md](./IOS_TESTING.md). Run `npm run mobile:ios:simulator` from the repository root; Expo simulator access is required.
+
 Use a current Node 22 LTS release (at least 22.13) or a supported newer LTS release. Node 22.12 does not satisfy the upgraded React Native/Metro toolchain. From the repository root:
 
 ```sh

@@ -73,9 +73,13 @@ export function AdminNotifications({ navigation }: any) {
           key={item.id}
           onPress={() => {
             setRead((v) => [...v, notificationReadKey(item)]);
-            const key = item.to.split("?")[0].split("/").pop();
+            const destination = new URL(item.to, "https://app.starvnt.com");
+            const key = destination.pathname.split("/").pop();
             if (adminModules.some((m) => m.key === key))
-              navigation.navigate("AdminModule", { module: key });
+              navigation.navigate("AdminModule", {
+                module: key,
+                tab: destination.searchParams.get("tab") || undefined,
+              });
           }}
         >
           <Pill>
@@ -101,10 +105,11 @@ export function AdminModule({ route, navigation }: any) {
     );
   return (
     <AdminModuleBody
-      key={module.key}
+      key={`${module.key}-${route.params.tab || ""}`}
       module={module}
       navigation={navigation}
       can={can}
+      initialTab={route.params.tab}
     />
   );
 }
@@ -180,12 +185,14 @@ function AutomationHealth() {
     </Card>
   );
 }
-function AdminModuleBody({ module, navigation, can }: any) {
+function AdminModuleBody({ module, navigation, can, initialTab }: any) {
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState("");
   const [applied, setApplied] = useState("");
   const [tab, setTab] = useState(
-    module.key === "payments" ? "Customer Payments" : "All",
+    adminListTabs[module.key]?.includes(initialTab)
+      ? initialTab
+      : module.key === "payments" ? "Customer Payments" : "All",
   );
   const [filters, setFilters] = useState<Data>({});
   const [appliedFilters, setAppliedFilters] = useState<Data>({});

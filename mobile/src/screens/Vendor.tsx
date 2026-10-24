@@ -290,33 +290,59 @@ function VendorModuleBody({ route, navigation }: any) {
           {key === "enquiries" && (
             <>
               <Txt muted>{row.customer?.fullName || row.clientName}</Txt>
-              <Button
-                title="Prepare a quote"
-                onPress={() =>
-                  navigation.navigate("VendorForm", {
-                    kind: "quote",
-                    item: row,
-                  })
-                }
-              />
-              <Button
-                title="Open conversation"
-                secondary
-                busy={a.busy}
-                onPress={() => {
-                  void a.run(async () => {
-                    const d = await external.call(
-                      `/vendor/messages/context/opportunity/${id(row)}`,
-                      "POST",
-                    );
-                    navigation.navigate("Chat", {
-                      kind: "thread",
-                      threadId: id(d.thread),
-                      vendor: true,
+              {["NEW", "VIEWED"].includes(row.status) && (
+                <Button
+                  title="Prepare a quote"
+                  onPress={() =>
+                    navigation.navigate("VendorForm", {
+                      kind: "quote",
+                      item: row,
+                    })
+                  }
+                />
+              )}
+              {row.status !== "DECLINED" && row.status !== "EXPIRED" && (
+                <Button
+                  title="Open conversation"
+                  secondary
+                  busy={a.busy}
+                  onPress={() => {
+                    void a.run(async () => {
+                      const d = await external.call(
+                        `/vendor/messages/context/opportunity/${id(row)}`,
+                        "POST",
+                      );
+                      navigation.navigate("Chat", {
+                        kind: "thread",
+                        threadId: id(d.thread),
+                        vendor: true,
+                      });
                     });
-                  });
-                }}
-              />
+                  }}
+                />
+              )}
+              {["NEW", "VIEWED"].includes(row.status) && (
+                <Button
+                  title="Decline enquiry"
+                  secondary
+                  busy={a.busy}
+                  onPress={() =>
+                    confirm(
+                      "Decline this enquiry?",
+                      "The customer will no longer receive a quote from your business for this request.",
+                      () => {
+                        void a.run(async () => {
+                          await external.call(
+                            `/vendor/opportunities/${encodeURIComponent(id(row))}/decline`,
+                            "POST",
+                          );
+                          await r.refresh();
+                        });
+                      },
+                    )
+                  }
+                />
+              )}
             </>
           )}
           {key === "quotes" && (
