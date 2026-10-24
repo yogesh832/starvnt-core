@@ -6,6 +6,7 @@ import ExternalLogin from './pages/external/Login.jsx';
 import TestLogin from './pages/external/TestLogin.jsx';
 import TestingHub from './pages/external/TestingHub.jsx';
 import Landing from './pages/customer/Landing.jsx';
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import CustomerPortal from './pages/customer/CustomerPortal.jsx';
 import VendorPortal from './pages/vendor/VendorPortal.jsx';
 import AdminLogin from './pages/admin/AdminLogin.jsx';
@@ -67,6 +68,8 @@ export default function App() {
         } 
       />
       {/* External domain — one auth UI, two portals */}
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />
       <Route path="/register" element={<ExternalLogin />} />

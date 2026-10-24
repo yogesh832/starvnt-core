@@ -119,9 +119,9 @@ export default function PublicFooter({ showTrustStrip = true }) {
                 </span>
               </li>
               <li>
-                <span className="cursor-pointer hover:text-primary transition">
+                <Link to="/privacy-policy" className="hover:text-primary transition">
                   Privacy Policy
-                </span>
+                </Link>
               </li>
               <li>
                 <span className="cursor-pointer hover:text-primary transition">
