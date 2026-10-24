@@ -8,6 +8,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
   const { user } = useExternalAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const vendorSite = /^(vendor|partner)\./.test(window.location.hostname);
 
   function handlePlan() {
     if (onPlanClick) {
@@ -63,7 +64,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
               </Link>
             ) : (
               <Link
-                to="/login?as=customer"
+                to={vendorSite ? '/login?as=vendor&next=%2Fvendor' : '/login?as=customer'}
                 className="text-xs sm:text-sm font-bold text-ink/70 dark:text-gray-300 hover:text-primary px-2 transition"
               >
                 Sign in

@@ -44,13 +44,19 @@ export default function ExternalLogin() {
     window.location.pathname === "/register" ||
     params.get("mode") === "register";
 
-  const resolveInitialAccountType = () => "VENDOR";
+  const resolveInitialAccountType = () => {
+    const role = (params.get("as") || params.get("role") || params.get("type") || "").toUpperCase();
+    if (role === "CUSTOMER" || role === "VENDOR") return role;
+    if (nextPath === "/vendor" || nextPath.startsWith("/vendor/")) return "VENDOR";
+    if (nextPath === "/customer" || nextPath.startsWith("/customer/")) return "CUSTOMER";
+    return /^(vendor|partner)\./.test(window.location.hostname) ? "VENDOR" : "CUSTOMER";
+  };
 
   const [mode, setMode] = useState(isRegisterPath ? "register" : "login");
   const [accountType, setAccountType] = useState(resolveInitialAccountType);
 
   useEffect(() => {
-    setAccountType("VENDOR");
+    setAccountType(resolveInitialAccountType());
   }, [params, nextPath]);
   // Auth Method: 'GOOGLE' | 'PHONE' | 'EMAIL'
   const [authMethod, setAuthMethod] = useState("EMAIL");
@@ -224,8 +230,8 @@ export default function ExternalLogin() {
       const map = {
         INVALID_CREDENTIALS: "Incorrect email or password.",
         ACCOUNT_TYPE_MISMATCH:
-          err.data?.message || "This account is not available on Vendor login. Please use the correct STARVNT app surface.",
-        EMAIL_IN_USE: "That email is already registered. Sign in here only if it belongs to a vendor account.",
+          err.data?.message || "Choose the Customer or Vendor tab for this account and try again.",
+        EMAIL_IN_USE: "That email is already registered. Choose the matching Customer or Vendor tab to sign in.",
         WEAK_PASSWORD: "Password needs 8+ chars with a letter and a number.",
         BUSINESS_NAME_REQUIRED: "Please add your brand / business name.",
         RATE_LIMITED: "Too many attempts — wait a few minutes and retry.",
@@ -312,7 +318,7 @@ export default function ExternalLogin() {
     } catch (err) {
       setError(
         err.data?.error === "ACCOUNT_TYPE_MISMATCH"
-          ? err.data?.message || "This account is not available on Vendor login. Please use the correct STARVNT app surface."
+          ? err.data?.message || "Choose the Customer or Vendor tab for this account and try again."
           : err.message || err.data?.error || "Google sign-in failed.",
       );
     } finally {
@@ -391,7 +397,7 @@ export default function ExternalLogin() {
           } catch (err) {
             setError(
               err.data?.error === "ACCOUNT_TYPE_MISMATCH"
-                ? err.data?.message || "This account is not available on Vendor login. Please use the correct STARVNT app surface."
+                ? err.data?.message || "Choose the Customer or Vendor tab for this account and try again."
                 : err.message || err.data?.error || "OTP verification failed.",
             );
           } finally {
@@ -457,7 +463,7 @@ export default function ExternalLogin() {
         OTP_EXPIRED_OR_NOT_FOUND: "OTP expired. Please request a new one.",
         TOO_MANY_ATTEMPTS: "Too many failed attempts. Request a new OTP.",
         ACCOUNT_TYPE_MISMATCH:
-          err.data?.message || "This account is not available on Vendor login. Please use the correct STARVNT app surface.",
+          err.data?.message || "Choose the Customer or Vendor tab for this account and try again.",
       };
       setError(
         map[err.data?.error] || err.message || "OTP verification failed.",
@@ -616,22 +622,29 @@ export default function ExternalLogin() {
           {/* Right: Auth Form Panel */}
           <main className="p-6 sm:p-10 flex flex-col justify-center bg-white">
             <div className="w-full">
-              {/* Main branch auth surface is intentionally vendor-only.
-                  Customer auth remains available in the merged backend/customer app, but is not exposed here. */}
+              <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl bg-lavender p-1" aria-label="Account type">
+                {[['CUSTOMER', 'Customer'], ['VENDOR', 'Vendor']].map(([type, label]) => (
+                  <button key={type} type="button" aria-pressed={accountType === type}
+                    onClick={() => { navigate(`${isRegisterPath ? '/signup' : '/login'}?as=${type.toLowerCase()}&next=${encodeURIComponent(type === 'VENDOR' ? '/vendor' : '/customer')}`, { replace: true }); setError(''); setOtpSent(false); setEmailOtpSent(false); setEmailOtpVerified(false); setForm(previous => ({ ...previous, otp: '', password: '' })); }}
+                    className={`rounded-xl px-4 py-3 text-sm font-bold transition ${accountType === type ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-primary'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="flex items-center justify-between pb-4 border-b border-gray-100 gap-4">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-extrabold text-navy tracking-tight">
                     {mode === "login"
-                      ? "Vendor Sign in"
-                      : "Create Vendor Account"}
+                      ? `${accountType === 'VENDOR' ? 'Vendor' : 'Customer'} Sign in`
+                      : `Create ${accountType === 'VENDOR' ? 'Vendor' : 'Customer'} Account`}
                   </h2>
                   <p className="text-xs text-muted mt-0.5">
-                    Operating as Verified Vendor / Brand
+                    {accountType === 'VENDOR' ? 'For your business and vendor services' : 'Plan and manage your events'}
                   </p>
                 </div>
 
                 <div className="px-3 sm:px-4 py-2 rounded-2xl bg-navy text-white text-xs font-extrabold shadow-sm border border-navy/10 shrink-0">
-                  Vendor OS
+                  {accountType === 'VENDOR' ? 'Vendor OS' : 'Customer'}
                 </div>
               </div>
 

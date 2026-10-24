@@ -60,9 +60,7 @@ export default function App() {
       <Route 
         path="/" 
         element={
-          window.location.hostname.startsWith('partner.') || window.location.hostname.startsWith('vendor.')
-            ? <Navigate to="/vendor" replace />
-            : window.location.hostname.startsWith('admin.')
+          window.location.hostname.startsWith('admin.')
               ? <Navigate to="/admin" replace />
               : <Landing />
         } 

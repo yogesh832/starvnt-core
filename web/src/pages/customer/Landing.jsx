@@ -67,6 +67,7 @@ export default function Landing() {
   function beginPlan(text) {
     const ask = typeof text === 'string' ? text.trim() : '';
     if (user) {
+      if (user.accountType === 'VENDOR') { navigate('/vendor'); return; }
       navigate(ask ? `/customer/aura?new=1&ask=${encodeURIComponent(ask)}` : '/customer');
       return;
     }
@@ -115,7 +116,7 @@ export default function Landing() {
               placeholder="Tell us what you want to arrange..."
               className="flex-1 outline-none text-sm sm:text-base placeholder:text-muted/60 min-w-0"
             />
-            <button type="button" className="text-muted hover:text-primary p-1 cursor-pointer transition shrink-0" aria-label="Voice input">
+            <button type="button" onClick={() => beginPlan(input.trim())} className="text-muted hover:text-primary p-1 cursor-pointer transition shrink-0" aria-label="Voice input">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M19 11a7 7 0 01-14 0m14 0a7 7 0 00-14 0m14 0v1a7 7 0 01-14 0v-1m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
@@ -159,6 +160,21 @@ export default function Landing() {
           </div>
         </div>
       </main>
+
+      <section id="how-it-works" aria-labelledby="how-it-works-heading" className="mx-auto w-full max-w-7xl scroll-mt-24 px-4 pb-12 sm:px-8 lg:px-12">
+        <h2 id="how-it-works-heading" className="mb-5 text-2xl font-extrabold text-navy dark:text-white">From your first idea to event day</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            ['01', 'Tell Aura+ your plans', 'Describe your event, date, location and budget in your own words. Build your plan at your pace.'],
+            ['02', 'Find the right services', 'Explore vendor services, ask questions and compare quotations before making a decision.'],
+            ['03', 'Keep everything together', 'Manage enquiries, bookings, messages and event progress from your dashboard.'],
+          ].map(([number, title, detail]) => <div key={number} className="rounded-2xl border border-primary/10 bg-white/80 p-6 dark:border-white/10 dark:bg-white/5"><span className="text-sm font-bold text-primary dark:text-violet-300">{number}</span><h3 className="mt-2 font-bold text-navy dark:text-white">{title}</h3><p className="mt-2 text-sm leading-relaxed text-muted dark:text-gray-300">{detail}</p></div>)}
+        </div>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary-soft p-6 dark:bg-white/5">
+          <div><h2 className="font-bold text-navy dark:text-white">Bring your services to STARVNT</h2><p className="mt-1 text-sm text-muted dark:text-gray-300">Create your vendor profile, showcase your work and manage incoming enquiries.</p></div>
+          <Link to="/signup?as=vendor&next=%2Fvendor" className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">Join as a vendor</Link>
+        </div>
+      </section>
 
       {/* Unified Public Footer with Trust Strip */}
       <PublicFooter showTrustStrip={true} />
