@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Installed as /opt/starvnt/bin/deploy-main, root-owned and executable.
+set -Eeuo pipefail
+sha=${1:-}
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'A full Git SHA is required'; exit 2; }
+exec 9>/opt/starvnt/deploy.lock
+flock -w 900 9
+release="/opt/starvnt/releases/$sha"
+if [[ ! -f "$release/.download-complete" ]]; then
+  mkdir -p /opt/starvnt/releases
+  stage=$(mktemp -d /opt/starvnt/releases/stage.XXXXXX)
+  curl --fail --location --retry 3 --connect-timeout 15 --max-time 180 \
+    "https://codeload.github.com/yogesh832/starvnt-core/tar.gz/$sha" -o "$stage/source.tar.gz"
+  mkdir "$stage/source"
+  tar -xzf "$stage/source.tar.gz" --strip-components=1 -C "$stage/source"
+  [[ -f "$stage/source/deploy/aws/apply-release.sh" ]]
+  touch "$stage/source/.download-complete"
+  # A previous interrupted download is retained for inspection.
+  [[ ! -e "$release" ]] || mv "$release" "$release.incomplete.$(date +%s)"
+  mv "$stage/source" "$release"
+fi
+exec bash "$release/deploy/aws/apply-release.sh" "$sha" "$release"

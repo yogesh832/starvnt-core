@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Deploy an exact STARVNT main commit using the installed production deployment script",
+  "parameters": {
+    "CommitSha": {
+      "type": "String",
+      "description": "Full Git commit SHA tested by GitHub Actions",
+      "allowedPattern": "^[0-9a-f]{40}$",
+      "interpolationType": "ENV_VAR"
+    }
+  },
+  "mainSteps": [{
+    "action": "aws:runShellScript",
+    "name": "deployMain",
+    "inputs": {
+      "timeoutSeconds": "1100",
+      "runCommand": [
+        "set -eu",
+        "exec /opt/starvnt/bin/deploy-main \"$SSM_CommitSha\""
+      ]
+    }
+  }]
+}

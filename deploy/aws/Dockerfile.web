@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY server/package.json ./server/package.json
+COPY web/package.json ./web/package.json
+RUN npm ci -w web
+COPY web ./web
+ARG DEPLOY_SHA
+ENV NODE_OPTIONS=--max-old-space-size=1024
+# Only the existing server-side frontend environment is supplied to this build.
+# It never enters the source archive or an image layer as an env file.
+RUN --mount=type=secret,id=web_env \
+    node --input-type=module -e 'import {existsSync} from "node:fs"; import {execFileSync} from "node:child_process"; if(existsSync("/run/secrets/web_env")) process.loadEnvFile("/run/secrets/web_env"); execFileSync("npm",["run","build","-w","web"],{stdio:"inherit",env:process.env});'
+RUN node -e 'require("fs").writeFileSync("/app/web/dist/deployment.json", JSON.stringify({commit:process.env.DEPLOY_SHA}))'
+
+FROM caddy:2-alpine
+COPY --from=build /app/web/dist /srv
