@@ -12,7 +12,7 @@ ENV NODE_OPTIONS=--max-old-space-size=1024
 # It never enters the source archive or an image layer as an env file.
 RUN --mount=type=secret,id=web_env \
     node --input-type=module -e 'import {existsSync} from "node:fs"; import {execFileSync} from "node:child_process"; if(existsSync("/run/secrets/web_env")) process.loadEnvFile("/run/secrets/web_env"); execFileSync("npm",["run","build","-w","web"],{stdio:"inherit",env:process.env});'
-RUN node -e 'require("fs").writeFileSync("/app/web/dist/deployment.json", JSON.stringify({commit:process.env.DEPLOY_SHA}))'
+RUN node -e 'require("fs").writeFileSync("/app/web/dist/deployment.json", JSON.stringify({commit:process.env.DEPLOY_SHA,builtAt:new Date().toISOString()}))'
 
 FROM caddy:2-alpine
 COPY --from=build /app/web/dist /srv
