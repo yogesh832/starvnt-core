@@ -1,3 +1,4 @@
+import { productMetrics } from '../services/productMetrics.js';
 import express from 'express';
 import { requireAdminAuth, requireAnyPermission } from '../middleware/requireAdminAuth.js';
 import { CoreBooking } from '../models/CoreBooking.js';
@@ -8,6 +9,26 @@ import { VendorReview } from '../../external/models/VendorReview.js';
 const router = express.Router();
 
 router.use(requireAdminAuth);
+router.get('/product-metrics', requireAnyPermission('analytics.read', 'reports.read'), async (req, res, next) => { try { res.json({ ok: true, metrics: await productMetrics() }); } catch (err) { next(err); } });
+
+router.get('/financial-summary', requireAnyPermission('revenue.read', 'reports.read'), async (req, res, next) => {
+  try {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - 30);
+    const [period, lifetime] = await Promise.all([
+      FinanceLedgerEntry.aggregate([
+        { $match: { type: 'SETTLEMENT_RELEASE', postedAt: { $gte: from, $lte: now } } },
+        { $group: { _id: null, platformFees: { $sum: '$tax.platformFee' }, vendorPayable: { $sum: '$tax.vendorPayable' }, tax: { $sum: '$tax.gstAmount' }, count: { $sum: 1 } } },
+      ]),
+      FinanceLedgerEntry.aggregate([
+        { $match: { type: 'SETTLEMENT_RELEASE' } },
+        { $group: { _id: null, platformFees: { $sum: '$tax.platformFee' }, vendorPayable: { $sum: '$tax.vendorPayable' }, tax: { $sum: '$tax.gstAmount' }, count: { $sum: 1 } } },
+      ]),
+    ]);
+    res.json({ ok: true, period: { from, to: now, label: 'Last 30 days' }, current: period[0] || { platformFees: 0, vendorPayable: 0, tax: 0, count: 0 }, lifetime: lifetime[0] || { platformFees: 0, vendorPayable: 0, tax: 0, count: 0 } });
+  } catch (err) { next(err); }
+});
 
 async function buildSummary() {
   const now = new Date();

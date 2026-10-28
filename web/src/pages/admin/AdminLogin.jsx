@@ -4,6 +4,7 @@ import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import { LogoWord } from '../../components/ui.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useTheme } from '../../lib/ThemeContext.jsx';
+import { DEV_SHORTCUTS_ENABLED } from '../../lib/devShortcuts.js';
 
 /**
  * STARVNT Core Platform Admin Login:
@@ -102,7 +103,7 @@ export default function AdminLogin() {
                 Welcome to Core Platform
               </h2>
               <p className="mt-2 text-white/80 text-xs sm:text-sm leading-relaxed">
-                Platform control center for event execution, verified vendor governance, settlement escrow, and matching intelligence.
+                Platform control center for event execution, verified vendor governance, settlement controls, and matching intelligence.
               </p>
               <p className="mt-6 text-white/70 italic text-xs leading-relaxed font-serif border-l-2 border-primary/60 pl-3">
                 "People, events and possibilities — coordinated seamlessly."
@@ -139,14 +140,40 @@ export default function AdminLogin() {
                     <b>admin@starvnt.com</b> / <b>Password123</b>
                   </div>
                 </div>
-                <button
+                {DEV_SHORTCUTS_ENABLED && <button
                   type="button"
                   onClick={fillDemo}
                   className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs transition cursor-pointer"
                 >
                   ⚡ Auto Fill
+                </button>}
+              </div>
+
+              {/* Developer POV Test Login Workbench Link */}
+              {DEV_SHORTCUTS_ENABLED && <>
+              <div className="mt-3.5 p-3 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 border border-purple-500/40 text-white flex items-center justify-between gap-3 shadow-md shadow-purple-950/20">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-300 grid place-items-center font-bold text-xs shrink-0 border border-purple-400/30">
+                    ⚡
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-black text-white flex items-center gap-1">
+                      <span>Dev 1-Click Test Auth</span>
+                      <span className="text-[9px] px-1 rounded bg-purple-500/30 text-purple-200 font-mono font-bold">/auth-test</span>
+                    </div>
+                    <div className="text-[10px] text-slate-300 truncate">4 Admins + 15 Vendors + 4 Customers</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/auth-test')}
+                  className="px-2.5 py-1.5 rounded-lg bg-purple-500 hover:bg-purple-400 text-slate-950 font-black text-[11px] transition shrink-0 cursor-pointer shadow-xs flex items-center gap-1"
+                >
+                  <span>Open Workbench</span>
+                  <span>→</span>
                 </button>
               </div>
+              </>}
 
               <form onSubmit={submit} className="mt-5 space-y-4">
                 <div>
@@ -223,14 +250,7 @@ export default function AdminLogin() {
                 </button>
               </form>
 
-              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-muted dark:text-gray-400">
-                <button
-                  type="button"
-                  onClick={() => navigate('/test-login')}
-                  className="text-primary hover:underline font-bold"
-                >
-                  🧪 Test Accounts Portal
-                </button>
+              <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end text-[11px] text-muted dark:text-gray-400">
                 <button
                   type="button"
                   onClick={() => navigate('/login')}

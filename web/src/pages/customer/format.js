@@ -33,6 +33,7 @@ export const EVENT_STATUS_LABEL = {
 
 /** Where an attention item takes the customer. */
 export function attentionLink(a) {
+  if (a.actionUrl) return a.actionUrl;
   if (a.type === 'quote_awaiting_decision') return `/customer/events/${a.eventId}/quotes`;
   if (a.type === 'reservation_awaiting_payment' || a.type === 'payment_failed') return `/customer/events/${a.eventId}/bookings`;
   return `/customer/events/${a.eventId}`;
@@ -40,6 +41,7 @@ export function attentionLink(a) {
 
 /** Customer-facing wording for a plan item's status. */
 export function planStatus(req) {
+  if (req.source === 'aura_inferred') return { text: 'Review Aura suggestion', tone: 'amber' };
   switch (req.status) {
     case 'pending':
       if (req.selectedOption?.vendorName) {

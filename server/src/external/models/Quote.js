@@ -41,6 +41,7 @@ const quoteSchema = new Schema(
       ref: 'VendorService',
       required: true,
     },
+    bookingReview: { status: { type: String, enum: ['CONFLICT_REVIEW', 'RESOLVED'] }, reason: String, updatedAt: Date },
     category: { type: String, default: '' },
     serviceName: {
       type: String,
@@ -66,7 +67,8 @@ const quoteSchema = new Schema(
       totalAmount: { type: Number, required: true },
     },
     advancePayment: {
-      percentage: { type: Number, default: 30 },
+      percentage: { type: Number, default: null },
+      policySnapshot: { type: Schema.Types.Mixed, default: null },
       amount: { type: Number, default: 0 },
       status: {
         type: String,

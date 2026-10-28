@@ -1,3 +1,4 @@
+import VendorCategoryPicker from "../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useExternalAuth } from "../../auth/ExternalAuthContext.jsx";
@@ -5,6 +6,7 @@ import { useTheme } from "../../lib/ThemeContext.jsx";
 import PublicNavbar from "../../components/PublicNavbar.jsx";
 import PublicFooter from "../../components/PublicFooter.jsx";
 import { LogoWord } from "../../components/ui.jsx";
+import { DEV_SHORTCUTS_ENABLED } from "../../lib/devShortcuts.js";
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -76,6 +78,7 @@ export default function ExternalLogin() {
   // Phone OTP States
   const [otpSent, setOtpSent] = useState(false);
   const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailDeliveryNotice, setEmailDeliveryNotice] = useState("");
   const [emailOtpVerified, setEmailOtpVerified] = useState(false);
   const [passwordSetupRequired, setPasswordSetupRequired] = useState(false);
   const [timer, setTimer] = useState(0);
@@ -197,6 +200,7 @@ export default function ExternalLogin() {
               ? form.city?.trim() || undefined
               : undefined,
         });
+        setEmailDeliveryNotice(otpRes?.message || "OTP requested. Inbox delivery is not confirmed. Check Spam or request a new code if it does not arrive.");
         setPasswordSetupRequired(Boolean(otpRes?.requiresPasswordSetup));
         setEmailOtpSent(true);
         return;
@@ -253,7 +257,7 @@ export default function ExternalLogin() {
           "Email delivery login failed. Please check the mail provider settings.",
       };
       setError(
-        map[err.data?.error] ||
+        err.data?.message || map[err.data?.error] ||
           err.message ||
           "Something went wrong. Please try again.",
       );
@@ -533,8 +537,8 @@ export default function ExternalLogin() {
 
               <p className="mt-2.5 text-white/85 text-xs sm:text-sm leading-relaxed max-w-sm">
                 {accountType === "VENDOR"
-                  ? "Manage incoming verified client leads, send instant calendar quotes, and secure milestone payouts."
-                  : "Sign in to access your AI event planner Aura+, verified vendor quotes, and 100% escrow-protected bookings."}
+                  ? "Manage client enquiries, send quotes, and review booking and payment records."
+                  : "Sign in to plan your event, review vendor quotes, and manage booking details."}
               </p>
 
               {/* Trust highlights */}
@@ -552,8 +556,8 @@ export default function ExternalLogin() {
                     />
                   </svg>
                   <span>
-                    <b className="font-semibold text-white">100% Core Escrow</b>{" "}
-                    payment protection
+                    <b className="font-semibold text-white">Payment status tracking</b>{" "}
+                    after provider confirmation
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-white/90 bg-white/10 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-white/10">
@@ -572,16 +576,16 @@ export default function ExternalLogin() {
                     {accountType === "VENDOR" ? (
                       <>
                         <b className="font-semibold text-white">
-                          Direct Client Requests
+                          Client Requests
                         </b>{" "}
-                        with verified budgets
+                        with submitted event details
                       </>
                     ) : (
                       <>
                         <b className="font-semibold text-white">
-                          Top 1% Verified Vendors
+                          Vendor profiles and services
                         </b>{" "}
-                        and studios
+                        for your event
                       </>
                     )}
                   </span>
@@ -622,15 +626,32 @@ export default function ExternalLogin() {
           {/* Right: Auth Form Panel */}
           <main className="p-6 sm:p-10 flex flex-col justify-center bg-white">
             <div className="w-full">
-              <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl bg-lavender p-1" aria-label="Account type">
-                {[['CUSTOMER', 'Customer'], ['VENDOR', 'Vendor']].map(([type, label]) => (
-                  <button key={type} type="button" aria-pressed={accountType === type}
-                    onClick={() => { navigate(`${isRegisterPath ? '/signup' : '/login'}?as=${type.toLowerCase()}&next=${encodeURIComponent(type === 'VENDOR' ? '/vendor' : '/customer')}`, { replace: true }); setError(''); setOtpSent(false); setEmailOtpSent(false); setEmailOtpVerified(false); setForm(previous => ({ ...previous, otp: '', password: '' })); }}
-                    className={`rounded-xl px-4 py-3 text-sm font-bold transition ${accountType === type ? 'bg-primary text-white shadow-sm' : 'text-muted hover:text-primary'}`}>
-                    {label}
-                  </button>
-                ))}
+              {/* Developer POV Test Login Workbench Banner Button */}
+              {DEV_SHORTCUTS_ENABLED && <>
+              <div className="mb-5 p-3.5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 border border-purple-500/40 text-white flex items-center justify-between gap-3 shadow-lg shadow-purple-950/30">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 grid place-items-center font-bold text-sm shrink-0 border border-purple-400/30">
+                    ⚡
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-xs font-black text-white flex items-center gap-1.5 flex-wrap">
+                      <span>Dev POV 1-Click Test Login</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/30 text-emerald-300 font-mono font-bold">15 Vendors + 4 Admins</span>
+                    </div>
+                    <div className="text-[10px] text-slate-300 truncate">Bypass login for testing & QA</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/auth-test')}
+                  className="px-3.5 py-1.5 rounded-xl bg-purple-500 hover:bg-purple-400 text-slate-950 font-black text-xs transition shrink-0 cursor-pointer shadow-sm flex items-center gap-1"
+                >
+                  <span>Open /auth-test</span>
+                  <span>→</span>
+                </button>
               </div>
+              </>}
+              {/* Persona Switcher: Customer vs Vendor */}
               <div className="flex items-center justify-between pb-4 border-b border-gray-100 gap-4">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-extrabold text-navy tracking-tight">
@@ -643,8 +664,48 @@ export default function ExternalLogin() {
                   </p>
                 </div>
 
-                <div className="px-3 sm:px-4 py-2 rounded-2xl bg-navy text-white text-xs font-extrabold shadow-sm border border-navy/10 shrink-0">
-                  {accountType === 'VENDOR' ? 'Vendor OS' : 'Customer'}
+                {/* Persona Pill Switcher */}
+                <div className="flex bg-gray-100/90 p-1 rounded-2xl text-xs font-bold shrink-0 border border-gray-200/50">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setAccountType('CUSTOMER');
+                      setError('');
+                      if (user && user.accountType !== 'CUSTOMER') {
+                        try {
+                          await switchSurface('CUSTOMER');
+                          navigate(getSafeNextPath('CUSTOMER'), { replace: true });
+                        } catch (err) {
+                          console.error("Failed to switch surface", err);
+                        }
+                      }
+                    }}
+                    className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
+                      accountType === 'CUSTOMER' ? 'bg-navy text-white shadow-sm' : 'text-muted hover:text-navy'
+                    }`}
+                  >
+                    Customer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setAccountType('VENDOR');
+                      setError('');
+                      if (user && user.accountType !== 'VENDOR') {
+                        try {
+                          await switchSurface('VENDOR');
+                          navigate(getSafeNextPath('VENDOR'), { replace: true });
+                        } catch (err) {
+                          console.error("Failed to switch surface", err);
+                        }
+                      }
+                    }}
+                    className={`px-3 sm:px-4 py-1.5 rounded-xl transition duration-150 cursor-pointer ${
+                      accountType === 'VENDOR' ? 'bg-navy text-white shadow-sm' : 'text-muted hover:text-navy'
+                    }`}
+                  >
+                    Vendor
+                  </button>
                 </div>
               </div>
 
@@ -744,6 +805,7 @@ export default function ExternalLogin() {
               </div>
 
               {/* Error Banner */}
+              {authMethod === "EMAIL" && emailOtpSent && !emailOtpVerified && emailDeliveryNotice && <p role="status" className="mb-3 rounded-xl bg-primary/10 p-3 text-sm text-ink dark:text-slate-200">{emailDeliveryNotice}</p>}
               {error && (
                 <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5 flex items-start gap-2 animate-fade">
                   <svg
@@ -797,29 +859,12 @@ export default function ExternalLogin() {
                               required
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             <div>
                               <label className="block text-xs font-semibold text-ink/80 mb-1">
                                 Category
                               </label>
-                              <select
-                                className={inputCls}
-                                value={form.category}
-                                onChange={set("category")}
-                                required
-                              >
-                                <option value="">Select Category...</option>
-                                <option value="Cinematic Production">
-                                  Cinematic Production
-                                </option>
-                                <option value="Photography">Photography</option>
-                                <option value="Videography">Videography</option>
-                                <option value="Decor & Styling">
-                                  Decor & Styling
-                                </option>
-                                <option value="Catering">Catering</option>
-                                <option value="DJ & Music">DJ & Music</option>
-                              </select>
+                              <VendorCategoryPicker value={form.category} onChange={(category) => setForm((current) => ({ ...current, category }))} className={inputCls} required />
                             </div>
                             <div>
                               <label className="block text-xs font-semibold text-ink/80 mb-1">
@@ -866,7 +911,7 @@ export default function ExternalLogin() {
                     >
                       <div className="p-3 bg-lavender rounded-xl border border-primary/20 flex items-center justify-between">
                         <div className="text-xs">
-                          <span className="text-muted">OTP sent to: </span>
+                          <span className="text-muted">OTP requested for: </span>
                           <b className="text-navy">{form.email}</b>
                         </div>
                         <button
@@ -962,6 +1007,41 @@ export default function ExternalLogin() {
                             : "Create Account"}
                       </button>
 
+                      {mode === "login" && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-[11px] mb-2">
+                            <span className="font-bold text-muted">Quick-Fill Demo Account:</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: "📸 Photography", email: "vendor@starvnt.com", type: "VENDOR" },
+                              { label: "🍽️ Catering", email: "catering@starvnt.com", type: "VENDOR" },
+                              { label: "🌸 Decor", email: "decor@starvnt.com", type: "VENDOR" },
+                              { label: "🏰 Venue", email: "venue@starvnt.com", type: "VENDOR" },
+                              { label: "🎵 Sound", email: "dj@starvnt.com", type: "VENDOR" },
+                              { label: "💄 Makeup", email: "makeup@starvnt.com", type: "VENDOR" },
+                              { label: "👤 Customer", email: "customer@starvnt.com", type: "CUSTOMER" },
+                            ].map((item) => (
+                              <button
+                                key={item.email}
+                                type="button"
+                                onClick={() => {
+                                  setAccountType(item.type);
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    email: item.email,
+                                    password: "Password123",
+                                  }));
+                                  setError("");
+                                }}
+                                className="px-2 py-1 text-[11px] rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-primary text-navy font-medium transition cursor-pointer border border-gray-200/60"
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </form>
                   )}
                 </div>
@@ -1000,27 +1080,12 @@ export default function ExternalLogin() {
                               required
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             <div>
                               <label className="block text-xs font-semibold text-ink/80 mb-1">
                                 Category
                               </label>
-                              <select
-                                className={inputCls}
-                                value={form.category}
-                                onChange={set("category")}
-                              >
-                                <option value="">Select Category...</option>
-                                <option value="Cinematic Production">
-                                  Cinematic Production
-                                </option>
-                                <option value="Photography">Photography</option>
-                                <option value="Decor & Styling">
-                                  Decor & Styling
-                                </option>
-                                <option value="Catering">Catering</option>
-                                <option value="DJ & Music">DJ & Music</option>
-                              </select>
+                              <VendorCategoryPicker value={form.category} onChange={(category) => setForm((current) => ({ ...current, category }))} className={inputCls} required />
                             </div>
                             <div>
                               <label className="block text-xs font-semibold text-ink/80 mb-1">
@@ -1075,7 +1140,7 @@ export default function ExternalLogin() {
                     >
                       <div className="p-3 bg-lavender/50 rounded-2xl border border-primary/20 flex items-center justify-between">
                         <div className="text-xs">
-                          <span className="text-muted">OTP sent to: </span>
+                          <span className="text-muted">OTP requested for: </span>
                           <b className="text-navy">{form.phone}</b>
                         </div>
                         <button
@@ -1158,27 +1223,12 @@ export default function ExternalLogin() {
                           required
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
                           <label className="block text-xs font-semibold text-ink/80 mb-1">
                             Category
                           </label>
-                          <select
-                            className={inputCls}
-                            value={form.category}
-                            onChange={set("category")}
-                          >
-                            <option value="">Select Category...</option>
-                            <option value="Cinematic Production">
-                              Cinematic Production
-                            </option>
-                            <option value="Photography">Photography</option>
-                            <option value="Decor & Styling">
-                              Decor & Styling
-                            </option>
-                            <option value="Catering">Catering</option>
-                            <option value="DJ & Music">DJ & Music</option>
-                          </select>
+                          <VendorCategoryPicker value={form.category} onChange={(category) => setForm((current) => ({ ...current, category }))} className={inputCls} required />
                         </div>
                         <div>
                           <label className="block text-xs font-semibold text-ink/80 mb-1">
@@ -1265,7 +1315,7 @@ export default function ExternalLogin() {
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-muted">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  <span>Protected by Core Escrow</span>
+                  <span>Payment status follows provider confirmation</span>
                 </div>
               </div>
             </div>

@@ -164,7 +164,7 @@ export function CompareModal({ onClose, onSelectVendor }) {
         {/* Why is Premium Moments better banner */}
         <div className="mt-5 p-4 rounded-2xl bg-primary-soft/60 border border-primary/20 flex items-start gap-3">
           <div className="w-6 h-6 rounded-full bg-primary text-white grid place-items-center text-xs shrink-0 mt-0.5">
-            <Icon name="bolt" size={13} />
+            <Icon name="aura" size={13} />
           </div>
           <div>
             <div className="text-xs font-bold text-primary">Why is Premium Moments better?</div>
@@ -198,7 +198,7 @@ export default function VendorRecommendations({ onBack, onSelectVendor }) {
             <span>Back to Event</span>
           </button>
           <h1 className="text-2xl font-extrabold text-navy">Vendor Recommendations</h1>
-          <p className="text-xs text-muted">Photography Options · 3 pre-qualified vendors available</p>
+          <p className="text-xs text-muted">Photography options · example comparison</p>
         </div>
         <button
           onClick={() => setShowCompare(true)}
@@ -208,6 +208,10 @@ export default function VendorRecommendations({ onBack, onSelectVendor }) {
           <Icon name="chevronDown" size={12} />
         </button>
       </div>
+
+      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        Example comparison only. Vendor names, prices, ratings, reviews, availability, and match scores below are illustrative, not live listings.
+      </p>
 
       {/* 3 Vendor Cards */}
       <div className="grid md:grid-cols-3 gap-5 items-stretch">

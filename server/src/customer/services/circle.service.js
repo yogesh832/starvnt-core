@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'node:crypto';
 import * as circleRepo from '../repositories/circle.repo.js';
 import * as commerceRepo from '../repositories/commerce.repo.js';
 import * as reqRepo from '../repositories/requirements.repo.js';
@@ -48,6 +49,7 @@ export async function recordLifecycleEventMessage({
   if (!vendorId || !text) return null;
 
   const now = new Date();
+  const logicalKey = `lifecycle:${crypto.createHash('sha256').update(JSON.stringify({ vendorId, customerId, eventId, bookingId, quoteId, opportunityId, sender, type, text, metadata })).digest('hex')}`;
 
   const contextFilter = bookingId ? { booking: bookingId }
     : opportunityId ? { opportunity: opportunityId }
@@ -88,8 +90,7 @@ export async function recordLifecycleEventMessage({
 
     if (!Array.isArray(thread.messages)) thread.messages = [];
 
-    const lastMsg = thread.messages[thread.messages.length - 1];
-    const isDup = lastMsg && lastMsg.text === text && (now.getTime() - new Date(lastMsg.createdAt).getTime()) < 5000;
+    const isDup = thread.messages.some(message => message.metadata?.eventKey === logicalKey);
 
     if (!isDup) {
       thread.messages.push({
@@ -98,7 +99,7 @@ export async function recordLifecycleEventMessage({
         text,
         isRead: false,
         createdAt: now,
-        metadata: metadata || { type },
+        metadata: { ...(metadata || { type }), eventKey: logicalKey },
       });
 
       if (sender === 'CLIENT') {
@@ -112,14 +113,15 @@ export async function recordLifecycleEventMessage({
   }
 
   if (eventId) {
-    await EventMessage.create({
+    await EventMessage.findOneAndUpdate({ event: eventId, idempotencyKey: logicalKey }, { $setOnInsert: {
       event: eventId,
       booking: bookingId || null,
       senderType: sender === 'CLIENT' ? 'customer' : sender === 'VENDOR' ? 'vendor' : 'team',
       senderName: senderName || 'STARVNT Core',
       body: text,
+      idempotencyKey: logicalKey,
       createdAt: now,
-    }).catch(() => null);
+    } }, { upsert: true }).catch(() => null);
   }
 
   if (sender === 'VENDOR' || sender === 'SYSTEM') {
@@ -133,7 +135,7 @@ export async function recordLifecycleEventMessage({
           ? (eventId ? `/customer/events/${eventId}/quotes` : '/customer/go/quotes')
           : (eventId ? `/customer/events/${eventId}/bookings` : '/customer/updates'),
         eventId: eventId ? String(eventId) : null,
-        idempotencyKey: `lifecycle-msg-${thread?._id || customerId}-${Date.now()}`,
+        idempotencyKey: `customer:${logicalKey}`,
       }).catch(() => null);
     }
   } else if (sender === 'CLIENT') {
@@ -143,7 +145,7 @@ export async function recordLifecycleEventMessage({
       message: text.slice(0, 160),
       type: 'MESSAGE',
       link: '/vendor/messages',
-      idempotencyKey: `lifecycle-vendor-msg-${vendorId}-${Date.now()}`,
+      idempotencyKey: `vendor:${logicalKey}`,
     }).catch(() => null);
   }
 

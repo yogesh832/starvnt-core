@@ -1,19 +1,33 @@
 {
   "name": "starvnt-core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "STARVNT — dual-domain identity & authorization architecture (MERN). One unified backend server hosting the External (Customer/Vendor) and Internal (Admin/Super Admin) identity domains on separate databases; three separate frontend portal experiences.",
   "workspaces": [
     "server",
-    "web"
+    "web",
+    "mobile"
   ],
   "scripts": {
+    "dev:mobile": "npm run start -w mobile",
+    "mobile:android": "npm run android -w mobile",
+    "mobile:ios": "npm run ios -w mobile",
+    "mobile:ios:simulator": "powershell -NoProfile -ExecutionPolicy Bypass -File mobile/scripts/ios-simulator.ps1",
+    "check:mobile": "npm run typecheck -w mobile && npm run test -w mobile",
     "dev": "npm run dev -w server",
     "dev:web": "npm run dev -w web",
+    "dev:qa": "node server/scripts/run-test-environment.js",
+    "dev:qa:web": "node server/scripts/run-test-web.js",
+    "check:env": "node server/scripts/check-environment.js",
+    "check:qa-env": "node server/scripts/check-environment.js --qa",
+    "test:smoke": "node server/scripts/portal-smoke.js",
+    "test:smoke:dev": "node server/scripts/portal-smoke.js --dev-auth",
+    "test:smoke:qa": "node server/scripts/portal-smoke.js --dev-auth --base=http://localhost:4100 --web=http://localhost:5174 --report=tmp/qa/portal-smoke-qa.json",
+    "test": "npm run test -w server",
+    "backup:db": "npm run backup:db -w server",
     "seed:super-admin": "npm run seed -w server",
     "seed:vendor": "npm run seed:vendor -w server",
-    "seed:customer-demo": "npm run seed:customer-demo -w server",
-    "test": "npm test -w server"
+    "seed:customer-demo": "npm run seed:customer-demo -w server"
   },
   "engines": {
     "node": ">=20"

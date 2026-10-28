@@ -1,0 +1,67 @@
+// Local acceptance preview: disposable database, fixture accounts, no email/AI
+// credentials, loopback binding only. Never mount these shortcuts in createApp.
+process.env.STARVNT_ENV_FILE = '__unified_preview_no_environment_file__';
+process.env.JWT_SECRET = 'local-unified-preview-external-fixture-only';
+process.env.JWT_ADMIN_SECRET = 'local-unified-preview-admin-fixture-only';
+process.env.ENABLE_DEV_TOOLS = 'false';
+const { default: express } = await import('express');
+const { default: crypto } = await import('node:crypto');
+const { fileURLToPath } = await import('node:url');
+const { MongoMemoryServer } = await import('mongodb-memory-server');
+const { externalConn, adminConn } = await import('../src/db/index.js');
+const { createApp } = await import('../src/app.js');
+const { ExternalUser } = await import('../src/external/models/ExternalUser.js');
+const { ExternalSession } = await import('../src/external/models/ExternalSession.js');
+const { VendorOrganization } = await import('../src/external/models/VendorOrganization.js');
+const { VendorService } = await import('../src/external/models/VendorService.js');
+const { VendorCapability } = await import('../src/external/models/VendorCapability.js');
+const { VendorResource } = await import('../src/external/models/VendorResource.js');
+const { VendorFinancialProfile } = await import('../src/external/models/VendorFinancialProfile.js');
+const { OperatingLocation } = await import('../src/external/models/OperatingLocation.js');
+const { ServiceCoverage } = await import('../src/external/models/ServiceCoverage.js');
+const { PortfolioItem } = await import('../src/external/models/PortfolioItem.js');
+const { CustomerEvent, EventRequirement } = await import('../src/customer/models/index.js');
+const { AdminUser } = await import('../src/admin/models/AdminUser.js');
+const { AdminSession } = await import('../src/admin/models/AdminSession.js');
+const { signExternalAccessToken } = await import('../src/external/utils/tokens.js');
+const { signAdminAccessToken } = await import('../src/admin/utils/tokens.js');
+const { saveCommitment } = await import('../src/external/services/commitments.service.js');
+const mongo = await MongoMemoryServer.create();
+await Promise.all([externalConn.openUri(mongo.getUri('preview_external')), adminConn.openUri(mongo.getUri('preview_admin'))]);
+const vendorUser = await ExternalUser.create({ fullName: 'Preview Vendor', email: 'vendor@preview.test', accountType: 'VENDOR' });
+const customer = await ExternalUser.create({ fullName: 'Preview Customer', email: 'customer@preview.test', accountType: 'CUSTOMER' });
+const vendor = await VendorOrganization.create({ owner: vendorUser._id, businessName: 'Preview Photography', category: 'Photography', location: 'Pune', isProfileCompleted: true, status: 'UNDER_REVIEW', activationState: 'UNDER_REVIEW', activationReview: { status: 'PENDING', requestedAt: new Date() } });
+vendorUser.vendorOrganization = vendor._id; await vendorUser.save();
+const service = await VendorService.create({ vendor: vendor._id, name: 'Event photography', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 35000 } });
+await VendorCapability.create({ vendor: vendor._id, vendorService: service._id, teamSize: 2, simultaneousEventLimit: 1 });
+await VendorResource.create({ vendor: vendor._id, name: 'Camera kit A', type: 'EQUIPMENT' });
+await VendorFinancialProfile.create({ vendor: vendor._id, pan: { verificationStatus: 'VERIFIED' }, bankAccount: { verificationStatus: 'VERIFIED' } });
+await OperatingLocation.create({ vendor: vendor._id, label: 'Studio', city: 'Pune' });
+await ServiceCoverage.create({ vendor: vendor._id, vendorService: service._id, coverageType: 'CITY', city: 'Pune' });
+await PortfolioItem.create({ vendor: vendor._id, mediaType: 'IMAGE', url: 'https://example.test/photo.jpg' });
+const event = await CustomerEvent.create({ customer: customer._id, title: 'Preview wedding', eventType: 'wedding', eventDate: '2027-01-15', city: 'Pune', guestCount: 150, budget: 500000, status: 'planning' });
+await EventRequirement.create({ event: event._id, category: 'photography', status: 'customer_provided', source: 'aura_inferred', providedValue: 'Family photographer' });
+await EventRequirement.create({ event: event._id, category: 'catering', status: 'pending', source: 'customer' });
+await saveCommitment(vendor._id, { date: '2027-01-05', endDate: '2027-01-07', reason: 'External Customer Booking', recordType: 'EXTERNAL_COMMITMENT', external: { customerName: 'Fixture Customer', customerPhone: '+919999999999', eventType: 'Conference', location: 'Pune' }, idempotencyKey: crypto.randomUUID() }, { id: vendorUser._id, role: 'VENDOR' });
+const administrator = await AdminUser.create({ fullName: 'Preview Admin', email: 'admin@preview.test', passwordHash: 'not-a-login-password', role: 'SUPER_ADMIN' });
+async function token(user) {
+  const session = await ExternalSession.create({ user: user._id, refreshTokenHash: crypto.randomUUID(), expiresAt: new Date(Date.now() + 3600000) });
+  return signExternalAccessToken(user, session._id);
+}
+const adminSession = await AdminSession.create({ admin: administrator._id, refreshTokenHash: crypto.randomUUID(), expiresAt: new Date(Date.now() + 3600000) });
+const sessions = { vendor: { token: await token(vendorUser), key: 'starvnt_external_access_token', path: '/vendor/dashboard' }, customer: { token: await token(customer), key: 'starvnt_external_access_token', path: '/customer/home' }, admin: { token: signAdminAccessToken(administrator, adminSession._id), key: 'starvnt_admin_access_token', path: '/admin/availability' } };
+const outer = express();
+const api = createApp();
+outer.get('/__acceptance', (_req, res) => res.send('<h1>Disposable acceptance preview</h1><a href="/__acceptance/vendor">Vendor preview</a><br><a href="/__acceptance/customer">Customer preview</a><br><a href="/__acceptance/admin">Admin preview</a>'));
+outer.get('/__acceptance/:surface', (req, res) => {
+  const session = sessions[req.params.surface];
+  if (!session) return res.sendStatus(404);
+  res.send(`<script>localStorage.setItem(${JSON.stringify(session.key)},${JSON.stringify(session.token)});location.replace(${JSON.stringify(session.path)})</script>`);
+});
+outer.use('/api', (req, res) => { req.url = `/api${req.url}`; api(req, res); });
+const root = fileURLToPath(new URL('../../web/dist-unified-preview/', import.meta.url));
+outer.use(express.static(root));
+outer.get('*', (_req, res) => res.sendFile(`${root}/index.html`));
+const server = outer.listen(4187, '127.0.0.1', () => console.log('Disposable preview: http://127.0.0.1:4187/__acceptance'));
+const stop = async () => { server.close(); await Promise.all([externalConn.close(), adminConn.close()]); await mongo.stop(); process.exit(0); };
+process.on('SIGINT', stop); process.on('SIGTERM', stop);

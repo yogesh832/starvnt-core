@@ -1,7 +1,9 @@
 import { config } from "../../config.js";
 import { OtpVerification } from "../models/OtpVerification.js";
+import { ExternalUser } from "../models/ExternalUser.js";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
+import { randomInt } from "node:crypto";
 
 /**
  * Normalizes email by trimming and converting to lowercase.
@@ -9,6 +11,12 @@ import { Resend } from "resend";
 export function normalizeEmail(email) {
   if (!email) return "";
   return String(email).trim().toLowerCase();
+}
+
+function isReviewEmail(email) {
+  return /^[0-9]{8}$/.test(config.appReviewOtp) &&
+    Boolean(config.appReviewEmail) &&
+    email === config.appReviewEmail;
 }
 
 function buildOtpMail({ otp, type = "signup" }) {
@@ -124,8 +132,12 @@ export async function sendEmailOtp(email, type = "signup") {
     throw new Error("INVALID_EMAIL_ADDRESS");
   }
 
-  // Generate 6-digit numeric OTP
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const review = isReviewEmail(normalized) && Boolean(await ExternalUser.exists({
+    email: normalized,
+    accountType: "CUSTOMER",
+    isAppReviewAccount: true,
+  }));
+  const otp = review ? config.appReviewOtp : randomInt(100000, 1000000).toString();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
   // Store OTP in database (re-using phone field for email identifier)
@@ -137,6 +149,16 @@ export async function sendEmailOtp(email, type = "signup") {
     attempts: 0,
     verified: false,
   });
+
+  if (review) {
+    return {
+      email: normalized,
+      emailSent: false,
+      delivery: { provider: "app-review", status: "ready" },
+      message: "Enter the test OTP supplied in the app-store review instructions.",
+      expiresInSeconds: 600,
+    };
+  }
 
   if (!config.resendApiKey && !config.emailServerHost) {
     await OtpVerification.deleteMany({ phone: normalized });
@@ -188,12 +210,6 @@ export async function verifyEmailOtp(email, otp) {
     return { valid: false, reason: "MISSING_EMAIL_OR_OTP" };
   }
 
-  // Always allow test master OTP in development/test
-  if (cleanOtp === "123456" || cleanOtp === "999999") {
-    await OtpVerification.deleteMany({ phone: normalized });
-    return { valid: true, email: normalized };
-  }
-
   const record = await OtpVerification.findOne({
     phone: normalized,
     expiresAt: { $gt: new Date() },
@@ -223,18 +239,19 @@ export async function consumeVerifiedEmailOtp(email, otp) {
   const normalized = normalizeEmail(email);
   const cleanOtp = String(otp || "").trim();
 
-  if (cleanOtp === "123456" || cleanOtp === "999999") {
-    await OtpVerification.deleteMany({ phone: normalized });
-    return { valid: true, email: normalized };
-  }
-
   const record = await OtpVerification.findOne({
     phone: normalized,
     expiresAt: { $gt: new Date() },
   });
 
   if (!record) return { valid: false, reason: "OTP_EXPIRED_OR_NOT_FOUND" };
-  if (!record.verified && record.otp !== cleanOtp) {
+  if (record.attempts >= 5) {
+    await OtpVerification.deleteOne({ _id: record._id });
+    return { valid: false, reason: "TOO_MANY_ATTEMPTS" };
+  }
+  if (record.otp !== cleanOtp) {
+    record.attempts += 1;
+    await record.save();
     return { valid: false, reason: "INVALID_OTP" };
   }
 

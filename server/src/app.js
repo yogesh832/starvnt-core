@@ -15,6 +15,7 @@ import { requireExternalAuth, requireAccountType } from './external/middleware/r
 import { customerRouter, auraRouter, internalRouter, webhookRouter } from './customer/routes/index.js';
 
 import adminAuthRoutes from './admin/routes/auth.routes.js';
+import adminAvailabilityRoutes from './admin/routes/availability.routes.js';
 import adminUsersRoutes from './admin/routes/users.routes.js';
 import adminPermissionsRoutes from './admin/routes/permissions.routes.js';
 import adminAuditRoutes from './admin/routes/audit.routes.js';
@@ -116,6 +117,7 @@ export function createApp() {
 
   // ── INTERNAL ADMIN domain: separate auth + RBAC ───────────────────────────
   app.use('/api/admin/auth', adminAuthRoutes);
+  app.use('/api/admin/availability', adminAvailabilityRoutes);
   app.use('/api/admin/users', adminUsersRoutes);
   app.use('/api/admin/permissions', adminPermissionsRoutes);
   app.use('/api/admin/audit', adminAuditRoutes);
@@ -141,7 +143,8 @@ export function createApp() {
   app.use((req, res) => res.status(404).json({ error: 'NOT_FOUND' }));
   app.use((err, req, res, next) => {
     console.error('[server]', err);
-    res.status(err.status || 500).json({ error: 'INTERNAL_ERROR', details: err.message, stack: err.stack });
+    const status = err.statusCode || err.status || (err.name === 'CastError' ? 404 : 500);
+    res.status(status).json({ error: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_REQUEST', message: status >= 500 ? 'Something went wrong. Please retry.' : err.message });
   });
 
   return app;

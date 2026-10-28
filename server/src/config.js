@@ -19,6 +19,11 @@ function parseOrigins(value) {
     .filter(Boolean);
 }
 
+export function devToolsAllowed(env = process.env) {
+  if (String(env.NODE_ENV || '').toLowerCase() === 'production') return false;
+  return env.ENABLE_DEV_TOOLS === 'true' || (env.ENABLE_DEV_TOOLS !== 'false');
+}
+
 const isProduction = process.env.NODE_ENV === "production";
 const cookieSecure =
   process.env.COOKIE_SECURE === undefined
@@ -104,6 +109,10 @@ export const config = {
   resendApiKey: process.env.RESEND_API_KEY || process.env.RESEND_KEY || "",
   resendSenderEmail: process.env.RESEND_SENDER_EMAIL || "no-reply@starvnt.com",
 
+  // Store-review access is limited to one external customer identity.
+  appReviewEmail: (process.env.APP_REVIEW_EMAIL || "").trim().toLowerCase(),
+  appReviewOtp: process.env.APP_REVIEW_OTP || "",
+
   // ── Production keep-alive for Render free instances ──
   keepAliveUrl:
     process.env.KEEP_ALIVE_URL ||
@@ -142,6 +151,7 @@ export const config = {
   // ── Core workers / safety gates ──
   enableQaPaymentBypass: process.env.ENABLE_QA_PAYMENT_BYPASS === "true",
   outboxWorkerEnabled: process.env.OUTBOX_WORKER_ENABLED !== "false",
+  eventRemindersEnabled: process.env.EVENT_REMINDERS_ENABLED !== "false",
   outboxWorkerIntervalMs: Number(process.env.OUTBOX_WORKER_INTERVAL_MS || 15000),
   reservationExpiryWorkerEnabled: process.env.RESERVATION_EXPIRY_WORKER_ENABLED !== "false",
   reservationExpiryIntervalMs: Number(process.env.RESERVATION_EXPIRY_INTERVAL_MS || 60000),
@@ -149,7 +159,7 @@ export const config = {
   requestLoggingEnabled: process.env.REQUEST_LOGGING_ENABLED === undefined
     ? isProduction
     : String(process.env.REQUEST_LOGGING_ENABLED).toLowerCase() === "true",
-  enableDevTools,
+  enableDevTools: devToolsAllowed(),
 
   // ── Settlement math ──
   platformCommissionPercent: Number(process.env.PLATFORM_COMMISSION_PERCENT || 10),

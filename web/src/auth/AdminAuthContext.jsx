@@ -42,9 +42,10 @@ export function AdminAuthProvider({ children }) {
   }
 
   async function logout() {
-    await adminApi.call('/auth/logout', { method: 'POST' }).catch(() => {});
+    const request = adminApi.raw('/auth/logout', { method: 'POST' }, false);
     adminApi.setToken(null);
     setAdmin(null);
+    await request.catch(() => {});
   }
 
   /** Permission check for UI affordances ONLY — backend enforces regardless. */

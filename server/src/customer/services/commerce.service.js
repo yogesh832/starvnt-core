@@ -1,3 +1,7 @@
+import { withVendorSchedule } from '../../external/services/scheduleLock.js';
+import { checkTrueAvailability } from '../../external/services/availability.service.js';
+import { evaluateVendorActivation } from '../../external/services/vendorActivation.service.js';
+import { VendorService } from '../../external/models/VendorService.js';
 import mongoose from 'mongoose';
 import * as eventsRepo from '../repositories/events.repo.js';
 import * as reqRepo from '../repositories/requirements.repo.js';
@@ -32,9 +36,8 @@ import { publishOutboxEvent } from '../../automation/services/outbox.service.js'
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
 
 const HOLD_HOURS = 48;
-const DEFAULT_ADVANCE_PERCENT = 30;
 const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
-const advanceOf = (total, percent = DEFAULT_ADVANCE_PERCENT) => Math.ceil((Number(total || 0) * percent) / 100);
+const advanceOf = (total, percent = 0) => Math.ceil((Number(total || 0) * percent) / 100);
 const packageTotalOf = (reservation) => reservation.packageTotal ?? reservation.amount;
 const advanceAmountOf = (reservation) => reservation.packageTotal == null ? advanceOf(reservation.amount, reservation.advancePercent) : reservation.amount;
 const balanceAmountOf = (reservation, paid = advanceAmountOf(reservation)) => Math.max(0, packageTotalOf(reservation) - paid);
@@ -52,7 +55,7 @@ export function serializeReservation(r) {
     amount: advanceAmount,
     advanceAmount,
     packageTotal,
-    advancePercent: r.advancePercent ?? DEFAULT_ADVANCE_PERCENT,
+    advancePercent: r.advancePercent ?? null,
     balanceAmount: r.balanceAmount ?? balanceAmountOf(r, advanceAmount),
     isDemo: r.isDemo,
     status: r.status,
@@ -110,6 +113,14 @@ export function serializeBooking(b) {
 export async function acceptQuote(customerId, quoteId) {
   const quote = await quotesRepo.findOwned(customerId, quoteId).catch(() => null);
   if (!quote) throw notFound('Quote not found');
+  const ids = quote.items.map(item => String(item.optionId || '').replace(/^vs_/, '')).filter(id => mongoose.isValidObjectId(id));
+  const vendors = [...new Set((await VendorService.find({ _id: { $in: ids } }).select('vendor').lean()).map(s => String(s.vendor)))].sort();
+  const acquire = index => index === vendors.length ? acceptQuoteLocked(customerId, quoteId) : withVendorSchedule(vendors[index], () => acquire(index + 1));
+  return acquire(0);
+}
+async function acceptQuoteLocked(customerId, quoteId) {
+  const quote = await quotesRepo.findOwned(customerId, quoteId).catch(() => null);
+  if (!quote) throw notFound('Quote not found');
   const event = await getOwnedEventOr404(customerId, quote.event);
   assertCommerceAllowed(event);
   if (quote.status === 'expired') throw conflict('QUOTE_EXPIRED', 'This quote has expired. Please get a new quote.');
@@ -132,6 +143,15 @@ export async function acceptQuote(customerId, quoteId) {
   }
   if (problems.length) throw conflict('QUOTE_ITEMS_UNAVAILABLE', problems.join('. '), { problems });
 
+  // Resolve every term before changing quote state or creating holds.
+  const resolvedPolicies = await Promise.all(quote.items.map(async (item) => {
+    const policy = await getCommercialPolicyForCategory(item.category);
+    if (!policy.policyActive || !Number.isFinite(Number(policy.minimumReservationPercent))) {
+      throw conflict('FINANCIAL_POLICY_NOT_APPROVED', `An approved advance payment policy is not available for ${categoryLabel(item.category)}.`, { category: item.category });
+    }
+    return policy;
+  }));
+
   const accepted = await commerceRepo.acceptDraftQuote(customerId, quote._id);
   if (!accepted) throw conflict('QUOTE_NOT_OPEN', 'This quote can no longer be accepted');
 
@@ -139,9 +159,9 @@ export async function acceptQuote(customerId, quoteId) {
   const expiresAt = new Date(Date.now() + HOLD_HOURS * 3600000);
   const reservations = await commerceRepo.createReservations(
     await Promise.all(
-      quote.items.map(async (i) => {
-        const policy = await getCommercialPolicyForCategory(i.category);
-        const advancePercent = policy.minimumReservationPercent ?? DEFAULT_ADVANCE_PERCENT;
+      quote.items.map(async (i, index) => {
+        const policy = resolvedPolicies[index];
+        const advancePercent = Number(policy.minimumReservationPercent);
         const advance = advanceOf(i.price, advancePercent);
         return {
           event: event._id,
@@ -155,6 +175,13 @@ export async function acceptQuote(customerId, quoteId) {
           packageName: i.packageName,
           packageTotal: i.price,
           advancePercent: advancePercent,
+          financialPolicySnapshot: {
+            policyId: policy.policyId, category: policy.policyCategory, version: policy.policyVersion,
+            effectiveFrom: policy.effectiveFrom, authorId: policy.draftAuthorId, approverId: policy.approverId,
+            advancePercent, vendorCancellationPenaltyPercent: policy.vendorCancellationPenaltyPercent,
+            customerCancellationRefunds: policy.customerCancellationRefunds,
+            settlementCondition: policy.settlementCondition, settlementDelayDays: policy.settlementDelayDays,
+          },
           amount: advance,
           balanceAmount: Math.max(0, i.price - advance),
           isDemo: i.isDemo,
@@ -492,7 +519,7 @@ export async function payReservation(customer, eventId, reservationId, body = {}
             reservationId: String(reservation._id),
             paymentType: isBalancePayment ? 'balance' : 'advance',
             packageTotal: String(packageTotalOf(reservation)),
-            advancePercent: String(reservation.advancePercent ?? DEFAULT_ADVANCE_PERCENT),
+            advancePercent: String(reservation.advancePercent ?? ''),
             couponCode: coupon?.code || '',
             couponDiscount: discountAmount ? String(discountAmount) : '',
           },
@@ -596,6 +623,15 @@ async function maybeMarkEventBooked(eventId) {
  */
 export async function confirmBookingFor(payment) {
   const reservation = await commerceRepo.getReservation(payment.reservation);
+  const quote = reservation?.quote ? await Quote.findById(reservation.quote).select('vendor').lean() : null;
+  const serviceId = String(reservation?.optionId || '').replace(/^vs_/, '');
+  const service = !quote && mongoose.isValidObjectId(serviceId) ? await VendorService.findById(serviceId).select('vendor').lean() : null;
+  const vendorId = quote?.vendor || service?.vendor;
+  if (!vendorId) return confirmBookingLocked(payment);
+  return withVendorSchedule(vendorId, assertLease => confirmBookingLocked(payment, vendorId, assertLease));
+}
+async function confirmBookingLocked(payment, vendorId = null, assertLease = async () => {}) {
+  const reservation = await commerceRepo.getReservation(payment.reservation);
   const eventId = reservation ? reservation.event : payment.event;
   const event = await eventsRepo.findEventById(eventId);
   if (!event) return null;
@@ -648,6 +684,15 @@ export async function confirmBookingFor(payment) {
     if (!claimed) reason = 'The vendor was just booked by someone else for your date';
   }
 
+  if (!reason && vendorId) {
+    const readiness = await evaluateVendorActivation(vendorId);
+    if (!readiness.matchingEligible) reason = 'Vendor activation is not approved or operational requirements are incomplete';
+    if (!reason) {
+      const available = await checkTrueAvailability({ vendorId, vendorServiceId: vq?.vendorService || String(reservation.optionId).replace(/^vs_/, ''), date: event.eventDate, allDay: true, serviceLocation: vq?.serviceLocation || event.location, excludeReservationId: reservation._id });
+      if (!available.feasible) reason = available.reason || 'Vendor schedule conflict';
+    }
+  }
+  await assertLease();
   const { booking, created } = await commerceRepo.createBooking({
     event: event._id,
     customer: event.customer,
@@ -672,7 +717,7 @@ export async function confirmBookingFor(payment) {
     try {
       vq.advancePayment = {
         ...(vq.advancePayment?.toObject?.() || vq.advancePayment || {}),
-        percentage: reservation.advancePercent || DEFAULT_ADVANCE_PERCENT,
+        percentage: reservation.advancePercent,
         amount: payment.amount,
         status: 'VERIFIED',
         provider: payment.provider || 'razorpay',
@@ -698,6 +743,7 @@ export async function confirmBookingFor(payment) {
             quoteId: String(vq._id),
             opportunityId: vq.opportunity ? String(vq.opportunity) : null,
             vendorId: vq.vendor?._id || vq.vendor,
+            vendorService: vq.vendorService,
             customerId: event.customer,
             customerEvent: event._id,
             serviceName: vq.serviceName || reservation.packageName,
@@ -705,6 +751,7 @@ export async function confirmBookingFor(payment) {
             serviceLocation: vq.serviceLocation || event.location || {},
             pricing: vq.pricingBreakdown || { totalAmount },
             totalAmount,
+            financialPolicySnapshot: reservation.financialPolicySnapshot || null,
             bookingStatus: 'CONFIRMED',
             settlementStatus: 'NOT_ELIGIBLE',
           },
@@ -714,7 +761,7 @@ export async function confirmBookingFor(payment) {
             customerName,
             category: vq.vendor?.category || reservation.category,
             paymentSummary: {
-              advancePercentage: reservation.advancePercent || DEFAULT_ADVANCE_PERCENT,
+              advancePercentage: reservation.advancePercent,
               advanceAmount: paidAmount,
               paidAmount,
               balanceAmount: reservation.balanceAmount ?? Math.max(0, totalAmount - paidAmount),

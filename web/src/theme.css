@@ -41,71 +41,195 @@ body {
 /* ── Dark Mode Overrides ─────────────────────────────────────────────── */
 html.dark {
   color-scheme: dark;
+  --color-primary: #818cf8;
+  --color-primary-dark: #6366f1;
+  --color-primary-soft: rgba(99, 102, 241, 0.22);
 }
 
 html.dark body {
-  background: #0f1117;
-  color: #d1d5e0;
+  background: #0b0d14;
+  color: #e2e8f0;
 }
 
 /* Card & surface backgrounds */
-html.dark .bg-white { background-color: #1a1d2e !important; }
-html.dark .bg-white\/60 { background-color: rgba(26, 29, 46, 0.6) !important; }
-html.dark .bg-white\/80 { background-color: rgba(26, 29, 46, 0.8) !important; }
-html.dark .bg-white\/85 { background-color: rgba(26, 29, 46, 0.85) !important; }
-html.dark .bg-white\/90 { background-color: rgba(26, 29, 46, 0.9) !important; }
-html.dark .bg-white\/95 { background-color: rgba(26, 29, 46, 0.95) !important; }
-html.dark .border-white\/60 { border-color: rgba(42, 45, 64, 0.6) !important; }
-html.dark .bg-gray-50 { background-color: #1e2133 !important; }
-html.dark .bg-gray-100 { background-color: #252839 !important; }
+html.dark .bg-white { background-color: #161926 !important; }
+html.dark .bg-white\/60 { background-color: rgba(22, 25, 38, 0.6) !important; }
+html.dark .bg-white\/70 { background-color: rgba(22, 25, 38, 0.7) !important; }
+html.dark .bg-white\/80 { background-color: rgba(22, 25, 38, 0.8) !important; }
+html.dark .bg-white\/85 { background-color: rgba(22, 25, 38, 0.85) !important; }
+html.dark .bg-white\/90 { background-color: rgba(22, 25, 38, 0.9) !important; }
+html.dark .bg-white\/95 { background-color: rgba(22, 25, 38, 0.95) !important; }
+html.dark .border-white\/60 { border-color: rgba(38, 42, 61, 0.6) !important; }
+html.dark .bg-gray-50 { background-color: #1b1e2e !important; }
+html.dark .bg-gray-100 { background-color: #222638 !important; }
 
 /* Lavender surfaces */
-html.dark .bg-lavender { background-color: #151825 !important; }
-html.dark .bg-lavender\/20 { background-color: rgba(21, 24, 37, 0.2) !important; }
-html.dark .bg-lavender\/30 { background-color: rgba(21, 24, 37, 0.3) !important; }
-html.dark .bg-lavender\/40 { background-color: rgba(21, 24, 37, 0.4) !important; }
-html.dark .bg-lavender\/50 { background-color: rgba(21, 24, 37, 0.5) !important; }
-html.dark .bg-lavender\/60 { background-color: rgba(21, 24, 37, 0.6) !important; }
+html.dark .bg-lavender { background-color: #0f111a !important; }
+html.dark .bg-lavender\/20 { background-color: rgba(30, 35, 54, 0.3) !important; }
+html.dark .bg-lavender\/30 { background-color: rgba(30, 35, 54, 0.4) !important; }
+html.dark .bg-lavender\/40 { background-color: rgba(30, 35, 54, 0.5) !important; }
+html.dark .bg-lavender\/50 { background-color: rgba(30, 35, 54, 0.6) !important; }
+html.dark .bg-lavender\/60 { background-color: #1e2235 !important; }
+html.dark .bg-lavender\/70 { background-color: #222638 !important; }
+
+/* Aura uses separate surfaces so messages, tabs, and the composer remain
+   distinct without the pale translucent backgrounds from the light theme. */
+.vendor-aura-panel {
+  container-type: inline-size;
+}
+
+.vendor-aura-panel .aura-header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2rem;
+  min-width: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 0.625rem;
+  color: var(--color-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: background-color 150ms, color 150ms;
+}
+
+.vendor-aura-panel .aura-header-action:hover,
+.vendor-aura-panel details[open] > summary {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.vendor-aura-panel .aura-header-action:focus-visible,
+.vendor-aura-panel .aura-layout-option:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.aura-new-chat-label { display: none; }
+
+@container (min-width: 480px) {
+  .aura-new-chat-label { display: inline; font-size: 0.75rem; font-weight: 600; }
+}
+
+.aura-layout-option {
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background-color: var(--color-lavender);
+  color: var(--color-navy);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.aura-layout-option span { display: block; margin-top: 0.25rem; color: var(--color-muted); }
+.aura-layout-option:hover { background-color: var(--color-primary-soft); }
+
+html.dark .vendor-aura-panel .aura-header-action { color: #aeb8d3; }
+html.dark .vendor-aura-panel .aura-header-action:hover,
+html.dark .vendor-aura-panel details[open] > summary { color: #bdc3ff; background-color: #303652; }
+html.dark .vendor-aura-panel .aura-layout-menu { background-color: #1c2232 !important; }
+html.dark .vendor-aura-panel .aura-layout-option { background-color: #283047; color: #e8edf7; }
+html.dark .vendor-aura-panel .aura-layout-option span { color: #aeb8d3; }
+html.dark .vendor-aura-panel .aura-layout-option:hover { background-color: #394363; }
+
+html.dark .vendor-aura-panel {
+  background-color: #141824 !important;
+  border-color: #343b52 !important;
+}
+
+html.dark .vendor-aura-panel .aura-assistant-message {
+  background-color: #242b3e !important;
+  color: #e8edf7 !important;
+  border: 1px solid #343e56;
+}
+
+html.dark .vendor-aura-panel .aura-user-message {
+  background-color: #5745c6 !important;
+  color: #fff !important;
+}
+
+html.dark .vendor-aura-panel .aura-suggestion {
+  background-color: #202638 !important;
+  color: #dce2ff !important;
+  border: 1px solid #3b4563;
+}
+
+html.dark .vendor-aura-panel .aura-suggestion:hover {
+  background-color: #303958 !important;
+  border-color: #929bff;
+}
+
+html.dark .vendor-aura-panel .aura-composer {
+  background-color: #1c2232 !important;
+  border-color: #424d68 !important;
+}
+
+html.dark .vendor-aura-panel .aura-composer:focus-within {
+  border-color: #929bff !important;
+  box-shadow: 0 0 0 2px rgb(146 155 255 / 15%);
+}
+
+html.dark .vendor-aura-panel .aura-composer input {
+  background-color: transparent !important;
+  color: #f1f5ff !important;
+}
+
+html.dark .vendor-aura-panel .aura-composer input::placeholder {
+  color: #a3adc5 !important;
+}
 
 /* Primary soft surfaces */
-html.dark .bg-primary-soft { background-color: #262046 !important; }
-html.dark .bg-primary-soft\/20 { background-color: rgba(38, 32, 70, 0.2) !important; }
-html.dark .bg-primary-soft\/50 { background-color: rgba(38, 32, 70, 0.5) !important; }
-html.dark .bg-primary-soft\/60 { background-color: rgba(38, 32, 70, 0.6) !important; }
+html.dark .bg-primary-soft { background-color: rgba(99, 102, 241, 0.22) !important; }
+html.dark .bg-primary-soft\/20 { background-color: rgba(99, 102, 241, 0.15) !important; }
+html.dark .bg-primary-soft\/50 { background-color: rgba(99, 102, 241, 0.35) !important; }
+html.dark .bg-primary-soft\/60 { background-color: rgba(99, 102, 241, 0.45) !important; }
+html.dark .text-primary { color: #818cf8 !important; }
 
 /* Text colors */
-html.dark .text-navy { color: #e2e5f0 !important; }
-html.dark .text-ink { color: #d1d5e0 !important; }
-html.dark .text-muted { color: #8b8fae !important; }
-html.dark .text-ink\/70 { color: rgba(209, 213, 224, 0.7) !important; }
-html.dark .text-ink\/80 { color: rgba(209, 213, 224, 0.8) !important; }
-html.dark .text-muted\/80 { color: rgba(139, 143, 174, 0.8) !important; }
+html.dark .text-navy { color: #f1f5f9 !important; }
+html.dark .text-navy\/70 { color: rgba(241, 245, 249, 0.7) !important; }
+html.dark .text-navy\/80 { color: rgba(241, 245, 249, 0.8) !important; }
+html.dark .text-navy\/90 { color: rgba(241, 245, 249, 0.9) !important; }
+
+html.dark .text-ink { color: #e2e8f0 !important; }
+html.dark .text-ink\/60 { color: rgba(226, 232, 240, 0.6) !important; }
+html.dark .text-ink\/65 { color: rgba(226, 232, 240, 0.65) !important; }
+html.dark .text-ink\/70 { color: rgba(226, 232, 240, 0.7) !important; }
+html.dark .text-ink\/75 { color: rgba(226, 232, 240, 0.75) !important; }
+html.dark .text-ink\/80 { color: rgba(226, 232, 240, 0.8) !important; }
+html.dark .text-ink\/85 { color: rgba(226, 232, 240, 0.85) !important; }
+html.dark .text-ink\/90 { color: rgba(226, 232, 240, 0.9) !important; }
+
+html.dark .text-muted { color: #94a3b8 !important; }
+html.dark .text-muted\/60 { color: rgba(148, 163, 184, 0.6) !important; }
+html.dark .text-muted\/70 { color: rgba(148, 163, 184, 0.7) !important; }
+html.dark .text-muted\/80 { color: rgba(148, 163, 184, 0.8) !important; }
+html.dark .text-muted\/90 { color: rgba(148, 163, 184, 0.9) !important; }
 
 /* Border colors */
-html.dark .border-gray-50 { border-color: #252839 !important; }
-html.dark .border-gray-100 { border-color: #2a2d40 !important; }
-html.dark .border-gray-200 { border-color: #333650 !important; }
-html.dark .border-gray-300 { border-color: #3d4060 !important; }
+html.dark .border-gray-50 { border-color: #1e2235 !important; }
+html.dark .border-gray-100 { border-color: #262a3d !important; }
+html.dark .border-gray-200 { border-color: #30354c !important; }
+html.dark .border-gray-300 { border-color: #3b415e !important; }
 
 /* Hover states */
-html.dark .hover\:bg-lavender:hover { background-color: #1e2133 !important; }
-html.dark .hover\:bg-gray-50:hover { background-color: #1e2133 !important; }
-html.dark .hover\:bg-gray-200\/70:hover { background-color: rgba(37, 40, 57, 0.7) !important; }
-html.dark .hover\:border-gray-200:hover { border-color: #3d4060 !important; }
-html.dark .hover\:border-gray-300:hover { border-color: #4a4d68 !important; }
+html.dark .hover\:bg-lavender:hover { background-color: #222638 !important; }
+html.dark .hover\:bg-gray-50:hover { background-color: #222638 !important; }
+html.dark .hover\:bg-gray-200\/70:hover { background-color: rgba(48, 53, 76, 0.7) !important; }
+html.dark .hover\:border-gray-200:hover { border-color: #3b415e !important; }
+html.dark .hover\:border-gray-300:hover { border-color: #4a5174 !important; }
 
 /* Shadow adjustments */
-html.dark .shadow-xs { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important; }
-html.dark .shadow-sm { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important; }
-html.dark .shadow-md { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4) !important; }
-html.dark .shadow-2xl { box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5) !important; }
+html.dark .shadow-xs { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important; }
+html.dark .shadow-sm { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6) !important; }
+html.dark .shadow-md { box-shadow: 0 4px 6px rgba(0, 0, 0, 0.6) !important; }
+html.dark .shadow-2xl { box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7) !important; }
 
 /* Divide colors */
-html.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: #252839 !important; }
-html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #2a2d40 !important; }
+html.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]) { border-color: #1e2235 !important; }
+html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #262a3d !important; }
 
 /* Dashed borders */
-html.dark .border-dashed { border-color: #3d4060 !important; }
+html.dark .border-dashed { border-color: #3b415e !important; }
 
 /* Specific accented backgrounds that should stay lighter in dark mode */
 html.dark .bg-emerald-50 { background-color: #0f2a1f !important; }
@@ -313,14 +437,178 @@ html.dark .border-red-200 { border-color: rgba(239, 68, 68, 0.3) !important; }
 html.dark .border-sky-200 { border-color: rgba(14, 165, 233, 0.3) !important; }
 html.dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.3) !important; }
 
-@keyframes loadingBar {
-  0% {
-    transform: translateX(-120%);
-  }
-  50% {
-    transform: translateX(120%);
-  }
-  100% {
-    transform: translateX(360%);
-  }
+/* Shared dark surfaces. Cover translucent and interactive variants too: a
+   light /30 background still creates a pale overlay on a dark card. Keep
+   light-theme utility names, but give each surface an opaque dark palette. */
+html.dark {
+  --color-primary-soft: #292845;
+  --color-lavender: #1a2232;
+}
+html.dark :is(
+  .bg-amber-100,
+  .bg-amber-100\/70,
+  .bg-amber-50,
+  .bg-amber-50\/30,
+  .bg-amber-50\/50,
+  .bg-amber-50\/60,
+  .bg-amber-50\/70,
+  .bg-amber-50\/80,
+  .bg-amber-50\/90,
+  .bg-orange-100,
+  .bg-orange-50,
+  .hover\:bg-amber-100:hover,
+  .hover\:bg-amber-100\/80:hover
+) { background-color: #302719 !important; }
+
+html.dark :is(
+  .bg-blue-50,
+  .bg-blue-50\/70,
+  .bg-indigo-50,
+  .bg-indigo-50\/80,
+  .bg-sky-100,
+  .bg-sky-50,
+  .hover\:bg-blue-100:hover,
+  .hover\:bg-indigo-50:hover
+) { background-color: #1d2b42 !important; }
+
+html.dark :is(
+  .bg-emerald-100,
+  .bg-emerald-50,
+  .bg-emerald-50\/30,
+  .bg-emerald-50\/50,
+  .bg-emerald-50\/60,
+  .bg-emerald-50\/70,
+  .bg-emerald-50\/80,
+  .bg-teal-50,
+  .hover\:bg-emerald-100:hover
+) { background-color: #172e28 !important; }
+
+html.dark :is(
+  .bg-gray-100,
+  .bg-gray-100\/70,
+  .bg-gray-100\/90,
+  .bg-gray-200,
+  .bg-gray-200\/80,
+  .bg-gray-300,
+  .bg-slate-100,
+  .bg-slate-100\/70,
+  .bg-slate-100\/80,
+  .bg-slate-200\/50,
+  .bg-slate-200\/60,
+  .bg-slate-200\/70,
+  .bg-slate-200\/80
+) { background-color: #202839 !important; }
+
+html.dark :is(
+  .bg-gray-50,
+  .bg-gray-50\/30,
+  .bg-gray-50\/40,
+  .bg-gray-50\/50,
+  .bg-gray-50\/70,
+  .bg-gray-50\/80,
+  .bg-lavender,
+  .bg-lavender\/10,
+  .bg-lavender\/20,
+  .bg-lavender\/30,
+  .bg-lavender\/40,
+  .bg-lavender\/50,
+  .bg-lavender\/60,
+  .bg-lavender\/70,
+  .bg-lavender\/80,
+  .bg-slate-50,
+  .bg-slate-50\/40,
+  .bg-slate-50\/50,
+  .bg-slate-50\/60,
+  .bg-slate-50\/70,
+  .bg-slate-50\/80
+) { background-color: #1a2232 !important; }
+
+html.dark :is(
+  .bg-primary-soft,
+  .bg-primary-soft\/20,
+  .bg-primary-soft\/30,
+  .bg-primary-soft\/40,
+  .bg-primary-soft\/50,
+  .bg-primary-soft\/60,
+  .bg-primary-soft\/70,
+  .bg-primary-soft\/80,
+  .hover\:bg-primary-soft:hover,
+  .hover\:bg-primary-soft\/60:hover,
+  .hover\:bg-primary-soft\/80:hover
+) { background-color: #292845 !important; }
+
+html.dark :is(
+  .bg-purple-100,
+  .bg-purple-50,
+  .bg-violet-50,
+  .hover\:bg-purple-100:hover
+) { background-color: #2a2240 !important; }
+
+html.dark :is(
+  .bg-red-100,
+  .bg-red-200,
+  .bg-red-50,
+  .bg-red-50\/80,
+  .bg-red-50\/90,
+  .bg-rose-100,
+  .bg-rose-50,
+  .bg-rose-50\/30,
+  .bg-rose-50\/50,
+  .bg-rose-50\/60,
+  .bg-rose-50\/70,
+  .bg-rose-50\/80,
+  .hover\:bg-red-100:hover,
+  .hover\:bg-red-200:hover,
+  .hover\:bg-red-200\/60:hover,
+  .hover\:bg-red-50:hover,
+  .hover\:bg-rose-100:hover,
+  .hover\:bg-rose-200:hover,
+  .hover\:bg-rose-50:hover
+) { background-color: #321e29 !important; }
+
+html.dark :is(
+  .bg-white,
+  .bg-white\/60,
+  .bg-white\/70,
+  .bg-white\/80,
+  .bg-white\/85,
+  .bg-white\/90,
+  .bg-white\/95
+) { background-color: #161c2a !important; }
+
+html.dark :is(
+  .focus-within\:bg-white:focus-within,
+  .focus\:bg-white:focus,
+  .hover\:bg-gray-100:hover,
+  .hover\:bg-gray-200:hover,
+  .hover\:bg-gray-200\/70:hover,
+  .hover\:bg-gray-50:hover,
+  .hover\:bg-gray-50\/50:hover,
+  .hover\:bg-lavender:hover,
+  .hover\:bg-lavender\/30:hover,
+  .hover\:bg-lavender\/40:hover,
+  .hover\:bg-lavender\/50:hover,
+  .hover\:bg-lavender\/60:hover,
+  .hover\:bg-lavender\/80:hover,
+  .hover\:bg-slate-50:hover,
+  .hover\:bg-slate-50\/50:hover,
+  .hover\:bg-white:hover,
+  .hover\:bg-white\/90:hover
+) { background-color: #2a3449 !important; }
+
+/* Solid action buttons need a deeper violet behind white labels. */
+html.dark .bg-primary { background-color: #6051d5 !important; }
+html.dark .hover\:bg-primary-dark:hover { background-color: #5142bd !important; }
+
+html.dark :is(.text-gray-500, .text-slate-500) { color: #a5b1c8 !important; }
+html.dark :is(.text-gray-600, .text-slate-600) { color: #b9c4d9 !important; }
+html.dark :is(.text-gray-700, .text-slate-700) { color: #cfd8e9 !important; }
+html.dark :is(.text-gray-800, .text-gray-900, .text-slate-800, .text-slate-900) { color: #edf2fa !important; }
+
+@keyframes aura-card-reveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .aura-card-reveal { animation: aura-card-reveal 240ms ease-out both; }
 }

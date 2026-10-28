@@ -13,7 +13,7 @@ import { HANDLED_STATUSES, progressOf } from './understanding.js';
 export function computeEventSummary(event, requirements, stats = new Map(), bookings = []) {
   const bookedByCat = new Map(bookings.map((b) => [b.category, b]));
   const items = requirements.map((r) => {
-    const handled = HANDLED_STATUSES.includes(r.status);
+    const handled = r.source !== 'aura_inferred' && HANDLED_STATUSES.includes(r.status);
     const s = stats.get(r.category) || { optionCount: 0, lowestPrice: null, lowestIsDemo: false };
     const booked = bookedByCat.get(r.category);
     return {
@@ -21,6 +21,7 @@ export function computeEventSummary(event, requirements, stats = new Map(), book
       label: categoryLabel(r.category),
       tier: tierOf(event.eventType, r.category),
       status: r.status,
+      source: r.source,
       providedValue: r.providedValue || null,
       selected: Boolean(r.selectedOptionId),
       selectedOption: r.selectedOptionId ? r.selectedOption : null,
@@ -37,7 +38,7 @@ export function computeEventSummary(event, requirements, stats = new Map(), book
   const inScope = items.filter((i) => i.tier === 'essential' || i.status === 'pending');
   const committedCost = items.reduce((sum, i) => sum + (i.bookedCost || 0), 0);
   const estimatedCost = inScope.reduce((sum, i) => sum + (i.estimatedCost || 0), 0);
-  const withoutEstimate = inScope.filter((i) => !HANDLED_STATUSES.includes(i.status) && i.estimatedCost == null).map((i) => i.label);
+  const withoutEstimate = inScope.filter((i) => (i.source === 'aura_inferred' || !HANDLED_STATUSES.includes(i.status)) && i.estimatedCost == null).map((i) => i.label);
   const target = event.budget ?? event.budgetMax ?? null;
 
   return {
@@ -67,18 +68,18 @@ const STEP_LABELS = [
 const AT_LEAST_BOOKED = ['booked', 'in_progress', 'completed'];
 
 /** Journey tracker, derived only from state and counts. */
-export function eventSteps(event, requirements) {
+export function eventSteps(event, requirements, payments = [], bookings = []) {
   const essentials = templateFor(event.eventType).essential;
   const byCat = new Map(requirements.map((r) => [r.category, r]));
   const essentialsDecided = essentials.every((c) => {
     const r = byCat.get(c);
-    return r && (HANDLED_STATUSES.includes(r.status) || r.selectedOptionId);
+    return r && r.source !== 'aura_inferred' && (HANDLED_STATUSES.includes(r.status) || r.selectedOptionId);
   });
   const done = {
     planning: event.status !== 'draft',
     vendors: event.status !== 'draft' && essentialsDecided,
     booking: AT_LEAST_BOOKED.includes(event.status),
-    payment: AT_LEAST_BOOKED.includes(event.status),
+    payment: bookings.some(b => b.status === 'confirmed') && payments.some(p => p.status === 'verified' && Number(p.amount) > 0),
     execution: event.status === 'completed',
     completed: event.status === 'completed',
   };

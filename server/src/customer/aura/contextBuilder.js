@@ -11,7 +11,7 @@ import { computeEventSummary } from '../services/summary.js';
  */
 export async function buildContext({ customer, event, catalogScope = event }) {
   const confirmed = event && event.status !== 'draft';
-  const [requirements, contextRows, allEvents, stats, bookingRows, paymentRows, reservationRows] = await Promise.all([
+  const [requirements, contextRows, allEvents, stats, bookingRows, paymentRows, reservationRows, financialTruth] = await Promise.all([
     event ? core.listRequirements(event._id) : [],
     event ? core.listContext(event._id) : [],
     core.listEvents(customer._id),
@@ -19,10 +19,9 @@ export async function buildContext({ customer, event, catalogScope = event }) {
     confirmed ? core.readBookings(event._id) : [],
     confirmed ? core.readPayments(event._id) : [],
     confirmed ? core.readReservations(event._id) : [],
+    confirmed ? core.readFinancialTruth(customer._id, event._id) : null,
   ]);
-  const budgetSummary = confirmed
-    ? computeEventSummary(event, requirements, stats, bookingRows.filter((b) => b.status === 'confirmed')).budget
-    : null;
+  const budgetSummary = financialTruth ? core.financialBudgetSummary(financialTruth) : null;
   const bookings = bookingRows.map((b) => ({
     service: categoryLabel(b.category),
     vendor: b.isDemo ? `${b.vendorName} (demo listing)` : b.vendorName,
@@ -90,7 +89,7 @@ export async function buildContext({ customer, event, catalogScope = event }) {
             serviceLocation: serviceLocationText(r.serviceLocation, locationLabel(event)) || undefined,
           }))
         : [],
-      // committedCost = booked amounts; estimatedCost = lowest listed options for what's still open.
+      // Shared Core budget contract; estimates, commitments and verified payments remain separate.
       budgetSummary,
       contextStates: buildContextStates(event, requirements, contextRows),
       inferredNotes,

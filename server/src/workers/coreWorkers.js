@@ -1,3 +1,4 @@
+import { runReminderBatch, runEventDeadlineBatch } from '../notifications/reminders.worker.js';
 import { config } from '../config.js';
 import { OutboxEvent } from '../admin/models/OutboxEvent.js';
 import { processOutboxBatch } from '../automation/services/outbox.service.js';
@@ -26,6 +27,24 @@ async function releaseStaleOutboxLocks() {
 
 export function startCoreWorkers() {
   startPushWorker();
+  let reminderBusy = false;
+  let lastDeadlineRun = 0;
+  const reminders = async () => {
+    if (reminderBusy) return;
+    reminderBusy = true;
+    const started = Date.now();
+    markWorkerStarted('event-reminders');
+    try {
+      await runReminderBatch();
+      if (Date.now() - lastDeadlineRun > 300000) { await runEventDeadlineBatch(); lastDeadlineRun = Date.now(); }
+      markWorkerSuccess('event-reminders', Date.now() - started);
+    } catch (err) { markWorkerError('event-reminders', err, Date.now() - started); console.warn('[reminders]', err.message); } finally { reminderBusy = false; }
+  };
+  configureWorker('event-reminders', { enabled: config.eventRemindersEnabled });
+  if (config.eventRemindersEnabled) {
+    setInterval(reminders, 30000).unref();
+    setTimeout(reminders, 4000).unref();
+  }
   configureWorker('outbox', { enabled: config.outboxWorkerEnabled });
   configureWorker('reservation-expiry', { enabled: config.reservationExpiryWorkerEnabled });
 

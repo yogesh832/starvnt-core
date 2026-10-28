@@ -1,3 +1,5 @@
+import { NotificationPreference } from './preferences.models.js';
+import { notificationDelivery } from './policy.js';
 import crypto from "node:crypto";
 import { config } from "../config.js";
 import { PushSubscription, PushJob } from "./push.models.js";
@@ -60,6 +62,8 @@ function sources(binding, owner) {
         model: CustomerNotification,
         filter: { customer: binding.audienceId },
         map: (n) => ({
+          type: n.type,
+          priorityRank: ({ CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 })[n.priority] ?? 2,
           title: n.title,
           body: n.body,
           actionUrl: n.actionUrl || `/customer/events/${n.event || ""}`,
@@ -75,6 +79,8 @@ function sources(binding, owner) {
         model: Notification,
         filter: { vendor: binding.audienceId },
         map: (n) => ({
+          type: n.type,
+          priorityRank: ({ CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 })[n.priority] ?? 2,
           title: n.title,
           body: n.message,
           actionUrl: n.link,
@@ -275,7 +281,7 @@ export async function deliverOne(
   const finish = async (update) => {
     await PushJob.updateOne(
       { _id: job._id, lease: job.lease },
-      { $set: { ...update, lockedUntil: null } },
+      { $set: { ...update, lockedUntil: null }, $push: { attemptLog: { $each: [{ at: new Date(), status: update.status, error: update.lastError || '', ticketId: update.ticketId || job.ticketId || '' }], $slice: -100 } } },
     );
     return update;
   };
@@ -286,6 +292,15 @@ export async function deliverOne(
     });
   if (new Date(job.expiresAt) <= new Date())
     return finish({ status: "FAILED", lastError: "EXPIRED" });
+  if (!job.ticketId && binding.surface !== 'ADMIN') {
+    const policy = await NotificationPreference.findById(`${binding.surface}:${binding.audienceId}`).lean();
+    const delivery = notificationDelivery(policy || undefined, job.type || '');
+    if (!delivery.allowed) return finish(delivery.disabled ? { status: 'CANCELLED', lastError: 'USER_PREFERENCE' } : { status: 'QUEUED', nextAttemptAt: delivery.nextAttemptAt, lastError: 'QUIET_HOURS', attempts: Math.max(0, (job.attempts || 1) - 1) });
+  }
+  if (!job.ticketId && (job.priorityRank ?? 2) > 0) {
+    const recent = await PushJob.countDocuments({ subscription: job.subscription, status: { $in: ['RECEIPT', 'SENT'] }, updatedAt: { $gte: new Date(Date.now() - 60000) } });
+    if (recent >= 5) return finish({ status: 'QUEUED', nextAttemptAt: new Date(Date.now() + 60000), lastError: 'THROTTLED', attempts: Math.max(0, (job.attempts || 1) - 1) });
+  }
   const receipt = !!job.ticketId;
   const tokenHash = crypto
     .createHash("sha256")
@@ -404,7 +419,7 @@ export async function runPushBatch() {
         },
         $inc: { attempts: 1 },
       },
-      { sort: { nextAttemptAt: 1 }, new: true },
+      { sort: { priorityRank: 1, nextAttemptAt: 1 }, new: true },
     ).lean();
     if (!job) break;
     const result = await deliverOne(job);

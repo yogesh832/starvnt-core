@@ -13,6 +13,8 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
   const [paymentNotes, setPaymentNotes] = useState('');
   const [validationNotes, setValidationNotes] = useState('');
   const [settlementRef, setSettlementRef] = useState('');
+  const [refundRef, setRefundRef] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
   const [failureReason, setFailureReason] = useState('');
 
   if (!booking) return null;
@@ -43,15 +45,18 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
 
   async function handleVerifyPayment(e) {
     e.preventDefault();
+    if (!paymentRef.trim()) {
+      setMessage({ type: 'error', text: 'Enter a verified payment/order reference from the customer payment ledger.' });
+      return;
+    }
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
       const res = await adminApi.call(`/operations/bookings/${_id}/verify-payment`, {
         method: 'POST',
         body: {
-          transactionReference: paymentRef || `MANUAL-${Date.now()}`,
-          notes: paymentNotes || 'Authoritatively verified by Super Admin',
-          paidAmount: paymentSummary.balanceAmount || totalAmount,
+          transactionReference: paymentRef.trim(),
+          notes: paymentNotes || 'Matched against authoritative customer payment ledger',
         },
       });
       if (res.ok) {
@@ -96,6 +101,10 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
 
   async function handleSettle(e) {
     e.preventDefault();
+    if (!settlementRef.trim()) {
+      setMessage({ type: 'error', text: 'Enter the real bank or transfer reference before releasing settlement.' });
+      return;
+    }
     if (!window.confirm('Execute vendor payout and release settlement?')) return;
     setLoading(true);
     setMessage({ type: '', text: '' });
@@ -103,12 +112,16 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
       const res = await adminApi.call(`/operations/bookings/${_id}/settle`, {
         method: 'POST',
         body: {
-          settlementReference: settlementRef || `BANK-UTR-${Date.now()}`,
+          transactionReference: settlementRef.trim(),
           notes: 'Settled by StarVnt Core Operations',
         },
       });
-      if (res.ok) {
+      if (res.pendingApproval) {
+        setMessage({ type: 'success', text: 'Settlement release request created. A different finance admin must approve it before payout release.' });
+      } else if (res.ok) {
         setMessage({ type: 'success', text: 'Vendor settlement executed and settled!' });
+      }
+      if (res.ok) {
         setTimeout(() => {
           onRefresh();
           onClose();
@@ -116,6 +129,47 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
       }
     } catch (err) {
       setMessage({ type: 'error', text: err.message || 'Settlement execution failed' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRefund(e) {
+    e.preventDefault();
+    const amount = Number(refundAmount || paymentSummary.paidAmount || totalAmount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage({ type: 'error', text: 'Enter a valid refund amount.' });
+      return;
+    }
+    if (!refundRef.trim()) {
+      setMessage({ type: 'error', text: 'Enter the real refund/payment provider reference.' });
+      return;
+    }
+    if (!window.confirm('Create refund request for maker-checker approval?')) return;
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+    try {
+      const res = await adminApi.call(`/operations/bookings/${_id}/refund`, {
+        method: 'POST',
+        body: {
+          amount,
+          reference: refundRef.trim(),
+          notes: 'Refund requested by StarVnt Core Operations',
+        },
+      });
+      if (res.pendingApproval) {
+        setMessage({ type: 'success', text: 'Refund request created. A different finance admin must approve it before ledger posting.' });
+      } else if (res.ok) {
+        setMessage({ type: 'success', text: 'Refund posted to the finance ledger.' });
+      }
+      if (res.ok) {
+        setTimeout(() => {
+          onRefresh();
+          onClose();
+        }, 1200);
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message || 'Refund request failed' });
     } finally {
       setLoading(false);
     }
@@ -242,7 +296,7 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
         <div className="flex items-center gap-2 px-6 pt-3 border-b border-gray-100 bg-white">
           {[
             { id: 'overview', label: 'Overview & Stakeholders', icon: 'bookings' },
-            { id: 'financials', label: 'Pricing & Escrow', icon: 'wallet' },
+            { id: 'financials', label: 'Pricing & Funds', icon: 'wallet' },
             { id: 'evidence', label: 'Proof & Evidence', icon: 'image' },
             { id: 'actions', label: 'Admin Operations', icon: 'operations' },
           ].map((tab) => (
@@ -399,7 +453,7 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
               {/* Vendor Settlement details */}
               <div className="bg-slate-50 border border-gray-100 rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-bold text-navy uppercase tracking-wider">Vendor Settlement Escrow</div>
+                  <div className="text-xs font-bold text-navy uppercase tracking-wider">Vendor Settlement Hold</div>
                   <StatusChip status={settlementStatus} />
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-xs">
@@ -496,14 +550,14 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
           {activeTab === 'actions' && (
             <div className="space-y-6">
               {/* Payment Verification */}
-              {paymentStatus !== 'PAID' && (
+              {paymentStatus !== 'PAYMENT_VERIFIED' && (
                 <form onSubmit={handleVerifyPayment} className="bg-slate-50 border border-gray-100 rounded-2xl p-5 space-y-3">
                   <div className="flex items-center gap-2 text-xs font-bold text-navy uppercase tracking-wider">
                     <Icon name="wallet" size={15} className="text-primary" />
                     <span>Authoritatively Verify Customer Payment</span>
                   </div>
                   <p className="text-xs text-muted">
-                    Confirm that payment has been received in escrow account to enable vendor execution.
+                    Match this booking against an authoritative verified customer payment before execution continues.
                   </p>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <input
@@ -590,6 +644,43 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
                   >
                     {loading ? 'Releasing...' : 'Release Settlement Now'}
+                  </button>
+                </form>
+              )}
+
+              {paymentStatus === 'PAYMENT_VERIFIED' && (
+                <form onSubmit={handleRefund} className="bg-amber-50/60 border border-amber-100 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-900 uppercase tracking-wider">
+                    <Icon name="payments" size={15} className="text-amber-600" />
+                    <span>Request Customer Refund</span>
+                  </div>
+                  <p className="text-xs text-muted">
+                    Refunds require a second finance admin approval before they are posted to the ledger.
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder={`Amount, max ₹${Number(paymentSummary.paidAmount || totalAmount || 0).toLocaleString('en-IN')}`}
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs outline-none focus:border-amber-600"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Refund ID / payment provider reference"
+                      value={refundRef}
+                      onChange={(e) => setRefundRef(e.target.value)}
+                      className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs outline-none focus:border-amber-600"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {loading ? 'Requesting...' : 'Request Refund Approval'}
                   </button>
                 </form>
               )}

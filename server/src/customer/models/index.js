@@ -201,6 +201,7 @@ const reservationSchema = new Schema(
     packageName: { type: String, required: true },
     packageTotal: { type: Number, default: null, min: 0 },
     advancePercent: { type: Number, default: null, min: 0, max: 100 },
+    financialPolicySnapshot: { type: Schema.Types.Mixed, default: null },
     amount: { type: Number, required: true, min: 0 }, // advance payable now
     balanceAmount: { type: Number, default: null, min: 0 },
     isDemo: { type: Boolean, default: false },
@@ -302,10 +303,12 @@ const eventMessageSchema = new Schema(
     senderCustomer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', default: null },
     senderName: { type: String, default: null },
     body: { type: String, required: true, maxlength: 4000 },
+    idempotencyKey: { type: String, default: null },
     payload: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: { createdAt: true, updatedAt: false }, collection: 'customer_event_messages' }
 );
+eventMessageSchema.index({ event: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } });
 
 const customerNotificationSchema = new Schema(
   {

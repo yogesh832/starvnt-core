@@ -1,9 +1,16 @@
+import VendorAuraLocation from '../../components/VendorAuraLocation.jsx';
+import { requestsVendorLocation, vendorCopy } from '../../../../server/src/common/vendorAuraUi.js';
+import { conversationLanguage } from '../../../../server/src/common/auraLanguage.js';
+import AuraMark from '../../components/AuraMark.jsx';
 import { useEffect, useRef, useState } from 'react';
+import { createAuraLive, sameAuraValue } from '../../../../shared/auraLive.ts';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
+import AuraActivity from '../../components/AuraActivity.jsx';
 import { externalApi } from '../../lib/api.js';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
-import MapLocationPicker from '../../components/MapLocationPicker.jsx';
+import { stopAuraSpeaking, transcribeAuraAudio } from '../../lib/voice.js';
+import { getAuraPrompts } from './vendorAuraPrompts.js';
 
 /**
  * Vendor Aura+: answers from the vendor's own data and links to the page
@@ -11,14 +18,8 @@ import MapLocationPicker from '../../components/MapLocationPicker.jsx';
  * category, city) during profile setup; everything else is done on the pages.
  */
 
-// Same 5 steps, order and checks as the dashboard onboarding (activation checklist).
-const SETUP_STEPS = [
-  { key: 'profile', title: 'Brand name, category & city', done: (c) => c.profile, to: '/vendor/profile', prompt: 'Help me set up my brand profile' },
-  { key: 'services', title: 'Add a service with a price', done: (c) => c.services, to: '/vendor/services', prompt: 'How do I add my first service?' },
-  { key: 'capabilities', title: 'Team & equipment', done: (c) => c.capabilities, to: '/vendor/services?action=gear', prompt: 'What should I add for team and equipment?' },
-  { key: 'coverage', title: 'Location & coverage area', done: (c) => c.locations && c.coverage, to: '/vendor/services?action=coverage', prompt: 'How do I set my map location pin and coverage radius?' },
-  { key: 'portfolio', title: 'Add a portfolio project', done: (c) => c.portfolio, to: '/vendor/portfolio', prompt: 'What should I put in my portfolio?' },
-];
+import { VENDOR_SETUP_STEPS } from '../../../../server/src/common/vendorSetupSteps.js';
+const SETUP_STEPS = VENDOR_SETUP_STEPS.map(step => ({ ...step, title: step.label }));
 
 const START_SETUP = 'Help me complete my profile setup';
 
@@ -26,65 +27,46 @@ const START_SETUP = 'Help me complete my profile setup';
 function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
   const steps = SETUP_STEPS.map((s) => ({ ...s, isDone: Boolean(s.done(setup.checklist)) }));
   const next = steps.find((s) => !s.isDone);
+  const doneCount = steps.filter((s) => s.isDone).length;
+  const nextLabel = next ? next.title.replace('Brand name, category & city', 'Profile').replace('Add a service with a price', 'Service') : 'Ready';
   return (
-    <div className="mx-4 mt-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-soft/60 to-white dark:from-primary-soft/20 dark:to-[#171a29] dark:border-primary/30 shrink-0">
-      <button onClick={onToggle} className="w-full flex items-center gap-2 px-3 pt-2.5 pb-2 text-left" aria-expanded={expanded}>
-        <span className="text-[12px] font-extrabold text-navy dark:text-white flex-1">Complete your profile</span>
-        <span className="text-[11px] font-bold text-primary dark:text-primary-soft">{setup.percent}%</span>
-        <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={14} className="text-muted dark:text-gray-400" />
-      </button>
-      <div className="mx-3 mb-2.5 h-1.5 rounded-full bg-white dark:bg-[#11131f] overflow-hidden">
-        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.max(4, setup.percent)}%` }} />
+    <div className="mx-3 mt-2 rounded-xl border border-primary/15 bg-white/95 px-2.5 py-2 shadow-xs shrink-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="h-1.5 w-14 rounded-full bg-lavender overflow-hidden shrink-0">
+          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.max(4, setup.percent)}%` }} />
+        </div>
+        <div className="min-w-0 flex-1 text-[11px] text-muted">
+          <span className="font-extrabold text-navy">Profile {setup.percent}%</span>
+          <span> · {doneCount}/{steps.length} done</span>
+          {!next ? <span>{setup.checklist.verified ? ' · ready for matching' : ' · verification pending'}</span> : <span> · next: {nextLabel}</span>}
+        </div>
+        {next ? (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => onAura(next.prompt)}
+              disabled={busy}
+              className="rounded-lg bg-primary text-white text-[10px] font-bold px-2 py-1 disabled:opacity-50"
+              title="Let Aura+ guide you"
+            >
+              Aura
+            </button>
+            <button
+              onClick={() => onManual(next.to)}
+              className="rounded-lg border border-gray-200 bg-white text-navy text-[10px] font-bold px-2 py-1 hover:bg-lavender"
+              title="Open manually"
+            >
+              Open
+            </button>
+          </div>
+        ) : !setup.checklist.verified ? (
+          <button onClick={() => onManual('/vendor/profile?tab=documents')} className="rounded-lg border border-amber-300 px-2 py-1 text-[10px] font-bold text-amber-800 shrink-0">Verify</button>
+        ) : (
+          <Icon name="check" size={14} className="text-emerald-600 shrink-0" />
+        )}
       </div>
-      {expanded && (
-        <ul className="px-3 pb-3 space-y-1.5">
-          {steps.map((s, i) => (
-            <li key={s.key} className={`flex items-center gap-2 rounded-xl px-2 py-1.5 ${s === next ? 'bg-white shadow-sm dark:bg-[#1f2336] dark:border dark:border-primary/20' : ''}`}>
-              <span
-                className={`w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold shrink-0 ${
-                  s.isDone ? 'bg-emerald-500 text-white' : 'bg-white border border-gray-200 text-muted dark:bg-[#1a1d2e] dark:border-gray-700 dark:text-gray-400'
-                }`}
-              >
-                {s.isDone ? '✓' : i + 1}
-              </span>
-              <span className={`flex-1 min-w-0 text-[12px] truncate ${s.isDone ? 'text-muted line-through dark:text-gray-400' : 'font-semibold text-navy dark:text-gray-100'}`}>{s.title}</span>
-              {!s.isDone && (
-                <span className="flex gap-1 shrink-0">
-                  <button
-                    onClick={() => onAura(s.prompt)}
-                    disabled={busy}
-                    className="rounded-lg bg-primary text-white text-[10px] font-bold px-2 py-1 disabled:opacity-50 hover:bg-primary-dark transition"
-                    title="Let Aura+ guide you"
-                  >
-                    With Aura
-                  </button>
-                  <button onClick={() => onManual(s.to)} className="rounded-lg border border-gray-200 bg-white text-navy text-[10px] font-bold px-2 py-1 hover:bg-lavender dark:bg-[#1a1d2e] dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition" title="Open the page and do it yourself">
-                    Manually
-                  </button>
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
-
-const QUICK = ['What should I do today?', 'Show pending enquiries', "This week's bookings", "What's my payment status?", "What's missing in my profile?"];
-
-const PAGE_PROMPTS = {
-  enquiries: ['Which enquiries still need a reply?'],
-  quotes: ['Which quotes are pending?', 'How many draft quotes do I have?'],
-  bookings: ['When is my next booking?'],
-  calendar: ['Which days are busy in the next 2 weeks?'],
-  availability: ['Which dates are blocked?'],
-  payments: ['Which bookings have the advance pending?'],
-  reviews: ['Which reviews still need a reply?'],
-  services: ['Summarise my services'],
-  profile: ["What's missing for activation?"],
-  documents: ["What's pending in my KYC?"],
-};
 
 // "Ask manually": plain shortcuts for vendors who'd rather do it themselves — no AI.
 const MANUAL = [
@@ -144,25 +126,12 @@ function writeSession(userId, sid) {
 }
 
 /**
- * Voice: speech-to-text for the question (browser Web Speech API) and
- * text-to-speech for Aura's reply. Nothing leaves the browser except the
- * transcribed text, which is sent like a typed message.
+ * Composer dictation uses ElevenLabs transcription. Continuous speech
+ * playback is owned by VoiceAgent so a reply has exactly one audio owner.
  */
-const Recognition = typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
-const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
-
-function speakText(text, onDone) {
-  if (!canSpeak || !text) return onDone?.();
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = /[ऀ-ॿ]/.test(text) ? 'hi-IN' : /[ঀ-৿]/.test(text) ? 'bn-IN' : 'en-IN';
-  const voice = window.speechSynthesis.getVoices().find((v) => v.lang === u.lang) || window.speechSynthesis.getVoices().find((v) => v.lang?.startsWith(u.lang.slice(0, 2)));
-  if (voice) u.voice = voice;
-  u.rate = 1;
-  u.onend = () => onDone?.();
-  u.onerror = () => onDone?.();
-  window.speechSynthesis.speak(u);
-}
+const voiceInputSupported =
+  typeof window !== 'undefined' &&
+  Boolean(typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined');
 
 /** ChatGPT-style voice-mode glyph: five bars; they pulse while Aura+ listens. */
 function WaveIcon({ active = false }) {
@@ -185,15 +154,13 @@ function Bubble({ m, onAction }) {
     <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
       {!mine && (
         <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0 mt-0.5">
-          <Icon name="bolt" size={13} />
+          <Icon name="aura" size={13} />
         </span>
       )}
-      <div className={`max-w-[85%] ${mine ? 'items-end' : 'items-start'} flex flex-col gap-1.5`}>
+      <div className={`min-w-0 max-w-[85%] ${mine ? 'items-end' : 'items-start'} flex flex-col gap-1.5 [overflow-wrap:anywhere]`}>
         <div
           className={`rounded-2xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
-            mine
-              ? 'bg-primary text-white rounded-br-md shadow-xs'
-              : 'bg-lavender/70 text-navy rounded-bl-md dark:bg-[#1e2238] dark:text-gray-100 dark:border dark:border-gray-800'
+            mine ? 'aura-user-message bg-primary text-white rounded-br-md' : 'aura-assistant-message bg-lavender/70 text-navy rounded-bl-md'
           }`}
         >
           {m.content}
@@ -362,21 +329,41 @@ function clampPanelPosition(pos, width, height) {
   };
 }
 
-export default function VendorAura({ open, onClose, page, userId, prompt, setup }) {
+export default function VendorAura({ open, onClose, page, userId, prompt, setup, conversationRequest }) {
   const navigate = useNavigate();
   const [sessionId, setSessionId] = useState(() => readSession(userId));
+  const currentSession = useRef(sessionId); currentSession.current = sessionId;
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [showThinkingStatus, setShowThinkingStatus] = useState(false);
   const [statusMessage, setStatusMessage] = useState(STATUS_MESSAGES[0]);
   const [error, setError] = useState('');
+  const live = useRef(null), sendingRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
+  const [activity, setActivity] = useState(null), [liveError, setLiveError] = useState('');
   const [mode, setModeState] = useState(readMode);
   const [setupExpanded, setSetupExpanded] = useState(true);
-  const setupIncomplete = Boolean(setup?.checklist) && setup.percent < 100;
+  const setupIncomplete = Boolean(setup?.checklist) && (setup.percent < 100 || !setup.checklist.verified);
   const listRef = useRef(null);
   const lastPromptId = useRef(null);
+  const lastConversationRequest = useRef(null);
+
+  useEffect(() => {
+    if (!conversationRequest || sending || lastConversationRequest.current === conversationRequest.id) return;
+    lastConversationRequest.current = conversationRequest.id;
+    setMode('aura');
+    if (conversationRequest.newChat) {
+      newChat();
+    } else if (/^[A-Za-z0-9_-]{8,80}$/.test(conversationRequest.sessionId || '')) {
+      writeSession(userId, conversationRequest.sessionId);
+      setSessionId(conversationRequest.sessionId);
+      setMessages([]);
+      setPending(null);
+      setError('');
+      setLoaded(false);
+    }
+  }, [conversationRequest, sending, userId]);
 
   function setMode(next) {
     setModeState(next);
@@ -392,25 +379,32 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     if (prompt?.text) setMode('aura');
   }, [prompt]);
 
-  // Load the conversation the first time the panel opens (and after "New chat").
+  // Refresh visible cards without replacing an in-flight voice/text turn.
   useEffect(() => {
-    if (!open || loaded) return;
-    let cancelled = false;
-    externalApi
-      .call(`/vendor/aura/sessions/${encodeURIComponent(sessionId)}`)
-      .then((res) => {
-        if (cancelled) return;
-        setMessages(res.messages || []);
-        setPending(res.pending || null);
-      })
-      .catch(() => {
-        /* a fresh session simply starts empty */
-      })
-      .finally(() => !cancelled && setLoaded(true));
+    if (!open || mode !== 'aura') return;
+    const sync = createAuraLive({
+      read: async () => {
+        const request = new AbortController(), timeout = setTimeout(() => request.abort(), 15000);
+        try { return await externalApi.call(`/vendor/aura/sessions/${encodeURIComponent(sessionId)}`, { signal: request.signal }); }
+        finally { clearTimeout(timeout); }
+      },
+      apply: snapshot => {
+        setActivity(previous => sameAuraValue(previous, snapshot.activity || null) ? previous : snapshot.activity || null);
+        setMessages(previous => sameAuraValue(previous, snapshot.messages || []) ? previous : snapshot.messages || []);
+        setPending(previous => sameAuraValue(previous, snapshot.pending || null) ? previous : snapshot.pending || null);
+      },
+      onSuccess: () => { setLoaded(true); setLiveError(''); }, onError: () => { setLoaded(true); setLiveError('Live activity could not refresh. Retrying automatically.'); },
+    });
+    live.current = sync;
+    if (sendingRef.current) sync.beginWrite();
+    const visible = () => { if (document.visibilityState === 'hidden') sync.stop(); else { sync.start(); void sync.refresh(); } };
+    if (document.visibilityState !== 'hidden') sync.start();
+    document.addEventListener('visibilitychange', visible); window.addEventListener('focus', visible); window.addEventListener('online', visible);
     return () => {
-      cancelled = true;
+      sync.stop(); if (live.current === sync) live.current = null;
+      document.removeEventListener('visibilitychange', visible); window.removeEventListener('focus', visible); window.removeEventListener('online', visible);
     };
-  }, [open, loaded, sessionId]);
+  }, [open, mode, sessionId]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
@@ -425,61 +419,96 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
   const [listening, setListening] = useState(null); // null | 'dictate' | 'converse'
   const [speaking, setSpeaking] = useState(false);
   const [voiceLang, setVoiceLang] = useState('en-IN');
-  const recRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
 
   /** Stop listening (keeping what was heard) and stop any reply being spoken. */
   function stopVoice() {
-    recRef.current?.stop();
-    if (canSpeak) window.speechSynthesis.cancel();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    if (streamRef.current) {
+      try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+      streamRef.current = null;
+    }
+    stopAuraSpeaking();
     setSpeaking(false);
+    setListening(null);
   }
 
   // Stop listening/speaking when the panel closes or unmounts.
   useEffect(() => {
     const abort = () => {
-      recRef.current?.abort();
-      if (canSpeak) window.speechSynthesis.cancel();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try { mediaRecorderRef.current.stop(); } catch {}
+      }
+      if (streamRef.current) {
+        try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+        streamRef.current = null;
+      }
+      stopAuraSpeaking();
       setSpeaking(false);
+      setListening(null);
     };
     if (!open) abort();
     return abort;
   }, [open]);
 
-  function startVoice(voiceMode) {
+  async function startVoice(voiceMode) {
     if (listening || speaking) return stopVoice();
-    if (!Recognition) return setError('Voice input is not supported in this browser. Try Chrome or Edge.');
+    if (!voiceInputSupported) return setError('Voice input is not supported in this browser.');
     setError('');
-    const rec = new Recognition();
-    rec.lang = voiceLang;
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
     const prefix = voiceMode === 'dictate' && input.trim() ? `${input.trim()} ` : '';
-    let finalText = '';
-    rec.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i += 1) {
-        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      audioChunksRef.current = [];
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
       }
-      setInput(`${prefix}${(finalText + interim).trim()}`);
-    };
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setError('Microphone permission denied. Allow the mic in your browser to talk to Aura+.');
-      else if (e.error !== 'aborted' && e.error !== 'no-speech') setError('Could not hear you. Please try again.');
-    };
-    rec.onend = () => {
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        setListening(null);
+        mediaRecorderRef.current = null;
+        if (streamRef.current) {
+          try { streamRef.current.getTracks().forEach((t) => t.stop()); } catch {}
+          streamRef.current = null;
+        }
+        const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+        if (blob.size < 500) return;
+        try {
+          setInput(`${prefix}Transcribing…`);
+          const text = await transcribeAuraAudio(blob);
+          if (text) {
+            setInput(`${prefix}${text}`);
+
+          } else {
+            setInput(prefix.trim());
+          }
+        } catch (err) {
+          setError(err?.message || 'Could not transcribe voice');
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      setListening(voiceMode);
+      recorder.start(250);
+      setInput(`${prefix}Listening…`);
+    } catch {
+      setError('Microphone permission denied. Allow mic access in your browser.');
       setListening(null);
-      recRef.current = null;
-      if (voiceMode === 'converse' && finalText.trim()) send(finalText, { spoken: true });
-    };
-    recRef.current = rec;
-    setListening(voiceMode);
-    rec.start();
+    }
   }
 
-  async function send(text, { spoken = false, confirm } = {}) {
+  async function send(text, { confirm, locationSelection } = {}) {
     const message = String(text || '').trim();
-    if (!message || sending) return;
+    if (!message || sendingRef.current) return;
+    const sync = live.current, expectedSession = sessionId; sync?.beginWrite(); sendingRef.current = true;
     setError('');
     setInput('');
     setSending(true);
@@ -488,22 +517,14 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
     setMessages((m) => [
       ...m,
-      { role: 'user', content: message, actions: [] },
+      { role: 'user', content: message, actions: [], page },
       { role: 'model', content: '', actions: [] },
     ]);
-
-    const VOICE_PROGRESS_PHRASES = [
-      'Okay, let me get that information for you.',
-      'Sure, let me check that for you.',
-      'Got it, I’m looking into that for you.',
-    ];
 
     let hasReceivedToken = false;
     let thinkingTimer = null;
     let rotationInterval = null;
     let timeoutTimer = null;
-    let voiceProgressTimer = null;
-    let hasSpokenVoiceProgress = false;
     let statusIdx = 0;
     const abortController = new AbortController();
 
@@ -517,25 +538,14 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
       }
     }, CHAT_THINKING_STATUS_DELAY_MS);
 
-    if (spoken) {
-      voiceProgressTimer = setTimeout(() => {
-        if (!hasReceivedToken && !hasSpokenVoiceProgress) {
-          hasSpokenVoiceProgress = true;
-          const phrase = VOICE_PROGRESS_PHRASES[Math.floor(Math.random() * VOICE_PROGRESS_PHRASES.length)];
-          speakText(phrase);
-        }
-      }, CHAT_THINKING_STATUS_DELAY_MS);
-    }
-
     timeoutTimer = setTimeout(() => {
       abortController.abort();
-    }, 25000);
+    }, 55000);
 
     const cleanupTimers = () => {
       if (thinkingTimer) clearTimeout(thinkingTimer);
       if (rotationInterval) clearInterval(rotationInterval);
       if (timeoutTimer) clearTimeout(timeoutTimer);
-      if (voiceProgressTimer) clearTimeout(voiceProgressTimer);
     };
 
     let accumulatedText = '';
@@ -546,10 +556,11 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         '/vendor/aura/chat',
         {
           method: 'POST',
-          body: { sessionId, message, page, ...(typeof confirm === 'boolean' ? { confirm } : {}) },
+          body: { sessionId, message, page, ...(typeof confirm === 'boolean' ? { confirm } : {}), ...(locationSelection ? {locationSelection} : {}) },
           signal: abortController.signal,
         },
         (event) => {
+          if (currentSession.current !== expectedSession) return;
           if (event.type === 'status') {
             if (event.message) setStatusMessage(event.message);
           } else if (event.type === 'chunk') {
@@ -558,7 +569,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               cleanupTimers();
               setShowThinkingStatus(false);
             }
-            accumulatedText += event.text || '';
+            accumulatedText += event.content || event.text || '';
             setMessages((m) => {
               const next = [...m];
               const last = next[next.length - 1];
@@ -591,20 +602,20 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
       );
 
       cleanupTimers();
+      if (currentSession.current !== expectedSession) return null;
       setShowThinkingStatus(false);
       setSending(false);
 
       if (donePayload) {
         setPending(donePayload.pending || null);
+        window.dispatchEvent(new Event('vendorAuraUpdated'));
         if (donePayload.profileUpdated) window.dispatchEvent(new Event('vendorProfileUpdated'));
-        if (spoken && canSpeak) {
-          setSpeaking(true);
-          speakText(donePayload.reply || accumulatedText, () => setSpeaking(false));
-        }
+
       }
       return accumulatedText;
     } catch (err) {
       cleanupTimers();
+      if (currentSession.current !== expectedSession) return null;
       setShowThinkingStatus(false);
       setSending(false);
 
@@ -624,16 +635,20 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         setError(ERRORS[err?.data?.error] || err?.message || 'Aura+ could not reply. Please try again.');
       }
       return null;
+    } finally {
+      if (currentSession.current === expectedSession) { sendingRef.current = false; if (live.current !== sync) live.current?.endWrite(); }
+      sync?.endWrite();
     }
   }
 
   // Voice mode (orb): a continuous spoken conversation; each turn goes through send(),
   // so setup confirmations work by voice too ("haan" / "no").
-  const agent = useVoiceAgent({ lang: voiceLang, onUtterance: (t) => send(t) });
+  const agent = useVoiceAgent({ lang: voiceLang, onUtterance: (t, extra) => send(t, extra) });
+  const sendInteractive = (text, extra) => agent.open ? agent.submit(text, extra) : send(text, extra);
   useEffect(() => {
-    if (!open && agent.open) agent.end();
+    if ((!open || mode === 'manual') && agent.open) agent.end();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, mode]);
 
   // A prompt handed over from elsewhere (dashboard card) is sent once the panel is ready.
   useEffect(() => {
@@ -644,7 +659,12 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
   }, [open, loaded, prompt]);
 
   function newChat() {
+    setActivity(null);
+    agent.end();
+    live.current?.stop(); live.current = null; sendingRef.current = false; setSending(false); setShowThinkingStatus(false);
+
     const sid = newId();
+    currentSession.current = sid;
     writeSession(userId, sid);
     setSessionId(sid);
     setMessages([]);
@@ -728,10 +748,10 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
   // When an explicit prompt arrives, ensure Aura is visible and not minimized
   useEffect(() => {
-    if (open && prompt?.text && dockMode === 'minimized') {
+    if (open && (prompt?.text || conversationRequest) && dockMode === 'minimized') {
       updateDockMode('docked');
     }
-  }, [open, prompt, dockMode]);
+  }, [open, prompt, conversationRequest, dockMode]);
 
   function handleDragStart(e) {
     if (window.innerWidth < 1024 || e.button !== 0) return;
@@ -912,7 +932,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         title="Open Aura+"
         aria-label="Open Aura+"
       >
-        <Icon name="bolt" size={18} />
+        <AuraMark variant="orb" size={52} />
         {pending && (
           <span
             className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white animate-pulse"
@@ -923,7 +943,8 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
     );
   }
 
-  const chips = [...(setupIncomplete ? [START_SETUP] : []), ...(PAGE_PROMPTS[page] || []), ...QUICK].slice(0, 5);
+  const showingLocationPicker = !pending && !sending && messages.at(-1)?.role === 'model' && requestsVendorLocation(messages.at(-1)?.content);
+  const chips = showingLocationPicker ? [] : getAuraPrompts({ page, setup, messages, pending, sending, steps: SETUP_STEPS });
   const setupCard = setupIncomplete && (
     <SetupCard
       setup={setup}
@@ -975,7 +996,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
       <aside
         id="vendor-aura-panel"
         style={panelStyle}
-        className={`fixed z-50 inset-0 w-screen h-[100dvh] max-h-[100dvh] rounded-none lg:w-auto lg:h-auto lg:max-h-none lg:rounded-3xl lg:inset-auto bg-white shadow-2xl border-0 lg:border lg:border-gray-100 flex flex-col overflow-hidden isolate transition-all duration-200 ease-out ${
+        className={`vendor-aura-panel fixed z-50 inset-x-0 top-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] w-screen h-auto max-h-[calc(100dvh-4.5rem-env(safe-area-inset-bottom))] rounded-none lg:w-auto lg:h-auto lg:max-h-none lg:rounded-3xl lg:inset-auto bg-white shadow-2xl border-0 lg:border lg:border-gray-100 flex flex-col overflow-hidden isolate transition-all duration-200 ease-out ${
           isDragging
             ? 'select-none transition-none shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] ring-2 ring-primary/40'
             : isResizing
@@ -1018,7 +1039,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         <button
           type="button"
           onMouseDown={(e) => handleResizeStart(e, 'top-left')}
-          className="hidden lg:block absolute left-1 top-1 z-40 w-5 h-5 cursor-nwse-resize rounded-md text-gray-200 hover:text-primary"
+          className="hidden lg:block absolute left-0 top-0 z-40 w-3 h-3 cursor-nwse-resize rounded-md text-transparent hover:text-primary"
           title="Drag corner to resize Aura"
           aria-label="Resize Aura"
         >
@@ -1027,59 +1048,52 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
 
         <header
           onMouseDown={handleDragStart}
-          className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing group bg-white/95 dark:bg-[#1a1d2e]/95 backdrop-blur-md"
-          title={isDesktop ? "Drag header to move Aura anywhere on your screen" : undefined}
+          className="aura-header relative flex items-center gap-3 px-4 py-3 border-b border-gray-100 shrink-0 select-none lg:cursor-grab active:lg:cursor-grabbing bg-white/95"
         >
-          <span className="hidden lg:flex w-6 h-9 items-center justify-center rounded-xl text-gray-300 group-hover:bg-lavender/70 group-hover:text-primary transition-colors cursor-grab active:cursor-grabbing shrink-0 dark:text-gray-600 dark:group-hover:bg-gray-800 dark:group-hover:text-primary-soft" title="Drag to move Aura">
-            <Icon name="drag" size={15} />
-          </span>
-          <span className="w-9 h-9 rounded-2xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/25 shrink-0">
-            <Icon name="bolt" size={15} />
+          <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-sm shrink-0">
+            <Icon name="aura" size={18} />
           </span>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-extrabold text-navy dark:text-white truncate">Aura+</div>
-            <div className="text-[10px] text-muted dark:text-gray-400 truncate">
-              {isDocked ? 'Docked assistant' : 'Floating assistant'}
+            <div className="text-sm font-extrabold text-navy leading-tight">Aura+</div>
+            <div className="text-[11px] text-muted mt-1 truncate">
+              <span className="lg:hidden">Your business assistant</span>
+              <span className="hidden lg:inline">{isDocked ? 'Docked' : 'Floating'} · Business assistant</span>
             </div>
           </div>
-
           <div className="flex items-center gap-1 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
-            {/* Dock / Float Toggle */}
-            {!isDocked ? (
-              <button
-                type="button"
-                onClick={dockToRight}
-                className="hidden lg:grid w-8 h-8 place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-                title="Dock to right side"
-                aria-label="Dock to right side"
-              >
-                <Icon name="dockRight" size={14} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={switchToFloat}
-                className="hidden lg:grid w-8 h-8 place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-                title="Float and drag freely"
-                aria-label="Float and drag freely"
-              >
-                <Icon name="float" size={13} />
+            {mode === 'aura' && (
+              <button type="button" onClick={newChat} className="aura-header-action aura-new-chat" title="Start a new chat" aria-label="New chat">
+                <Icon name="edit" size={16} />
+                <span className="aura-new-chat-label">New chat</span>
               </button>
             )}
-
-            {/* Minimize Button */}
-            <button
-              type="button"
-              onClick={() => updateDockMode('minimized')}
-              className="w-8 h-8 grid place-items-center rounded-xl text-muted hover:bg-lavender hover:text-navy transition cursor-pointer dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
-              title="Minimize Aura"
-              aria-label="Minimize"
-            >
-              <Icon name="minus" size={14} />
+            <details className="hidden lg:block" onKeyDown={(e) => { if (e.key === 'Escape') e.currentTarget.removeAttribute('open'); }}>
+              <summary className="aura-header-action list-none cursor-pointer [&::-webkit-details-marker]:hidden" title="Panel layout" aria-label="Panel layout">
+                <Icon name="settings" size={16} />
+              </summary>
+              <div className="aura-layout-menu absolute right-4 top-[calc(100%-4px)] z-50 w-64 max-w-[calc(100%-2rem)] rounded-2xl border border-gray-200 bg-white shadow-xl p-3" onClick={(e) => { if (e.target.closest('button')) e.currentTarget.closest('details').removeAttribute('open'); }}>
+                <div className="text-xs font-bold text-navy mb-3">Panel layout</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={cycleWidth} className="aura-layout-option" title="Cycle panel width">Width <span>{panelWidth}px</span></button>
+                  <button type="button" onClick={cycleHeight} className="aura-layout-option" title="Cycle panel height">Height <span>{Math.round(panelHeight)}px</span></button>
+                </div>
+                <div className="text-[10px] font-semibold text-muted uppercase tracking-wide mt-4 mb-2">Position</div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {['left', 'center', 'right', 'top', 'bottom'].map((place) => (
+                    <button key={place} type="button" onClick={() => snapTo(place)} className="aura-layout-option capitalize" aria-label={`Snap Aura ${place}`}>{place}</button>
+                  ))}
+                </div>
+                <button type="button" onClick={isDocked ? switchToFloat : dockToRight} className="aura-layout-option flex items-center justify-center gap-2 w-full mt-3">
+                  <Icon name={isDocked ? 'float' : 'dockRight'} size={14} />
+                  {isDocked ? 'Float panel' : 'Dock to right'}
+                </button>
+              </div>
+            </details>
+            <button type="button" onClick={() => updateDockMode('minimized')} className="aura-header-action" title="Minimize Aura" aria-label="Minimize Aura">
+              <Icon name="minus" size={17} />
             </button>
-
-            <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-xl hover:bg-rose-50 text-ink/60 hover:text-rose-600 transition cursor-pointer dark:text-gray-400 dark:hover:bg-rose-950/40 dark:hover:text-rose-400" aria-label="Close Aura+">
-              <Icon name="close" size={16} />
+            <button type="button" onClick={onClose} className="aura-header-action" title="Close Aura" aria-label="Close Aura+">
+              <Icon name="close" size={17} />
             </button>
           </div>
         </header>
@@ -1087,7 +1101,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         <div className="px-4 pt-3 shrink-0" role="tablist">
           <div className="grid grid-cols-2 gap-1 rounded-2xl bg-lavender/70 dark:bg-[#151825] dark:border dark:border-gray-800 p-1">
             {[
-              ['aura', 'Ask Aura', 'bolt'],
+              ['aura', 'Ask Aura', 'aura'],
               ['manual', 'Ask manually', 'edit'],
             ].map(([key, label, icon]) => (
               <button
@@ -1142,18 +1156,19 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
           </div>
         ) : (
         <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
+          <AuraActivity activity={activity} />
           {messages.length === 0 && !sending && (setupIncomplete ? (
             <div className="text-center pt-4">
-              <div className="text-sm font-extrabold text-navy dark:text-white">Welcome! Let's set up your business.</div>
-              <p className="text-xs text-muted dark:text-gray-400 mt-1 max-w-[290px] mx-auto">
-                Customers can find and book you once all 5 steps above are done. Just talk or type — I'll set up your brand, services
+              <div className="text-sm font-extrabold text-navy">Welcome! Let's set up your business.</div>
+              <p className="text-xs text-muted mt-1 max-w-[290px] mx-auto">
+                Complete all six profile steps plus identity and bank verification before customer matching. Just talk or type — I'll set up your brand, services
                 with prices, team &amp; gear, location and coverage (you confirm before I save). Or tap “Manually” on any step.
               </p>
               <button
                 onClick={() => setupWithAura(START_SETUP)}
                 className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-xs font-bold px-4 py-2 shadow-md shadow-primary/25 hover:bg-primary-dark transition"
               >
-                <Icon name="bolt" size={13} /> Start setup with Aura
+                <Icon name="aura" size={13} /> Start setup with Aura
               </button>
             </div>
           ) : (
@@ -1166,68 +1181,64 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
           ))}
           {messages.map((m, i) => {
             if (m.role === 'model' && !m.content) return null;
-            return <Bubble key={i} m={m} onAction={goTo} />;
+            return <div key={i} className="space-y-3"><Bubble m={m} onAction={goTo} />
+              {m.role === 'model' && i === messages.length - 1 && showingLocationPicker &&
+                <VendorAuraLocation key={`${sessionId}-${i}`} language={conversationLanguage('',messages)} disabled={sending}
+                  onSelect={location => send(`${vendorCopy(conversationLanguage('',messages),'useLocation')}: ${location.address}, ${location.city}`, {locationSelection:location})} />}
+            </div>;
           })}
           {pending && !sending && (
-            pending.kind === 'location' || pending.kind === 'coverage' ? (
-              <AuraMapLocationWidget
-                onConfirm={(promptText, opts) => send(promptText, opts)}
-                onCancel={() => send('Cancel', { confirm: false })}
-                busy={sending}
-              />
-            ) : (
-              <div className="ml-9 rounded-2xl border border-primary/30 bg-primary-soft/40 dark:bg-primary-soft/15 dark:border-primary/40 p-3">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-primary dark:text-primary-soft">
+            <div className="ml-9 rounded-2xl border border-primary/30 bg-primary-soft/40 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                {pending.kind === 'block_date'
+                  ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Update Calendar Date' : 'Block Calendar Date')
+                  : pending.kind === 'revise_quote'
+                  ? 'Revise Offer'
+                  : pending.kind === 'create_quote'
+                  ? 'Send Quotation'
+                  : vendorCopy(conversationLanguage('',messages),'review')}
+              </div>
+              <div className="text-[12px] font-semibold text-navy mt-0.5">{pending.summary}</div>
+              <div className="flex gap-2 mt-2.5">
+                <button
+                  onClick={() =>
+                    send(
+                      pending.kind === 'block_date'
+                        ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Confirm Update' : 'Confirm Block')
+                        : pending.kind === 'revise_quote'
+                        ? 'Send Revised Offer'
+                        : pending.kind === 'create_quote'
+                        ? 'Send Quote'
+                        : 'Yes, save it',
+                      { confirm: true }
+                    )
+                  }
+                  className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-1.5 shadow-sm hover:opacity-95 transition-opacity"
+                >
                   {pending.kind === 'block_date'
                     ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Update Calendar Date' : 'Block Calendar Date')
                     : pending.kind === 'revise_quote'
                     ? 'Revise Offer'
                     : pending.kind === 'create_quote'
-                    ? 'Send Quotation'
-                    : 'Save this?'}
-                </div>
-                <div className="text-[12px] font-semibold text-navy dark:text-white mt-0.5">{pending.summary}</div>
-                <div className="flex gap-2 mt-2.5">
-                  <button
-                    onClick={() =>
-                      send(
-                        pending.kind === 'block_date'
-                          ? (pending.isUpdate || pending.summary?.startsWith('Update') ? 'Confirm Update' : 'Confirm Block')
-                          : pending.kind === 'revise_quote'
-                          ? 'Send Revised Offer'
-                          : pending.kind === 'create_quote'
-                          ? 'Send Quote'
-                          : 'Yes, save it',
-                        { confirm: true }
-                      )
-                    }
-                    className="rounded-xl bg-primary text-white text-[11px] font-bold px-3 py-1.5 shadow-sm hover:opacity-95 transition-opacity"
-                  >
-                    {pending.kind === 'block_date'
-                      ? (pending.isUpdate || pending.summary?.startsWith('Update') ? '✓ Confirm Update' : '✓ Confirm Block')
-                      : pending.kind === 'revise_quote'
-                      ? '✓ Send Revised Offer'
-                      : pending.kind === 'create_quote'
-                      ? '✓ Send Quote'
-                      : '✓ Save'}
-                  </button>
-                  <button
-                    onClick={() => send('Cancel', { confirm: false })}
-                    className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-1.5 hover:bg-lavender dark:bg-[#1a1d2e] dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-                <p className="text-[10px] text-muted dark:text-gray-400 mt-1.5">
-                  Or reply “yes” / “haan” / “confirm” — or tell me what to change.
-                </p>
+                    ? '✓ Send Quote'
+                    : `✓ ${vendorCopy(conversationLanguage('',messages),'save')}`}
+                </button>
+                <button
+                  onClick={() => send('Cancel', { confirm: false })}
+                  className="rounded-xl border border-gray-200 bg-white text-navy text-[11px] font-bold px-3 py-1.5 hover:bg-lavender transition-colors"
+                >
+                  {vendorCopy(conversationLanguage('',messages),'cancel')}
+                </button>
               </div>
-            )
+              <p className="text-[10px] text-muted mt-1.5">
+                {vendorCopy(conversationLanguage('',messages),'confirm')}
+              </p>
+            </div>
           )}
           {sending && showThinkingStatus && (
             <div className="flex gap-2 items-center text-[11px] text-muted dark:text-gray-400 pl-1">
               <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0">
-                <Icon name="bolt" size={13} />
+                <Icon name="aura" size={13} />
               </span>
               <span className="flex items-center gap-1.5 font-medium">
                 <span className="w-2 h-2 rounded-full bg-primary animate-ping shrink-0" />
@@ -1243,15 +1254,17 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
             These shortcuts open the page directly — no AI involved.
           </div>
         ) : (
-        <div className="px-3 pb-3 pt-2 border-t border-gray-100 dark:border-gray-800 shrink-0 space-y-2" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
+        <div className="min-w-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 border-t border-gray-100 shrink-0 space-y-2">
+          <VoiceAgentOverlay agent={agent} compact title="Aura+" />
           {error && <div className="text-[11px] text-red-500 px-1">{error}</div>}
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          {liveError && <p role="status" className="text-[11px] text-amber-600 px-1">{liveError}</p>}
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pb-0.5" aria-label="Suggested questions">
             {chips.map((c) => (
               <button
                 key={c}
-                onClick={() => send(c)}
+                onClick={() => sendInteractive(c)}
                 disabled={sending}
-                className="shrink-0 rounded-full bg-lavender text-navy text-[11px] font-semibold px-3 py-1.5 hover:bg-primary-soft disabled:opacity-50 dark:bg-[#1e2235] dark:text-gray-200 dark:hover:bg-primary-soft/30 dark:border dark:border-gray-700/60 transition"
+                className="aura-suggestion min-w-0 max-w-full whitespace-normal break-words text-left rounded-full bg-lavender text-navy text-[11px] font-semibold px-3 py-1.5 hover:bg-primary-soft disabled:opacity-50"
               >
                 {c}
               </button>
@@ -1261,9 +1274,10 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              send(input);
+
+              sendInteractive(input);
             }}
-            className="flex items-center gap-1 rounded-full border border-gray-200 bg-white shadow-sm focus-within:border-primary/40 pl-1.5 pr-1.5 py-1.5 transition dark:border-gray-700 dark:bg-[#161927] dark:focus-within:border-primary"
+            className="aura-composer flex items-center gap-1 rounded-full border border-gray-200 bg-white shadow-sm focus-within:border-primary/40 pl-1.5 pr-1.5 py-1.5 transition"
           >
             <button type="button" onClick={newChat} className="w-8 h-8 grid place-items-center rounded-full text-ink/70 hover:bg-lavender shrink-0 dark:text-gray-300 dark:hover:bg-gray-800 transition" title="New chat" aria-label="New chat">
               <Icon name="plus" size={17} />
@@ -1275,7 +1289,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
               placeholder={listening === 'converse' ? 'Listening… speak now' : listening === 'dictate' ? 'Listening… tap the mic to stop' : 'Ask Aura+ anything'}
               className="flex-1 min-w-0 bg-transparent outline-none text-[13px] px-1 dark:text-white dark:placeholder:text-gray-500"
             />
-            {Recognition && (
+            {voiceInputSupported && (
               <>
                 <button
                   type="button"
@@ -1289,7 +1303,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
                 <button
                   type="button"
                   onClick={() => (listening === 'dictate' ? stopVoice() : startVoice('dictate'))}
-                  disabled={sending || listening === 'converse' || speaking}
+                  disabled={agent.open || sending || listening === 'converse' || speaking}
                   className={`relative w-8 h-8 rounded-full grid place-items-center shrink-0 transition disabled:opacity-40 ${
                     listening === 'dictate' ? 'bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400' : 'text-ink/70 hover:bg-lavender dark:text-gray-300 dark:hover:bg-gray-800'
                   }`}
@@ -1301,7 +1315,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
                 </button>
               </>
             )}
-            {(input.trim() && !listening) || !Recognition ? (
+            {(input.trim() && !listening) || !voiceInputSupported ? (
               <button
                 type="submit"
                 disabled={sending || !input.trim()}
@@ -1314,11 +1328,11 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
             ) : (
               <button
                 type="button"
-                onClick={() => (speaking ? stopVoice() : agent.start())}
+                onClick={() => agent.open ? agent.end() : (speaking ? stopVoice() : agent.start(!messages.length))}
                 disabled={(sending || listening) && !speaking}
                 className="relative w-8 h-8 rounded-full text-white grid place-items-center shrink-0 transition disabled:opacity-50 bg-primary hover:bg-primary-dark"
-                title={speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
-                aria-label={speaking ? 'Stop speaking' : 'Voice mode'}
+                title={agent.open ? 'End voice mode' : speaking ? 'Stop speaking' : 'Talk to Aura+ (voice mode)'}
+                aria-label={agent.open ? 'End voice mode' : speaking ? 'Stop speaking' : 'Voice mode'}
               >
                 <span className="relative">{speaking ? <span className="block w-2.5 h-2.5 rounded-[3px] bg-white" /> : <WaveIcon />}</span>
               </button>
@@ -1333,14 +1347,6 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup 
         </div>
         )}
 
-        <VoiceAgentOverlay
-          agent={agent}
-          embedded
-          title="Aura+"
-          subtitle="Your business assistant · voice"
-          lang={voiceLang}
-          onToggleLang={() => setVoiceLang((l) => (l === 'en-IN' ? 'hi-IN' : 'en-IN'))}
-        />
       </aside>
     </>
   );

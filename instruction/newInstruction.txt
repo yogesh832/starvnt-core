@@ -1,0 +1,727 @@
+STARVNT — UNIFIED PRODUCT ENGINEERING SPECIFICATION
+
+Product Scope: Customer Dashboard + Aura+ + Notification Engine + Vendor Availability + External Booking + Admin Control Tower + Vendor Profile Activation & Support
+
+To: STARVNT Engineering Team
+Priority: P0/P1 — Existing-System Audit, Integration & Implementation
+Execution Principle: REUSE → INTEGRATE → TEST → PROVE
+
+---
+
+PART A — CUSTOMER DASHBOARD: ENGAGEMENT & RETENTION
+
+1. Product Objective
+
+Rethink the STARVNT Customer Dashboard from a static dashboard into a personal, proactive, progress-driven Event Assistant.
+
+The goal is to make event planning easier through simplicity, personalisation, timely notifications and effortless interactions. Encourage meaningful, voluntary return visits without addictive social-media mechanics, artificial urgency or manufactured FOMO.
+
+The dashboard must answer:
+
+“What needs my attention right now?”
+
+Every dashboard component must connect to a real event, requirement, booking, payment, decision or actionable workflow.
+
+2. Frictionless Customer Experience
+
+Customers must be able to:
+
+- Explain their event through text, voice or guided inputs.
+- Progress through one clear question, one useful answer and one next decision.
+- Use contextual quick actions without navigating through multiple unrelated modules.
+- Resume previous progress without repeatedly entering the same information.
+- Receive clear confirmation before consequential actions such as accepting a quote, making a payment or confirming a booking.
+- Understand whether information is confirmed, inferred, missing or awaiting their decision.
+
+Requirements inferred by Aura+ must never be silently treated as customer-confirmed facts.
+
+3. Personalised Customer Dashboard
+
+The dashboard must display the following information using real backend data.
+
+A. Upcoming Event
+
+- Event name/type, date and location.
+- Countdown to the event.
+- Current lifecycle stage.
+- Next relevant action.
+
+B. Event Readiness
+
+- Completed milestones.
+- Confirmed and outstanding requirements.
+- Decisions awaiting customer approval.
+- Readiness calculation based on explicit, testable rules.
+
+C. Budget Health
+
+- Customer budget target.
+- Estimated cost.
+- Approved/committed amount.
+- Actual verified payments.
+- Remaining budget.
+- Budget variance and risk indicators.
+
+A quote, payment intent, successful payment and settlement are different financial states and must never be treated as interchangeable.
+
+D. Decisions & Approvals
+
+- Pending quote decisions.
+- Requirement clarifications.
+- Vendor proposals awaiting review.
+- Customer approvals awaiting action.
+
+E. Bookings & Schedule
+
+- Upcoming confirmed bookings.
+- Event timeline and milestones.
+- Vendor schedules and booking status.
+- Relevant changes, risks and deadlines.
+
+F. Changes & Risks
+
+- Guest-count changes affecting catering estimates.
+- Requirement changes affecting quotations.
+- Booking or payment status changes.
+- Operational issues requiring customer action.
+
+Every card must deep-link to the exact relevant event, requirement, quote, booking or workflow.
+
+4. Aura+ Proactive Event Assistant
+
+Aura+ must understand the customer's event context and recommend relevant next steps.
+
+Examples:
+
+- “Your photography requirement is ready for comparison.”
+- “Your guest count changed. This may affect catering costs.”
+- “Two important event decisions are still pending.”
+- “Your event is approaching. Review the remaining tasks.”
+
+Aura+ may interpret intent, clarify requirements, explain choices, compare validated options, recommend actions and identify potential risks.
+
+Aura+ must not independently manufacture or determine:
+
+- Vendor eligibility or availability.
+- Quote or payment status.
+- Booking confirmation.
+- Settlement eligibility.
+- Verified completion.
+- Event progress unsupported by Core records.
+- Deterministic financial calculations that belong to Core.
+
+STARVNT Core remains the authoritative source of business truth.
+
+5. Smart Notification Engine
+
+Notifications must be event-driven and context-aware.
+
+Supported triggers:
+
+- A quote has arrived.
+- A vendor requests clarification.
+- A booking or payment status genuinely changes.
+- An important deadline is approaching.
+- A customer-requested reminder becomes due.
+- A relevant requirement, schedule or event state changes.
+
+Required controls:
+
+- Notification preferences by type/channel where supported.
+- Configurable quiet hours and timezone-aware delivery.
+- Deduplication and idempotency.
+- Throttling and sensible priority.
+- Deep links to the exact actionable destination.
+- Retry handling and delivery status where supported.
+- Audit records for notification creation and delivery attempts.
+- No repeated alert for the same unresolved event without a meaningful state change or justified reminder.
+- No notification sent solely to increase screen time.
+
+A payment must not be described as successful until server-side verification confirms it.
+
+6. Progress & Reward Design
+
+Provide meaningful progress indicators:
+
+- Event Readiness.
+- Budget Health.
+- Requirements Completed.
+- Decisions Pending.
+- Booking Milestones.
+- Event Timeline.
+
+Celebrate genuine milestones, such as completing an event plan or confirming a booking.
+
+Do not implement meaningless streaks, artificial rewards, false urgency or pressure to open the app daily.
+
+Progress percentages must derive from defined Core data and documented calculation rules. Missing information must not be represented as completed work.
+
+7. Lifecycle-Aware Dashboard
+
+The customer experience must evolve with the actual event lifecycle:
+
+Planning → Comparing → Booking → Preparing → Event Day → Memories
+
+The displayed stage must be based on authoritative event and booking state, not UI assumptions.
+
+When there is no urgent action, show an accurate status such as “You're on track” or “Nothing needs your attention right now.”
+
+Do not manufacture tasks or notifications to keep customers returning.
+
+---
+
+PART B — VENDOR OS: AVAILABILITY & EXTERNAL BOOKING
+
+8. Vendor Calendar: Block Availability
+
+Extend the existing Vendor OS Calendar with Block Availability / Add External Booking.
+
+Vendors must be able to create:
+
+- Full-day blocks.
+- Partial-day blocks with start/end times.
+- Multi-day blocks.
+- Recurring availability rules if supported by the existing architecture; otherwise scope them as a separate extension.
+
+Supported reasons:
+
+- Personal / Vacation.
+- External Customer Booking.
+- Team Unavailable.
+- Equipment Maintenance.
+- Travel / Transit.
+- Other.
+
+9. Resource Scope
+
+The vendor must be able to define the scope of a block:
+
+- Entire business / all services.
+- Specific service or category.
+- Specific team member.
+- Equipment, vehicle or other applicable operational resource.
+
+A resource-specific block must not unnecessarily disable unrelated services or resources.
+
+The system must consider:
+
+- Existing bookings.
+- Team and equipment capacity.
+- Service duration.
+- Travel time and locality.
+- Setup time and buffers.
+- Applicable concurrent-job limits.
+
+Availability must be recalculated using the same authoritative rules used by customer matching.
+
+10. External Customer Details
+
+When the vendor selects External Customer Booking, display:
+
+- Customer Name.
+- Customer Phone Number, with country code such as +91.
+- Event Type.
+- Event Date/Time.
+- Event Location.
+- Optional Notes.
+- Optional External Booking Reference.
+
+Collect only the information needed for the operational purpose. Keep unnecessary fields optional.
+
+Customer phone numbers and other personal details must be protected by server-side role-based access control.
+
+Access must be limited to authorised vendor users and authorised Admin roles with a legitimate operational need.
+
+External customer details must never appear on public vendor profiles or be exposed to unrelated vendors.
+
+11. Record Classification
+
+Use distinct record types:
+
+- "VENDOR_BLOCK" — vendor's personal or operational unavailability.
+- "EXTERNAL_COMMITMENT" — vendor-reported external customer commitment.
+- "CONFIRMED_BOOKING" — authoritative STARVNT booking.
+- "CONFLICT_REVIEW" — conflict requiring review or resolution.
+- "CANCELLED" — cancelled block/commitment record, retained in audit history as appropriate.
+
+An external commitment is not a STARVNT booking. A vendor-reported commitment is not independently verified merely because it was entered into the system.
+
+Maintain a clear distinction between record type, verification status and operational status.
+
+12. Conflict Validation
+
+Before creating or modifying a block, validate:
+
+- Existing confirmed STARVNT bookings.
+- Applicable pending commitments and quote/booking transitions.
+- Overlapping blocks.
+- Team member schedules.
+- Equipment, vehicle and inventory availability.
+- Travel and setup buffers.
+- Service-specific capacity and concurrent-job constraints.
+
+If a conflict exists:
+
+- Show a clear warning.
+- Identify the affected booking/resource to authorised users.
+- Prevent unsafe or inconsistent state transitions.
+- Require an explicit, authorised resolution where applicable.
+
+A vendor block must never silently cancel or override an existing confirmed STARVNT booking.
+
+Use server-side validation and appropriate database transactions or concurrency controls to prevent race conditions.
+
+---
+
+PART C — STARVNT ADMIN CONTROL TOWER
+
+13. Availability & External Commitments
+
+Integrate a section named Availability & External Commitments into the existing Admin Control Tower.
+
+Admin should be able to view, subject to permissions:
+
+- Vendor name and vendor ID.
+- Block/commitment type.
+- Start and end date/time.
+- Resource scope.
+- Reason and operational status.
+- External customer name and phone number where authorised.
+- Event type and location.
+- Creation and last-update timestamps.
+- Reported versus verified status.
+- Existing booking/resource conflicts.
+- Relevant audit history.
+
+Provide filters for vendor, date range, record type, resource, status and conflict state where useful.
+
+Vendor and Admin views must use the same backend records and business rules. Do not create a parallel source of truth.
+
+14. Admin Actions & Governance
+
+Authorised Admin users may review records, inspect conflicts and take permitted administrative actions.
+
+Every consequential action must record:
+
+- Actor and role.
+- Action performed.
+- Timestamp.
+- Previous state and new state.
+- Reason, where applicable.
+- Relevant record/reference ID.
+
+Admin must not mark a vendor-reported external commitment as verified without a defined verification process.
+
+Customer personal information access must be restricted and auditable.
+
+---
+
+PART D — SHARED CORE & SYSTEM INTEGRATION
+
+15. Authoritative Business Truth
+
+Reuse STARVNT Core as the single authoritative source for relevant event, requirement, vendor, availability, booking, payment and audit states.
+
+The following modules must consume the same validated business state:
+
+- Customer Dashboard.
+- Aura+.
+- Notification Engine.
+- Vendor OS.
+- Admin Control Tower.
+- Customer Matching Engine.
+
+Do not implement separate competing versions of booking status, availability rules, readiness calculations or financial truth.
+
+16. API Responsibilities
+
+First inspect the existing APIs. Reuse or extend existing endpoints where appropriate. Do not blindly create new endpoints with duplicate logic.
+
+Customer Dashboard
+
+- Fetch event overview and lifecycle state.
+- Fetch requirements and milestone progress.
+- Fetch budget summary and validated financial states.
+- Fetch pending decisions and confirmed bookings.
+- Fetch contextual next actions and relevant risks.
+
+Aura+
+
+- Retrieve authorised event context.
+- Return contextual recommendations linked to real records.
+- Submit customer-confirmed requirement changes through validated Core workflows.
+
+Notifications
+
+- Register and process domain-event triggers.
+- Deduplicate events and enforce notification preferences/quiet hours.
+- Track delivery attempts and audit records.
+- Navigate to an authorised, relevant destination.
+
+Vendor Availability
+
+- Create, update and cancel availability blocks.
+- Create and update external commitments.
+- Fetch calendar availability and conflicts.
+- Validate resource scope and overlap.
+
+Admin
+
+- Fetch availability and external commitment records.
+- Review conflicts.
+- Perform authorised administrative actions.
+- Inspect audit history.
+
+Vendor Profile Activation
+
+- Fetch authoritative profile and verification status.
+- Fetch outstanding profile requirements.
+- Submit or update profile data through validated workflows.
+- Retrieve permitted review feedback.
+- Perform authorised activation transitions through Admin workflows.
+
+All APIs must enforce authentication, authorisation, input validation, tenant/vendor/customer isolation, idempotency where appropriate and consistent error handling.
+
+17. Real-Time Synchronisation
+
+Use the existing event infrastructure, polling or realtime mechanism after auditing the current implementation.
+
+Relevant state changes must update affected dashboard views without introducing competing business logic.
+
+If realtime delivery fails, the system must recover safely through retry, refresh or reconciliation mechanisms as appropriate.
+
+18. Auditability & Idempotency
+
+Critical operations must be safe against duplicate requests and concurrent execution.
+
+Apply idempotency and duplicate prevention to applicable operations, including:
+
+- Block creation/update/cancellation.
+- External commitment creation/update.
+- Notification trigger processing and delivery retries.
+- Booking/payment state transitions.
+- Profile activation transitions.
+- Relevant administrative actions.
+
+Audit records must be generated server-side and must not rely solely on frontend event logging.
+
+---
+
+PART E — VENDOR PROFILE STATUS & SUPPORT CONTACT
+
+19. Existing Profile Status UI
+
+Audit and reuse the existing Vendor OS Profile Status component shown in the supplied screenshot.
+
+The current UI includes:
+
+- Profile Status heading.
+- An Inactive status badge.
+- A review message.
+- A Need Support section.
+- WhatsApp and phone call actions.
+
+Retain the familiar layout where practical, but correct the business logic and wording based on the actual backend state.
+
+20. Profile Activation Lifecycle
+
+Support the following logical profile states where compatible with the existing architecture:
+
+- "DRAFT"
+- "PROFILE_INCOMPLETE"
+- "VERIFICATION_PENDING"
+- "UNDER_REVIEW"
+- "ACTIVE"
+- "REJECTED"
+- "SUSPENDED"
+
+First inspect the current status model. Map existing states where possible rather than introducing duplicate or conflicting activation states.
+
+Profile completion, verification, activation and matching eligibility must remain distinct concepts.
+
+21. Profile Status UI Requirements
+
+Display:
+
+- Current profile status badge.
+- Clear explanation of the current state.
+- Expected next step or outstanding requirement.
+- Support options where appropriate.
+- Last status update, where available.
+
+For a vendor under review, use clear wording such as:
+
+“Your profile is under review. Our team will review your submission and update your activation status. If you need assistance, contact our support team.”
+
+Do not promise activation within 24 hours unless that service-level commitment is explicitly configured and supported by the real review process.
+
+The displayed status must come from the backend. Do not hardcode "Inactive" or "Active" based on frontend assumptions.
+
+The UI must show an appropriate message for incomplete, pending, active, rejected and suspended profiles.
+
+22. Official Support Contact
+
+Configure the following support contact:
+
+STARVNT Vendor Support: +91 9403891095
+
+Provide two clearly labelled actions:
+
+A. WhatsApp Support
+
+- Open a WhatsApp conversation with the configured support number.
+- Use a valid international-format phone number in the link.
+- Optionally prefill a concise support message, such as: “Hello STARVNT Support, I need help with my vendor profile activation.”
+- Do not imply that a message has been sent until the user sends it.
+
+B. Call Support
+
+- Open the device's phone dialler with the configured support number.
+- Ensure the action works on supported mobile devices.
+
+Keep the support number in a central application configuration rather than duplicating it across unrelated components.
+
+The configured contact must be shown consistently wherever this specific Vendor Profile Status support component is used.
+
+Do not imply that calls or messages are automatically answered or monitored unless that capability has actually been established.
+
+23. Admin Profile Activation Controls
+
+Integrate vendor activation review with the existing Admin Control Tower.
+
+Authorised Admin users should be able to inspect:
+
+- Vendor identity and submitted profile information.
+- Profile completion and outstanding requirements.
+- Verification status and review history.
+- Current activation status.
+- Review notes and permitted next actions.
+
+Where supported by the existing architecture, Admin should be able to approve, reject or request additional information.
+
+Every activation transition must be authorised, validated and audit-logged with actor, timestamp, previous state, new state and reason.
+
+24. Profile Activation Business Rules
+
+- Profile completion does not automatically mean verification or activation is complete.
+- "ACTIVE" status must be assigned only through the authorised activation workflow.
+- Customer enquiries and matching eligibility must follow authoritative backend eligibility rules.
+- A frontend status badge must never independently grant lead access.
+- Rejected or suspended profiles must show an accurate status and appropriate next step.
+- Support links must use the centrally configured number.
+- Admin and Vendor OS must reflect the same authoritative activation status.
+
+---
+
+PART F — ENGINEERING EXECUTION PLAN
+
+25. Phase 0: Existing-System Audit
+
+Before coding:
+
+1. Audit the existing Customer Dashboard and Vendor OS Calendar.
+2. Identify reusable components, state management and UI patterns.
+3. Map existing event, requirement, quote, booking, payment and availability models.
+4. Inspect Aura+ integration and the current event lifecycle.
+5. Inspect notification infrastructure, delivery channels and preferences.
+6. Inspect Admin Control Tower and access-control policies.
+7. Identify existing APIs, database tables, realtime events and audit mechanisms.
+8. Audit the current Vendor Profile Status component and support links.
+9. Map each dashboard card and calendar state to its source of truth.
+10. Document gaps, dependencies, risks and required schema/API changes.
+
+Deliverable: Audit report, current architecture map, reuse plan and prioritised implementation backlog.
+
+26. Phase 1: Contracts & UX
+
+Before full implementation:
+
+- Define the customer dashboard information hierarchy.
+- Define loading, error, empty and no-action states.
+- Define API contracts and state ownership.
+- Define notification event types, deduplication keys and priority rules.
+- Define availability block scope and external commitment lifecycle.
+- Define profile activation states and permitted transitions.
+- Define support contact configuration and link behaviour.
+- Define privacy permissions and audit requirements.
+- Define measurable acceptance tests.
+
+Deliverable: Approved UX flow, API/data contract and test plan.
+
+27. Phase 2: Implementation
+
+Implement in dependency order:
+
+1. Reuse and validate Core business-state APIs.
+2. Implement Vendor Availability and External Commitment backend rules.
+3. Integrate Vendor Calendar and Admin Control Tower.
+4. Integrate Profile Status UI with the authoritative backend.
+5. Configure WhatsApp and phone support actions.
+6. Implement the real-data Customer Dashboard.
+7. Integrate contextual Aura+ recommendations.
+8. Implement event-driven notifications, preferences and quiet hours.
+9. Integrate realtime updates or reliable refresh/reconciliation.
+10. Complete mobile responsiveness, accessibility and error handling.
+
+Avoid parallel implementations of existing functionality.
+
+28. Phase 3: End-to-End Verification
+
+Journey A — Customer Progress
+
+1. Customer opens an existing event.
+2. Dashboard displays actual event, requirement, budget and booking state.
+3. A real requirement or booking state changes.
+4. Dashboard updates from the authoritative source.
+5. The next action points to the relevant workflow.
+
+Journey B — Notification
+
+1. A real domain event occurs, such as a quote arriving.
+2. A relevant notification is generated.
+3. Reprocessing the same event does not create a duplicate.
+4. Quiet hours and preferences are respected.
+5. The notification opens the correct authorised destination.
+
+Journey C — Vendor Block
+
+1. Vendor creates a full-day or partial-day block.
+2. Backend validates booking and resource conflicts.
+3. The saved record appears in Vendor Calendar and Admin.
+4. Customer matching excludes the affected time/resource.
+5. Editing or removing the block updates all relevant views.
+
+Journey D — External Customer Commitment
+
+1. Vendor selects External Customer Booking.
+2. Vendor enters permitted customer/event details.
+3. Backend stores the record as "EXTERNAL_COMMITMENT".
+4. Authorised Admin can inspect the record and its status.
+5. Unauthorised users cannot access customer phone details.
+6. The record does not become a STARVNT confirmed booking.
+7. Conflicts are flagged without silently cancelling existing bookings.
+
+Journey E — Vendor Profile Activation & Support
+
+1. Vendor opens Profile Status.
+2. UI displays the actual backend activation status.
+3. A pending profile displays the correct review message.
+4. WhatsApp Support opens a conversation with +91 9403891095.
+5. Call Support opens the phone dialler with +91 9403891095.
+6. A genuine Admin status change updates the Vendor OS.
+7. Profile completion alone does not grant activation or enquiry eligibility.
+8. Unauthorised activation attempts are rejected and audited.
+
+29. Phase 4: Release Readiness
+
+Before production rollout:
+
+- Run automated unit, integration and end-to-end tests.
+- Test role-based access and customer/vendor data isolation.
+- Test duplicate requests, concurrency and failure recovery.
+- Verify notification delivery, deduplication and quiet-hour behaviour.
+- Test mobile layouts and accessibility.
+- Test profile state transitions and support actions.
+- Review logs, audit records and error monitoring.
+- Deploy incrementally behind feature flags where practical.
+- Provide rollback and reconciliation procedures.
+
+---
+
+PART G — ACCEPTANCE CRITERIA
+
+30. Customer Dashboard
+
+- Real event data is accurate.
+- A real backend state change updates the dashboard.
+- Every actionable card links to the correct workflow.
+- No fabricated progress, availability, payment state or booking confirmation.
+- Budget calculations use documented and validated financial states.
+- Lifecycle and readiness indicators follow defined business rules.
+
+31. Aura+ & Notifications
+
+- Recommendations are grounded in authorised event data.
+- A real event triggers the correct notification.
+- Duplicate event processing does not create duplicate logical notifications.
+- Quiet hours and customer preferences are enforced.
+- Deep links open the correct authorised destination.
+- No false urgency or engagement-only notification is generated.
+
+32. Vendor Availability & Admin
+
+- Vendor blocks persist in the existing backend.
+- The same record appears in Admin.
+- External customer details are permission-protected.
+- Matching excludes the applicable blocked time/resource.
+- Existing confirmed bookings cannot be silently overridden.
+- Editing/cancellation recalculates availability.
+- Audit history is available for consequential actions.
+
+33. Vendor Profile Status & Support
+
+- Profile status is sourced from the backend.
+- Admin and Vendor OS display the same authoritative status.
+- Activation transitions require appropriate permissions.
+- Profile completion does not automatically grant enquiry eligibility.
+- WhatsApp Support uses +91 9403891095.
+- Call Support uses +91 9403891095.
+- Both links are verified on supported devices.
+- Unauthorised customer data and activation actions are blocked.
+- Relevant changes and administrative actions are auditable.
+
+34. Evidence Required for Completion
+
+A UI screenshot alone is insufficient.
+
+Provide:
+
+- Existing-system audit report.
+- API and schema changes.
+- Relevant automated test results.
+- End-to-end test evidence.
+- Demonstration of a real customer state change.
+- Demonstration of notification deduplication and quiet hours.
+- Demonstration of Vendor-to-Admin synchronisation.
+- Permission-denial evidence for unauthorised customer data access.
+- Demonstration of profile activation state changes.
+- Verification of WhatsApp and call support links.
+- Known limitations, unresolved risks and rollout status.
+
+---
+
+PART H — SUCCESS METRICS
+
+Measure:
+
+- Event-plan completion rate.
+- Time to complete key planning actions.
+- Pending decisions resolved.
+- Quote-to-booking conversion.
+- On-time event task completion.
+- Notification usefulness and opt-out rate.
+- Customer satisfaction and repeat-event usage.
+- Availability conflict rate.
+- Duplicate booking/block/notification rate.
+- Vendor-to-Admin sync reliability.
+- Vendor profile review turnaround time.
+- Profile activation error rate.
+- Support-link success rate.
+
+Do not optimise for screen time, notification clicks or daily opens in isolation.
+
+---
+
+FINAL PRODUCT PRINCIPLE
+
+STARVNT should be easy to return to because it remembers the event, understands the context and helps the customer make progress—not because it manipulates attention.
+
+The Vendor OS must represent real operational availability, and Admin must see the same authoritative business records without exposing customer data unnecessarily.
+
+Vendor activation must reflect genuine review and verification, not frontend assumptions.
+
+Engineering principle: REUSE → INTEGRATE → TEST → PROVE.
+
+First deliver the existing-system audit, architecture map, UX flow, API dependencies, data-source mapping and implementation plan. Then implement incrementally and demonstrate the complete end-to-end journey using the existing backend.
+
+Do not declare completion until business rules, privacy controls, backend integration, auditability and end-to-end acceptance criteria have been verified.

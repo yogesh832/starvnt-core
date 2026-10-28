@@ -1,10 +1,27 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Page, Card } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
+import VendorMessageField from '../VendorMessageField.jsx';
 
 export default function Enquiries() {
+  const navigate = useNavigate();
+  const [openingChat, setOpeningChat] = useState(false);
+  async function openEnquiryChat(opportunity) {
+    if (openingChat) return;
+    setOpeningChat(true);
+    try {
+      const result = await externalApi.call(`/vendor/messages/context/opportunity/${opportunity.dbId}`, { method: 'POST' });
+      if (!result.ok || !result.thread?._id) throw new Error('Could not open this enquiry’s conversation.');
+      navigate(`/vendor/updates?tab=messages&thread=${result.thread._id}`);
+    } catch (error) {
+      setFeedback(`Notice: ${error.message}`);
+    } finally {
+      setOpeningChat(false);
+    }
+  }
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
@@ -17,6 +34,8 @@ export default function Enquiries() {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [declining, setDeclining] = useState(null);
 
   useEffect(() => {
     async function loadLiveOpportunities() {
@@ -28,6 +47,8 @@ export default function Enquiries() {
             id: o._id,
             dbId: o._id,
             customerId: o.customer?._id || o.customer,
+            customerName: o.customer?.fullName || o.customerName || 'Customer enquiry',
+            eventType: o.eventType || o.eventName || 'Event enquiry',
             serviceId: o.vendorService,
             service: o.serviceName,
             status: o.status === 'NEW' ? 'New' : o.status,
@@ -35,19 +56,22 @@ export default function Enquiries() {
             date: o.eventDate,
             location: `${o.serviceLocation?.address || ''} ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Venue'}`.trim(),
             guests: o.guestCount || 'As required',
-            capability: o.requiredCapability || 'Standard Service Execution',
-            coverage: `Serves ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Zone'} (Verified)`,
-            availability: 'Eligible slot verified',
+            capability: o.requiredCapability || 'Requirements not specified',
+            coverage: o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED' ? 'Extended coverage needs confirmation' : 'Standard coverage match',
+            availability: o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED' ? 'Extended distance - confirmation required' : 'Not confirmed by vendor',
             travel: o.estimatedTravel || 'Local Transit',
-            travelCost: o.travelCost ? `₹${Number(o.travelCost).toLocaleString()}` : 'Included',
+            travelCost: o.travelCost ? `₹${Number(o.travelCost).toLocaleString()}` : 'No additional travel cost recorded',
             basePrice: o.basePrice || 0,
-            fit: o.fit || 95,
+            fit: Number.isFinite(o.fit) ? o.fit : null,
+            coverageStatus: o.coverageStatus,
+            extendedService: o.extendedService || null,
           }));
           setOpportunities(mapped);
           if (mapped[0]) setExpanded(mapped[0].id);
         }
       } catch (err) {
         console.warn('[Enquiries] Load error:', err.message);
+        setFeedback(`Notice: ${err.message}`);
       } finally {
         setLoading(false);
       }
@@ -57,16 +81,35 @@ export default function Enquiries() {
 
   function handleOpenQuoteModal(opp) {
     setQuoteModalOpp(opp);
-    setBasePrice(opp.basePrice || 48000);
-    setTravelFee(parseInt(opp.travelCost?.replace(/[^0-9]/g, '')) || 2000);
+    setBasePrice(opp.basePrice || 0);
+    setTravelFee(Number(opp.travelCost?.replace(/[^0-9.]/g, '')) || 0);
     setEquipmentFee(0);
     setSetupFee(0);
     setAdditionalFee(0);
-    setNotes(`Offer includes ${opp.service} for ${opp.guests} guests on ${opp.date}. Please reply here if you want any change in timing, package, or price.`);
+    setNotes('');
+  }
+
+  async function declineOpportunity(opportunity) {
+    if (declining) return;
+    setDeclining(opportunity.id);
+    try {
+      await externalApi.call(`/vendor/opportunities/${opportunity.dbId}/decline`, { method: 'POST' });
+      setOpportunities((rows) => rows.map((row) => row.id === opportunity.id ? { ...row, status: 'DECLINED' } : row));
+      setFeedback('Enquiry declined. This status is saved.');
+    } catch (error) {
+      setFeedback(`Notice: ${error.message}`);
+    } finally {
+      setDeclining(null);
+    }
   }
 
   async function handleSendQuote() {
     if (!quoteModalOpp) return;
+    const amounts = [basePrice, travelFee, equipmentFee, setupFee, additionalFee].map(Number);
+    if (amounts.some((amount) => !Number.isFinite(amount) || amount < 0) || amounts.reduce((sum, amount) => sum + amount, 0) <= 0) {
+      setFeedback('Notice: Add a valid positive quote total. Fees cannot be negative.');
+      return;
+    }
     setSubmitting(true);
     try {
       const totalAmount = Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee);
@@ -110,9 +153,12 @@ export default function Enquiries() {
       title="Enquiries & Structured Opportunities"
       sub="Pre-qualified opportunities with service, location, date, guests, capability, coverage, availability, and travel."
       action={
-        <button className="inline-flex items-center gap-1.5 rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2.5">
-          Filters <Icon name="chevronDown" size={13} />
-        </button>
+        <select aria-label="Filter enquiries by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border border-gray-200 bg-white text-navy text-sm px-3 py-2.5">
+          <option value="ALL">All enquiries</option>
+          <option value="NEW">New</option>
+          <option value="RESPONDED">Responded</option>
+          <option value="DECLINED">Declined</option>
+        </select>
       }
     >
       {feedback && (
@@ -123,24 +169,41 @@ export default function Enquiries() {
       )}
 
       <div className="space-y-4">
-        {opportunities.map((o) => (
-          <Card key={o.id} className="!p-0 overflow-hidden">
+        {!loading && opportunities.length > 0 && !opportunities.some((o) => statusFilter === 'ALL' || o.status.toUpperCase() === statusFilter) && <Card><p className="text-sm text-muted">No enquiries match this status.</p></Card>}
+        {opportunities.filter((o) => statusFilter === 'ALL' || o.status.toUpperCase() === statusFilter).map((o) => (
+          <Card key={o.id} className="!p-0 overflow-hidden border border-gray-100 hover:border-gray-200 transition">
             <button
               onClick={() => setExpanded(expanded === o.id ? null : o.id)}
-              className="w-full flex items-center gap-3 p-4 sm:p-5 text-left"
+              className="w-full flex items-center gap-3 p-4 sm:p-5 text-left hover:bg-gray-50/50 transition cursor-pointer"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-[15px]">{o.service}</span>
+                  <span className="font-extrabold text-[15px] text-navy">👤 {o.customerName} · {o.eventType}</span>
                   <StatusChip status={o.status} />
                   <span className="text-[10px] text-muted">{o.id} · {o.ago}</span>
                 </div>
-                <div className="text-xs text-muted mt-1">{o.date} · {o.location} · {o.guests} guests</div>
+                <div className="text-xs text-muted mt-1 font-medium flex flex-wrap items-center gap-2">
+                  <span>📅 {o.date}</span>
+                  <span>·</span>
+                  <span>📍 {o.location}</span>
+                  <span>·</span>
+                  <span>👥 {o.guests} guests</span>
+                </div>
+                <div className="mt-2 inline-flex items-center gap-1.5 bg-primary-soft/80 border border-primary/20 text-primary px-2.5 py-1 rounded-xl text-xs font-bold">
+                  <span className="text-[10px] uppercase tracking-wide opacity-80">Requested Package:</span>
+                  <span>{o.service}</span>
+                </div>
+                {o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED' && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1 rounded-xl text-xs font-bold">
+                    <span>Extended Service:</span>
+                    <span>{o.extendedService?.label || 'outside configured radius'}</span>
+                  </div>
+                )}
               </div>
-              <div className="text-center shrink-0">
+              {o.fit != null && <div className="text-center shrink-0 ml-2">
                 <div className="text-lg font-extrabold text-primary">{o.fit}%</div>
-                <div className="text-[9px] text-muted">match</div>
-              </div>
+                <div className="text-[9px] text-muted font-bold uppercase">match</div>
+              </div>}
               <Icon
                 name="chevronDown"
                 size={16}
@@ -149,38 +212,72 @@ export default function Enquiries() {
             </button>
 
             {expanded === o.id && (
-              <div className="border-t border-gray-100 p-4 sm:p-5">
+              <div className="border-t border-gray-100 p-4 sm:p-5 bg-gray-50/30">
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
                   {[
+                    ['Customer Name', o.customerName],
+                    ['Event & Date', `${o.eventType} (${o.date})`],
+                    ['Requested Package', o.service],
                     ['Required capability', o.capability],
                     ['Coverage', o.coverage],
                     ['Availability', o.availability],
                     ['Estimated travel', o.travel],
                     ['Travel cost', o.travelCost],
+                    ...(o.coverageStatus === 'EXTENDED_SERVICE_REQUIRED'
+                      ? [
+                          ['Normal radius', `${o.extendedService?.configuredRadiusKm || 'Configured'} km`],
+                          ['Extended requirement', 'Vendor must explicitly confirm distance, logistics, and final cost'],
+                        ]
+                      : []),
                     ['Guest count', `${o.guests} guests`],
                   ].map(([k, v]) => (
-                    <div key={k} className="bg-lavender rounded-xl p-3">
-                      <div className="text-muted text-[10px] uppercase tracking-wide">{k}</div>
-                      <div className="font-semibold mt-1">{v}</div>
+                    <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-xs">
+                      <div className="text-muted text-[10px] uppercase tracking-wide font-extrabold">{k}</div>
+                      <div className="font-bold text-navy mt-1 truncate">{v}</div>
                     </div>
                   ))}
                 </div>
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <button
-                    onClick={() => handleOpenQuoteModal(o)}
-                    className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-5 py-2.5 transition shadow-sm"
-                  >
-                    Respond & Quote
-                  </button>
-                  <button className="rounded-xl border border-gray-200 text-xs font-semibold px-5 py-2.5 hover:bg-lavender transition">
-                    Ask a question
-                  </button>
-                  <button
-                    onClick={() => setOpportunities((prev) => prev.filter((item) => item.id !== o.id))}
-                    className="rounded-xl text-xs font-semibold px-4 py-2.5 text-muted hover:text-red-500 transition"
-                  >
-                    Decline
-                  </button>
+                <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-gray-100">
+                  {['DECLINED', 'EXPIRED'].includes(o.status) ? <span className="text-xs text-muted">This enquiry is {o.status.toLowerCase()}.</span> : ['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED', 'Quote Sent'].includes(o.status) ? (
+                    <>
+                      <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-extrabold px-4 py-2.5 shadow-2xs">
+                        <Icon name="check" size={14} className="text-emerald-600" />
+                        <span>✓ Offer Submitted</span>
+                      </span>
+                      <button
+                        onClick={() => handleOpenQuoteModal(o)}
+                        className="rounded-xl border border-primary/30 text-primary bg-primary-soft hover:bg-primary-soft/80 text-xs font-bold px-4 py-2.5 transition cursor-pointer"
+                      >
+                        Revise / Update Offer
+                      </button>
+                      <button
+                        type="button" onClick={() => openEnquiryChat(o)} disabled={openingChat}
+                        className="rounded-xl border border-gray-200 text-xs font-semibold px-4 py-2.5 hover:bg-lavender transition flex items-center gap-1.5 text-navy"
+                      >
+                        <Icon name="message" size={13} className="text-primary" />
+                        <span>Vendor Chat</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleOpenQuoteModal(o)}
+                        className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold px-5 py-2.5 transition shadow-sm cursor-pointer"
+                      >
+                        Respond & Quote
+                      </button>
+                      <button type="button" onClick={() => openEnquiryChat(o)} disabled={openingChat} className="rounded-xl border border-gray-200 text-xs font-semibold px-5 py-2.5 hover:bg-lavender transition cursor-pointer disabled:opacity-50">
+                        Ask a question
+                      </button>
+                      <button
+                        disabled={Boolean(declining)}
+                        onClick={() => declineOpportunity(o)}
+                        className="rounded-xl text-xs font-semibold px-4 py-2.5 text-muted hover:text-red-500 transition cursor-pointer"
+                      >
+                        Decline
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -293,14 +390,7 @@ export default function Enquiries() {
               </div>
 
               <div>
-                <label className="block text-muted font-semibold mb-1">Message shown to customer with this quote</label>
-                <textarea
-                  rows={4}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl p-3 text-navy outline-none focus:border-primary resize-none"
-                />
-                <p className="text-[10px] text-muted mt-1">Mention what is included, any condition, and what can be negotiated.</p>
+                <VendorMessageField value={notes} onChange={setNotes} context={{ type: 'opportunity', id: quoteModalOpp.dbId }} label="Message with this quote (optional)" placeholder={`e.g. Offer includes ${quoteModalOpp.service}. Add your inclusions, timing and any conditions.`} disabled={submitting} />
               </div>
             </div>
 

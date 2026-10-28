@@ -9,6 +9,7 @@
  * is still recorded explicitly on the AdminUser document and in audit logs.
  */
 const CATALOG = {
+  'availability.personal': ['read'],
   customers: ['read', 'create', 'update', 'delete', 'disable'],
   vendors: ['read', 'create', 'update', 'delete', 'disable', 'approve'],
   events: ['read', 'create', 'update', 'delete'],
@@ -31,6 +32,8 @@ const CATALOG = {
   permissions: ['read', 'manage'],
   audit: ['read'],
   settings: ['read', 'update'],
+  financePolicies: ['read', 'update', 'approve'],
+  financeCoupons: ['read', 'manage'],
 };
 
 /** Flat list of every valid "resource.action" permission string. */
@@ -125,6 +128,11 @@ export const ADMIN_ROLE_PRESETS = {
     permissions: [
       'bookings.read',
       'payments.read',
+      'financePolicies.read',
+      'financePolicies.update',
+      'financePolicies.approve',
+      'financeCoupons.read',
+      'financeCoupons.manage',
       'payments.approve',
       'payments.refund',
       'settlements.read',

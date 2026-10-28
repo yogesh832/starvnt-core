@@ -253,7 +253,9 @@ export async function validateCompletionFromCore(bookingId, { approved = true, n
 
   // Approved by Core
   booking.executionStatus = 'COMPLETION_VERIFIED';
-  booking.settlementStatus = 'SETTLEMENT_ELIGIBLE';
+  const reviewDelayDays = Math.max(0, Number(booking.financialPolicySnapshot?.settlementDelayDays || 0));
+  booking.payoutReviewAt = reviewDelayDays ? new Date(Date.now() + reviewDelayDays * 24 * 60 * 60 * 1000) : null;
+  booking.settlementStatus = reviewDelayDays ? 'NOT_ELIGIBLE' : 'SETTLEMENT_ELIGIBLE';
   await ensureInvoiceForBooking(booking, coreActor);
   booking.validationAudit = {
     verifiedBy: coreActor,
@@ -271,7 +273,7 @@ export async function validateCompletionFromCore(bookingId, { approved = true, n
       bookingId: booking._id,
       sender: 'SYSTEM',
       senderName: 'STARVNT Core',
-      text: `✓ Completion Verified: STARVNT Core validated service completion for ${booking.serviceName || 'booking'}. Vendor payout is now eligible for settlement.`,
+      text: `✓ Completion Verified: STARVNT Core validated service completion for ${booking.serviceName || 'booking'}.${reviewDelayDays ? ` Payout review opens after ${reviewDelayDays} days.` : ' Vendor payout is now eligible for settlement.'}`,
       type: 'completion',
     }).catch(() => null);
   }
@@ -291,6 +293,17 @@ export async function settleBooking(bookingId, { transactionReference = '' } = {
     err.statusCode = 404;
     err.code = 'BOOKING_NOT_FOUND';
     throw err;
+  }
+
+  if (booking.settlementStatus !== 'SETTLEMENT_ELIGIBLE' && booking.executionStatus === 'COMPLETION_VERIFIED' && booking.payoutReviewAt) {
+    if (booking.payoutReviewAt > new Date()) {
+      const err = new Error(`SETTLEMENT_REVIEW_DELAY: Payout review opens at ${booking.payoutReviewAt.toISOString()}.`);
+      err.statusCode = 409;
+      err.code = 'SETTLEMENT_REVIEW_DELAY';
+      throw err;
+    }
+    booking.settlementStatus = 'SETTLEMENT_ELIGIBLE';
+    await booking.save();
   }
 
   if (booking.settlementStatus !== 'SETTLEMENT_ELIGIBLE') {

@@ -2,7 +2,22 @@ import { Quote } from '../models/Quote.js';
 import { Opportunity } from '../models/Opportunity.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
+import { evaluateVendorActivation } from './vendorActivation.service.js';
+import { checkTrueAvailability } from './availability.service.js';
+import { schedulingError } from '../../common/scheduleRules.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
+
+export async function assertQuoteSubmission({ vendor, vendorService, eventDate, serviceLocation, category, advancePolicy }) {
+  const status = await evaluateVendorActivation(vendor?._id || vendor);
+  if (!status.matchingEligible) throw schedulingError('ACTIVATION_REQUIRED', 'Activation approval and complete verification are required to submit offers.', 403);
+  const available = await checkTrueAvailability({ vendorId: vendor?._id || vendor, vendorServiceId: vendorService, date: eventDate, allDay: true, serviceLocation });
+  if (!available.feasible) throw schedulingError('SCHEDULE_CONFLICT', available.reason || 'The vendor is unavailable.', 409, available.conflicts);
+  const policy = advancePolicy || await getCommercialPolicyForCategory(category || vendor?.category);
+  if (!policy?.policyActive || !Number.isFinite(Number(policy.minimumReservationPercent))) {
+    throw schedulingError('FINANCIAL_POLICY_NOT_APPROVED', 'A financial policy must be approved and effective before this quote can be issued.', 409);
+  }
+  return policy;
+}
 
 /**
  * Valid state transitions for Quotes (Spec §9, §10, Golden Test G).
@@ -32,8 +47,11 @@ export async function createQuote({
   notes = '',
   status = 'DRAFT',
   actor = 'VENDOR',
+  advancePolicy,
+  category = '',
 }) {
   const initialStatus = ['DRAFT', 'SUBMITTED'].includes(status) ? status : 'DRAFT';
+  if (initialStatus === 'SUBMITTED') await assertQuoteSubmission({ vendor: vendorId, vendorService: vendorServiceId, eventDate, serviceLocation, category, advancePolicy });
 
   const quote = await Quote.create({
     opportunity: opportunityId || null,
@@ -44,6 +62,27 @@ export async function createQuote({
     eventDate,
     serviceLocation: serviceLocation || {},
     pricingBreakdown,
+    category,
+    advancePayment: advancePolicy?.policyActive ? {
+      percentage: advancePolicy.minimumReservationPercent,
+      amount: 0,
+      policySnapshot: {
+        category: advancePolicy.policyCategory || category || 'Global',
+        version: advancePolicy.policyVersion || 0,
+        source: advancePolicy.policySource || 'APPROVED',
+        appliedAt: new Date(),
+        effectiveFrom: advancePolicy.effectiveFrom || null,
+        policyId: advancePolicy.policyId || null,
+        authorId: advancePolicy.draftAuthorId || null,
+        approverId: advancePolicy.approverId || null,
+        terms: {
+          vendorCancellationPenaltyPercent: advancePolicy.vendorCancellationPenaltyPercent ?? 0,
+          customerCancellationRefunds: advancePolicy.customerCancellationRefunds || {},
+          settlementCondition: advancePolicy.settlementCondition,
+          settlementDelayDays: advancePolicy.settlementDelayDays,
+        },
+      },
+    } : undefined,
     notes,
     status: initialStatus,
     history: [
@@ -75,6 +114,8 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
   }
 
   const currentStatus = quote.status;
+  let submissionPolicy = null;
+  if (targetStatus === 'SUBMITTED') submissionPolicy = await assertQuoteSubmission({ ...quote.toObject(), category: quote.category || quote.vendor?.category });
   const allowedNext = ALLOWED_TRANSITIONS[currentStatus] || [];
 
   if (!allowedNext.includes(targetStatus)) {
@@ -89,6 +130,30 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
 
   // Update status and history
   quote.status = targetStatus;
+  if (targetStatus === 'SUBMITTED' && submissionPolicy) {
+    quote.advancePayment = {
+      ...(quote.advancePayment?.toObject?.() || quote.advancePayment || {}),
+      percentage: submissionPolicy.minimumReservationPercent,
+      amount: 0,
+      status: 'NOT_STARTED',
+      policySnapshot: {
+        category: submissionPolicy.policyCategory || quote.category || 'Global',
+        version: submissionPolicy.policyVersion,
+        source: 'APPROVED',
+        appliedAt: new Date(),
+        effectiveFrom: submissionPolicy.effectiveFrom || null,
+        policyId: submissionPolicy.policyId || null,
+        authorId: submissionPolicy.draftAuthorId || null,
+        approverId: submissionPolicy.approverId || null,
+        terms: {
+          vendorCancellationPenaltyPercent: submissionPolicy.vendorCancellationPenaltyPercent ?? 0,
+          customerCancellationRefunds: submissionPolicy.customerCancellationRefunds || {},
+          settlementCondition: submissionPolicy.settlementCondition,
+          settlementDelayDays: submissionPolicy.settlementDelayDays,
+        },
+      },
+    };
+  }
   quote.history.push({
     fromStatus: currentStatus,
     toStatus: targetStatus,
@@ -101,50 +166,8 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
 
   // If quote is APPROVED, publish QUOTE_APPROVED event to Central Automation Outbox
   if (targetStatus === 'APPROVED') {
-    try {
-      const policy = await getCommercialPolicyForCategory(quote.category || quote.serviceName);
-      const advancePercentage = policy.minimumReservationPercent ?? 20;
-      const totalAmount = quote.pricingBreakdown?.totalAmount || quote.amount || 0;
-      const advanceAmount = quote.advancePayment?.amount || Math.round((totalAmount * advancePercentage) / 100);
-      const paid = quote.advancePayment?.status === 'VERIFIED';
-      const opportunity = quote.opportunity ? await Opportunity.findOne({ _id: quote.opportunity, customer: quote.customer, vendor: quote.vendor }).lean() : null;
-      await CoreBooking.findOneAndUpdate(
-        { quoteId: quote._id.toString() },
-        {
-          $setOnInsert: {
-            quoteId: quote._id.toString(),
-            quoteReference: quote.quoteReference || `QT-${quote._id.toString().slice(-6)}`,
-            bookingReference: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
-            opportunityId: quote.opportunity ? quote.opportunity.toString() : null,
-            customerEvent: opportunity?.customerEvent || null,
-            vendorId: quote.vendor,
-            customerId: quote.customer,
-            serviceName: quote.serviceName || 'Event Service',
-            eventDate: quote.eventDate || new Date().toISOString().split('T')[0],
-            serviceLocation: quote.serviceLocation || {},
-            pricing: quote.pricingBreakdown || { totalAmount },
-            totalAmount,
-            bookingStatus: 'CONFIRMED',
-            paymentStatus: paid ? 'PAYMENT_VERIFIED' : 'PENDING',
-            executionStatus: paid ? 'SERVICE_SCHEDULED' : 'NOT_STARTED',
-            settlementStatus: 'NOT_ELIGIBLE',
-            customerName: 'Customer',
-            vendorName: 'Vendor',
-            category: quote.category || 'Service',
-            paymentSummary: {
-              advancePercentage,
-              advanceAmount,
-              paidAmount: paid ? advanceAmount : 0,
-              balanceAmount: Math.max(0, totalAmount - (paid ? advanceAmount : 0)),
-            },
-          },
-        },
-        { upsert: true, new: true }
-      );
-    } catch (err) {
-      console.warn('[quoteStateMachine] CoreBooking upsert notice:', err.message);
-    }
-
+    // Approval is a customer decision, not payment or booking confirmation.
+    // The verified-payment workflow owns schedule validation and booking creation.
     await publishOutboxEvent({
       eventType: 'QUOTE_APPROVED',
       aggregateType: 'Quote',

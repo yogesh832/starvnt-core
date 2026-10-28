@@ -1,7 +1,8 @@
+import AuraMark from '../../components/AuraMark.jsx';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
-import { LogoMark, LogoWord } from '../../components/ui.jsx';
+import { LogoWord } from '../../components/ui.jsx';
 import PublicNavbar from '../../components/PublicNavbar.jsx';
 import PublicFooter from '../../components/PublicFooter.jsx';
 import { savePendingPrompt } from './pendingPrompt.js';
@@ -22,7 +23,7 @@ function LoginPopup({ text, onClose }) {
       <div className="absolute inset-0 bg-navy/50 backdrop-blur-xs" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl shadow-primary/20 w-full max-w-sm p-6 text-center animate-[pop_.18s_ease-out]">
         <div className="w-12 h-12 mx-auto rounded-2xl bg-primary-soft text-primary grid place-items-center">
-          <LogoMark size={26} />
+          <AuraMark size={30} />
         </div>
         <h2 className="mt-4 text-lg font-extrabold text-navy">Log in to start planning</h2>
         <p className="mt-2 text-xs text-muted leading-relaxed">

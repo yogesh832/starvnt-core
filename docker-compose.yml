@@ -1,0 +1,41 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGO_URI_EXTERNAL: mongodb://mongo:27017/starvnt_external
+      MONGO_URI_ADMIN: mongodb://mongo:27017/starvnt_admin
+      CLIENT_ORIGINS: http://localhost:8080
+      METRICS_ENABLED: "true"
+      OUTBOX_WORKER_ENABLED: "true"
+      RESERVATION_EXPIRY_WORKER_ENABLED: "true"
+      ENABLE_QA_PAYMENT_BYPASS: "false"
+    ports:
+      - "4000:4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "8080:80"
+
+volumes:
+  mongo_data:

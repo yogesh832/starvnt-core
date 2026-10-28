@@ -58,7 +58,7 @@ export default function BookingPayment({ vendor, event, onBack, onPaymentSuccess
           ← Back to Recommendations
         </button>
         <h1 className="text-2xl font-extrabold text-navy">Booking & Payment</h1>
-        <p className="text-xs text-muted">You're almost done. Secure your booking with verified escrow protection.</p>
+        <p className="text-xs text-muted">You're almost done. Payment status updates after provider verification.</p>
       </div>
 
       <div className="grid md:grid-cols-[1fr_1.2fr] gap-6 items-start">
@@ -113,7 +113,7 @@ export default function BookingPayment({ vendor, event, onBack, onPaymentSuccess
 
           <div className="flex items-center gap-2.5 text-[11px] text-emerald-700 bg-emerald-50 rounded-xl p-3">
             <Icon name="shieldCheck" size={16} className="text-emerald-600 shrink-0" />
-            <span>Covered by STARVNT 100% Money-Back & Fulfillment Guarantee</span>
+            <span>Review the vendor’s cancellation terms before paying.</span>
           </div>
         </div>
 
@@ -121,7 +121,7 @@ export default function BookingPayment({ vendor, event, onBack, onPaymentSuccess
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-6">
           <div>
             <h2 className="text-lg font-bold text-navy">Select Payment Method</h2>
-            <p className="text-xs text-muted mt-0.5">Funds are held in Escrow and released only after verified execution</p>
+            <p className="text-xs text-muted mt-0.5">Settlement status and execution updates are recorded in your booking.</p>
           </div>
 
           <div className="space-y-3">
@@ -195,9 +195,9 @@ export default function BookingPayment({ vendor, event, onBack, onPaymentSuccess
               )}
             </button>
             <div className="flex items-center justify-center gap-4 text-[11px] text-muted mt-3 flex-wrap">
-              <span className="inline-flex items-center gap-1"><Icon name="shieldCheck" size={13} className="text-emerald-600" /> 256-Bit SSL Encryption</span>
+              <span>Payment status is confirmed after provider-side verification.</span>
               <span>•</span>
-              <span>100% Secure Payments</span>
+              <span>Booking confirmation also requires availability confirmation.</span>
             </div>
           </div>
         </div>

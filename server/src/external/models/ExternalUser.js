@@ -33,6 +33,7 @@ const externalUserSchema = new Schema(
       default: 'EMAIL',
       index: true,
     },
+    isAppReviewAccount: { type: Boolean, default: false, select: false },
     accountType: {
       type: String,
       enum: ['CUSTOMER', 'VENDOR'],

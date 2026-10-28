@@ -321,7 +321,7 @@ export default function EventCenter({ event, onAskAura, onBackToEvents }) {
                   <span>{item.q}</span>
                 </div>
                 <div className="text-ink/80 leading-relaxed pl-4 flex items-start gap-1.5">
-                  <Icon name="bolt" size={13} className="text-primary mt-0.5 shrink-0" />
+                  <Icon name="aura" size={13} className="text-primary mt-0.5 shrink-0" />
                   <span>{item.a}</span>
                 </div>
               </div>

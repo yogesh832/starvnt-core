@@ -1,0 +1,35 @@
+{
+  "title": "StarVnt Entertainment — Events. Simplified.",
+  "light": {
+    "bg": "#f4f5fb",
+    "card": "#ffffff",
+    "ink": "#1c2440",
+    "navy": "#141a3c",
+    "muted": "#6b7194",
+    "line": "#f3f4f6",
+    "accent": "#5a4bd1",
+    "accentDark": "#4639b8",
+    "onAccent": "#ffffff",
+    "soft": "#eceafe",
+    "danger": "#dc2626"
+  },
+  "dark": {
+    "bg": "#0b0d14",
+    "card": "#161926",
+    "ink": "#e2e8f0",
+    "navy": "#f1f5f9",
+    "muted": "#94a3b8",
+    "line": "#262a3d",
+    "accent": "#818cf8",
+    "accentDark": "#6366f1",
+    "onAccent": "#0e1330",
+    "soft": "rgba(99, 102, 241, 0.22)",
+    "danger": "#f87171"
+  },
+  "wordmarkGradient": [
+    "#5a4bd1",
+    "#2563eb",
+    "#00a6ff"
+  ],
+  "launchBackground": "#020316"
+}

@@ -1,3 +1,6 @@
+import { CustomerFeedback } from '../../common/productObservability.js';
+import { CustomerEvent, CustomerNotification } from '../models/index.js';
+import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
 import express, { Router } from 'express';
 import { requireCustomer } from '../middleware/requireCustomer.js';
 import { requireInternal } from '../middleware/requireInternal.js';
@@ -9,6 +12,15 @@ import * as i from '../controllers/internal.controller.js';
 /** /api/customer/* — Customer App API. Every route is customer-authenticated. */
 export const customerRouter = Router();
 customerRouter.use(requireCustomer);
+customerRouter.use(notificationPreferencesRoutes('CUSTOMER'));
+customerRouter.post('/feedback', h(async (req, res) => {
+  const { kind, reference, score } = req.body || {};
+  if (!['EVENT', 'NOTIFICATION'].includes(kind) || !Number.isInteger(score) || score < 1 || score > 5) return res.status(400).json({ error: 'INVALID_FEEDBACK' });
+  const Model = kind === 'EVENT' ? CustomerEvent : CustomerNotification;
+  if (!await Model.exists({ _id: reference, customer: req.externalUser._id })) return res.status(404).json({ error: 'RECORD_NOT_FOUND' });
+  await CustomerFeedback.findOneAndUpdate({ customer: req.externalUser._id, kind, reference }, { $set: { score } }, { upsert: true, runValidators: true });
+  res.json({ ok: true });
+}));
 customerRouter.get('/profile', h(c.getProfile));
 customerRouter.patch('/profile', h(c.patchProfile));
 customerRouter.get('/home', h(c.home));
@@ -37,6 +49,7 @@ customerRouter.get('/events/:id/financial-truth', h(c.financialTruth));
 customerRouter.get('/events/:id/history', h(c.history));
 
 customerRouter.get('/events/:id/requirements', h(c.listRequirements));
+customerRouter.post('/events/:id/requirements/:category/confirm', h(c.confirmRequirement));
 customerRouter.patch('/events/:id/requirements/:category', h(c.patchRequirement));
 customerRouter.post('/events/:id/requirements/:category/select', h(c.selectOption));
 

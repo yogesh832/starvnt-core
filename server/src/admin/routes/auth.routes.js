@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { nativeAuthTransport } from '../../common/nativeAuthTransport.js';
 import rateLimit from 'express-rate-limit';
-import { config } from '../../config.js';
+import { config, devToolsAllowed } from '../../config.js';
 import { AdminUser } from '../models/AdminUser.js';
 import { AdminSession } from '../models/AdminSession.js';
 import { hashPassword, verifyPassword } from '../../external/utils/password.js';
@@ -77,7 +77,7 @@ const DEV_ADMIN_PROFILES = {
 // ── Admin Dev Single-Click Auth Endpoint ────────────────────────────────────
 router.post('/dev-auth', async (req, res, next) => {
   try {
-    if (!config.enableDevTools) {
+    if (!devToolsAllowed()) {
       return res.status(404).json({ error: 'NOT_FOUND' });
     }
     const { email: requestedEmail, role } = req.body || {};

@@ -48,8 +48,6 @@ npm run seed:super-admin
 npm run dev          # server on :4000
 npm run dev:web      # web on :5173 (proxies /api → :4000)
 
-# 4. Tests (in-memory MongoDB, no Atlas needed)
-npm test
 ```
 
 Sign in at `http://localhost:5173/admin/login` with `SUPER_ADMIN_EMAIL` /
@@ -146,8 +144,12 @@ curl -X POST localhost:4000/api/internal/ops/events/<eventId>/complete -H "x-int
 curl -X POST localhost:4000/api/internal/admin/simulate-vendor-cancellation -H "x-internal-key: $K" -H "Content-Type: application/json" -d '{"bookingId":"<bookingId>","operator":"ravi"}'
 ```
 
-Tests (`npm test`, 49 tests) use an in-memory MongoDB, a scripted LLM and a faked
-Razorpay orders API — they never touch Atlas, Gemini or Razorpay.
+## Android and iOS
+
+The `mobile/` workspace contains the React Native + Expo app using the same backend.
+See [mobile setup](mobile/README.md) for development builds, public environment values,
+Google configuration and validation, and the [parity/QA record](mobile/PARITY.md)
+for implemented flows and remaining release work. Start Metro with `npm run dev:mobile`.
 
 ## Layout
 
@@ -158,7 +160,6 @@ server/
     external/  models · middleware · routes · utils   (Customer/Vendor auth)
     admin/     models · middleware · routes · constants · utils  (RBAC)
   scripts/seed-super-admin.js
-  test/  external-auth.test.js · admin-rbac.test.js
 web/
   src/pages/{customer,vendor,admin,external}/
   src/auth/  (separate External/Admin auth contexts)

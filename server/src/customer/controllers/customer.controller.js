@@ -103,3 +103,5 @@ export const patchRequirement = async (req, res) => {
   const requirement = await events.setRequirement(me(req), req.params.id, req.params.category, req.body);
   res.json({ requirement, ...(await events.requirementsDetail(me(req), req.params.id)) });
 };
+
+export const confirmRequirement = async (req, res) => res.json({ requirement: await events.confirmRequirement(me(req), req.params.id, req.params.category) });

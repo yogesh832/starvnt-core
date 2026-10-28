@@ -629,7 +629,7 @@ export function ConfirmDeleteModal({ target, targetType = 'vendor', isOpen, onCl
       onDeleted(target._id || target.id);
       onClose();
     } catch (err) {
-      setError(err.data?.error || err.message || 'Failed to delete record');
+      setError(err.data?.error || err.message || 'Failed to deactivate record');
     } finally {
       setLoading(false);
     }
@@ -645,9 +645,9 @@ export function ConfirmDeleteModal({ target, targetType = 'vendor', isOpen, onCl
             </div>
             <div>
               <h3 className="text-base font-extrabold text-navy">
-                Delete {targetType === 'vendor' ? 'Vendor Organization' : 'Customer Account'}
+                Deactivate {targetType === 'vendor' ? 'Vendor Organization' : 'Customer Account'}
               </h3>
-              <p className="text-xs text-rose-600 font-medium">Permanent, irreversible action</p>
+              <p className="text-xs text-rose-600 font-medium">Access is disabled; records are retained for audit</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-lavender text-muted hover:text-navy cursor-pointer">
@@ -663,10 +663,10 @@ export function ConfirmDeleteModal({ target, targetType = 'vendor', isOpen, onCl
           )}
 
           <p className="text-ink/80 text-xs leading-relaxed">
-            Are you sure you want to permanently delete <strong className="text-navy">{name}</strong>?
+            Are you sure you want to deactivate <strong className="text-navy">{name}</strong>?
             {targetType === 'vendor'
-              ? ' This will detach the owner user and delete all uploaded documents for this organization.'
-              : ' This customer account and their active sessions will be completely removed.'}
+              ? ' The vendor and owner account will be suspended, while documents and linked history stay retained.'
+              : ' The customer account will be disabled and restricted, while linked history stays retained.'}
           </p>
 
           <div className="p-3 rounded-xl bg-slate-50 border border-gray-200 text-[11px] text-muted space-y-0.5">
@@ -690,7 +690,7 @@ export function ConfirmDeleteModal({ target, targetType = 'vendor', isOpen, onCl
               disabled={loading}
               className="px-5 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition shadow-sm cursor-pointer disabled:opacity-50"
             >
-              {loading ? 'Deleting...' : 'Confirm Delete'}
+              {loading ? 'Deactivating...' : 'Confirm Deactivation'}
             </button>
           </div>
         </div>

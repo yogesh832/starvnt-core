@@ -1,3 +1,4 @@
+export { customerFinancialTruth as readFinancialTruth, financialBudgetSummary } from '../../common/financialTruth.service.js';
 import * as events from '../services/events.service.js';
 import * as eventsRepo from '../repositories/events.repo.js';
 import * as reqRepo from '../repositories/requirements.repo.js';

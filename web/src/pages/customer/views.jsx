@@ -144,7 +144,7 @@ function AskCard({ onOpenAura }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="w-6 h-6 rounded-lg bg-primary text-white grid place-items-center">
-              <Icon name="bolt" size={13} />
+              <Icon name="aura" size={13} />
             </span>
             <div className="font-bold text-sm text-navy">Ask STARVNT anything</div>
           </div>
@@ -177,6 +177,9 @@ function AskCard({ onOpenAura }) {
 function VendorOptions({ selected, onSelect }) {
   return (
     <Card>
+      <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        Example comparison only. Vendor names, prices, ratings, reviews, and availability below are illustrative, not live listings.
+      </p>
       <div className="flex items-center justify-between gap-2 mb-3">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wide text-primary">Vendor recommendations</div>
@@ -372,7 +375,7 @@ function BookingPayment({ opt }) {
       </div>
       <p className="text-[9px] text-muted mt-2 leading-relaxed inline-flex items-center gap-1">
         <Icon name="shieldCheck" size={12} className="text-emerald-600 shrink-0" />
-        <span>100% secure — payment shows as confirmed only after provider-side verification.</span>
+        <span>Payment is marked confirmed after provider-side verification.</span>
       </p>
     </Card>
   );
@@ -408,7 +411,7 @@ function ExecutionCard() {
       </div>
       <div className="mt-3 bg-lavender/60 rounded-xl p-3 flex gap-2.5">
         <div className="w-7 h-7 rounded-full bg-primary text-white grid place-items-center shrink-0">
-          <Icon name="bolt" size={12} />
+          <Icon name="aura" size={12} />
         </div>
         <div>
           <p className="text-[11px] leading-snug text-ink/80">"Your photography team is scheduled and will arrive by <b>9:30 AM</b>. I'll keep you posted on the day."</p>
@@ -438,7 +441,7 @@ export function HomeView({ firstName, events, onOpenEvent, onOpenAura, onOpenUpd
           You don't have any events set up yet. Let's create your first celebration.
         </p>
         <button onClick={onOpenAura} className="bg-primary hover:bg-primary-dark text-white font-bold text-sm px-6 py-3 rounded-2xl shadow-sm shadow-primary/30 transition flex items-center gap-2">
-          <Icon name="bolt" size={16} />
+          <Icon name="aura" size={16} />
           Plan an Event
         </button>
       </div>
@@ -614,7 +617,7 @@ export function UpdatesView({ events }) {
           items.push({
             t: 'Just now',
             kind: 'Vendor Match',
-            text: `Aura+ is analyzing verified vendors for your ${req.name} requirement for ${e.name}.`,
+            text: `Aura+ is checking vendor profiles marked verified for your ${req.name} requirement for ${e.name}.`,
             tone: 'primary'
           });
         } else if (lower.includes('confirm') || lower.includes('approve')) {

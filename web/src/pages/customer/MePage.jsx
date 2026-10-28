@@ -1,3 +1,4 @@
+import NotificationPreferences from '../../components/NotificationPreferences.jsx';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
@@ -84,6 +85,7 @@ export default function MePage({ user, logout }) {
         ))}
       </div>
 
+      <NotificationPreferences />
       {active.length > 0 && (
         <section>
           <div className="text-sm font-extrabold text-navy mb-2">My events</div>

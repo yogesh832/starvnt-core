@@ -1,46 +1,72 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import {
   AskBox,
   BackLink,
   Empty,
-  EventMeta,
-  EventStatusPill,
   ProgressBar,
   ProgressRing,
-  StepTracker,
   Tabs,
   categoryIcon,
   DetailSkeleton,
   useLoad,
 } from './customerUi.jsx';
 import UnderstandingCard, { EditForm } from './UnderstandingCard.jsx';
+import CustomerEventSummary from './CustomerEventSummary.jsx';
 import { attentionLink, formatINR, planStatus } from './format.js';
 
 const TONE = { amber: 'text-amber-600', emerald: 'text-emerald-600', primary: 'text-primary', muted: 'text-muted' };
 
-function Cover({ event, onEdit, editable }) {
+function FinancialPicture({ truth, eventId }) {
+  const m = truth?.metrics || {};
+  const attention = Array.isArray(truth?.attentionItems) ? truth.attentionItems : [];
+  const tiles = [
+    ['Budget', m.totalBudget ? formatINR(m.totalBudget) : 'Not set'],
+    ['Committed', formatINR(m.committedAmount || 0)],
+    ['Paid', formatINR(m.paidAmount || 0)],
+    ['Upcoming', formatINR(m.upcomingAmount || 0)],
+    ['Remaining', m.totalBudget ? formatINR(m.remainingAmount || 0) : '—'],
+    ['Overdue', formatINR(m.overdueAmount || 0)],
+    ['Projected', formatINR(m.projectedTotal || 0)],
+  ];
+
   return (
-    <section className="rounded-3xl p-5 bg-gradient-to-br from-primary to-[#9b6dff] text-white shadow-lg shadow-primary/20">
+    <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] text-white/80">{event.eventTypeLabel}</div>
-          <h1 className="text-xl font-extrabold truncate">{event.title}</h1>
+        <div>
+          <div className="text-sm font-extrabold text-navy">My event financial picture</div>
+          <div className="text-[11px] text-muted mt-0.5">Calculated from recorded bookings and provider-verified payments.</div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="bg-white rounded-full"><EventStatusPill status={event.status} /></span>
-          {editable && (
-            <button onClick={onEdit} className="text-[11px] font-bold bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1 inline-flex items-center gap-1">
-              <Icon name="edit" size={11} /> Edit
-            </button>
-          )}
-        </div>
+        <Link to={`/customer/events/${eventId}/budget`} className="text-xs font-bold text-primary shrink-0">Budget →</Link>
       </div>
-      <div className="mt-2 [&_*]:text-white/90"><EventMeta event={event} /></div>
-      <LocationDetails event={event} />
-    </section>
+      <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        {tiles.map(([label, value]) => (
+          <div key={label} className="rounded-xl bg-lavender/50 border border-gray-100 px-3 py-2">
+            <div className="text-[10px] font-semibold text-muted">{label}</div>
+            <div className={`text-xs font-extrabold mt-0.5 ${label === 'Overdue' && m.overdueAmount > 0 ? 'text-rose-600' : 'text-navy'}`}>{value}</div>
+          </div>
+        ))}
+      </div>
+      {attention.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {attention.slice(0, 2).map((item, index) => (
+            <Link
+              key={`${item.type}-${index}`}
+              to={item.actionUrl || `/customer/events/${eventId}/bookings`}
+              className="flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs"
+            >
+              <span className="min-w-0">
+                <span className="block font-bold text-navy truncate">{item.title}</span>
+                <span className="block text-[10px] text-muted truncate">{item.detail}</span>
+              </span>
+              <span className="font-extrabold text-amber-700 shrink-0">{item.amount ? formatINR(item.amount) : 'Open'}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -60,8 +86,8 @@ function LocationDetails({ event }) {
     <dl className="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
       {lines.map(([k, v]) => (
         <div key={k} className="min-w-0">
-          <dt className="text-white/70 inline">{k}: </dt>
-          <dd className="inline text-white/95">{v}</dd>
+          <dt className="text-muted dark:text-slate-400 inline">{k}: </dt>
+          <dd className="inline text-navy dark:text-slate-200">{v}</dd>
         </div>
       ))}
     </dl>
@@ -153,9 +179,10 @@ function BudgetCard({ eventId, budget }) {
 
 export default function EventPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { data, error, loading, reload } = useLoad(() => customerApi.dashboard(id), [id]);
   const [tab, setTab] = useState('plan');
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => searchParams.get('edit') === '1');
 
   if (loading && !data) return <DetailSkeleton />;
   if (error) {
@@ -166,14 +193,14 @@ export default function EventPage() {
       </div>
     );
   }
-  const { event, summary, attention, attentionCount, steps, understanding, recentHistory, bookings = [], payments = [] } = data;
+  const { event, summary, attention, attentionCount, financialTruth, steps, understanding, recentHistory, bookings = [], payments = [] } = data;
 
   if (event.status === 'draft') {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <BackLink to="/customer/events">All events</BackLink>
-        <Cover event={event} />
-        <UnderstandingCard understanding={understanding} event={event} onChanged={reload} />
+        <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={() => setEditing(true)}><LocationDetails event={event} /></CustomerEventSummary>
+        <UnderstandingCard understanding={understanding} event={event} onChanged={reload} editing={editing} onEditingChange={setEditing} />
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <div className="text-sm font-bold text-navy mb-2">Tell Aura+ more</div>
           <AskBox eventId={event.id} placeholder="e.g. We need a photographer and the venue is…" />
@@ -186,7 +213,7 @@ export default function EventPage() {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <BackLink to="/customer/events">All events</BackLink>
-        <Cover event={event} />
+        <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments}><LocationDetails event={event} /></CustomerEventSummary>
         <div className="bg-white rounded-3xl shadow-sm p-6 text-center">
           <div className="text-3xl">🎉</div>
           <div className="mt-2 text-lg font-extrabold text-navy">Your {event.eventTypeLabel?.toLowerCase()} is complete</div>
@@ -203,7 +230,7 @@ export default function EventPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <BackLink to="/customer/events">All events</BackLink>
-      <Cover event={event} editable={editable} onEdit={() => setEditing((v) => !v)} />
+      <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={editable ? () => setEditing(value => !value) : undefined}><LocationDetails event={event} /></CustomerEventSummary>
       {event.status === 'in_progress' && (
         <Link to={`/customer/events/${event.id}/event-day`} className="flex items-center gap-2 rounded-2xl bg-red-50 text-red-600 px-4 py-3 text-sm font-bold">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> Your event is live — follow it on Event day →
@@ -229,8 +256,9 @@ export default function EventPage() {
               </div>
               <ProgressRing percent={summary.progressPercent} />
             </div>
-            <div className="mt-4"><StepTracker steps={steps} /></div>
           </div>
+
+          <FinancialPicture truth={financialTruth} eventId={event.id} />
 
           <Tabs
             value={tab}
@@ -291,22 +319,66 @@ export default function EventPage() {
             <AskBox eventId={event.id} placeholder="Ask about this event…" chips={['What am I missing?', 'Budget check', 'Is everything on track?']} />
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <div className="text-sm font-bold text-navy mb-2">Upcoming actions</div>
-            {attention.length === 0 ? (
-              <p className="text-xs text-muted">You're all caught up.</p>
-            ) : (
+          <div className="bg-white dark:bg-[#151827] rounded-2xl shadow-sm p-4 border border-gray-100 dark:border-white/10">
+            <div className="text-sm font-bold text-navy dark:text-white mb-2">Upcoming actions</div>
+            {attention.length > 0 ? (
               <ul className="space-y-2">
                 {attention.map((a, i) => (
                   <li key={i}>
-                    <Link to={attentionLink(a)} className="block rounded-xl bg-lavender/60 hover:bg-primary-soft p-2.5 text-xs">
-                      <b className="text-navy">{a.title}</b>
-                      <div className="text-muted text-[11px]">{a.detail}</div>
+                    <Link to={attentionLink(a)} className="block rounded-xl bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/40 p-2.5 text-xs border border-amber-200 dark:border-amber-900/40">
+                      <b className="text-amber-900 dark:text-amber-200">{a.title}</b>
+                      <div className="text-amber-700 dark:text-amber-300 text-[11px] mt-0.5">{a.detail}</div>
                     </Link>
                   </li>
                 ))}
               </ul>
-            )}
+            ) : (() => {
+              const unbookedItems = (summary?.items || []).filter((i) => ['missing', 'pending'].includes(i.status) && !i.selectedOption?.vendorName);
+              if (unbookedItems.length > 0) {
+                return (
+                  <div className="space-y-3">
+                    <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 p-2.5 border border-indigo-100 dark:border-indigo-900/50">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-800 dark:text-indigo-300">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0" />
+                        {event.title || 'Event'} status
+                      </div>
+                      <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-0.5">
+                        No urgent alerts. {unbookedItems.length} service category{unbookedItems.length > 1 ? 's' : ''} remaining for vendor selection.
+                      </p>
+                    </div>
+                    <ul className="space-y-2">
+                      {unbookedItems.slice(0, 3).map((item) => (
+                        <li key={item.category}>
+                          <Link
+                            to={`/customer/events/${event.id}/services?category=${item.category}`}
+                            className="block rounded-xl bg-lavender/60 dark:bg-white/5 hover:bg-primary-soft dark:hover:bg-primary/20 p-2.5 text-xs transition"
+                          >
+                            <div className="flex items-center justify-between">
+                              <b className="text-navy dark:text-white">Choose {item.label}</b>
+                              <span className="text-[10px] font-bold text-primary dark:text-[#a5b4fc]">Select →</span>
+                            </div>
+                            <div className="text-muted dark:text-slate-400 text-[11px] mt-0.5">
+                              {item.optionCount ? `${item.optionCount} verified options available` : 'Explore recommendations for your event'}
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              }
+              return (
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-3 border border-emerald-100 dark:border-emerald-900/50">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    You're all caught up for {event.title || 'this event'} 🎉
+                  </div>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300/80 mt-0.5 leading-relaxed">
+                    All services are confirmed and on schedule. No urgent customer action is pending right now.
+                  </p>
+                </div>
+              );
+            })()}
           </div>
 
           <BudgetCard eventId={event.id} budget={summary.budget} />

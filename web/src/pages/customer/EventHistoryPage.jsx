@@ -2,25 +2,12 @@ import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, Empty, PageSkeleton, Tabs, useLoad } from './customerUi.jsx';
+import { milestones } from './historyMilestones.js';
+export { milestones } from './historyMilestones.js';
 
 const when = (t) => new Date(t).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 
 /** Milestones reached so far, derived only from recorded history. */
-export function milestones(history) {
-  const has = (re) => history.find((h) => re.test(h.text));
-  const booked = history.filter((h) => / booked with /.test(h.text));
-  const verified = history.filter((h) => /^Payment of .* verified$/.test(h.text));
-  const sum = verified.reduce((s, h) => s + Number(h.text.replace(/[^\d]/g, '')), 0);
-  return [
-    ['Event created', has(/draft started|plan created from your details/)],
-    ['Event plan built', has(/^Event plan created$/)],
-    [`Vendors confirmed${booked.length ? ` (${booked.length})` : ''}`, booked[booked.length - 1]],
-    [`Payments completed${sum ? ` (₹${sum.toLocaleString('en-IN')})` : ''}`, verified[verified.length - 1]],
-    ['Event day', has(/checked in|started/)],
-    ['Completion', has(/^Event completed$/)],
-  ];
-}
-
 /** Event Timeline: milestones + full activity log in plain language. */
 export default function EventHistoryPage() {
   const { id } = useParams();

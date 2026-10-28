@@ -1,0 +1,3589 @@
+STARVNT — FULL WEBSITE OWNERSHIP & DEVELOPMENT DIRECTION
+
+Yogesh,
+
+I want to give you a clear update regarding your current responsibility.
+
+You are no longer responsible only for the Vendor Dashboard. You now have overall responsibility for the entire StarVnt Website and its connected product ecosystem.
+
+Your overall ownership will include:
+
+- Customer Website
+- Vendor Dashboard
+- Frontend Development
+- Backend Integration
+- Authentication & Authorization
+- Core Business Workflows
+- Aura+ Integration
+- Automation
+- E2E Testing
+- Production Readiness
+
+Our objective is not to build isolated features or separate dashboards.
+
+The objective is to establish the entire StarVnt Website as one integrated, reliable and production-ready working product.
+
+---
+
+1. Vendor Dashboard — Universal Vendor Architecture
+
+The Vendor Dashboard must not use one generic/static form for every vendor category.
+
+There should be a Common Vendor Master, while the information captured, capabilities supported, pricing structure, capacity, coverage and operational requirements should dynamically change according to the vendor's Primary Category.
+
+Architecture
+
+Common Vendor Master → Primary Category → Category-Specific Module → Services → Capability/Capacity → Coverage → Availability → Pricing
+
+The principle is:
+
+«One Universal Vendor OS + Dynamic Category/Service Modules»
+
+For example:
+
+Photographer
+
+The system should support information such as:
+
+- Coverage duration
+- Number of photographers
+- Number of videographers
+- Deliverables
+- Equipment
+- Multiple locations
+- Editing requirements
+- Delivery timeline
+- Travel charges
+
+Decorator
+
+- Decoration type
+- Venue/area
+- Stage/backdrop
+- Materials
+- Setup and dismantling
+- Area/scope
+- Power/access requirements
+- Transport
+- Setup requirements
+
+Caterer
+
+- Cuisine
+- Veg/Non-Veg
+- Guest capacity
+- Per-plate pricing
+- Menu/package
+- Kitchen/service setup
+- Service area
+- Additional guest pricing
+
+Makeup Artist
+
+- Bridal/party type
+- Number of people
+- On-site/studio
+- Duration
+- Products/equipment
+- Travel
+
+Venue
+
+- Venue type
+- Capacity
+- Available spaces
+- Indoor/outdoor
+- Availability
+- Catering policy
+- Decoration policy
+- Sound/production restrictions
+- Parking
+- Accessibility
+
+Religious & Spiritual Services
+
+This category must not be limited to only "Purohit."
+
+It should support:
+
+- Hindu Priest / Purohit
+- Muslim Imam / Nikah Officiant
+- Christian Priest / Pastor
+- Sikh Granthi
+- Buddhist Monk
+- Jain Priest
+- Interfaith Officiant
+- Spiritual Ceremony Specialist
+- Religious Ritual Services
+
+A generic role/title can be:
+
+«Religious Ceremony Officiant»
+
+Taxonomy
+
+Religious & Spiritual Services → Ceremony Type → Faith/Tradition → Service
+
+Examples:
+
+Religious & Spiritual Services → Wedding → Hindu → Purohit
+
+Religious & Spiritual Services → Wedding → Interfaith → Interfaith Officiant
+
+This category-specific information must not exist only in the frontend form.
+
+It must be properly supported across:
+
+Frontend → API → Backend → Database → Validation → Business Logic
+
+The architecture must therefore be genuinely dynamic, not just visually dynamic.
+
+---
+
+2. STARVNT = EVENT UNIVERSE
+
+The most important direction is this:
+
+«StarVnt must not be built as a Wedding Event Platform.»
+
+Our long-term product vision is:
+
+STARVNT = EVENT UNIVERSE
+
+Any type of event should be able to operate inside the same universal architecture.
+
+The platform should support the complete relationship between:
+
+Customer → Event → Requirement → Service → Vendor → Quotation → Booking → Payment → Execution → Completion
+
+The Customer experience should follow the same universal structure:
+
+Understanding → Event → Event Plan → Requirements → Service Locations → Vendor Discovery → Validation → Total Cost → Compare → Recommend → Customer Decision → Quote → Payment → Booking → Execution → Completion
+
+The Vendor ecosystem must therefore support not only wedding vendors but all relevant event vendors and service providers.
+
+---
+
+3. Event Universe — Vendor Ecosystem
+
+Wedding & Social Events
+
+Examples:
+
+- Photographer
+- Decorator
+- Caterer
+- Makeup Artist
+- Mehendi Artist
+- Purohit
+- Venue
+- DJ
+- Anchor
+- Invitation
+- Cake
+- Florist
+- Transport
+- Bridal Wear
+- Entertainment
+
+Religious & Cultural Events
+
+Examples:
+
+- Purohit
+- Imam
+- Priest
+- Granthi
+- Monk
+- Ritual Services
+- Decorator
+- Caterer
+- Sound
+- Lighting
+- Tent
+- Seating
+- Flower
+- Transport
+
+Corporate Events
+
+Including:
+
+- Conferences
+- Meetings
+- Seminars
+- Product Launches
+- Corporate Parties
+- Exhibitions
+- MICE
+
+Relevant vendors may include:
+
+- Venue
+- AV
+- Stage
+- Production
+- Catering
+- Photographer/Videographer
+- Host/Anchor
+- Branding
+- Printing
+- Furniture
+- Transport
+- Accommodation
+
+Clubs & Community Events
+
+Including:
+
+- Club Functions
+- Annual Programmes
+- Cultural Programmes
+- Sports Events
+- Community Gatherings
+- Puja
+- Festivals
+- Award Ceremonies
+
+Education & Institutional Events
+
+Including:
+
+- School/College Functions
+- Farewell
+- Freshers
+- Annual Functions
+- Convocations
+- Seminars
+- Cultural Events
+- Sports Events
+
+The architecture should also support:
+
+- Birthday
+- Anniversary
+- Engagement
+- Reception
+- House Party
+- Destination Events
+- Public Gatherings
+- Cultural Gatherings
+- Future event types
+
+The system must be designed so that new event types can be added without rebuilding the core platform.
+
+---
+
+4. Universal Event Architecture
+
+The core architecture should be:
+
+«EVENT → EVENT TYPE → REQUIREMENTS → SERVICE NEEDS → VENDOR ECOSYSTEM → DISCOVERY → QUOTE → BOOKING → PAYMENT → EXECUTION → COMPLETION»
+
+The Event Type may change.
+
+The Core System should not.
+
+We should build:
+
+«Universal Event Core + Universal Vendor OS + Dynamic Category/Service Modules»
+
+Based on the event type, the platform should dynamically load the relevant:
+
+- Requirements
+- Services
+- Vendor categories
+- Vendor capabilities
+- Pricing logic
+- Matching rules
+- Workflows
+- Execution requirements
+
+---
+
+5. Service Location Must Be Dynamic
+
+Service Location is a critical part of vendor matching.
+
+A single event can have different service locations.
+
+For example:
+
+- Photography → Wedding Venue
+- Makeup → Bride's Home/Hotel
+- Catering → Event Venue
+- Decoration → Venue
+- Transport → Pickup Location → Event Venue
+- Accommodation → Hotel
+- Religious Ceremony → Ceremony Location
+
+Therefore, the system must not assume that the Event Location automatically equals every Service Location.
+
+Service Location must be independently represented and connected to the relevant service requirement.
+
+This will become one of the foundations of the Vendor Matching Engine.
+
+---
+
+6. StarVnt Is Not Just a Vendor Listing Platform
+
+StarVnt is not being built simply to display vendor profiles.
+
+The platform should understand what the customer is trying to accomplish.
+
+For any event, StarVnt should be able to move the customer through:
+
+«Understand → Plan → Discover → Validate → Compare → Recommend → Decide → Book → Pay → Execute → Complete»
+
+Vendor discovery must therefore not depend only on:
+
+- Location
+- Displayed Price
+
+The matching system should consider:
+
+- Customer Requirement
+- Service Location
+- Vendor Service
+- Coverage
+- Availability
+- Capacity
+- Eligibility
+- Travel
+- Logistics
+- Total Cost
+- Suitability
+
+The objective is to generate relevant vendor options, not simply a list of vendors.
+
+---
+
+7. Website — Overall E2E Responsibility
+
+You are now responsible for ensuring that both sides of the platform work together.
+
+Customer Side
+
+Authentication → Event Creation → Aura+ → Requirements → Vendor Discovery → Quote → Booking → Payment → Event Tracking
+
+Vendor Side
+
+Vendor Onboarding → Profile → Category → Services → Capability → Coverage → Availability → Enquiry → Quote → Booking → Execution → Completion
+
+Both sides must be connected to the same:
+
+«Core Business Truth»
+
+There must not be separate or conflicting business states between Customer, Vendor, Admin and Backend systems.
+
+---
+
+8. Payment Architecture
+
+Payment cannot be treated as complete simply because the frontend displays a success message.
+
+The system must establish payment truth through:
+
+Payment Gateway → Backend Verification → Webhook → Reconciliation → PAYMENT_CONFIRMED
+
+The frontend must never independently declare the business state as paid.
+
+The backend/database must remain the source of truth.
+
+---
+
+9. Vendor Execution Lifecycle
+
+After booking, the vendor workflow must remain connected through execution.
+
+The intended lifecycle is:
+
+BOOKING_CONFIRMED
+
+↓
+
+PAYMENT_VERIFIED
+
+↓
+
+SERVICE_SCHEDULED
+
+↓
+
+CHECK_IN
+
+↓
+
+SERVICE_STARTED
+
+↓
+
+MILESTONE
+
+↓
+
+SERVICE_COMPLETED
+
+↓
+
+COMPLETION_SUBMITTED
+
+This should ultimately connect back to the Customer Event Tracking experience.
+
+---
+
+10. Website Quality & Engineering Standard
+
+A UI being completed does not mean the feature is completed.
+
+Every important flow must be tested across the complete chain:
+
+«UI → API → Authentication → Authorization → Backend → Database → Business Logic → Automation → Response → UI»
+
+Every feature should have a clear status:
+
+WORKING
+
+Fully functional and verified.
+
+PARTIAL
+
+Some components work, but the complete flow is not finished.
+
+NOT WORKING
+
+Implemented but currently failing.
+
+BLOCKED
+
+Cannot proceed because of a dependency, access issue, external service, decision or technical blocker.
+
+Before building anything new:
+
+«Review Existing → Reuse → Extend → Avoid Duplicate»
+
+Do not create duplicate systems simply because an existing implementation is difficult to find.
+
+---
+
+11. Current Payment
+
+I am currently paying you ₹10,000.
+
+At the same time, please also process Sourav's payment.
+
+Sourav has worked for approximately one week.
+
+If his applicable monthly salary is ₹12,500, then:
+
+₹12,500 ÷ 30 × 7 = ₹2,916.67
+
+Therefore, approximately:
+
+«Sourav Payment = ₹2,916.70»
+
+Please process this payment and make sure the payment is properly recorded.
+
+As per the proposed overall development plan dated 17 September, the overall ₹40,000 development budget includes the required team/freelancer development work.
+
+---
+
+12. Current Status Report Required
+
+I now need a consolidated status report from you.
+
+Please provide the current status under these six categories:
+
+1. Completed
+2. Pending
+3. Partially Working
+4. Blocked
+5. Additional Work Required
+6. Additional Developer/Freelancer Required — if any
+
+The report must specifically cover:
+
+Customer Website
+
+- Authentication
+- Event Creation
+- Event Planning
+- Requirements
+- Vendor Discovery
+- Quote
+- Booking
+- Payment
+- Event Tracking
+
+Vendor Dashboard
+
+- Onboarding
+- Profile
+- Category
+- Services
+- Capability
+- Coverage
+- Availability
+- Enquiry
+- Quotation
+- Booking
+- Execution
+- Completion
+
+Core Integration
+
+- Frontend ↔ Backend
+- API Integration
+- Database
+- Authentication
+- Authorization
+- Business Logic
+- Shared Business States
+
+Aura+
+
+- Integration
+- Event Understanding
+- Requirement Collection
+- Recommendation
+- Vendor Discovery
+- Workflow Integration
+
+Automation
+
+- Event Automation
+- Status Changes
+- Notifications
+- Follow-ups
+- Vendor Workflow
+- Customer Workflow
+
+Testing
+
+- Unit Testing
+- API Testing
+- Integration Testing
+- E2E Testing
+- Payment Testing
+- Authentication Testing
+- Failure/Edge Cases
+
+Production Readiness
+
+- Environment Configuration
+- Database
+- Security
+- Error Handling
+- Logging
+- Monitoring
+- Deployment
+- Performance
+- Production Testing
+
+---
+
+13. Final Direction
+
+The final direction is very simple.
+
+We are not building a Wedding Website.
+
+We are not building a Vendor Listing Platform.
+
+We are not building a Customer App and a separate Vendor Dashboard.
+
+We are building one connected system.
+
+A system where:
+
+Wedding → Corporate → Club → Cultural → Religious → Institutional → Social → Future Event Types
+
+can all operate through the same universal architecture.
+
+The platform should connect:
+
+Customer
+
+→ Event
+
+→ Requirements
+
+→ Services
+
+→ Vendors
+
+→ Discovery
+
+→ Validation
+
+→ Quotation
+
+→ Decision
+
+→ Payment
+
+→ Booking
+
+→ Execution
+
+→ Completion
+
+Everything must ultimately connect back to one Core Business Truth.
+
+The architecture must be modular enough to support new event types and vendor categories without rebuilding the platform from scratch.
+
+---
+
+STARVNT
+
+EVENT UNIVERSE
+
+One Platform. Every Event. One Connected Event Universe.
+
+Build the system, not just the screens.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+STARVNT Notification System
+
+Production-Grade, Context-Aware & Non-Spam Notification Architecture
+
+1. Objective
+
+Build a centralized, event-driven Notification Service for STARVNT that communicates with Customers, Vendors, and Admins only when a notification provides genuine value.
+
+The system must feel:
+
+- Personal
+- Relevant
+- Timely
+- Human
+- Trustworthy
+- Context-aware
+- Action-oriented
+
+It must NOT feel like an automated spam system.
+
+Core Principle
+
+«Notify only when there is a meaningful reason to notify.»
+
+Every notification must answer at least one of these questions:
+
+1. What changed?
+2. What does the user need to know?
+3. What action is required?
+4. What important milestone has been reached?
+5. What risk or deadline should the user be aware of?
+
+If none apply, do not send the notification.
+
+---
+
+2. Notification Channels
+
+The Notification Service should support:
+
+- In-App Notification
+- Push Notification
+- WhatsApp
+- SMS
+- Email
+
+Channels must be provider-independent.
+
+Example:
+
+STARVNT Event
+      ↓
+Notification Engine
+      ↓
+Template Engine
+      ↓
+Channel Router
+      ↓
+SMS / WhatsApp / Email / Push / In-App
+
+The system must allow STARVNT to change providers without changing the core business logic.
+
+---
+
+3. Notification Philosophy
+
+3.1 Transactional First
+
+The primary purpose of notifications is to support the customer's event journey.
+
+Examples:
+
+- OTP
+- Booking confirmation
+- Payment confirmation
+- Quotation availability
+- Important event update
+- Vendor assignment
+- Deadline reminder
+- Cancellation/refund
+
+Marketing notifications must remain a separate system.
+
+---
+
+3.2 No Duplicate Communication
+
+If the same information has already been successfully communicated through an appropriate channel, do not unnecessarily send the same information through multiple channels.
+
+Example:
+
+BAD:
+
+Booking confirmed
+→ SMS
+→ WhatsApp
+→ Email
+→ Push
+→ 4 separate notifications
+
+BETTER:
+
+Booking confirmed
+→ In-App + Push
+
+SMS only if required or configured.
+Email for the official booking record.
+
+The channel strategy must depend on:
+
+- Urgency
+- User preference
+- Message importance
+- Previous delivery status
+- Regulatory requirements
+
+---
+
+4. Customer Notifications
+
+A. Authentication
+
+Required
+
+- Mobile verification OTP
+- Login OTP
+- Password reset OTP
+- Security/login alert when genuinely necessary
+
+Rules
+
+OTP messages can be immediate.
+
+Do not send unnecessary "Welcome" or promotional SMS immediately after every login.
+
+---
+
+5. Enquiry & Planning Journey
+
+Notify the customer when there is a meaningful change.
+
+Recommended events
+
+- Enquiry successfully submitted
+- Requirement received
+- Aura+ requirement analysis completed
+- Additional information required
+- Vendor matching started
+- Vendor matching completed
+- Relevant vendors found
+- Quotations received
+- Quotation comparison ready
+- Customer action required
+
+Avoid
+
+Do NOT send notifications for every internal backend operation.
+
+For example:
+
+DO NOT notify:
+
+«"Aura+ processed your requirement."»
+
+if nothing useful changed.
+
+Instead:
+
+«"We've reviewed your requirements. We need your preferred event date to continue."»
+
+The notification must communicate value, not system activity.
+
+---
+
+6. Booking Notifications
+
+Send notifications for genuine booking-state changes.
+
+Events
+
+- Booking request submitted
+- Booking accepted
+- Booking confirmed
+- Booking ID generated
+- Payment required
+- Payment successful
+- Payment failed
+- Payment receipt available
+- Booking modified
+- Booking cancelled
+- Refund initiated
+- Refund completed
+
+Important Rule
+
+Do not send multiple notifications for one state transition.
+
+For example:
+
+Payment Successful
+
+should generate one customer-facing notification event.
+
+The Notification Engine decides the appropriate channels.
+
+---
+
+7. Event Lifecycle Notifications
+
+STARVNT Core lifecycle:
+
+DRAFT
+   ↓
+MANIFESTING
+   ↓
+CONFIRMED
+   ↓
+ONGOING
+   ↓
+COMPLETED
+
+Customers should receive notifications only for meaningful lifecycle milestones.
+
+Recommended
+
+- Event created
+- Planning officially started
+- Event confirmed
+- Major milestone completed
+- Important readiness issue
+- Event approaching
+- Event starts today
+- Event ongoing
+- Event completed
+- Post-event experience/review request
+
+Do NOT notify
+
+Every internal status change.
+
+The customer does not need to see STARVNT's internal machinery.
+
+---
+
+8. Event Reminders
+
+Reminders must be configurable based on:
+
+- Event type
+- Event duration
+- Event importance
+- Customer preference
+- Outstanding tasks
+- Payment status
+- Event readiness
+
+Possible schedule:
+
+30 days → only if useful
+15 days → only if useful
+7 days  → planning/readiness update
+3 days  → important pending actions
+1 day   → final preparation
+Event day → essential information only
+
+Do not automatically send all six reminders for every event.
+
+The Notification Engine should determine whether a reminder is actually useful.
+
+---
+
+9. Payment Notifications
+
+Payment notifications are high-value and should be precise.
+
+Send for:
+
+- Payment required
+- Payment due soon
+- Payment due today
+- Payment successful
+- Payment failed
+- Partial payment received
+- Receipt available
+- Refund initiated
+- Refund completed
+
+Avoid:
+
+Repeated payment reminders when payment has already been completed.
+
+The system must always check the latest payment state before sending.
+
+---
+
+10. Document Notifications
+
+Notify when the customer actually needs to access or act on a document.
+
+Examples:
+
+- Quotation available
+- Invoice available
+- Receipt available
+- Agreement requires action
+- Document approved
+- Document rejected
+- Updated document available
+
+Do not send notifications simply because an internal document was generated.
+
+---
+
+11. Vendor Notifications
+
+A. Vendor Onboarding
+
+Notify for:
+
+- Registration successful
+- Profile incomplete
+- Verification required
+- Profile submitted
+- Profile verified
+- Profile rejected
+- Vendor approved
+- Vendor suspended/deactivated
+
+Notifications should explain the required action where applicable.
+
+Example:
+
+«"Your STARVNT vendor profile is incomplete. Add your service areas and pricing to continue."»
+
+Better than:
+
+«"Profile status changed."»
+
+---
+
+12. Vendor Lead Notifications
+
+Important events
+
+- New qualified lead
+- Lead details available
+- Customer requested quotation
+- Response deadline approaching
+- Quotation submitted
+- Customer viewed quotation
+- Customer requested clarification
+- Customer selected vendor
+- Lead converted to booking
+- Lead cancelled/lost
+
+Anti-spam rule
+
+Do not repeatedly remind a vendor about the same lead unless:
+
+- The deadline is approaching
+- Customer activity has changed
+- The lead status has changed
+- Admin has explicitly escalated it
+
+---
+
+13. Vendor Event Execution
+
+Notify vendors about actionable operational events:
+
+- Event assigned
+- Event confirmed
+- Event approaching
+- Important checklist pending
+- Document pending
+- Payment status changed
+- Event started
+- Event completed
+- Completion verification required
+- Customer feedback received
+
+Do not send generic motivational or unnecessary operational messages.
+
+---
+
+14. Vendor Payments
+
+Notify for:
+
+- Payment pending
+- Payment approved
+- Payment processing
+- Payment completed
+- Payment failed
+- Settlement statement available
+
+Payment status must always come from the authoritative payment/settlement record.
+
+---
+
+15. Admin Notifications
+
+Admin notifications should focus on exceptions, risks and actions.
+
+Critical
+
+- New booking
+- Payment failure
+- Booking cancellation
+- Refund request
+- Serious customer complaint
+- Event execution issue
+- High-risk event
+- SLA breach
+- Critical vendor issue
+
+Operational
+
+- New qualified lead
+- Vendor verification required
+- Quotation pending
+- Customer response pending
+- Payment due
+- Event readiness below threshold
+- Checklist incomplete
+- Document pending
+
+Important
+
+Do not notify Admin about every normal system activity.
+
+Use an exception-based approach.
+
+---
+
+16. Aura+ Intelligence Notifications
+
+Aura+ must NOT behave like a chatbot constantly sending messages.
+
+Aura+ should trigger notifications only when a defined condition produces meaningful value.
+
+Examples:
+
+Missing information
+
+Customer requirement incomplete
+        ↓
+Aura+ detects missing information
+        ↓
+Notification
+        ↓
+Customer provides information
+
+Budget mismatch
+
+Customer budget: ₹2L
+Expected requirement: ₹3.5L
+        ↓
+Aura+ detects mismatch
+        ↓
+Customer notification
+
+Event risk
+
+Event readiness: 62%
+Event date: 3 days away
+        ↓
+Risk detected
+        ↓
+Customer/Admin notification
+
+Vendor delay
+
+Vendor response deadline approaching
+        ↓
+No response
+        ↓
+Vendor reminder
+        ↓
+Escalate to Admin only if required
+
+---
+
+17. Notification Priority
+
+Every notification must have a priority.
+
+CRITICAL
+
+Requires immediate attention.
+
+Examples:
+
+- Security issue
+- Payment failure
+- Booking cancellation
+- Major event execution issue
+
+HIGH
+
+Important action/update.
+
+Examples:
+
+- Booking confirmation
+- Payment due
+- Quotation received
+- Vendor assignment
+
+NORMAL
+
+Useful information.
+
+Examples:
+
+- Planning update
+- Event milestone
+- Document available
+
+LOW
+
+Non-essential communication.
+
+Examples:
+
+- Recommendations
+- Engagement
+- Marketing
+
+Low-priority notifications should generally remain inside the app unless the user has explicitly opted into another channel.
+
+---
+
+18. Smart Channel Selection
+
+The Notification Engine must decide the appropriate channel.
+
+Example:
+
+OTP
+
+SMS / WhatsApp OTP
+
+Booking confirmation
+
+In-App + Push
+Email for official record
+
+Critical payment failure
+
+In-App + Push
+SMS/WhatsApp when appropriate
+
+General planning update
+
+In-App / Push
+
+Marketing
+
+Only through opted-in marketing channels
+
+The system must avoid sending the same message through every channel.
+
+---
+
+19. Notification Frequency Control
+
+Implement notification throttling.
+
+Examples:
+
+Maximum X notifications per user per time window
+
+But transactional and security-critical notifications must be exempt where necessary.
+
+Also implement:
+
+- Duplicate detection
+- Event deduplication
+- Cooldown period
+- Reminder suppression
+- State validation before sending
+- User preference checks
+
+---
+
+20. Notification Deduplication
+
+Every notification event should have a unique idempotency key.
+
+Example:
+
+booking_confirmed:SV-1024
+
+If the same event is processed twice:
+
+DO NOT SEND TWICE
+
+This is critical for production reliability.
+
+---
+
+21. Notification Database
+
+Store:
+
+- notification_id
+- user_id
+- event_id
+- booking_id
+- vendor_id
+- notification_type
+- priority
+- channel
+- template_id
+- recipient
+- payload
+- idempotency_key
+- status
+- provider
+- provider_message_id
+- created_at
+- queued_at
+- sent_at
+- delivered_at
+- read_at
+- failed_at
+- failure_reason
+- retry_count
+
+Status
+
+QUEUED
+→ SENT
+→ DELIVERED
+→ READ
+
+Failure:
+
+FAILED
+→ RETRY
+→ DELIVERED
+
+or:
+
+FAILED
+→ PERMANENT_FAILURE
+
+---
+
+22. Template System
+
+Templates must not be hard-coded into business logic.
+
+Templates should support:
+
+- Template name
+- Channel
+- Language
+- Category
+- Variables
+- DLT Template ID
+- Sender ID
+- Version
+- Active/Inactive
+- Approval status
+
+Example:
+
+Hello {{customer_name}},
+
+Your STARVNT booking {{booking_id}}
+has been confirmed for {{event_date}}.
+
+View your event:
+{{event_link}}
+
+Templates should sound natural and human.
+
+Avoid robotic wording such as:
+
+«"Your request has been successfully processed by our system."»
+
+Prefer:
+
+«"Your event request is in. We're reviewing the details and will update you once the next step is ready."»
+
+---
+
+23. Human-Like Communication Rules
+
+Every customer-facing notification should follow:
+
+1. Context
+
+Tell the user what this relates to.
+
+2. Reason
+
+Explain why they are receiving it.
+
+3. Action
+
+Tell them what to do, if anything.
+
+4. Useful Link
+
+Provide a direct action link when applicable.
+
+5. Brevity
+
+Do not write long messages.
+
+Example:
+
+BAD:
+
+«"Dear valued customer, this is to inform you that your booking request has been successfully processed by our automated booking management system..."»
+
+BETTER:
+
+«"Your STARVNT booking request is received. We're reviewing your event details and will update you when the next step is ready."»
+
+---
+
+24. Marketing Notifications
+
+Marketing must be completely separated from transactional notifications.
+
+Examples:
+
+- New package
+- Seasonal offer
+- Referral campaign
+- Lucky Coupon
+- Promotional campaign
+
+Marketing notifications require:
+
+- User consent/preferences
+- Proper DLT/template compliance
+- Frequency controls
+- Opt-out handling
+
+Important
+
+Never disguise marketing as a transactional notification.
+
+---
+
+25. Notification Preferences
+
+Users should eventually be able to control:
+
+- SMS
+- WhatsApp
+- Email
+- Push
+- Marketing communication
+
+However, mandatory transactional/security communications must remain governed by the applicable rules and cannot simply be disabled like marketing messages.
+
+---
+
+26. Notification Queue
+
+Use an asynchronous queue.
+
+Example:
+
+Business Event
+      ↓
+Notification Event
+      ↓
+Queue
+      ↓
+Notification Worker
+      ↓
+Provider
+      ↓
+Delivery Status
+
+This prevents notification delivery from slowing down core booking/payment operations.
+
+---
+
+27. Retry & Failure Handling
+
+Implement:
+
+- Automatic retry
+- Exponential backoff
+- Provider timeout handling
+- Provider error logging
+- Dead-letter queue
+- Delivery tracking
+
+Do not retry indefinitely.
+
+---
+
+28. Provider Abstraction
+
+Do not lock STARVNT into one SMS/WhatsApp provider.
+
+Architecture:
+
+Notification Service
+        ↓
+Channel Adapter
+        ↓
+Provider Adapter
+        ↓
+MSG91 / Other Provider
+
+The SMS provider can therefore be changed later without modifying STARVNT Core.
+
+---
+
+29. Admin Notification Center
+
+Admin should be able to view:
+
+- Notification history
+- Delivery status
+- Failed messages
+- Provider response
+- Retry status
+- Template used
+- Recipient
+- Triggering event
+- Channel
+- Timestamp
+
+Admin should also be able to search by:
+
+- Customer
+- Vendor
+- Booking
+- Event
+- Notification type
+- Status
+
+---
+
+30. Developer Deliverables
+
+Developer must deliver:
+
+1. Central Notification Service
+2. Notification Event Schema
+3. Event-to-Notification Rules
+4. Template Engine
+5. Channel Router
+6. SMS Provider Integration
+7. WhatsApp Provider Integration
+8. Email Integration
+9. In-App Notification System
+10. Push Notification foundation
+11. Notification Queue
+12. Retry System
+13. Deduplication / Idempotency
+14. Delivery Tracking
+15. Notification Preferences
+16. Admin Notification Center
+17. Template Management
+18. Notification Logs
+19. Rate Limiting
+20. API Documentation
+21. Unit Tests
+22. Integration Tests
+23. Production Environment Configuration
+24. Monitoring & Error Logging
+
+---
+
+31. Acceptance Criteria
+
+The system will be considered production-ready only when:
+
+- No duplicate notification is generated for the same event.
+- Notifications are triggered from business events rather than scattered throughout the codebase.
+- Failed notifications can be retried safely.
+- Delivery status is tracked.
+- Provider APIs can be replaced without rewriting STARVNT Core.
+- Marketing and transactional communication are completely separated.
+- User preferences are respected where applicable.
+- Notification frequency can be controlled.
+- Every notification has a clear business reason.
+- Customer-facing messages do not expose unnecessary internal system information.
+- Notification content is concise, natural and context-aware.
+- The system does not send notifications merely because an internal database field changed.
+- Critical notifications cannot be silently lost.
+- Notification delivery failure does not break booking/payment/event operations.
+
+---
+
+32. STARVNT Notification Golden Rule
+
+«Don't notify because the system can. Notify because the user should know.»
+
+STARVNT should feel like a trusted event partner—not an automated messaging machine.
+
+The objective is not to maximize the number of notifications.
+
+The objective is to maximize the usefulness of every notification sent.
+
+
+
+
+
+
+
+
+33. Recommended Notification Provider Stack
+
+STARVNT should use specialized communication providers rather than depending on one provider for every channel.
+
+Primary Provider Stack
+
+SMS
+
+MSG91
+
+Use for:
+
+- Mobile OTP
+- Login OTP
+- Critical transactional SMS
+- Payment alerts
+- Booking alerts
+- Important event reminders
+- Vendor operational alerts
+
+MSG91 provides SMS APIs, template management, SMS logs and analytics.
+
+WhatsApp
+
+MSG91 WhatsApp API
+
+Use for:
+
+- Booking updates
+- Quotation availability
+- Event planning updates
+- Payment confirmations
+- Important reminders
+- Vendor lead notifications
+- Customer support communication where appropriate
+
+WhatsApp integration must follow Meta's applicable WhatsApp Business requirements and approved templates.
+
+MSG91 supports WhatsApp as one of its communication channels.
+
+Transactional Email
+
+Resend
+
+Use for:
+
+- Booking confirmation
+- Quotation
+- Invoice
+- Payment receipt
+- Event documents
+- Account/security emails
+- Important event summaries
+- Customer/vendor transactional communication
+
+Resend provides a REST email API, official SDKs including Node.js, batch sending, attachments, scheduling, webhooks/logs and idempotency support.
+
+---
+
+34. STARVNT Recommended Communication Architecture
+
+                    STARVNT CORE
+                         │
+                         ▼
+                BUSINESS EVENT
+                         │
+                         ▼
+              NOTIFICATION ENGINE
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+       TEMPLATE ENGINE        CHANNEL ROUTER
+                                    │
+              ┌─────────┬───────────┼───────────┬─────────┐
+              ▼         ▼           ▼           ▼         ▼
+           In-App     Push        MSG91       MSG91     Resend
+                                  SMS        WhatsApp    Email
+
+Business modules must NEVER directly call MSG91 or Resend.
+
+For example:
+
+BAD:
+
+BookingService → MSG91 API
+PaymentService → MSG91 API
+VendorService → MSG91 API
+
+GOOD:
+
+BookingService
+      ↓
+BookingConfirmed Event
+      ↓
+Notification Engine
+      ↓
+Channel Router
+      ↓
+MSG91 / Resend / Push / In-App
+
+This keeps STARVNT Core independent from communication providers.
+
+---
+
+35. Provider Abstraction Layer
+
+Create provider interfaces.
+
+Example:
+
+NotificationProvider
+    │
+    ├── SmsProvider
+    │      └── Msg91SmsProvider
+    │
+    ├── WhatsAppProvider
+    │      └── Msg91WhatsAppProvider
+    │
+    ├── EmailProvider
+    │      └── ResendEmailProvider
+    │
+    ├── PushProvider
+    │      └── PushProviderV1
+    │
+    └── InAppProvider
+           └── StarVntInAppProvider
+
+The rest of STARVNT must communicate with the interfaces, not directly with provider-specific SDKs.
+
+---
+
+36. SMS — MSG91 Requirements
+
+Developer must integrate the current MSG91 SMS API rather than an unofficial Way2SMS implementation.
+
+MSG91's current SMS API supports template-based sending with recipient variables.
+
+Required implementation:
+
+- MSG91 Auth Key stored in environment variables
+- Template ID stored in STARVNT template configuration
+- DLT Template ID mapping
+- Sender/Header mapping
+- Dynamic variables
+- Delivery status
+- Provider message ID
+- Error handling
+- Retry
+- Logging
+- Idempotency
+
+Example:
+
+STARVNT Event
+      ↓
+Notification Engine
+      ↓
+SMS Template
+      ↓
+MSG91 Adapter
+      ↓
+MSG91 API
+      ↓
+Customer Mobile
+
+Never expose the MSG91 Auth Key to frontend/mobile applications.
+
+---
+
+37. India DLT Compliance
+
+For SMS sent to Indian mobile numbers, STARVNT must complete the applicable DLT process.
+
+Developer must support:
+
+- DLT Entity ID
+- STARVNT Sender/Header ID
+- Approved SMS Template ID
+- MSG91 template mapping
+- Template version management
+
+MSG91's current documentation states that Indian entities sending SMS to Indian mobile numbers need DLT registration, approved headers and approved SMS content templates.
+
+Do not allow production SMS templates to bypass the approved-template system.
+
+---
+
+38. Resend Email Requirements
+
+Use Resend for transactional email.
+
+Developer must configure:
+
+- STARVNT sending domain
+- Domain authentication
+- API key
+- Email templates
+- Sender identity
+- Reply-to address
+- Webhooks
+- Delivery/bounce tracking
+- Error handling
+- Idempotency
+
+Example:
+
+Payment Successful
+       ↓
+Notification Engine
+       ↓
+Email Template
+       ↓
+Resend Adapter
+       ↓
+Customer Email
+
+Resend supports idempotency keys, which should be used to prevent duplicate transactional emails during retries.
+
+---
+
+39. Environment Variables
+
+Provider credentials must NEVER be committed to Git.
+
+Example:
+
+MSG91_AUTH_KEY=
+MSG91_SMS_TEMPLATE_PREFIX=
+MSG91_WHATSAPP_API_KEY=
+
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+RESEND_REPLY_TO=
+
+NOTIFICATION_QUEUE_URL=
+
+Production secrets must be stored using a proper secrets/environment-management system.
+
+---
+
+40. Provider Configuration
+
+Create a provider configuration layer.
+
+Example:
+
+notification_providers
+
+channel: SMS
+provider: MSG91
+status: ACTIVE
+
+channel: WHATSAPP
+provider: MSG91
+status: ACTIVE
+
+channel: EMAIL
+provider: RESEND
+status: ACTIVE
+
+This allows STARVNT to change providers without changing business logic.
+
+---
+
+41. Provider Failover
+
+Do not automatically send the exact same notification through multiple providers unless the business rule requires it.
+
+Example:
+
+MSG91 SMS Failure
+        ↓
+Retry according to provider policy
+        ↓
+If permanently failed
+        ↓
+Notification marked FAILED
+        ↓
+Alternative channel considered
+
+Do NOT do:
+
+SMS failed
+→ SMS again
+→ WhatsApp
+→ Email
+→ Push
+
+unless the Notification Engine determines that the notification is important enough and the user has not already received it through another successful channel.
+
+---
+
+42. Channel Decision Matrix
+
+The Notification Engine should use rules similar to:
+
+Notification| Primary| Secondary
+OTP| SMS| WhatsApp where supported
+Booking confirmation| In-App| Email
+Payment success| In-App| Email
+Payment failure| In-App/Push| SMS/WhatsApp if important
+Quotation available| In-App| Push/WhatsApp
+Invoice| Email| In-App
+Receipt| Email| In-App
+Event reminder| Push/In-App| WhatsApp when useful
+Critical event issue| Push/In-App| SMS/WhatsApp
+Vendor new lead| In-App| Push/WhatsApp
+Vendor deadline| Push/In-App| WhatsApp
+Marketing| User-selected channel| Never automatic
+
+This is a starting policy, not a hard-coded rule.
+
+---
+
+43. Notification Provider Monitoring
+
+Admin must be able to see provider health.
+
+Track:
+
+- Total messages
+- Successful messages
+- Failed messages
+- Delivery rate
+- Provider latency
+- API errors
+- Retry count
+- Bounce rate
+- Provider downtime
+- Cost/usage where available
+
+Provider failure must not silently fail the STARVNT notification system.
+
+---
+
+44. Cost Control
+
+The Notification Engine should track communication cost by:
+
+- Customer
+- Vendor
+- Event
+- Booking
+- Channel
+- Provider
+- Notification type
+
+Example:
+
+Event: SV-1024
+
+SMS: 4
+WhatsApp: 3
+Email: 7
+Push: 12
+In-App: 19
+
+Estimated communication cost: ₹X
+
+This will allow STARVNT to understand the communication cost of every event.
+
+---
+
+45. Production Rules
+
+Rule 1
+
+Never expose provider credentials to frontend.
+
+Rule 2
+
+Never call provider APIs directly from React/Next.js client components.
+
+Rule 3
+
+Never hard-code provider names inside business modules.
+
+Rule 4
+
+Never send duplicate transactional notifications.
+
+Rule 5
+
+Never send marketing content inside transactional messages.
+
+Rule 6
+
+Never send an SMS simply because an internal database field changed.
+
+Rule 7
+
+Always validate the latest business state before sending time-sensitive notifications.
+
+Rule 8
+
+Every provider request must be logged safely without exposing secrets.
+
+Rule 9
+
+Every important notification must have an idempotency key.
+
+Rule 10
+
+Provider failure must not break booking, payment or event execution.
+
+---
+
+46. Initial STARVNT Provider Setup
+
+For V1:
+
+SMS
+→ MSG91
+
+WhatsApp
+→ MSG91
+
+Email
+→ Resend
+
+In-App
+→ STARVNT Core
+
+Push
+→ STARVNT Push Infrastructure
+
+Do not add multiple SMS/email providers at V1 unless there is a demonstrated reliability or cost requirement.
+
+Build the abstraction layer now; add alternative providers later when necessary.
+
+---
+
+47. Provider Replacement Test
+
+The architecture should pass this test:
+
+If STARVNT replaces:
+
+MSG91 → Provider B
+
+the following must NOT require modification:
+
+- Booking Service
+- Payment Service
+- Vendor Service
+- Event Core
+- Aura+
+- Customer Dashboard
+- Admin Dashboard
+
+Only the provider adapter/configuration should need to change.
+
+Similarly:
+
+Resend → Email Provider B
+
+must not require rewriting STARVNT business logic.
+
+---
+
+48. Recommended V1 Implementation Priority
+
+Phase 1 — Core
+
+1. Notification Event System
+2. Notification Queue
+3. Template Engine
+4. Notification Database
+5. Deduplication
+6. Idempotency
+7. In-App Notifications
+
+Phase 2 — External Channels
+
+8. MSG91 SMS
+9. MSG91 WhatsApp
+10. Resend Email
+
+Phase 3 — Reliability
+
+11. Delivery tracking
+12. Retry
+13. Failure handling
+14. Provider monitoring
+15. Admin notification logs
+
+Phase 4 — Intelligence
+
+16. Aura+ notification rules
+17. Smart channel selection
+18. Notification throttling
+19. Context-aware reminders
+20. Cost analytics
+
+---
+
+49. Final Provider Decision
+
+For STARVNT V1:
+
+MSG91 = SMS + WhatsApp
+
+Resend = Transactional Email
+
+STARVNT Core = In-App Notifications
+
+Push = STARVNT Push Layer
+
+The provider is a replaceable infrastructure component.
+
+STARVNT's intelligence, business rules and customer experience must remain provider-independent.
+
+Final Principle
+
+«STARVNT owns the notification decision. Providers only deliver the message.»
+
+The Notification Engine decides whether, when, why, to whom and through which channel a notification should be sent.
+
+MSG91 and Resend are only delivery infrastructure.
+
+
+
+GST Registered?
+   │
+   ├── YES
+   │    ↓
+   │  GSTIN
+   │    ↓
+   │  Verify GSTIN
+   │
+   └── NO
+        ↓
+      PAN Number
+        ↓
+      PAN Check
+        ↓
+      No GSTIN Found
+        ↓
+      Continue Registration ✓
+
+      STARVNT — Vendor Registration Financial & Verification Logic
+
+Please implement the Vendor Registration flow according to the following rules. This should be treated as the single source of truth for PAN, GST and Bank onboarding logic.
+
+1. PAN NUMBER — REQUIRED
+
+PAN must be collected from every vendor, regardless of GST status.
+
+Field:
+
+- PAN Number — Required
+
+Rules:
+
+- Vendor can register even if they do not have GST registration.
+- PAN should be validated for correct format.
+- PAN verification/API integration can be added.
+- PAN verification and GST verification must remain separate concepts.
+
+---
+
+2. GST REGISTRATION STATUS — REQUIRED
+
+Field:
+
+GST Registered?
+
+Options:
+
+- Yes
+- No
+
+This field is mandatory.
+
+---
+
+3. GSTIN LOGIC
+
+If:
+
+GST Registered = YES
+
+Then:
+
+- GSTIN field becomes visible.
+- GSTIN becomes Required.
+- GSTIN should be validated.
+- GSTIN verification should be performed through the configured GST verification API.
+
+If:
+
+GST Registered = NO
+
+Then:
+
+- GSTIN field should be hidden or marked Not Applicable.
+- GSTIN must NOT be required.
+- Vendor registration must NOT be blocked because GSTIN is unavailable.
+- Vendor can continue onboarding using PAN.
+
+Important:
+
+GST registration is NOT a prerequisite for Vendor Registration.
+
+---
+
+4. PAN → GSTIN DISCOVERY
+
+Where supported, integrate PAN → GSTIN search.
+
+Flow:
+
+PAN
+↓
+PAN → GSTIN Search
+↓
+GST registration found?
+├── YES → Show/verify GSTIN
+└── NO → Continue as GST-unregistered vendor
+
+If no GST registration is found:
+
+Display:
+
+“No GST registration found for this PAN.”
+
+Do NOT display:
+
+“PAN invalid”
+
+unless the PAN verification itself has failed.
+
+PAN verification ≠ GST verification.
+
+---
+
+5. BANK DETAILS — GST INDEPENDENT
+
+Bank details must be completely independent from GST status.
+
+GST Registered = NO does NOT prevent the vendor from adding a bank account.
+
+Bank Details:
+
+- Account Holder Name — Required
+- Account Number — Required
+- IFSC — Required
+- Bank Name — Required
+- Account Type — Required
+
+The system must NOT implement logic such as:
+
+"GSTIN required → Bank Account enabled"
+
+Instead:
+
+"GST Status" and "Bank Verification" are separate modules.
+
+---
+
+6. BANK ACCOUNT VERIFICATION
+
+After the vendor submits bank details:
+
+Bank Details
+↓
+Bank Verification Request
+↓
+Provider Verification API
+↓
+Verification Result
+↓
+Verified / Failed / Pending
+
+Where the selected bank-verification provider supports it, use a:
+
+₹0.02 penny-drop / micro-credit verification transaction
+
+for bank-account verification.
+
+The ₹0.02 transaction is strictly a verification transaction.
+
+It must NOT be treated as:
+
+- Vendor payout
+- Vendor settlement
+- Event payment
+- Booking advance
+- Revenue
+- Vendor payable
+- Customer payment
+
+---
+
+7. ₹0.02 VERIFICATION DATA
+
+Store the following wherever supported by the verification provider:
+
+- verification_id
+- vendor_id
+- bank_account_id
+- provider
+- provider_transaction_id
+- verification_reference
+- amount
+- currency
+- account_holder_name
+- submitted_account_number (masked where appropriate)
+- IFSC
+- verification_status
+- name_match_status
+- provider_response
+- requested_at
+- completed_at
+- failure_reason
+
+Sensitive bank information must be protected and never exposed unnecessarily in frontend/admin screens.
+
+---
+
+8. BANK VERIFICATION STATES
+
+Recommended state machine:
+
+"NOT_VERIFIED"
+↓
+"VERIFICATION_REQUESTED"
+↓
+"PROCESSING"
+↓
+"VERIFIED"
+
+Failure:
+
+"PROCESSING"
+↓
+"FAILED"
+
+Pending:
+
+"PROCESSING"
+↓
+"PENDING"
+
+Retry should create a controlled new verification attempt with its own reference/idempotency protection.
+
+---
+
+9. BANK VERIFICATION SUCCESS
+
+On successful verification:
+
+Display:
+
+✓ Bank Account Verified
+
+Store:
+
+- Verification status
+- Provider reference
+- Verification timestamp
+- Name-match result where available
+
+Vendor financial profile:
+
+"Bank Status = VERIFIED"
+
+---
+
+10. BANK VERIFICATION FAILURE
+
+If verification fails:
+
+Display a clear reason where safely available.
+
+Example:
+
+Bank account verification failed. Please check Account Number and IFSC.
+
+Do NOT silently mark the bank account as verified.
+
+Vendor status should remain:
+
+"BANK_VERIFICATION_FAILED"
+
+The system may allow the vendor to correct bank details and retry according to the configured business rule.
+
+---
+
+11. GST STATUS MUST NOT CONTROL BANK VERIFICATION
+
+These are independent:
+
+GST Module
+
+"PAN"
+→
+"GST Status"
+→
+"GSTIN if applicable"
+→
+"GST Verification"
+
+Bank Module
+
+"Bank Details"
+→
+"₹0.02 Verification"
+→
+"Bank Verification Status"
+
+Therefore:
+
+Vendor with GST
+
+PAN ✓
+GST ✓
+GSTIN ✓
+Bank ✓
+Bank Verification ✓
+
+Vendor without GST
+
+PAN ✓
+GST = NO
+GSTIN = N/A
+Bank ✓
+Bank Verification ✓
+
+Both vendors are allowed to onboard.
+
+---
+
+12. COMPLETE VENDOR ONBOARDING FLOW
+
+Implement the complete flow as:
+
+VENDOR REGISTRATION
+        ↓
+Business Information
+        ↓
+Owner / Contact Information
+        ↓
+PAN Number
+        ↓
+PAN Validation / Verification
+        ↓
+GST Registered?
+      /       \
+    YES        NO
+     ↓          ↓
+   GSTIN      GSTIN N/A
+     ↓          ↓
+GST Verification
+      \        /
+       \      /
+        ↓
+   Bank Details
+        ↓
+Bank Verification
+        ↓
+₹0.02 Penny Drop
+        ↓
+Verification Result
+        ↓
+Bank Verified
+        ↓
+Services / Categories
+        ↓
+Vendor Profile
+        ↓
+Onboarding Complete
+
+---
+
+13. VENDOR REGISTRATION FIELDS
+
+Business Information
+
+- Business Name — Required
+- Business Type — Required
+- Services / Categories — Required
+- Business Address — Required
+
+Owner / Contact
+
+- Owner / Contact Person — Required
+- Mobile Number — Required
+- Email — Recommended
+
+Tax Identity
+
+- PAN Number — Required
+- GST Registered? — Required
+- GSTIN — Required only when GST = YES
+
+Bank Details
+
+- Account Holder Name — Required
+- Account Number — Required
+- IFSC — Required
+- Bank Name — Required
+- Account Type — Required
+
+---
+
+14. VENDOR FINANCIAL PROFILE
+
+After onboarding, maintain a separate financial profile:
+
+Vendor
+│
+├── PAN
+│
+├── GST Status
+│   └── GSTIN if applicable
+│
+└── Bank Account
+    ├── Account Details
+    ├── Verification Status
+    └── Verification History
+
+Do not combine PAN, GSTIN and Bank Account into one field/entity.
+
+---
+
+15. VENDOR WITH NO GST
+
+Example:
+
+Business Name:
+ABC Decoration
+
+PAN:
+ABCDE1234F
+
+GST Registered:
+NO
+
+GSTIN:
+N/A
+
+Bank Account:
+XXXXXXXX1234
+
+IFSC:
+XXXXXXXX
+
+Bank Verification:
+VERIFIED
+
+This vendor must be allowed to complete onboarding.
+
+---
+
+16. VENDOR WITH GST
+
+Example:
+
+Business Name:
+XYZ Events Pvt Ltd
+
+PAN:
+ABCDE1234F
+
+GST Registered:
+YES
+
+GSTIN:
+19ABCDE1234F1Z5
+
+GST Status:
+ACTIVE
+
+Bank Account:
+XXXXXXXX1234
+
+Bank Verification:
+VERIFIED
+
+This vendor must also be allowed to complete onboarding.
+
+---
+
+17. IMPORTANT VALIDATION RULES
+
+Do NOT implement:
+
+GST missing
+↓
+Registration blocked
+
+Do NOT implement:
+
+GST missing
+↓
+Bank Account disabled
+
+Do NOT implement:
+
+GSTIN missing
+↓
+Bank verification blocked
+
+Correct logic:
+
+PAN
+↓
+GST Status
+↓
+GSTIN only if applicable
+↓
+Bank Details
+↓
+Bank Verification
+
+---
+
+18. BANK VERIFICATION SECURITY
+
+Bank verification APIs must be called from the backend.
+
+Never expose:
+
+- API keys
+- Provider secrets
+- Sensitive verification credentials
+
+in frontend code.
+
+Use:
+
+- Backend API
+- Authentication
+- Authorization
+- Rate limiting
+- Idempotency
+- Audit logging
+- Secure secret management
+
+---
+
+19. DUPLICATE VERIFICATION PROTECTION
+
+Every verification request should have an idempotency mechanism.
+
+Prevent:
+
+- Duplicate ₹0.02 transactions
+- Duplicate verification requests
+- Duplicate provider callbacks
+- Duplicate bank-account creation
+
+Provider callbacks/webhooks, if available, must also be idempotent.
+
+---
+
+20. AUDIT TRAIL
+
+Every important action must be logged.
+
+Example:
+
+Vendor:
+VEN-1024
+
+Action:
+Bank Verification Requested
+
+User:
+Vendor / Admin
+
+Provider:
+[Provider Name]
+
+Amount:
+₹0.02
+
+Status:
+PROCESSING
+
+Timestamp:
+02 Oct 2026 12:30
+
+Then:
+
+Status:
+VERIFIED
+
+Provider Reference:
+XXXXXXXX
+
+Verified At:
+02 Oct 2026 12:31
+
+---
+
+21. IMPORTANT PROVIDER RULE
+
+Do NOT hard-code the ₹0.02 amount into the system as an unconditional assumption.
+
+The selected bank-verification provider must actually support the penny-drop/micro-credit method and amount.
+
+Therefore architect it as:
+
+Bank Verification Provider
+        ↓
+Provider Configuration
+        ↓
+Verification Method
+        ↓
+Verification Transaction
+
+If the provider uses a different verification mechanism, follow the provider's official API contract.
+
+The business requirement is:
+
+Verify the vendor's bank account before allowing financial settlement where required.
+
+₹0.02 is the preferred penny-drop method where supported.
+
+---
+
+22. SETTLEMENT CONTROL
+
+Bank verification should become particularly important before vendor settlement.
+
+Recommended:
+
+Vendor Onboarding
+        ↓
+Bank Details
+        ↓
+Bank Verification
+        ↓
+VERIFIED
+        ↓
+Vendor Eligible for Settlement
+
+Do not automatically assume:
+
+"Vendor Registered = Vendor Eligible for Payout"
+
+Settlement eligibility should depend on the approved STARVNT financial rules.
+
+---
+
+23. FINAL ARCHITECTURAL PRINCIPLE
+
+Keep these three modules independent:
+
+PAN
+
+Identity / tax identity
+
+GST
+
+Tax registration and tax treatment
+
+BANK
+
+Settlement/payment destination verification
+
+Therefore:
+
+PAN MODULE
+     │
+     ├──────── GST MODULE
+     │
+     └──────── BANK MODULE
+                    │
+                    ↓
+             BANK VERIFICATION
+                    │
+                    ↓
+              SETTLEMENT
+
+FINAL GOLDEN RULE
+
+GST is not a prerequisite for Vendor Registration.
+
+GST is not a prerequisite for adding a Bank Account.
+
+GST is not a prerequisite for Bank Verification.
+
+PAN is required for Vendor Registration.
+
+Bank Verification is a separate financial-control process.
+
+₹0.02 penny-drop is only for Bank Verification and must never be treated as a vendor payout or financial settlement.
+
+Please implement this logic without adding extra GST-based restrictions unless explicitly approved by STARVNT management/compliance.
+
+
+If a vendor is 60 km away but has configured a 50 km service radius, the system should not automatically treat them as normally eligible. However, if there are no valid vendors within the standard service area, we should support an Out-of-Coverage / Extended Service Option state.
+Flow:
+1. Standard Matching:
+First check vendors strictly against their configured service coverage/radius.
+2. If valid vendors exist:
+Show only normally eligible vendors.
+3. If no valid vendors exist:
+Search a broader fallback range, but do not silently override the vendor's 50 km limit.
+4. If an out-of-radius vendor is technically capable:
+Show it separately as: “Extended Service — 60 km away”
+with clear indication that additional travel/logistics charges may apply and vendor confirmation is required.
+5. Vendor must explicitly accept the extended-distance requirement before it becomes a valid option/quote.
+So the rule is:
+Eligibility ≠ Proximity.
+Configured coverage is the normal eligibility rule.
+Out-of-radius vendors can be surfaced only as a clearly labelled fallback opportunity, never silently converted into eligible vendors.
+Also, the fallback should go through coverage → availability → capacity → operational feasibility → travel/logistics → validated total cost → vendor confirmation.
+Customer should never see a vendor as “available” when the vendor has not actually confirmed that they can serve that location.
+This keeps the Core truth intact while preventing a dead-end “No Results” experience when a potentially usable vendor exists.
+
+
+
+STARVNT CORE
+
+Master QA, Implementation & Verification Directive
+
+To: Yogesh — Technical Owner
+Review Date: 10 October 2026
+Scope: STARVNT Core Admin — Dashboard, Customers, Vendors, Events, Bookings, Payments & Settlements, Automation & Operations, Automation, Reports & Analytics, Coupons, Users & Access, Audit Logs and Settings.
+
+1. Mandatory Engineering Rules
+
+Follow REUSE → INTEGRATE → TEST → PROVE.
+
+1. Inspect the existing implementation, API contracts, database schema, audit history and business logic before introducing changes.
+2. Reuse existing Core logic. Do not introduce a parallel state model or duplicate business rules without demonstrating that the current implementation cannot support the requirement.
+3. Investigate root causes before changing UI labels, KPI calculations, database records or financial states.
+4. Never fabricate transactions, automation jobs, audit events, customers, vendors or events to populate dashboards.
+5. Do not merge, delete, recreate or rewrite records without verified evidence and an authorised remediation plan.
+6. Enforce permissions and critical business rules on the server. Frontend button visibility is not security enforcement.
+7. Distinguish Fixed from Verified. A code change or passing screenshot alone does not establish verification.
+8. Preserve valid records, financial history, linked entities and audit evidence.
+9. Test in a controlled environment. Never use live financial operations for retry or failure testing.
+10. Report evidence honestly. If implementation or testing has not occurred, mark the item Not Started or In Progress rather than Fixed or Verified.
+
+Required status definitions
+
+- Not Started: Investigation or implementation has not begun.
+- In Progress: Root-cause investigation, implementation or testing remains incomplete.
+- Fixed: A code/configuration/data-source correction has been implemented, but all verification requirements may not yet be satisfied.
+- Verified: Root cause resolved, relevant regression tests passed, evidence recorded and no unresolved blocker remains for the tested scope.
+
+For every finding, provide: Finding ID, severity, root cause, affected UI/API/database/worker components, implementation changes, before/after evidence, regression-test results, current status and remaining blockers.
+
+Do not claim a root cause, code change or test result without actual evidence.
+
+---
+
+2. Admin Dashboard
+
+DASH-01 — Events KPI versus status breakdown | P1
+
+Observed: Dashboard shows 23 Active / 25 Total Events, while Events by Status shows 0.
+
+Investigate:
+
+- KPI and chart source APIs, database queries, status mappings and date filters.
+- Whether both components query the same authoritative event records.
+- Whether draft, cancelled, archived or other states are being included/excluded consistently.
+- Whether API errors, empty responses or failed joins are silently converted into zero.
+
+Required proof: Reconcile total and status counts against authoritative event IDs. Verify that the sum of mutually exclusive status buckets matches the documented denominator.
+
+DASH-02 — Booking chart date labels | P1
+
+Observed: A Last 30 Days chart displays Aug–Nov labels even though the review date is 10 October 2026, including a future month.
+
+Investigate:
+
+- Chart label generation, date-range boundaries, timezone and API aggregation.
+- Whether labels are hardcoded or derived from the wrong date range.
+- Whether future periods are intentionally included.
+
+Required proof: Test fixed dates, month boundaries, year boundaries, empty data and Asia/Kolkata timezone. Labels must match the selected period and actual bucket dates.
+
+DASH-03 — GMV definition and source | P1
+
+Observed: GMV is ₹20,000 across one booking.
+
+Document the exact GMV formula, source query, included booking statuses, date basis, currency handling and refund/cancellation policy. Reconcile the displayed result with authoritative booking records.
+
+Keep GMV separate from:
+
+- Customer payments collected.
+- Refunds.
+- Platform revenue.
+- Vendor settlement amounts.
+
+Required proof: Source-query/API evidence and regression tests for relevant booking/payment states. Do not assume booking value equals cash collected.
+
+DASH-04 — Vendor verification alert | P2
+
+Observed: “1 vendor verification need review.”
+
+Verify the alert count and underlying vendor records, then correct grammar and ensure the alert links to the appropriate review workflow. Test zero, one and multiple pending vendors.
+
+DASH-05 — Login audit and brute-force protection | P1
+
+Review repeated successful and failed login events, including duplicate-looking timestamps and observed IP representations such as "::1", "::ffff:127.0.0.1" and "10.27.25.223".
+
+Verify:
+
+- Server-side rate limiting and brute-force protections.
+- Session expiry, lockout/throttling policy and privileged-account safeguards.
+- Whether repeated audit entries represent separate requests or duplicate logging.
+- Whether proxy/IP handling matches the actual deployment configuration.
+
+Do not infer an attack solely from repeated failures or localhost IPs.
+
+Required proof: Controlled security tests, request/correlation IDs and audit evidence.
+
+---
+
+3. Customers Module
+
+CUST-01 — Same-phone customer records | P1
+
+Two "Dev Test Customer" records reportedly share phone number "+919876543211" but have different email addresses.
+
+Compare customer IDs, creation timestamps, verification evidence, linked events, bookings, payments, protection records and audit history. Determine whether the records represent the same person, separate legitimate records or test data.
+
+Do not auto-merge or delete either record without verified identity evidence and an approved remediation plan.
+
+CUST-02 — Test-looking production records | P1
+
+Investigate records with names such as "Dev Test Customer", "testmail 1", "arav", "khy" and "sdf".
+
+Determine environment, provenance, creation source and linked-record impact. Names alone are not sufficient evidence for deletion.
+
+CUST-03 — PERSON versus ORGANIZATION | P1
+
+Define and verify the existing customer identity model. Confirm how individuals and organisations are represented, displayed, searched and linked to events, bookings, payments and protection cases.
+
+Do not force an organisation into a personal identity model merely to simplify the UI.
+
+CUST-04 — Relationship integrity | P1
+
+Verify customer relationships and authorised record access across:
+
+- Events and requirements.
+- Bookings and vendors.
+- Customer payments, refunds and financial references.
+- Customer Protection cases and resolution records.
+- Audit history.
+
+Verify foreign keys, API joins, deletion restrictions and appropriate retention behaviour.
+
+CUST-05 — Status filters | P1
+
+Test Active, Flagged, Suspended and Inactive filters against the actual backend status fields and documented lifecycle.
+
+Verify individual and combined filters, counts, pagination and status transitions. Do not silently map unrelated statuses to these labels.
+
+CUST-06 — PII access and status-change security | P1
+
+Verify server-side role-based permissions for customer PII and protected status changes.
+
+Every status change must record:
+
+- Actor and target customer ID.
+- Timestamp and request/correlation ID.
+- Reason where required.
+- Previous and new state.
+- Outcome.
+
+Test authorised and unauthorised requests directly against the API.
+
+CUST-07 — Search and pagination | P1
+
+Test search across name, phone and email, including combined filters and pagination. Verify consistent totals, stable ordering and correct results when filters change.
+
+Acceptance criteria: No silent merging or destructive cleanup; backend counts reconcile; search and filters remain consistent; unauthorised access is rejected; status changes are authorised and auditable.
+
+---
+
+4. Vendors Module
+
+VEND-01 — Approve action for incomplete/KYC-pending vendors | P1
+
+Investigate why vendors with "KYC = Pending" and "status = PROFILE_INCOMPLETE" display an Approve action.
+
+Trace the UI condition, API action, server-side eligibility checks and database state. Define the intended meaning of approval and prevent an action from bypassing required onboarding or verification steps.
+
+VEND-02 — Separate vendor state dimensions | P1
+
+Inspect the existing Core model before changing it. Ensure the system distinguishes:
+
+- Profile completion.
+- KYC/document verification.
+- Operational activation.
+- Matching eligibility.
+
+A vendor's profile completion or KYC verification must not automatically grant matching eligibility.
+
+Matching eligibility must evaluate applicable category, service, capability, capacity, coverage, availability, commercial readiness and verification requirements.
+
+VEND-03 — Verified filter | P1
+
+Verify whether the Verified filter uses the intended verification field or incorrectly relies on "status = ACTIVE".
+
+Test vendors across relevant combinations of verification and activation states. Document the filter's authoritative field and API query.
+
+VEND-04 — Review KYC action | P1
+
+Investigate why Review KYC appears for vendors whose KYC is already Verified.
+
+Ensure the action opens the correct workflow for the current state. Do not reopen or alter completed verification without a defined reason and authorised action.
+
+VEND-05 — Vendor location/category and seed data | P1
+
+Validate category and location data, especially test/seed records and records showing locations outside the primary target market.
+
+Determine whether each record is genuine, test data or incorrectly structured. Do not modify or delete real records without confirmation.
+
+VEND-06 — Protected actions and audit | P1
+
+Test Approve, Reject, Flag and Suspend for:
+
+- Server-side permissions.
+- Valid state transitions.
+- Confirmation and reason capture.
+- Audit actor, timestamp, target, reason and before/after state.
+- Duplicate submissions and API failures.
+
+VEND-07 — Filters, counts and pagination | P1
+
+Test search, Category, Location, combined filters, result counts and pagination against backend records.
+
+VEND-08 — Missing onboarding fields | P1
+
+Confirm how missing contact/location fields affect onboarding and eligibility according to the existing policy. Missing required information must not be silently treated as valid.
+
+Definition of Done: Document root cause and affected components; test state transitions and filters; prove unauthorised actions are rejected server-side; report Fixed separately from Verified.
+
+---
+
+5. Events Module
+
+EVENT-01 — Five similar-looking event records | P1
+
+Investigate five apparently similar "My birthday" records for Ananya Roy dated 9 February 2027 at "10 Vendor Live Test Lawn, Kapkote, Kapkote".
+
+Compare event IDs, creation timestamps, customer IDs, creation requests, audit history, idempotency keys and linked requirements, bookings, payments and other records.
+
+Matching names, dates or locations do not prove that records are duplicates.
+
+EVENT-02 — Two similar-looking event records | P1
+
+Investigate two apparently similar records dated 25 January 2027 at "Notification Services QA Lawn, Kapkote, Kapkote".
+
+Apply the same evidence requirements. Preserve valid events and all linked records.
+
+EVENT-03 — Create Event idempotency | P1
+
+Test repeated submissions, double-clicks, network retries and API retries. Verify that a repeated logical request cannot create duplicate events unintentionally.
+
+Use the existing idempotency architecture where available. Do not merge existing events as a substitute for fixing request handling.
+
+EVENT-04 — Draft lifecycle and filters | P1
+
+Draft records exist, but the filter list reportedly omits Draft.
+
+Verify the intended lifecycle, all supported statuses, status mappings and filter options. Confirm All includes every eligible event state according to the documented policy.
+
+EVENT-05 — Date TBD | P1
+
+Verify that "Date TBD" is represented as unknown/unconfirmed date data, not an authoritative event date.
+
+Prevent date-dependent matching, scheduling or confirmation from treating a missing date as confirmed.
+
+EVENT-06 — Dashboard reconciliation | P1
+
+Reconcile the Events page's 25 records, Dashboard's 23 Active / 25 Total and the earlier zero-valued status breakdown.
+
+Document inclusion rules for each metric and reconcile by event ID, status and relevant date range.
+
+EVENT-07 — Server-side lifecycle transitions | P1
+
+Validate permitted status transitions on the server. Preserve who changed the state, when, why, and the previous/new state.
+
+EVENT-08 — Structured location | P2
+
+Review duplicated location labels. Where the existing schema supports it, distinguish venue, locality, city, district and state rather than duplicating the same text across fields.
+
+Do not migrate existing location data without validation and a safe migration plan.
+
+EVENT-09 — Search, event type and pagination | P2
+
+Test search, Event Type filters, combined filters, pagination, action permissions and API/error states.
+
+Definition of Done: Root cause, affected API/database/UI, before/after evidence, regression tests and status for each issue. No destructive cleanup based only on visual similarity.
+
+---
+
+6. Bookings Module
+
+BOOK-01 — BK-3927 generic Customer/Vendor labels | P1
+
+Investigate why booking "BK-3927" displays generic "Customer" and "Vendor" labels.
+
+Verify customer/vendor foreign keys, joins, API response fields, record availability and the viewing user's permissions. Render correct authorised links when valid relationships exist. Do not expose restricted PII.
+
+BOOK-02 — Booking relationship integrity | P1
+
+Verify the booking's relationships to:
+
+- Event and Requirement.
+- Vendor and service.
+- Location and date/time.
+- Quote and payment records.
+- Execution and completion evidence.
+- Protection/dispute records where applicable.
+
+BOOK-03 — Booking lifecycle consistency | P1
+
+Trace "PAYMENT_VERIFIED", "COMPLETION_VERIFIED" and "SETTLEMENT_ELIGIBLE".
+
+Document the permitted transitions and authoritative source for each. Settlement eligibility is not proof that a settlement was processed or paid.
+
+BOOK-04 — Completion validation | P1
+
+Verify completion evidence and Core validation before setting completion to verified. Test missing evidence, invalid evidence, review-required outcomes and failure states where supported.
+
+BOOK-05 — GMV reconciliation | P1
+
+Document the ₹20,000 GMV definition and reconcile it with authoritative booking records. Keep GMV separate from collected payments, refunds, platform revenue and vendor settlements.
+
+BOOK-06 — Payment verification and idempotency | P1
+
+Verify server-side payment confirmation and idempotent processing. Test duplicate booking/payment requests and gateway webhook retries in a controlled environment.
+
+BOOK-07 — Settlement calculation | P1
+
+Verify settlement calculations, deductions, vendor payable, settlement references, payment status and audit history. Do not infer settlement paid from eligibility.
+
+BOOK-08 — Disputes and financial holds | P1
+
+Test disputed-booking holds and ensure restricted settlement actions cannot proceed when policy requires a hold.
+
+BOOK-09 — Filters and discoverability | P2
+
+Test every booking status filter and combined Vendor, Category and City filters. Assess whether cancellation/refund states need discoverable views.
+
+Definition of Done: Provide root cause, API/DB/UI evidence, regression tests and separate Fixed/Verified status. Do not alter valid financial or booking records merely to force dashboard totals to match.
+
+---
+
+7. Payments & Settlements
+
+PAY-01 — P0: Reconcile BK-3927 with authoritative payment truth
+
+Observed: Booking "BK-3927" displays ₹20,000 and previously displayed "PAYMENT_VERIFIED". Payments & Settlements shows:
+
+- Total Collected: ₹0.
+- Held in Escrow: ₹0.
+- Released to Vendors: ₹0.
+- No records in Customer Payments, Vendor Settlements or Refunds.
+
+This is an unresolved reconciliation issue, not proof that a payment occurred or failed.
+
+Trace:
+
+1. Booking ID and authoritative booking record.
+2. Payment ID and payment-intent/order ID, where applicable.
+3. Gateway reference and transaction status.
+4. Server-side verification result and verified timestamp.
+5. Webhook receipt, signature/verification result and processing outcome.
+6. Ledger entry and reconciliation record.
+7. Settlement/refund references, if any.
+8. The APIs, tables, filters and joins used by the Payments & Settlements screen.
+
+Determine whether the booking state is backed by a genuine server-verified payment, is stale/incorrectly derived, or uses a different data source.
+
+Do not fabricate a transaction, create a ledger entry without evidence, or manually change financial status to force the totals to match.
+
+PAY-02 — Metric definitions | P1
+
+Document exact definitions, source queries, status inclusion rules, date filters and currency rules for:
+
+- Total Collected.
+- Held balance.
+- Released to Vendors.
+- Refund totals.
+- Platform revenue.
+
+Keep booking GMV, customer collections, refunds, platform revenue and vendor settlements distinct.
+
+PAY-03 — Escrow terminology | P1
+
+Confirm whether STARVNT actually operates a legally and technically appropriate escrow arrangement. Do not use “Escrow” as a generic label for funds awaiting settlement. If the arrangement is not verified, use terminology that accurately reflects the actual payment/hold model.
+
+PAY-04 — Correct API/table sources | P1
+
+Verify that Customer Payments, Vendor Settlements and Refunds query the correct authoritative sources. Check default filters, pagination, joins, permissions and status mappings.
+
+PAY-05 — Empty state versus error | P1
+
+Distinguish a genuinely empty dataset from API failure, permission denial, connection problems, malformed responses and missing data. Failed requests must not appear as successful zero-value results.
+
+PAY-06 — Financial processing safety | P1
+
+Verify webhook processing, server-side verification, idempotency, reconciliation, audit logging and safe retry behaviour.
+
+PAY-07 — Regression coverage | P1
+
+Where supported, test verified, pending, failed, partial, refunded and disputed payments, including the associated booking and settlement states.
+
+Acceptance criteria: Every verified payment has an authoritative transaction record and traceable reference; financial states reconcile with the ledger; metric definitions and filters are documented; financial record history remains intact.
+
+---
+
+8. Automation & Operations
+
+AUTOOPS-01 — Empty tabs versus infrastructure failure | P1
+
+Workflows, Queue, Logs, Retry and Alerts reportedly show no records.
+
+Determine whether the system is genuinely empty or whether data is missing because of query errors, permissions, unavailable workers, queue disconnection or missing configuration.
+
+AUTOOPS-02 — Financial and booking idempotency | P0
+
+Verify idempotency for payment webhooks, payment verification, booking confirmation and settlement operations.
+
+Retries must not create duplicate bookings, payments, settlements or notifications. Test in a controlled environment; do not retry live financial operations.
+
+AUTOOPS-03 — Workflow configuration and triggers | P1
+
+Verify workflow definitions, enabled/disabled state, triggers and execution history. Confirm event lifecycle and requirement changes trigger only the intended workflows.
+
+AUTOOPS-04 — Queue and worker health | P1
+
+Verify:
+
+- Queue connectivity.
+- Worker heartbeat/health.
+- Queue depth.
+- Oldest pending job.
+- Failed-job count.
+- Worker processing errors.
+
+AUTOOPS-05 — Logs, retries and dead letters | P1
+
+Verify execution status, timestamps, error details, correlation IDs, retry limits, backoff and dead-letter handling. Confirm failed jobs can be diagnosed without exposing secrets.
+
+AUTOOPS-06 — Alerts | P1
+
+Test whether meaningful failures generate actionable alerts, with enough context to investigate the affected workflow and request.
+
+AUTOOPS-07 — Rule creation and permissions | P1
+
+Validate Create Rule permissions, input constraints, activation controls, dangerous rule safeguards and audit logging. High-risk rules must not execute without required authorisation and validation.
+
+AUTOOPS-08 — Empty state and API errors | P1
+
+Ensure the interface distinguishes an empty queue from failed APIs, disconnected workers, missing configuration and unavailable services.
+
+Definition of Done: Evidence for workflow, queue, worker, retry, dead-letter and alert behaviour. No fake records created merely to populate the UI.
+
+---
+
+9. Automation Page
+
+AUTOPAGE-01 — Status filters and data source | P1
+
+All, Pending, Processing, Completed and Dead Letter reportedly show no records.
+
+Identify the authoritative job/execution API and database query. Determine whether the source is empty, inaccessible, misfiltered or incorrectly mapped.
+
+AUTOPAGE-02 — Consistency with Automation & Operations | P1
+
+Determine whether both pages use the same job/execution source. If they represent different entities, document the distinction. Align status definitions where they refer to the same lifecycle.
+
+AUTOPAGE-03 — End-to-end job lifecycle | P1
+
+In a test environment, verify:
+"enqueue → pending → processing → completed".
+
+Also test controlled failure, bounded retries, retry exhaustion and dead-letter handling.
+
+AUTOPAGE-04 — Observability and safe retries | P1
+
+Verify worker health, retry counts, timestamps, error details and correlation IDs. Ensure payment, booking and notification jobs remain idempotent.
+
+AUTOPAGE-05 — Failure presentation | P1
+
+Failed API requests must be displayed as errors, not “No records found.”
+
+Definition of Done: Source API/query, root cause, evidence for each supported state, regression results and separate Fixed/Verified status.
+
+---
+
+10. Reports & Analytics
+
+REPORT-01 — New Customers | P1
+
+The current screen shows 0 while the Customers module has shown 20 records.
+
+Verify the authoritative customer creation timestamp, selected Last 30 Days range, timezone, filters and query. Do not assume all 20 customers were created during the selected period.
+
+REPORT-02 — Bookings | P1
+
+The report shows 0 while the Bookings module has shown one booking worth ₹20,000.
+
+Reconcile authoritative booking records, report date basis, included statuses, timezone, joins and filters. Determine whether the booking qualifies for the report's selected period and definition.
+
+REPORT-03 — Revenue | P1
+
+Document the exact revenue formula, source query, currency and status/date inclusion rules.
+
+Do not equate GMV, booking value, customer collections, platform revenue or vendor settlements.
+
+REPORT-04 — Average Rating | P1
+
+The screen displays 0/5. Verify the eligible review source and calculation. If no eligible reviews exist, display "—" or "No reviews yet" instead of implying an actual zero-star rating.
+
+REPORT-05 — Missing records and errors | P1
+
+Investigate date/status filters, incorrect joins, API failures, permission issues and genuinely empty datasets. A failure must not silently become a zero metric.
+
+REPORT-06 — Filter consistency | P1
+
+Test Last 30 Days, All Event Types and combined filters. Define the comparison period for each percentage-change indicator.
+
+REPORT-07 — Export integrity | P2
+
+Test exports with data, without data and with active filters. Reconcile exported totals and rows with the visible report and document the export's date/status scope.
+
+Definition of Done: Every metric has a documented source query/API, formula, date range, status inclusion rules, root cause and regression evidence.
+
+---
+
+11. Coupons Module
+
+COUPON-01 — Expired NEW10 still Active | P1
+
+"NEW10" reportedly expired on 30 September 2026 but was displayed as Active on 10 October 2026.
+
+Verify server-side expiry enforcement, status derivation, scheduled expiry processing if used, and redemption-time validation. Expired coupons must not be redeemable merely because a stored display status says Active.
+
+COUPON-02 — HEY20 expiry boundary | P1
+
+"HEY20" expires on 10 October 2026.
+
+Define whether validity includes the full expiry date or ends at a specific timestamp. Ensure backend, UI and redemption logic use the same timezone and boundary rule.
+
+COUPON-03 — Usage limits and concurrency | P1
+
+Verify "HEY20" usage 0/1 and "NEW10" usage 0/5 against authoritative redemption records.
+
+Concurrent redemptions must never exceed configured limits. Use transaction-safe enforcement and idempotent redemption handling.
+
+COUPON-04 — Discount source of truth | P1
+
+Redemption must use the stored discount type and value, not infer discount rules from the coupon code name.
+
+COUPON-05 — Create Coupon validation | P1
+
+Validate:
+
+- Percentage greater than 0 and at most 100.
+- Fixed amount greater than zero and compatible with the order currency.
+- Non-negative minimum order and maximum cap.
+- Valid combinations of percentage/fixed discount and maximum cap.
+- Expiry policy, including whether no-expiry coupons are permitted.
+- Normalised coupon codes and server-side duplicate protection.
+- Usage-limit semantics, including Unlimited.
+- Permissions for immediate activation and unlimited usage.
+
+COUPON-06 — Form behaviour and audit | P1
+
+Test Cancel, duplicate submission, validation errors, API failures and successful creation. Audit creation, activation, expiry-policy changes and material edits with actor and before/after values.
+
+COUPON-07 — Safe redemption | P1
+
+Validate eligibility against order value, expiry, active status, usage limit and applicable business rules on the server.
+
+Failed orders must not incorrectly consume usage. Concurrent redemption must not oversubscribe a coupon. Percentage caps must be enforced server-side.
+
+Definition of Done: Test expiry boundaries, duplicate codes, maximum discount caps, failed orders and concurrent redemption in a test environment. Preserve historical usage records.
+
+---
+
+12. Users & Access
+
+ACCESS-01 — P0: All admins appear as Super Admin | P0
+
+Earlier, three internal admins were displayed with "Super Admin" and "ALL_PERMISSIONS":
+
+- "admin@starvnt.com"
+- "automation@starvnt.com"
+- "superadmin@starvnt.com"
+
+Investigate whether this represents intentional seed/test configuration or actual production assignments. Inspect the existing database records, role assignments, effective permissions and audit history.
+
+Do not blindly demote accounts or alter recovery access. Confirm the intended owner and authorised recovery path first.
+
+ACCESS-02 — P0: Internal Admin count regressed to zero | P0
+
+The latest Users & Access screen reportedly shows "Internal Admins = 0" and no admin rows.
+
+Compare:
+
+- Authoritative admin records and status fields.
+- API response and UI state.
+- Role/status filters and query joins.
+- Permission/authorisation behaviour.
+- Audit logs for deletion, disabling and role changes.
+- Failed API requests and database/query errors.
+
+Determine whether the cause is a UI/API issue, query/filter bug, authorisation problem or actual data mutation.
+
+Do not recreate, promote or delete accounts merely to restore the count.
+
+ACCESS-03 — Server-side privileged API authorisation | P0
+
+Verify every privileged API, especially:
+
+- "payments.refund"
+- "settlements.release"
+- "roles.delete"
+- "permissions.manage"
+- "audit.read"
+- "settings.update"
+
+Prevent privilege escalation, including an admin granting permissions they do not possess or escalating their own role. Test direct API calls, not only UI button visibility.
+
+ACCESS-04 — Account creation and credential security | P1
+
+Validate unique work email, password policy and permission selections server-side. Verify secure password hashing, temporary-password/invitation flow and first-login security. Never log passwords or tokens.
+
+ACCESS-05 — Role design and least privilege | P1
+
+Separate roles, permissions and user-role assignments. Define narrowly scoped roles for Operations, Vendor Verification, Finance, Support and Analytics/Audit where appropriate.
+
+Consider maker-checker approval for refunds, settlement releases and other high-impact financial actions.
+
+ACCESS-06 — Disable, sessions and MFA | P1
+
+Verify account disable revokes active sessions/tokens and blocks subsequent privileged requests. Review session expiry, password reset, rate limiting and MFA requirements for privileged accounts.
+
+ACCESS-07 — Audit coverage | P1
+
+Audit admin creation, role/permission changes, account disable, financial actions and other critical transitions with actor, target, timestamp and before/after state.
+
+ACCESS-08 — Dedicated Customers/Vendors navigation | P1
+
+Verify page links, return navigation, filters and counts. Reconcile the previously displayed 54 vendor records and 20 customer records with authoritative sources.
+
+Continue investigating the same-phone customer records without automatic merging or deletion.
+
+Definition of Done: Effective-permission matrix, affected APIs, allowed/denied authorization tests, audit evidence and separate Fixed/Verified status. Confirm an authorised administrative recovery path remains available before access-control changes.
+
+---
+
+13. Audit Logs
+
+AUDIT-01 — P0: Investigate Internal Admin regression | P0
+
+Reconcile the Users & Access count regression with historical admin creation/login events, including "SEED_SUPER_ADMIN_CREATE" on 17 September 2026.
+
+Trace current admin records, roles, status fields, API responses, query filters and relevant audit entries. Preserve existing access and recovery paths.
+
+AUDIT-02 — Destructive CUSTOMER_DELETED / VENDOR_DELETED events | P1
+
+Investigate reported deletion events on 2, 4 and 5 October 2026, including entries whose target or reason appeared as "-".
+
+Where retained evidence permits, establish:
+
+- Target entity and record ID.
+- Actor.
+- Timestamp and outcome.
+- Reason/context.
+- Request/correlation ID.
+- Authorisation and relevant linked-record impact.
+
+Determine whether each operation was authorised and intentional. Do not restore, recreate or delete records without verified evidence and an approved remediation plan.
+
+AUDIT-03 — Login events and IP handling | P1
+
+Investigate repeated failed login events, duplicate-looking timestamps and localhost/proxy IP representations.
+
+Distinguish separate requests from duplicate audit writes. Verify rate limiting, authentication protections and actual network/proxy configuration. Do not declare a security incident based only on the displayed entries.
+
+AUDIT-04 — Critical transition coverage | P1
+
+Verify audit coverage for:
+
+- Admin creation, role changes, permission grants and account disable.
+- Customer/vendor status changes and destructive actions.
+- Payment verification, refunds and settlement processing.
+- Booking, completion, protection and other critical state transitions.
+- Settings and coupon changes.
+- Automation rule changes and high-risk operations.
+
+AUDIT-05 — Mandatory audit schema | P1
+
+Define required fields by action type, including actor, action, target entity/ID, timestamp, outcome, reason/context where applicable and request/correlation ID.
+
+Do not log passwords, tokens or other secrets.
+
+AUDIT-06 — Tamper resistance and access | P1
+
+Verify ordinary admins cannot silently edit or delete audit history. Test audit access permissions, search, filters, pagination and retention behaviour.
+
+Definition of Done: Root cause, supporting API/DB/audit evidence, authorised remediation, regression tests and separate Fixed/Verified status.
+
+---
+
+14. Settings
+
+SETTINGS-01 — Missing Updated metadata | P1
+
+Current settings reportedly show:
+
+- Platform Name: "STARVNT"
+- Support Email: "support@starvnt.com"
+- Timezone: "Asia/Kolkata"
+- Default Currency: "INR — Indian Rupee"
+
+The Updated column displays "—" for all four.
+
+Determine whether update metadata is legitimately absent or not returned by the API/UI. Check the existing schema and audit model before adding fields or duplicating audit functionality.
+
+SETTINGS-02 — Persistence and audit | P1
+
+Verify setting changes persist server-side and survive reloads.
+
+Audit changes with actor, timestamp, previous value and new value, without logging secrets. Test authorised updates, unauthorised rejection, API failures and concurrent edits.
+
+SETTINGS-03 — Timezone consistency | P1
+
+Verify "Asia/Kolkata" is applied consistently to event dates, booking schedules, coupon expiry, automation schedules and audit display.
+
+Store timestamps and render them according to the established system convention; avoid inconsistent timezone conversion or ambiguous expiry boundaries.
+
+SETTINGS-04 — Currency integrity | P1
+
+Verify default INR applies to new transactions according to the business policy. Historical transaction currency must remain immutable when the default setting changes.
+
+Test transaction display, calculation and reporting behaviour without rewriting historical financial records.
+
+SETTINGS-05 — Validation and support integration | P2
+
+Validate Platform Name and Support Email. Confirm support email is used consistently in relevant customer-facing support links and notification templates.
+
+Verify success/error feedback and that the page does not display stale values after a failed save.
+
+Definition of Done: Source API/database evidence, root cause for missing Updated metadata, regression tests and separate Fixed/Verified status.
+
+---
+
+15. Cross-Module Regression Requirements
+
+Run cross-module regression tests after relevant fixes:
+
+1. Dashboard ↔ Events: Counts and status buckets reconcile against the same documented event scope.
+2. Dashboard ↔ Bookings: GMV reconciles against eligible booking records, without being mislabelled as collections.
+3. Bookings ↔ Payments: "PAYMENT_VERIFIED" is backed by authoritative payment evidence.
+4. Payments ↔ Settlements: Payment collection, refunds, holds and vendor settlement states remain distinct.
+5. Bookings ↔ Execution: Completion verification requires the correct category-specific evidence and Core validation.
+6. Customers ↔ Events/Bookings/Protection: Relationships remain valid and access-controlled.
+7. Vendors ↔ Matching: KYC, profile completion and activation do not bypass matching eligibility.
+8. Coupons ↔ Orders/Payments: Expiry, usage limits and discount calculations are enforced transaction-safely.
+9. Automation ↔ Core: Retries are bounded, observable and idempotent for financial and booking operations.
+10. Users & Access ↔ All Admin APIs: Privileged actions are authorised server-side and audited.
+11. Audit Logs ↔ Critical Actions: State transitions remain traceable and protected from unauthorised alteration.
+12. Settings ↔ All Modules: Timezone, currency and support configuration are applied consistently without mutating historical facts.
+
+16. Required Final Report from Yogesh
+
+Return a single consolidated report using this structure:
+
+Field| Required content
+Finding ID| Stable identifier, e.g. PAY-01
+Severity| P0 / P1 / P2
+Observed behaviour| What was actually reproduced
+Root cause| Evidence-backed explanation; otherwise “Under investigation”
+Affected components| UI, API/endpoint, service, database/table, worker/queue, configuration
+Implementation| Actual code/configuration changes or “Not started”
+Data remediation| Exact records affected and approved safeguards, if applicable
+Test evidence| Test name/ID, environment, result and relevant request/response/log reference
+Regression coverage| Automated tests added or updated and results
+Status| Not Started / In Progress / Fixed / Verified
+Blockers| Missing access, data, configuration or unresolved dependencies
+
+Final acceptance gate
+
+A finding may be marked Verified only when:
+
+- The underlying cause has been identified and resolved.
+- Relevant API/database and UI behaviour has been tested.
+- Authorised and unauthorised access cases have been tested where applicable.
+- Regression tests pass.
+- Cross-module reconciliation succeeds where required.
+- Audit evidence and data-preservation checks are complete.
+- No unresolved blocker invalidates the claimed result.
+
+Important: This directive defines the work and evidence required. It is not a claim that any item has already been investigated, implemented, fixed or verified. Report actual status only after inspecting the implementation and executing the relevant tests.
+
+Yogesh — priority order: P0 financial truth, administrative access/recovery, payment/booking idempotency and audit integrity; then P1 data integrity, state consistency, authorisation and cross-module reconciliation; then P2 usability and presentation.
+
+
+
+
+
+
+

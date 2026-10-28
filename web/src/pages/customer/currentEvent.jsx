@@ -72,7 +72,7 @@ export function useCurrentEvent() {
 const SECTION_PATH = {
   quotes: 'quotes',
   bookings: 'bookings',
-  payments: 'bookings',
+  payments: 'payments',
   vendors: 'vendors',
   timeline: 'history',
   plan: 'requirements',
@@ -87,8 +87,8 @@ export function GoToSection() {
   if (error) {
     return (
       <CustomerErrorScreen
-        title="Could not open your event"
-        message="STARVNT could not load your event list. Check the server and try again."
+        title="We couldn't open your event"
+        message="We're having trouble connecting to STARVNT servers right now. Please try again in a moment, or reach out to customer care."
         onRetry={refresh}
       />
     );

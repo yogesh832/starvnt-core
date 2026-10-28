@@ -1,3 +1,4 @@
+import VendorCategoryPicker from "../../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Page, Card } from "./shared.jsx";
@@ -44,12 +45,36 @@ function activationStepList(activation) {
       action: "Add gear",
     },
     {
+      key: "capacity",
+      label: "Capacity configured",
+      detail: "Team size and concurrent event capacity recorded in Core",
+      done: Boolean(checklist.capacity),
+      href: "/vendor/services?action=gear",
+      action: "Set capacity",
+    },
+    {
+      key: "resources",
+      label: "Operational resources",
+      detail: "Required team, equipment, or resource declarations are present",
+      done: Boolean(checklist.resources),
+      href: "/vendor/services?action=gear",
+      action: "Declare resources",
+    },
+    {
       key: "coverage",
       label: "Coverage and travel",
-      detail: "Operating hub plus service coverage radius/localities",
+      detail: checklist.coverage && !checklist.locations ? "Coverage saved. Add your operating location pin/address." : checklist.locations && !checklist.coverage ? "Operating location saved. Set your service radius/localities." : "Operating hub plus service coverage radius/localities",
       done: Boolean(checklist.locations && checklist.coverage),
-      href: "/vendor/services?action=coverage",
-      action: "Set coverage",
+      href: checklist.coverage && !checklist.locations ? "/vendor/profile?tab=locations" : "/vendor/services?action=coverage",
+      action: checklist.coverage && !checklist.locations ? "Add operating location" : "Set coverage",
+    },
+    {
+      key: "availability",
+      label: "Operational availability",
+      detail: "Working days and hours are configured for feasibility checks",
+      done: Boolean(checklist.availability),
+      href: "/vendor/availability",
+      action: "Set availability",
     },
     {
       key: "portfolio",
@@ -61,11 +86,11 @@ function activationStepList(activation) {
     },
     {
       key: "verified",
-      label: "KYC verification",
-      detail: "Documents uploaded and verified by STARVNT",
+      label: "PAN/KYC + bank verification",
+      detail: "PAN or KYC identity plus a verified bank account",
       done: Boolean(checklist.verified),
       href: "/vendor/profile?tab=documents",
-      action: "Upload documents",
+      action: checklist.identityVerified ? "Verify bank" : "Verify identity",
     },
   ];
 }
@@ -74,85 +99,161 @@ function VendorActivationCard({ activation, compact = false }) {
   if (!activation) return null;
   const steps = activationStepList(activation);
   const next = steps.find((step) => !step.done);
-  const complete = steps.every((step) => step.done);
+  const matchingEligible = Boolean(activation.matchingEligible);
+  const readiness = activation.readiness || {};
+  const reasonText =
+    activation.missingRequirements?.[0] ||
+    (next ? next.label : readiness.matchingEligibility || "Core readiness locked");
+  const percent = activation.completionPercentage ?? 0;
+  const [showSteps, setShowSteps] = useState(false);
 
   return (
-    <div
-      className={`rounded-2xl border ${complete ? "border-emerald-200 bg-emerald-50/80" : "border-amber-200 bg-amber-50/70"} p-4 sm:p-5 shadow-xs`}
-    >
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="min-w-0">
-          <div
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${complete ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}
+    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#161926] p-4 shadow-xs space-y-3">
+      {/* Header Row: Status & Readiness % */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0 flex items-start gap-3">
+          <span
+            className={`mt-0.5 h-9 w-9 rounded-2xl grid place-items-center shrink-0 ${
+              matchingEligible
+                ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400"
+                : "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400"
+            }`}
           >
-            <Icon name={complete ? "check" : "lock"} size={12} />
-            {complete ? "Client matching active" : "Client matching locked"}
-          </div>
-          <h2 className="mt-2 text-base font-extrabold text-navy">
-            {complete
-              ? "Your vendor profile is live for customers"
-              : "Finish these steps to appear in customer search"}
-          </h2>
-          <p className="mt-1 text-xs text-muted leading-relaxed">
-            There is no manual vendor toggle. STARVNT turns commercial matching
-            on automatically after service, coverage, portfolio, and
-            verification are complete.
-          </p>
-        </div>
-        <div className="shrink-0 text-left sm:text-right">
-          <div className="text-2xl font-extrabold text-navy">
-            {activation.completionPercentage ?? 0}%
-          </div>
-          <div className="text-[11px] font-bold text-muted">readiness</div>
-        </div>
-      </div>
-
-      <div
-        className={`mt-4 grid ${compact ? "grid-cols-1" : "sm:grid-cols-2 xl:grid-cols-3"} gap-2.5`}
-      >
-        {steps.map((step) => (
-          <a
-            key={step.key}
-            href={step.href}
-            className={`rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-sm ${step.done ? "border-emerald-200 bg-white text-emerald-900" : "border-amber-200 bg-white text-navy"}`}
-          >
-            <div className="flex items-start gap-2">
-              <span
-                className={`mt-0.5 h-5 w-5 rounded-full grid place-items-center shrink-0 ${step.done ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
-              >
-                <Icon name={step.done ? "check" : "chevronRight"} size={11} />
+            <Icon name={matchingEligible ? "check" : "lock"} size={16} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-muted dark:text-gray-400">
+                {matchingEligible ? "Client matching active" : "Client matching locked"}
               </span>
-              <span className="min-w-0">
-                <span className="block text-xs font-extrabold">
-                  {step.label}
-                </span>
-                <span className="block text-[11px] text-muted leading-snug mt-0.5">
-                  {step.done ? "Done" : step.detail}
-                </span>
-                {!step.done && (
-                  <span className="block text-[11px] font-bold text-primary mt-1">
-                    {step.action}
-                  </span>
-                )}
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  matchingEligible
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
+                    : "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"
+                }`}
+              >
+                {matchingEligible ? "Live" : next ? `Next: ${next.label}` : readiness.matchingEligibility || "Locked"}
               </span>
             </div>
-          </a>
-        ))}
+            <h2 className="mt-0.5 text-sm font-extrabold text-navy dark:text-white truncate">
+              {matchingEligible
+                ? "Live for customer matching"
+                : `Locked: ${reasonText}`}
+            </h2>
+            <p className="mt-0.5 text-[11px] text-muted dark:text-gray-400 leading-snug">
+              Profile completion and matching eligibility are separate. Core requires verification, capacity, coverage, availability, portfolio, and financial readiness.
+            </p>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xl font-black text-navy dark:text-white font-mono">
+              {percent}%
+            </span>
+            <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted dark:text-gray-400">
+              readiness
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSteps(!showSteps)}
+            className="text-[11px] font-bold text-primary dark:text-[#a5b4fc] hover:underline cursor-pointer flex items-center gap-1"
+          >
+            <span>{showSteps ? "Hide Steps" : "View Steps"}</span>
+            <Icon name={showSteps ? "chevronUp" : "chevronDown"} size={12} />
+          </button>
+        </div>
       </div>
 
-      {!complete && next && (
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-white border border-amber-100 p-3">
+      {/* Sleek Horizontal Gradient Progress Bar */}
+      <div className="space-y-1.5 pt-1">
+        <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden relative">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              matchingEligible
+                ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                : "bg-gradient-to-r from-amber-500 via-primary to-emerald-500"
+            }`}
+            style={{ width: `${Math.max(4, percent)}%` }}
+          />
+        </div>
+
+        {/* Compact Horizontal Step Indicators */}
+        <div className="flex items-center justify-between gap-1 overflow-x-auto py-1 no-scrollbar">
+          {steps.map((step) => (
+            <div key={step.key} className="flex items-center gap-1 text-[10px] shrink-0">
+              <span
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                  step.done
+                    ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"
+                    : "bg-gray-300 dark:bg-gray-700"
+                }`}
+              />
+              <span
+                className={`truncate max-w-[90px] sm:max-w-[120px] ${
+                  step.done ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-muted dark:text-gray-400 opacity-80"
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Expandable Checklist Cards */}
+      {showSteps && (
+        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
+          {steps.map((step) => (
+            <a
+              key={step.key}
+              href={step.done ? undefined : step.href}
+              className={`rounded-xl border px-3 py-2 transition ${
+                step.done
+                  ? "border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300"
+                  : "border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-navy dark:text-gray-200 hover:-translate-y-0.5 hover:shadow-sm"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-5 w-5 rounded-full grid place-items-center shrink-0 ${
+                    step.done
+                      ? "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300"
+                      : "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300"
+                  }`}
+                >
+                  <Icon name={step.done ? "check" : "chevronRight"} size={11} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-extrabold truncate">
+                    {step.label}
+                  </span>
+                  <span className="block text-[10px] text-muted dark:text-gray-400 leading-snug truncate">
+                    {step.done ? "Done" : step.action}
+                  </span>
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Next Action Banner */}
+      {!matchingEligible && next && (
+        <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40 p-3">
           <div className="text-xs">
-            <div className="font-extrabold text-navy">
+            <div className="font-extrabold text-navy dark:text-white">
               Next step: {next.label}
             </div>
-            <div className="text-muted mt-0.5">{next.detail}</div>
+            <div className="text-muted dark:text-gray-400 text-[11px] mt-0.5">{next.detail}</div>
           </div>
           <a
             href={next.href}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark cursor-pointer shrink-0"
           >
-            {next.action}
+            <span>{next.action}</span>
             <Icon name="chevronRight" size={12} />
           </a>
         </div>
@@ -541,7 +642,7 @@ export function ServicesPage() {
         setSearchParams({});
       }
       setCoverageFeedback(
-        "Operating radius, coverage area and transit policy saved to database. Step 4 is verified!",
+        "Service radius, coverage area and travel policy saved. Your operating location is checked separately in the setup checklist.",
       );
       setTimeout(() => setCoverageFeedback(""), 5000);
       await loadServices();
@@ -752,7 +853,7 @@ export function ServicesPage() {
                         <div className="space-y-1 text-[11px]">
                           <div>
                             <span className="font-semibold text-muted">
-                              Operating Base & Radius:{" "}
+                              Service Coverage & Radius:{" "}
                             </span>
                             <span className="font-bold text-navy">
                               {primaryCov.radiusKm || 40} km radius from{" "}
@@ -791,7 +892,7 @@ export function ServicesPage() {
                             >
                               {primaryCov.outstationAllowed
                                 ? "Outstation Events Permitted"
-                                : "Base Metropolitan Area Only"}
+                                : "Outstation travel not enabled"}
                             </span>
                           </div>
                         </div>
@@ -905,22 +1006,7 @@ export function ServicesPage() {
                 <label className="block text-muted font-semibold mb-1">
                   Category
                 </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-semibold text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="Photography">Photography</option>
-                  <option value="Videography">Videography</option>
-                  <option value="Decor">Decor & Styling</option>
-                  <option value="Catering">Catering</option>
-                  <option value="Makeup">Makeup & Styling</option>
-                  <option value="Entertainment">
-                    DJ & Music / Entertainment
-                  </option>
-                  <option value="Venue">Venue</option>
-                  <option value="Planning">Event Planning</option>
-                </select>
+                <VendorCategoryPicker label="Service category" value={category} onChange={setCategory} required />
               </div>
               <div>
                 <label className="block text-muted font-semibold mb-1">
@@ -1436,6 +1522,7 @@ export function ServicesPage() {
 
 /* ── Availability ─────────────────────────────────────────────────────────── */
 export function AvailabilityPage() {
+  const blockRequestKey = useRef(crypto.randomUUID());
   const [blockouts, setBlockouts] = useState([]);
   const [resources, setResources] = useState([]);
   const [loadingAvailability, setLoadingAvailability] = useState(true);
@@ -1637,11 +1724,13 @@ export function AvailabilityPage() {
         method: "POST",
         body: {
           date: blockDate,
+          idempotencyKey: blockRequestKey.current,
           reason: blockReason || "Unavailable",
           allDay: true,
         },
       });
       setShowBlockModal(false);
+      blockRequestKey.current = crypto.randomUUID();
       setBlockDate("");
       setBlockReason("");
       await loadAvailability();
@@ -2332,7 +2421,206 @@ export function AvailabilityPage() {
   );
 }
 
-/* ── STARVNT Financial & Verification Onboarding Manager ───────────────────── */
+const CASHFREE_BANK_TEST_CASES = [
+  {
+    label: "Valid YES Bank",
+    expected: "VALID",
+    accountHolderName: "JOHN DOE",
+    accountNumber: "026291800001191",
+    ifsc: "YESB0000262",
+    bankName: "YES BANK",
+    phone: "9999999999",
+  },
+  {
+    label: "Valid HDFC",
+    expected: "VALID",
+    accountHolderName: "JANE DOE",
+    accountNumber: "00011020001772",
+    ifsc: "HDFC0000001",
+    bankName: "HDFC Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Invalid account / IFSC",
+    expected: "INVALID",
+    accountHolderName: "Test User",
+    accountNumber: "7766666585146",
+    ifsc: "YESB0000001",
+    bankName: "YES BANK",
+    phone: "9999999999",
+  },
+  {
+    label: "Invalid IFSC",
+    expected: "INVALID",
+    accountHolderName: "Test User",
+    accountNumber: "7766667287515",
+    ifsc: "ICIC0000001",
+    bankName: "ICICI Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Blocked account",
+    expected: "INVALID",
+    accountHolderName: "Test User",
+    accountNumber: "7766667989884",
+    ifsc: "RATN0000070",
+    bankName: "RBL Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "NRE account",
+    expected: "INVALID",
+    accountHolderName: "Test User",
+    accountNumber: "7766667755761",
+    ifsc: "ICIC0000001",
+    bankName: "ICICI Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Source bank declined",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766674831270",
+    ifsc: "SBIN0000003",
+    bankName: "State Bank of India",
+    phone: "9999999999",
+  },
+  {
+    label: "Failed at bank",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766671735852",
+    ifsc: "SBIN0000004",
+    bankName: "State Bank of India",
+    phone: "9999999999",
+  },
+  {
+    label: "Beneficiary bank offline",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766668692253",
+    ifsc: "INDB0000018",
+    bankName: "IndusInd Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "NPCI unavailable",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766668458130",
+    ifsc: "INDB0000018",
+    bankName: "IndusInd Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "IMPS mode fail",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766667521638",
+    ifsc: "ICIC0000001",
+    bankName: "ICICI Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Verification failed",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "7766667053392",
+    ifsc: "ICIC0000001",
+    bankName: "ICICI Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Temporary unavailable",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "007711000031",
+    ifsc: "HDFC0000077",
+    bankName: "HDFC Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Could not verify",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "00224412311300",
+    ifsc: "YESB0000001",
+    bankName: "YES BANK",
+    phone: "9999999999",
+  },
+  {
+    label: "Insufficient balance",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "50101329442375",
+    ifsc: "HDFC0000001",
+    bankName: "HDFC Bank",
+    phone: "9999999999",
+  },
+  {
+    label: "Invalid name",
+    expected: "ERROR",
+    accountHolderName: "Test User @",
+    accountNumber: "026291800001191",
+    ifsc: "YESB0000262",
+    bankName: "YES BANK",
+    phone: "9999999999",
+  },
+  {
+    label: "Invalid phone",
+    expected: "ERROR",
+    accountHolderName: "Test User",
+    accountNumber: "026291800001191",
+    ifsc: "YESB0000262",
+    bankName: "YES BANK",
+    phone: "9999999999999",
+  },
+];
+
+/* ── STARVNT Financial, Verification & Document Hub ────────────────────── */
+function ModuleDocumentCard({ doc, onPreview, onDelete }) {
+  const isImg = doc.fileUrl?.startsWith("data:image/") || /\.(jpg|jpeg|png|webp)$/i.test(doc.fileName || "");
+  return (
+    <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl border border-gray-200/80 dark:border-gray-700/80 bg-white/90 dark:bg-gray-900/60 text-xs shadow-2xs">
+      <div className="flex items-center gap-3 min-w-0">
+        {isImg && doc.fileUrl ? (
+          <img src={doc.fileUrl} alt={doc.title} className="w-10 h-10 rounded-lg object-cover border border-gray-200 dark:border-gray-700 shrink-0" />
+        ) : (
+          <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
+            <Icon name="documents" size={18} />
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="font-bold text-navy dark:text-gray-100 truncate">{doc.fileName || doc.title}</div>
+          <div className="text-[10px] text-muted dark:text-gray-400 flex items-center gap-2 flex-wrap">
+            <span>{doc.fileSize || "File"}</span>
+            <span>·</span>
+            <span className={doc.status === "VERIFIED" ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-amber-600 dark:text-amber-400 font-bold"}>
+              {doc.status === "VERIFIED" ? "✓ Verified Document" : "Under Admin Review"}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+        <button
+          type="button"
+          onClick={() => onPreview(doc)}
+          className="px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-navy dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
+        >
+          Preview
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(doc._id)}
+          className="px-2.5 py-1 rounded-lg border border-rose-200 dark:border-rose-900/50 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function VendorFinancialOnboardingCard() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2349,6 +2637,8 @@ export function VendorFinancialOnboardingCard() {
   const [gstRegistered, setGstRegistered] = useState(false);
   const [gstinInput, setGstinInput] = useState("");
   const [savingGst, setSavingGst] = useState(false);
+  const [verifyingGst, setVerifyingGst] = useState(false);
+  const [gstVerificationResult, setGstVerificationResult] = useState(null);
 
   // Bank state
   const [bankForm, setBankForm] = useState({
@@ -2357,39 +2647,54 @@ export function VendorFinancialOnboardingCard() {
     ifsc: "",
     bankName: "",
     accountType: "SAVINGS",
+    phone: "",
   });
   const [savingBank, setSavingBank] = useState(false);
   const [verifyingBank, setVerifyingBank] = useState(false);
   const [logs, setLogs] = useState([]);
   const [showLogs, setShowLogs] = useState(false);
+  const [documents, setDocuments] = useState([]);
+  const [isEditingPan, setIsEditingPan] = useState(false);
+  const [isEditingGst, setIsEditingGst] = useState(false);
+  const [isEditingBank, setIsEditingBank] = useState(false);
+
+  // File upload state & previews
+  const [uploadingDocType, setUploadingDocType] = useState(null);
+  const [selectedPreviewDoc, setSelectedPreviewDoc] = useState(null);
 
   const loadFinancialData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await externalApi.call("/vendor/financial");
-      if (res.ok && res.profile) {
-        setProfile(res.profile);
-        if (res.profile.pan?.panNumber) {
-          setPanInput(res.profile.pan.panNumber);
-        }
-        if (res.profile.gst) {
-          setGstRegistered(Boolean(res.profile.gst.isRegistered));
-          setGstinInput(res.profile.gst.gstin !== "N/A" ? res.profile.gst.gstin || "" : "");
-        }
-        if (res.profile.bankAccount) {
-          setBankForm({
-            accountHolderName: res.profile.bankAccount.accountHolderName || "",
-            accountNumber: res.profile.bankAccount.accountNumber || "",
-            ifsc: res.profile.bankAccount.ifsc || "",
-            bankName: res.profile.bankAccount.bankName || "",
-            accountType: res.profile.bankAccount.accountType || "SAVINGS",
-          });
-        }
+      const [financialRes, auditRes, docsRes] = await Promise.allSettled([
+        externalApi.call("/vendor/financial"),
+        externalApi.call("/vendor/financial/bank/verifications"),
+        externalApi.call("/vendor/documents"),
+      ]);
+
+      if (financialRes.status === "fulfilled" && financialRes.value?.ok) {
+        const p = financialRes.value.profile || {};
+        setProfile(p);
+        setPanInput(p.pan?.panNumber || "");
+        setGstRegistered(Boolean(p.gst?.isRegistered));
+        setGstinInput(p.gst?.gstin && p.gst.gstin !== "N/A" ? p.gst.gstin : "");
+
+        const b = p.bankAccount || {};
+        setBankForm({
+          accountHolderName: b.accountHolderName || "",
+          accountNumber: b.accountNumber || "",
+          ifsc: b.ifsc || "",
+          bankName: b.bankName || "",
+          accountType: b.accountType || "SAVINGS",
+          phone: b.phone || "",
+        });
       }
 
-      const logRes = await externalApi.call("/vendor/financial/bank/verifications");
-      if (logRes.ok && Array.isArray(logRes.verifications)) {
-        setLogs(logRes.verifications);
+      if (auditRes.status === "fulfilled" && auditRes.value?.ok) {
+        setLogs(auditRes.value.verifications || []);
+      }
+
+      if (docsRes.status === "fulfilled" && docsRes.value?.ok) {
+        setDocuments(docsRes.value.documents || []);
       }
     } catch (err) {
       console.warn("[VendorFinancialOnboardingCard] load error:", err.message);
@@ -2402,467 +2707,756 @@ export function VendorFinancialOnboardingCard() {
     loadFinancialData();
   }, [loadFinancialData]);
 
-  async function handleSavePan(e) {
-    if (e) e.preventDefault();
+  const triggerFileUpload = async (file, docType, defaultTitle) => {
+    if (!file) return;
+    try {
+      setUploadingDocType(docType);
+      setFeedback("");
+      
+      let base64Url = "";
+      if (file.type.startsWith("image/")) {
+        base64Url = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const payload = {
+        title: defaultTitle,
+        type: docType,
+        documentNumber: docType === "PAN" ? panInput : docType === "GST" ? gstinInput : bankForm.accountNumber || "",
+        fileName: file.name,
+        fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        fileUrl: base64Url,
+        notes: `Uploaded for inline ${docType} verification`,
+      };
+
+      const res = await externalApi.call("/vendor/documents", {
+        method: "POST",
+        body: payload,
+      });
+
+      if (res.ok) {
+        setFeedbackType("success");
+        setFeedback(`✓ ${defaultTitle} document attached successfully.`);
+        await loadFinancialData();
+      } else {
+        setFeedbackType("error");
+        setFeedback(`Document upload failed: ${res.error || "Server error"}`);
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(`Upload error: ${err.message}`);
+    } finally {
+      setUploadingDocType(null);
+    }
+  };
+
+  const handleVerifyPan = async (e) => {
+    e?.preventDefault();
     if (!panInput.trim()) return;
     try {
       setSavingPan(true);
       setFeedback("");
+
       const res = await externalApi.call("/vendor/financial/pan", {
         method: "POST",
-        body: { panNumber: panInput.trim() },
+        body: { panNumber: panInput.trim().toUpperCase() },
       });
+
       if (res.ok) {
         setFeedbackType("success");
-        setFeedback(res.pan?.verificationStatus === "VERIFIED" ? "✓ PAN Number verified successfully!" : "PAN saved.");
+        setFeedback(res.pan?.verificationStatus === "VERIFIED" ? "✓ PAN Number verified successfully!" : "PAN saved for review.");
+        setIsEditingPan(false);
+        setDiscoveryResult(res.verificationResult || null);
         await loadFinancialData();
       } else {
         setFeedbackType("error");
-        setFeedback(res.message || res.error || "Failed to save PAN.");
+        setFeedback(`Could not save PAN: ${res.error || "API error"}`);
       }
     } catch (err) {
       setFeedbackType("error");
-      setFeedback(err.message);
+      setFeedback(`PAN Save Error: ${err.message}`);
     } finally {
       setSavingPan(false);
     }
-  }
+  };
 
-  async function handleDiscoverGstins() {
+  const handleDiscoverGstins = async () => {
     if (!panInput.trim()) return;
     try {
       setDiscoveringGstin(true);
       setDiscoveryResult(null);
+      setFeedback("");
+
       const res = await externalApi.call("/vendor/financial/discover-gstin", {
         method: "POST",
-        body: { pan: panInput.trim() },
+        body: { pan: panInput.trim().toUpperCase() },
       });
-      setDiscoveryResult(res);
-    } catch (err) {
-      setDiscoveryResult({ ok: false, message: err.message });
-    } finally {
-      setDiscoveringGstin(false);
-    }
-  }
 
-  async function handleSaveGst(e) {
-    if (e) e.preventDefault();
-    try {
-      setSavingGst(true);
-      setFeedback("");
-      const payload = {
-        isRegistered: gstRegistered,
-        gstin: gstRegistered ? gstinInput.trim() : "N/A",
-      };
-      const res = await externalApi.call("/vendor/financial/gst", {
-        method: "POST",
-        body: payload,
-      });
       if (res.ok) {
-        setFeedbackType("success");
-        setFeedback(
-          gstRegistered
-            ? "✓ GSTIN verified and saved successfully!"
-            : "✓ GST status updated to NOT REGISTERED (N/A). Onboarding continues via PAN!"
-        );
-        await loadFinancialData();
+        setDiscoveryResult(res);
+        setFeedbackType("info");
+        setFeedback(res.message || (res.found ? "GSTINs discovered under this PAN." : "No GST registration found for this PAN."));
       } else {
         setFeedbackType("error");
-        setFeedback(res.message || res.error || "Failed to save GST status.");
+        setFeedback(res.error || "Could not complete PAN discovery.");
       }
     } catch (err) {
       setFeedbackType("error");
-      setFeedback(err.message);
+      setFeedback(`PAN Discovery Error: ${err.message}`);
+    } finally {
+      setDiscoveringGstin(false);
+    }
+  };
+
+  const handleVerifyGstApi = async () => {
+    if (!gstinInput.trim()) return;
+    try {
+      setVerifyingGst(true);
+      setGstVerificationResult(null);
+      setFeedback("");
+
+      const res = await externalApi.call("/vendor/financial/gst", {
+        method: "POST",
+        body: { isRegistered: true, gstin: gstinInput.trim().toUpperCase() },
+      });
+
+      if (res.ok && res.verificationResult) {
+        setGstVerificationResult(res.verificationResult);
+        if (res.verificationResult.matched) {
+          setFeedbackType("success");
+          setFeedback(`✓ GSTIN auto-verified via API! Legal Name: "${res.verificationResult.legalName || res.verificationResult.registeredName}" matched your profile.`);
+        } else {
+          setFeedbackType("info");
+          setFeedback(`GSTIN API lookup complete. Official Name: "${res.verificationResult.legalName || res.verificationResult.registeredName || "N/A"}" (Trade: "${res.verificationResult.tradeName || "N/A"}")`);
+        }
+      } else {
+        setFeedbackType("error");
+        setFeedback(res.error || "Could not complete GSTIN verification API check.");
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(`GST Verification Error: ${err.message}`);
+    } finally {
+      setVerifyingGst(false);
+    }
+  };
+
+  const handleSaveGst = async (e) => {
+    e?.preventDefault();
+    try {
+      setSavingGst(true);
+      setFeedback("");
+
+      const res = await externalApi.call("/vendor/financial/gst", {
+        method: "POST",
+        body: {
+          isRegistered: !!gstRegistered,
+          gstin: gstRegistered ? gstinInput.trim().toUpperCase() : "N/A",
+        },
+      });
+
+      if (res.ok) {
+        setGstVerificationResult(res.verificationResult || null);
+        setFeedbackType("success");
+        setFeedback(
+          gstRegistered
+            ? "✓ GSTIN saved and verification completed."
+            : "✓ GST status saved: Exempt / Not Registered."
+        );
+        setIsEditingGst(false);
+        await loadFinancialData();
+      } else {
+        setFeedbackType("error");
+        setFeedback(`Could not save GST: ${res.message || res.error || "Please try again later or contact support@starvnt.com."}`);
+      }
+    } catch (err) {
+      setFeedbackType("error");
+      setFeedback(`GST Save Error: ${err.message}`);
     } finally {
       setSavingGst(false);
     }
-  }
+  };
 
-  async function handleSaveBank(e) {
-    if (e) e.preventDefault();
+  const handleSaveBankDetails = async (e) => {
+    e?.preventDefault();
     try {
       setSavingBank(true);
       setFeedback("");
+
       const res = await externalApi.call("/vendor/financial/bank", {
         method: "POST",
         body: bankForm,
       });
+
       if (res.ok) {
         setFeedbackType("success");
-        setFeedback("Bank account details saved. Proceed to ₹0.02 Penny Drop verification.");
+        setFeedback("✓ Bank account details saved successfully.");
         await loadFinancialData();
       } else {
         setFeedbackType("error");
-        setFeedback(res.message || res.error || "Failed to save bank details.");
+        setFeedback(`Could not save bank details: ${res.message || res.error || "Please check your details and try again, or reach out to support@starvnt.com."}`);
       }
     } catch (err) {
       setFeedbackType("error");
-      setFeedback(err.message);
+      setFeedback(`Bank Save Error: ${err.message}`);
     } finally {
       setSavingBank(false);
     }
-  }
+  };
 
-  async function handleVerifyBank() {
+  const handleVerifyBank = async () => {
     try {
       setVerifyingBank(true);
       setFeedback("");
+
       const res = await externalApi.call("/vendor/financial/bank/verify", {
         method: "POST",
         body: { ...bankForm, forceRetry: true },
       });
+
       if (res.ok && res.status === "VERIFIED") {
         setFeedbackType("success");
-        setFeedback("✓ Bank Account Verified via ₹0.02 Penny Drop transaction!");
+        setFeedback("✓ Bank Account Verified successfully!");
+        setIsEditingBank(false);
         await loadFinancialData();
       } else {
         setFeedbackType("error");
-        setFeedback(res.failureReason || res.message || "Bank account verification failed. Please check Account Number and IFSC.");
+        setFeedback(res.failureReason || res.message || res.error || "Bank verification failed.");
         await loadFinancialData();
       }
     } catch (err) {
       setFeedbackType("error");
-      setFeedback(`Bank verification failed: ${err.message}`);
+      setFeedback(`Bank Verification Error: ${err.message}`);
     } finally {
       setVerifyingBank(false);
     }
-  }
+  };
 
-  if (loading && !profile) {
+  const handleDeleteDoc = async (docId) => {
+    if (!window.confirm("Remove this document record?")) return;
+    try {
+      const res = await externalApi.call(`/vendor/documents/${docId}`, { method: "DELETE" });
+      if (res.ok) {
+        await loadFinancialData();
+      }
+    } catch (err) {
+      alert(`Could not delete document: ${err.message}`);
+    }
+  };
+
+  if (loading) {
     return (
-      <Card className="p-6">
-        <SkeletonLine className="h-6 w-1/3 mb-4" />
-        <SkeletonLine className="h-4 w-2/3 mb-2" />
-        <SkeletonLine className="h-20 w-full" />
+      <Card className="space-y-4">
+        <SkeletonLine className="h-6 w-56" />
+        <SkeletonLine className="h-20 w-full rounded-2xl" />
+        <SkeletonLine className="h-20 w-full rounded-2xl" />
       </Card>
     );
   }
 
-  const panVerified = profile?.pan?.verificationStatus === "VERIFIED";
+  const panStatus = profile?.pan?.verificationStatus;
   const gstStatus = profile?.gst?.verificationStatus;
-  const isGstNotReq = profile?.gst?.isRegistered === false;
   const bankStatus = profile?.bankAccount?.verificationStatus;
+  const isPanProvided = Boolean(profile?.pan?.panNumber || panInput);
+  const isPanVerified = panStatus === "VERIFIED";
+  const isGstProvided = Boolean(profile?.gst?.gstin && profile.gst.gstin !== "N/A") || Boolean(gstRegistered && gstinInput);
+  const isGstExempt = profile?.gst?.isRegistered === false || !gstRegistered;
+  const isGstVerified = gstStatus === "VERIFIED";
   const isBankVerified = bankStatus === "VERIFIED";
-  const isSettlementEligible = Boolean(profile?.isSettlementEligible);
+  const isTaxIdentityValid = isPanVerified || isGstVerified || isGstExempt || isPanProvided || isGstProvided;
+
+  const panDocs = documents.filter((d) => d.type === "PAN");
+  const gstDocs = documents.filter((d) => d.type === "GST");
+  const bankDocs = documents.filter((d) => d.type === "BANK_PROOF" || d.type === "CHEQUE");
+  const otherDocs = documents.filter((d) => !["PAN", "GST", "BANK_PROOF", "CHEQUE"].includes(d.type));
 
   return (
-    <Card className="p-5 sm:p-6 space-y-6 border border-gray-100 dark:border-gray-800 dark:bg-dark-card shadow-xs">
-      {/* Header & Overall Status */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+    <Card className="space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-gray-800">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
-              Tax Identity & Bank Verification
+            <h2 className="font-extrabold text-lg text-navy dark:text-gray-100">
+              Tax Identity & Bank Verification Hub
             </h2>
-            {isSettlementEligible ? (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
-                ✓ Settlement Eligible
-              </span>
-            ) : (
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
-                Action Required
-              </span>
-            )}
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-soft text-primary uppercase">
+              Core Activation Gate
+            </span>
           </div>
-          <p className="text-xs text-muted dark:text-gray-400 mt-1">
-            Single source of truth for PAN, GST, and Bank Account verification. GST registration is optional.
+          <p className="text-xs text-muted dark:text-gray-400 mt-1 max-w-2xl">
+            Provide either PAN or GST (or both) to verify tax identity. Mandatory bank account verification enables payouts and customer matching.
           </p>
+        </div>
+
+        {/* Readiness Badges */}
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 ${
+            isTaxIdentityValid
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
+              : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300"
+          }`}>
+            <Icon name={isTaxIdentityValid ? "shieldCheck" : "alertTriangle"} size={14} />
+            <span>Tax ID: {isTaxIdentityValid ? (isPanProvided ? "PAN Verified/Provided" : "GST Exempt") : "Action Required"}</span>
+          </div>
+
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 ${
+            isBankVerified
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
+              : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300"
+          }`}>
+            <Icon name={isBankVerified ? "check" : "bank"} size={14} />
+            <span>Bank: {isBankVerified ? "Verified" : "Mandatory Verification Required"}</span>
+          </div>
         </div>
       </div>
 
+      {/* Feedback Banner */}
       {feedback && (
-        <div
-          className={`p-3 rounded-xl text-xs font-bold flex items-start gap-2 ${
-            feedbackType === "success"
-              ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
-              : "bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800"
-          }`}
-        >
-          <Icon name={feedbackType === "success" ? "check" : "info"} size={16} className="shrink-0 mt-0.5" />
+        <div className={`p-3.5 rounded-2xl text-xs font-bold border flex items-center justify-between gap-2 ${
+          feedbackType === "success"
+            ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 text-emerald-900 dark:text-emerald-200"
+            : feedbackType === "error"
+            ? "bg-rose-50 dark:bg-rose-950/40 border-rose-200 text-rose-900 dark:text-rose-200"
+            : "bg-sky-50 dark:bg-sky-950/40 border-sky-200 text-sky-900 dark:text-sky-200"
+        }`}>
           <span>{feedback}</span>
+          <button type="button" onClick={() => setFeedback("")} className="text-muted hover:text-navy dark:hover:text-white font-mono text-sm cursor-pointer">✕</button>
         </div>
       )}
 
-      {/* Module 1: PAN NUMBER (Required for all) */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-extrabold text-navy dark:text-gray-200 flex items-center gap-1.5">
-            <span>1. PAN Number</span>
-            <span className="text-rose-500 font-bold text-[11px]">*Required</span>
-          </label>
-          {panVerified && (
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <Icon name="check" size={12} /> Verified ({profile?.pan?.legalName || "Matched"})
-            </span>
-          )}
-        </div>
-        <form onSubmit={handleSavePan} className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="text"
-            maxLength={10}
-            value={panInput}
-            onChange={(e) => setPanInput(e.target.value.toUpperCase())}
-            placeholder="e.g. ABCDE1234F"
-            className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
-          />
-          <button
-            type="submit"
-            disabled={savingPan || !panInput.trim()}
-            className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
-          >
-            {savingPan ? "Saving & Verifying..." : "Verify PAN"}
-          </button>
-          <button
-            type="button"
-            onClick={handleDiscoverGstins}
-            disabled={discoveringGstin || !panInput.trim()}
-            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer shrink-0"
-          >
-            {discoveringGstin ? "Searching..." : "Search GSTINs under PAN"}
-          </button>
-        </form>
-
-        {discoveryResult && (
-          <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 text-xs space-y-2">
-            <div className="font-bold text-navy dark:text-gray-200">{discoveryResult.message}</div>
-            {discoveryResult.gstins && discoveryResult.gstins.length > 0 && (
-              <ul className="space-y-1 pl-2 border-l-2 border-primary">
-                {discoveryResult.gstins.map((g, idx) => (
-                  <li key={idx} className="flex items-center justify-between text-[11px]">
-                    <span className="font-mono font-bold text-primary">{g.gstin}</span>
-                    <span className="text-muted dark:text-gray-400">{g.state} — {g.legalName}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGstRegistered(true);
-                        setGstinInput(g.gstin);
-                      }}
-                      className="text-[10px] font-bold text-primary hover:underline"
-                    >
-                      Use this GSTIN
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Module 2: GST REGISTRATION STATUS (Mandatory Yes/No) */}
-      <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-extrabold text-navy dark:text-gray-200">
-            2. GST Registration Status <span className="text-rose-500 font-bold text-[11px]">*Mandatory</span>
-          </label>
-          {isGstNotReq && (
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
-              GST Not Applicable (Onboarding Active)
-            </span>
-          )}
-          {gstStatus === "VERIFIED" && !isGstNotReq && (
-            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-              ✓ GSTIN Verified ({profile?.gst?.gstin})
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-6">
-          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
-            <input
-              type="radio"
-              name="gstRegistered"
-              checked={gstRegistered === true}
-              onChange={() => setGstRegistered(true)}
-              className="accent-primary"
-            />
-            <span>YES (I have GST registration)</span>
-          </label>
-          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-navy dark:text-gray-200">
-            <input
-              type="radio"
-              name="gstRegistered"
-              checked={gstRegistered === false}
-              onChange={() => {
-                setGstRegistered(false);
-                setGstinInput("");
-              }}
-              className="accent-primary"
-            />
-            <span>NO (GST not registered)</span>
-          </label>
-        </div>
-
-        {gstRegistered ? (
-          <form onSubmit={handleSaveGst} className="flex flex-col sm:flex-row gap-2 mt-2">
-            <input
-              type="text"
-              maxLength={15}
-              value={gstinInput}
-              onChange={(e) => setGstinInput(e.target.value.toUpperCase())}
-              placeholder="e.g. 19ABCDE1234F1Z5"
-              className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase focus:ring-2 focus:ring-primary/20 outline-none"
-            />
-            <button
-              type="submit"
-              disabled={savingGst || !gstinInput.trim()}
-              className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer shrink-0"
-            >
-              {savingGst ? "Verifying..." : "Verify & Save GSTIN"}
-            </button>
-          </form>
-        ) : (
-          <div className="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-300 flex items-center justify-between">
-            <span>GST registration is not required. You can complete onboarding and add bank details using your PAN.</span>
-            <button
-              type="button"
-              onClick={handleSaveGst}
-              disabled={savingGst}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-[11px] hover:bg-emerald-700 shrink-0 ml-2 cursor-pointer"
-            >
-              Confirm GST = NO
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Module 3: BANK DETAILS & ₹0.02 PENNY DROP VERIFICATION (GST Independent) */}
-      <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-        <div className="flex items-center justify-between">
+      {/* MODULE 1: PAN NUMBER & DOCUMENT */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-xs font-extrabold text-navy dark:text-gray-200">
-              3. Bank Details & ₹0.02 Penny-Drop Verification
-            </h3>
-            <p className="text-[11px] text-muted dark:text-gray-400">
-              Bank details are independent from GST status. ₹0.02 verification is strictly for bank identity control.
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-extrabold text-xs grid place-items-center">1</span>
+              <h3 className="font-extrabold text-sm text-navy dark:text-gray-100">PAN Identity Card & Document</h3>
+              {isPanProvided && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✓ PAN Configured</span>}
+            </div>
+            <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
+              Personal or Firm 10-digit PAN (e.g., ABCDE1234F). Verified against official entity name & brand name.
             </p>
           </div>
-          {isBankVerified ? (
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 flex items-center gap-1">
-              <Icon name="check" size={12} /> Bank Account Verified
-            </span>
-          ) : bankStatus === "FAILED" ? (
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400">
-              Verification Failed
-            </span>
-          ) : (
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400">
-              Not Verified
-            </span>
-          )}
+
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {isPanProvided && !isEditingPan && (
+              <button
+                type="button"
+                onClick={() => setIsEditingPan(true)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-navy dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                Edit PAN
+              </button>
+            )}
+            <label className="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer">
+              <Icon name="plus" size={13} />
+              <span>{uploadingDocType === "PAN" ? "Uploading..." : "Upload PAN Image/PDF"}</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                disabled={uploadingDocType === "PAN"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) triggerFileUpload(f, "PAN", "Corporate / Firm PAN Card");
+                }}
+              />
+            </label>
+          </div>
         </div>
 
-        <form onSubmit={handleSaveBank} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {(!isPanProvided || isEditingPan) ? (
+          <form onSubmit={handleVerifyPan} className="grid sm:grid-cols-3 gap-3 pt-2">
+            <div className="sm:col-span-2">
+              <input
+                type="text"
+                value={panInput}
+                onChange={(e) => setPanInput(e.target.value.toUpperCase())}
+                placeholder="e.g. ABCDE1234F"
+                maxLength={10}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20 uppercase text-xs"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={savingPan || !panInput.trim()}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer"
+              >
+                {savingPan ? "Saving..." : "Save PAN"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscoverGstins}
+                disabled={discoveringGstin || panInput.length < 10}
+                className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 transition cursor-pointer"
+              >
+                {discoveringGstin ? "Verifying..." : "Verify Name"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-mono font-bold text-navy dark:text-gray-100">
+            <span>PAN: {panInput}</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-sans text-[11px] font-bold">✓ PAN Identity Active</span>
+          </div>
+        )}
+
+        {discoveryResult && (
+          <div className={`p-3 rounded-xl border text-xs ${discoveryResult.matched ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 text-emerald-900 dark:text-emerald-200" : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 text-amber-900 dark:text-amber-200"}`}>
+            <div className="font-extrabold flex items-center justify-between">
+              <span>{discoveryResult.matched ? "✓ Name Auto-Verified" : "⚠ Admin Review Required"}</span>
+              <span className="text-[10px] uppercase font-bold">{discoveryResult.entityType || "PAN Record"}</span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              <div>Legal Entity Name: <strong>{discoveryResult.legalName || discoveryResult.registeredName || "N/A"}</strong></div>
+              {discoveryResult.tradeName && <div>Trade/Brand Name: <strong>{discoveryResult.tradeName}</strong></div>}
+            </div>
+          </div>
+        )}
+
+        {panDocs.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[11px] font-extrabold uppercase text-muted dark:text-gray-400 tracking-wider">Attached PAN Documents ({panDocs.length})</div>
+            {panDocs.map((doc) => (
+              <ModuleDocumentCard key={doc._id} doc={doc} onPreview={setSelectedPreviewDoc} onDelete={handleDeleteDoc} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* MODULE 2: GST REGISTRATION */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              Account Holder Name *
-            </label>
-            <input
-              type="text"
-              value={bankForm.accountHolderName}
-              onChange={(e) => setBankForm({ ...bankForm, accountHolderName: e.target.value })}
-              placeholder="Full name as in bank record"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            />
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-extrabold text-xs grid place-items-center">2</span>
+              <h3 className="font-extrabold text-sm text-navy dark:text-gray-100">GST Registration & Certificate</h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                {gstRegistered ? "Active GSTIN" : "Exempt / Not Registered"}
+              </span>
+            </div>
+            <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
+              GST is optional if not registered. Enter 15-digit GSTIN or upload certificate for instant API verification.
+            </p>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              Account Number *
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {!isEditingGst && (
+              <button
+                type="button"
+                onClick={() => setIsEditingGst(true)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-navy dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                Change GST Status
+              </button>
+            )}
+            <label className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer">
+              <Icon name="plus" size={13} />
+              <span>{uploadingDocType === "GST" ? "Uploading..." : "Upload GST Certificate"}</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                disabled={uploadingDocType === "GST"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) triggerFileUpload(f, "GST", "GST Registration Certificate");
+                }}
+              />
             </label>
-            <input
-              type="text"
-              value={bankForm.accountNumber}
-              onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
-              placeholder="e.g. 123456789012"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            />
+          </div>
+        </div>
+
+        {isEditingGst ? (
+          <form onSubmit={handleSaveGst} className="space-y-3 pt-2">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2 text-xs font-bold ${!gstRegistered ? "border-primary bg-primary/5 text-primary" : "border-gray-200 dark:border-gray-700 text-navy dark:text-gray-300"}`}>
+                <input
+                  type="radio"
+                  name="gstStatusChoice"
+                  checked={!gstRegistered}
+                  onChange={() => setGstRegistered(false)}
+                />
+                <span>GST Exempt / Not Registered (Active via PAN)</span>
+              </label>
+
+              <label className={`p-3 rounded-xl border cursor-pointer transition flex items-center gap-2 text-xs font-bold ${gstRegistered ? "border-primary bg-primary/5 text-primary" : "border-gray-200 dark:border-gray-700 text-navy dark:text-gray-300"}`}>
+                <input
+                  type="radio"
+                  name="gstStatusChoice"
+                  checked={gstRegistered}
+                  onChange={() => setGstRegistered(true)}
+                />
+                <span>I have an Active GSTIN</span>
+              </label>
+            </div>
+
+            {gstRegistered && (
+              <div>
+                <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">15-Digit GSTIN Number *</label>
+                <input
+                  type="text"
+                  value={gstinInput}
+                  onChange={(e) => setGstinInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. 33AASFB5978N1ZK"
+                  maxLength={15}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20 uppercase text-xs"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="submit"
+                disabled={savingGst || verifyingGst}
+                className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark disabled:opacity-50 transition cursor-pointer"
+              >
+                {savingGst || verifyingGst ? "Verifying with API..." : gstRegistered ? "Verify & Save GSTIN" : "Save GST Status"}
+              </button>
+              {gstRegistered && (
+                <button
+                  type="button"
+                  onClick={handleVerifyGstApi}
+                  disabled={verifyingGst || gstinInput.length < 10}
+                  className="px-3.5 py-2.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 disabled:opacity-50 transition cursor-pointer"
+                >
+                  {verifyingGst ? "Verifying..." : "⚡ Check GSTIN via API"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsEditingGst(false)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs flex items-center justify-between font-bold text-navy dark:text-gray-100">
+            <span>GST Status: {gstRegistered ? `GSTIN ${gstinInput}` : "GST Not Applicable / Exempt (Onboarding Active via PAN)"}</span>
+            <span className="text-emerald-600 dark:text-emerald-400 text-[11px]">✓ Validated</span>
+          </div>
+        )}
+
+        {gstVerificationResult && (
+          <div className={`p-3 rounded-xl border text-xs ${gstVerificationResult.matched ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 text-emerald-900 dark:text-emerald-200" : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 text-amber-900 dark:text-amber-200"}`}>
+            <div className="font-extrabold flex items-center justify-between">
+              <span>{gstVerificationResult.matched ? "✓ GSTIN Auto-Verified (API)" : "⚠ Name Review Required"}</span>
+              <span className="text-[10px] uppercase font-bold">{gstVerificationResult.gstinStatus || "Active"}</span>
+            </div>
+            <div className="mt-1 space-y-0.5">
+              <div>Legal Registered Name: <strong>{gstVerificationResult.legalName || gstVerificationResult.registeredName || "N/A"}</strong></div>
+              {gstVerificationResult.tradeName && <div>Trade/Brand Name: <strong>{gstVerificationResult.tradeName}</strong></div>}
+              {gstVerificationResult.taxpayerType && <div>Taxpayer Type: <strong>{gstVerificationResult.taxpayerType}</strong></div>}
+            </div>
+          </div>
+        )}
+
+        {gstDocs.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[11px] font-extrabold uppercase text-muted dark:text-gray-400 tracking-wider">Attached GST Certificates ({gstDocs.length})</div>
+            {gstDocs.map((doc) => (
+              <ModuleDocumentCard key={doc._id} doc={doc} onPreview={setSelectedPreviewDoc} onDelete={handleDeleteDoc} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* MODULE 3: BANK ACCOUNT & VERIFICATION */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-extrabold text-xs grid place-items-center">3</span>
+              <h3 className="font-extrabold text-sm text-navy dark:text-gray-100">Bank Details & Verification</h3>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isBankVerified ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"}`}>
+                {isBankVerified ? "✓ Bank Account Verified" : "Action Required (Mandatory)"}
+              </span>
+            </div>
+            <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
+              Direct verification required via penny drop API. Payouts and customer matching unlock upon verification.
+            </p>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              IFSC Code *
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {isBankVerified && !isEditingBank && (
+              <button
+                type="button"
+                onClick={() => setIsEditingBank(true)}
+                className="px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-navy dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                Edit Bank Details
+              </button>
+            )}
+            <label className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer">
+              <Icon name="plus" size={13} />
+              <span>{uploadingDocType === "BANK_PROOF" ? "Uploading..." : "Upload Passbook/Cheque"}</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                disabled={uploadingDocType === "BANK_PROOF"}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) triggerFileUpload(f, "BANK_PROOF", "Bank Passbook / Cancelled Cheque");
+                }}
+              />
             </label>
-            <input
-              type="text"
-              maxLength={11}
-              value={bankForm.ifsc}
-              onChange={(e) => setBankForm({ ...bankForm, ifsc: e.target.value.toUpperCase() })}
-              placeholder="e.g. HDFC0001234"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white uppercase outline-none focus:ring-2 focus:ring-primary/20"
-            />
           </div>
+        </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              Bank Name *
-            </label>
-            <input
-              type="text"
-              value={bankForm.bankName}
-              onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
-              placeholder="e.g. HDFC Bank / ICICI Bank"
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
+        {(!isBankVerified || isEditingBank) ? (
+          <form onSubmit={handleSaveBankDetails} className="grid sm:grid-cols-2 gap-3 pt-2">
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Account Holder Name *</label>
+              <input
+                type="text"
+                required
+                value={bankForm.accountHolderName}
+                onChange={(e) => setBankForm({ ...bankForm, accountHolderName: e.target.value })}
+                placeholder="Full name as in bank records"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">
-              Account Type *
-            </label>
-            <select
-              value={bankForm.accountType}
-              onChange={(e) => setBankForm({ ...bankForm, accountType: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none"
-            >
-              <option value="SAVINGS">Savings Account</option>
-              <option value="CURRENT">Current Account</option>
-              <option value="CC_OD">Cash Credit / Overdraft</option>
-              <option value="OTHER">Other</option>
-            </select>
-          </div>
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Account Number *</label>
+              <input
+                type="text"
+                required
+                value={bankForm.accountNumber}
+                onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value.replace(/\D/g, "") })}
+                placeholder="e.g. 123456789012"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
 
-          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={savingBank}
-              className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition cursor-pointer"
-            >
-              {savingBank ? "Saving Details..." : "Save Bank Details"}
-            </button>
-            <button
-              type="button"
-              onClick={handleVerifyBank}
-              disabled={verifyingBank || !bankForm.accountNumber || !bankForm.ifsc}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Icon name="check" size={14} />
-              <span>{verifyingBank ? "Executing ₹0.02 Penny Drop..." : "Verify with ₹0.02 Penny Drop"}</span>
-            </button>
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">IFSC Code *</label>
+              <input
+                type="text"
+                required
+                value={bankForm.ifsc}
+                onChange={(e) => setBankForm({ ...bankForm, ifsc: e.target.value.toUpperCase() })}
+                placeholder="e.g. YESB0000262"
+                maxLength={11}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20 uppercase"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Bank Name *</label>
+              <input
+                type="text"
+                required
+                value={bankForm.bankName}
+                onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
+                placeholder="e.g. YES Bank / HDFC Bank"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Account Type *</label>
+              <select
+                value={bankForm.accountType}
+                onChange={(e) => setBankForm({ ...bankForm, accountType: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-navy dark:text-white outline-none"
+              >
+                <option value="SAVINGS">Savings Account</option>
+                <option value="CURRENT">Current Account</option>
+                <option value="CC_OD">Cash Credit / Overdraft</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-navy dark:text-gray-300 mb-1">Phone Number for Verification</label>
+              <input
+                type="tel"
+                value={bankForm.phone}
+                onChange={(e) => setBankForm({ ...bankForm, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                placeholder="e.g. 9888833333"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-mono font-bold text-navy dark:text-white outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="submit"
+                disabled={savingBank}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-navy dark:text-gray-200 text-xs font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+              >
+                {savingBank ? "Saving..." : "Save Bank Details"}
+              </button>
+              <button
+                type="button"
+                onClick={handleVerifyBank}
+                disabled={verifyingBank || !bankForm.accountNumber || !bankForm.ifsc}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs disabled:opacity-50 transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Icon name="check" size={14} />
+                <span>{verifyingBank ? "Verifying Bank..." : "Verify Bank Account Now"}</span>
+              </button>
+              {isBankVerified && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingBank(false)}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-muted hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </form>
+        ) : (
+          <div className="p-3.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-extrabold text-navy dark:text-gray-100">{bankForm.bankName || "Bank Account"} ({bankForm.accountType})</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">✓ Penny Drop Verified</span>
+            </div>
+            <div className="text-muted dark:text-gray-400 font-mono flex items-center gap-3">
+              <span>Holder: <strong>{bankForm.accountHolderName}</strong></span>
+              <span>Acc: <strong>••••{bankForm.accountNumber?.slice(-4)}</strong></span>
+              <span>IFSC: <strong>{bankForm.ifsc}</strong></span>
+            </div>
           </div>
-        </form>
+        )}
+
+        {bankDocs.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-[11px] font-extrabold uppercase text-muted dark:text-gray-400 tracking-wider">Attached Bank Proofs ({bankDocs.length})</div>
+            {bankDocs.map((doc) => (
+              <ModuleDocumentCard key={doc._id} doc={doc} onPreview={setSelectedPreviewDoc} onDelete={handleDeleteDoc} />
+            ))}
+          </div>
+        )}
 
         {logs.length > 0 && (
-          <div className="pt-2">
+          <div className="pt-1">
             <button
               type="button"
               onClick={() => setShowLogs(!showLogs)}
               className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
             >
               <Icon name={showLogs ? "chevronUp" : "chevronDown"} size={12} />
-              <span>{showLogs ? "Hide" : "View"} Verification Audit Log ({logs.length})</span>
+              <span>{showLogs ? "Hide" : "View"} Bank Verification Audit Logs ({logs.length})</span>
             </button>
 
             {showLogs && (
-              <div className="mt-2 space-y-2 p-3 bg-gray-50 dark:bg-gray-800/70 rounded-xl text-[11px] border border-gray-200 dark:border-gray-700">
+              <div className="mt-2 space-y-2 p-3 bg-white dark:bg-gray-800 rounded-xl text-[11px] border border-gray-200 dark:border-gray-700">
                 {logs.map((log) => (
-                  <div key={log.verificationId} className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 last:border-0 pb-1.5 last:pb-0">
+                  <div key={log.verificationId} className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700/60 last:border-0 pb-1.5 last:pb-0">
                     <div>
                       <span className="font-mono font-bold text-navy dark:text-gray-200">{log.verificationId}</span>
-                      <span className="text-muted dark:text-gray-400 ml-2">Amount: ₹{log.amount}</span>
+                      <span className="text-muted dark:text-gray-400 ml-2">₹{log.amount} Penny Drop</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded font-bold ${log.verificationStatus === "VERIFIED" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+                      <span className={`px-2 py-0.5 rounded font-bold ${log.verificationStatus === "VERIFIED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"}`}>
                         {log.verificationStatus}
                       </span>
                       <span className="text-muted text-[10px]">{new Date(log.requestedAt).toLocaleDateString()}</span>
@@ -2874,757 +3468,99 @@ export function VendorFinancialOnboardingCard() {
           </div>
         )}
       </div>
-    </Card>
-  );
-}
 
-/* ── Working Documents Manager (KYC & Verification) ───────────────────────── */
-export function DocumentsManager({ isTab = false }) {
-  const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [selectedDocForPreview, setSelectedDocForPreview] = useState(null);
-  const [checkingApi, setCheckingApi] = useState(false);
-  const [apiCheckResult, setApiCheckResult] = useState(null);
-
-  const [docForm, setDocForm] = useState({
-    title: "GST Registration Certificate",
-    type: "GST",
-    documentNumber: "",
-    fileName: "GST_Certificate.pdf",
-    fileSize: "1.2 MB",
-    expiryDate: "",
-    notes: "",
-  });
-
-  function getVerificationIssue(result) {
-    const code = String(result?.error || "").toLowerCase();
-    const message = String(result?.message || "").toLowerCase();
-    if (!code && !message) return null;
-
-    if (
-      code.includes("insufficient") ||
-      code.includes("credit") ||
-      message.includes("insufficient") ||
-      message.includes("credit")
-    ) {
-      return {
-        title: "Manual admin review required",
-        detail:
-          "The verification provider could not complete this check because API credits are unavailable. Your document is still submitted to STARVNT Core for manual review.",
-      };
-    }
-
-    if (code.includes("fetch") || message.includes("failed to fetch")) {
-      return {
-        title: "Manual admin review required",
-        detail:
-          "The verification provider is temporarily unreachable. Your document can still be submitted and reviewed by STARVNT Core.",
-      };
-    }
-
-    if (code.includes("not_configured")) {
-      return {
-        title: "Manual admin review required",
-        detail:
-          "Automatic verification is not configured yet. STARVNT Core will review this document manually.",
-      };
-    }
-
-    return {
-      title: "Manual admin review required",
-      detail:
-        result?.message ||
-        "Automatic verification could not confirm this document. STARVNT Core will review it manually.",
-    };
-  }
-
-  const loadDocuments = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await externalApi.call("/vendor/documents");
-      if (res.ok && Array.isArray(res.documents)) {
-        setDocuments(res.documents);
-      }
-    } catch (err) {
-      console.warn("[DocumentsManager] Load error:", err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadDocuments();
-  }, [loadDocuments]);
-
-  async function handleQuickCheck() {
-    if (!docForm.documentNumber?.trim()) return;
-    try {
-      setCheckingApi(true);
-      setApiCheckResult(null);
-      const isPan = docForm.type === "PAN";
-      const endpoint = isPan
-        ? "/vendor/documents/verify-pan"
-        : "/vendor/documents/verify-gstin";
-      const payload = isPan
-        ? { pan: docForm.documentNumber.trim() }
-        : { gstin: docForm.documentNumber.trim() };
-      const res = await externalApi.call(endpoint, {
-        method: "POST",
-        body: payload,
-      });
-      if (res.ok && res.result) {
-        setApiCheckResult(res.result);
-      } else {
-        setApiCheckResult({
-          ok: false,
-          error: res.error || "Verification check failed",
-        });
-      }
-    } catch (err) {
-      setApiCheckResult({ ok: false, error: err.message });
-    } finally {
-      setCheckingApi(false);
-    }
-  }
-
-  async function handleUpload(e) {
-    e.preventDefault();
-    if (!docForm.title.trim()) return;
-
-    try {
-      setUploading(true);
-      const res = await externalApi.call("/vendor/documents", {
-        method: "POST",
-        body: docForm,
-      });
-
-      if (res.ok) {
-        setShowUploadModal(false);
-        setApiCheckResult(null);
-        setDocForm({
-          title: "GST Registration Certificate",
-          type: "GST",
-          documentNumber: "",
-          fileName: "GST_Certificate.pdf",
-          fileSize: "1.2 MB",
-          expiryDate: "",
-          notes: "",
-        });
-        await loadDocuments();
-      }
-    } catch (err) {
-      alert(`Could not upload document: ${err.message}`);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleDelete(docId) {
-    if (
-      !window.confirm("Are you sure you want to remove this document record?")
-    )
-      return;
-    try {
-      const res = await externalApi.call(`/vendor/documents/${docId}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        await loadDocuments();
-      }
-    } catch (err) {
-      alert(`Could not delete document: ${err.message}`);
-    }
-  }
-
-  const content = (
-    <div className="space-y-6">
-      {/* Decoupled Financial & Verification Onboarding Module */}
-      <VendorFinancialOnboardingCard />
-
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-dark-card p-5 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xs">
-        <div>
-          <h2 className="font-extrabold text-base text-navy dark:text-gray-100">
-            KYC & Business Document Records
-          </h2>
-          <p className="text-xs text-muted mt-0.5">
-            GSTIN and Corporation PAN are verified automatically via API.
-            Matching registered names are verified instantly; mismatches go to
-            admin review.
-          </p>
-        </div>
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition flex items-center gap-1.5 self-start sm:self-center shrink-0 cursor-pointer"
-        >
-          <Icon name="plus" size={14} />
-          <span>Upload Document</span>
-        </button>
-      </div>
-
-      {documents.length > 0 ? (
-        <Card className="!p-0 overflow-hidden">
-          <ul className="divide-y divide-gray-100">
-            {documents.map((doc) => (
-              <li
-                key={doc._id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-lavender/30 transition"
-              >
-                <div className="flex items-start gap-3 min-w-0">
-                  <div
-                    className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${
-                      doc.type === "GST"
-                        ? "bg-purple-50 text-purple-600"
-                        : doc.type === "PAN"
-                          ? "bg-sky-50 text-sky-600"
-                          : doc.type === "BANK_PROOF"
-                            ? "bg-emerald-50 text-emerald-600"
-                            : "bg-primary-soft text-primary"
-                    }`}
-                  >
-                    <Icon name="documents" size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-sm text-navy">
-                        {doc.title}
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-lavender text-muted uppercase">
-                        {doc.type}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted mt-0.5 flex items-center gap-2 flex-wrap">
-                      {doc.documentNumber && (
-                        <span>
-                          ID:{" "}
-                          <strong className="text-navy">
-                            {doc.documentNumber}
-                          </strong>
-                        </span>
-                      )}
-                      <span>·</span>
-                      <span>
-                        {doc.fileName || "document.pdf"} (
-                        {doc.fileSize || "1.2 MB"})
-                      </span>
-                      <span>·</span>
-                      <span>
-                        Added {new Date(doc.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    {doc.notes && (
-                      <p className="text-[11px] text-muted italic mt-1">
-                        {doc.notes}
-                      </p>
-                    )}
-                    {(doc.verificationSource === "GSTIN_API" ||
-                      doc.verificationSource === "PAN_API") && (
-                      <div
-                        className={`mt-2 rounded-xl border p-3 text-[11px] ${
-                          doc.status === "VERIFIED"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                            : "border-amber-200 bg-amber-50 text-amber-950"
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 font-extrabold flex-wrap">
-                          <Icon
-                            name={
-                              doc.status === "VERIFIED" ? "shieldCheck" : "help"
-                            }
-                            size={13}
-                          />
-                          <span>
-                            {doc.status === "VERIFIED"
-                              ? doc.verificationSource === "PAN_API"
-                                ? "Corporate PAN Auto-Verified"
-                                : "GSTIN Auto-Verified"
-                              : doc.verificationSource === "PAN_API"
-                                ? "Corporate PAN Needs Admin Review"
-                                : "GSTIN Needs Admin Review"}
-                          </span>
-                          {doc.verificationResult?.confidence && (
-                            <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] uppercase">
-                              {doc.verificationResult.confidence}
-                            </span>
-                          )}
-                          {doc.verificationResult?.entityType && (
-                            <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] text-navy">
-                              {doc.verificationResult.entityType}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 grid sm:grid-cols-2 gap-x-3 gap-y-1">
-                          <span>
-                            Legal / Registered:{" "}
-                            <strong>
-                              {doc.verificationResult?.legalName ||
-                                doc.verificationResult?.registeredName ||
-                                "Not provided"}
-                            </strong>
-                          </span>
-                          <span>
-                            Trade / Brand:{" "}
-                            <strong>
-                              {doc.verificationResult?.tradeName ||
-                                "Not provided"}
-                            </strong>
-                          </span>
-                          {doc.verificationResult?.gstinStatus ? (
-                            <span>
-                              GST Status:{" "}
-                              <strong>
-                                {doc.verificationResult.gstinStatus}
-                              </strong>
-                            </span>
-                          ) : null}
-                          {doc.verificationResult?.panStatus ? (
-                            <span>
-                              PAN Status:{" "}
-                              <strong>
-                                {doc.verificationResult.panStatus}
-                              </strong>
-                            </span>
-                          ) : null}
-                          <span>
-                            Type:{" "}
-                            <strong>
-                              {doc.verificationResult?.taxpayerType ||
-                                doc.verificationResult?.entityType ||
-                                "Unknown"}
-                            </strong>
-                          </span>
-                        </div>
-                        {doc.verificationResult?.error && (
-                          <div className="mt-2 rounded-xl border border-amber-200 bg-white/70 p-2 text-amber-900">
-                            <div className="font-extrabold">
-                              {getVerificationIssue(doc.verificationResult)?.title}
-                            </div>
-                            <div className="mt-0.5 leading-snug">
-                              {getVerificationIssue(doc.verificationResult)?.detail}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 self-end sm:self-center shrink-0">
-                  <span
-                    className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                      doc.status === "VERIFIED"
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        : doc.status === "REJECTED"
-                          ? "bg-rose-50 text-rose-700 border border-rose-200"
-                          : "bg-amber-50 text-amber-800 border border-amber-200"
-                    }`}
-                  >
-                    {doc.status === "VERIFIED"
-                      ? "✓ Verified by Core"
-                      : doc.status === "REJECTED"
-                        ? "Action Required"
-                        : "● Submitted · Verification Pending"}
-                  </span>
-                  <button
-                    onClick={() => setSelectedDocForPreview(doc)}
-                    className="text-xs font-bold text-primary hover:underline cursor-pointer"
-                  >
-                    View Details
-                  </button>
-                  <button
-                    onClick={() => handleDelete(doc._id)}
-                    className="text-xs font-semibold text-rose-500 hover:text-rose-700 cursor-pointer"
-                    title="Delete document"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : !loading ? (
-        <Card className="text-center py-10 px-4 space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-primary-soft text-primary grid place-items-center mx-auto">
-            <Icon name="documents" size={22} />
-          </div>
+      {/* MODULE 4: ADDITIONAL SUPPORTING DOCUMENTS */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-extrabold text-sm text-navy">
-              No Verification Documents Uploaded Yet
-            </h3>
-            <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
-              Upload your GST Registration Certificate or Corporate PAN Card to complete partner verification.
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-extrabold text-xs grid place-items-center">4</span>
+              <h3 className="font-extrabold text-sm text-navy dark:text-gray-100">Additional Supporting KYC Documents</h3>
+            </div>
+            <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
+              Upload business license, shop establishment proof, or address documents for STARVNT admin review.
             </p>
           </div>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition cursor-pointer"
-          >
-            <Icon name="plus" size={14} />
-            <span>+ Upload Your First Document</span>
-          </button>
-        </Card>
-      ) : (
-        <Card className="space-y-3">
-          <SkeletonLine className="h-5 w-48" />
-          <SkeletonLine className="h-16 w-full rounded-2xl" />
-          <SkeletonLine className="h-16 w-full rounded-2xl" />
-        </Card>
-      )}
 
-      {/* Upload Document Modal */}
-      {showUploadModal && (
-        <div
-          className="vendor-modal-backdrop"
-          onClick={() => setShowUploadModal(false)}
-        >
-          <div
-            className="vendor-modal-panel max-w-md p-4 sm:p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <div>
-                <h3 className="font-extrabold text-base text-navy">
-                  Upload KYC / Business Document
-                </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Enter GSTIN or Corporate PAN to auto-verify business name via
-                  API.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setApiCheckResult(null);
-                }}
-                className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleUpload} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Document Category / Type
-                </label>
-                <select
-                  value={docForm.type}
-                  onChange={(e) => {
-                    const t = e.target.value;
-                    const defaultTitles = {
-                      GST: "GST Registration Certificate",
-                      PAN: "Corporate / Firm PAN Card",
-                    };
-                    setDocForm({
-                      ...docForm,
-                      type: t,
-                      title: defaultTitles[t] || docForm.title,
-                      fileName: `${t.toLowerCase()}_proof.pdf`,
-                    });
-                    setApiCheckResult(null);
-                  }}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="GST">
-                    GST Registration Certificate (API Checked)
-                  </option>
-                  <option value="PAN">
-                    Corporate / Firm PAN Card (API Checked)
-                  </option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Document Title
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={docForm.title}
-                  onChange={(e) =>
-                    setDocForm({ ...docForm, title: e.target.value })
-                  }
-                  placeholder={docForm.type === "PAN" ? "e.g. Corporate PAN Card" : "GST Registration Certificate"}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-muted font-semibold">
-                    {docForm.type === "PAN"
-                      ? "PAN Number"
-                      : "GSTIN Number"}
-                  </label>
-                  {(docForm.type === "PAN" || docForm.type === "GST") &&
-                    docForm.documentNumber.trim().length >= 10 && (
-                      <button
-                        type="button"
-                        disabled={checkingApi}
-                        onClick={handleQuickCheck}
-                        className="text-[10px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-50"
-                      >
-                        {checkingApi
-                          ? "Verifying with API…"
-                          : "⚡ Check with API"}
-                      </button>
-                    )}
-                </div>
-                <input
-                  type="text"
-                  value={docForm.documentNumber}
-                  onChange={(e) => {
-                    setDocForm({ ...docForm, documentNumber: e.target.value });
-                    setApiCheckResult(null);
-                  }}
-                  placeholder={
-                    docForm.type === "PAN"
-                      ? "e.g. AABCC1234D or PAN number"
-                      : "e.g. 27AABCU9603R1ZM or PAN number"
-                  }
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:ring-2 focus:ring-primary/20 font-mono"
-                />
-                {docForm.type === "GST" && (
-                  <span className="text-[10px] text-muted mt-1 block">
-                    If GST legal/trade name matches your business profile,
-                    STARVNT verifies KYC automatically. If not, it goes to admin
-                    review.
-                  </span>
-                )}
-                {docForm.type === "PAN" && (
-                  <span className="text-[10px] text-muted mt-1 block">
-                    If PAN legal/trade name matches your business profile,
-                    STARVNT verifies KYC automatically. If not, it goes to admin
-                    review.
-                  </span>
-                )}
-
-                {apiCheckResult && (
-                  <div
-                    className={`mt-2 p-2.5 rounded-xl border text-[11px] ${
-                      apiCheckResult.matched
-                        ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                          : "bg-amber-50 border-amber-200 text-amber-900"
-                    }`}
-                  >
-                    <div className="font-bold flex items-center gap-1">
-                      <span>
-                        {apiCheckResult.matched
-                          ? "✓ Ready to Auto-Verify"
-                          : apiCheckResult.ok
-                            ? "⚠ Name Review Required"
-                            : getVerificationIssue(apiCheckResult)?.title || "⚠ Manual Review Required"}
-                      </span>
-                      {apiCheckResult.entityType && (
-                        <span className="text-[10px] text-muted font-normal">
-                          ({apiCheckResult.entityType})
-                        </span>
-                      )}
-                    </div>
-                    {apiCheckResult.legalName ||
-                    apiCheckResult.registeredName ? (
-                      <div className="mt-0.5">
-                        Found Name:{" "}
-                        <strong>
-                          {apiCheckResult.legalName ||
-                            apiCheckResult.registeredName}
-                        </strong>
-                      </div>
-                    ) : null}
-                    {apiCheckResult.tradeName ? (
-                      <div>
-                        Trade: <strong>{apiCheckResult.tradeName}</strong>
-                      </div>
-                    ) : null}
-                    {apiCheckResult.error && (
-                      <div className="mt-1 font-medium leading-snug">
-                        {getVerificationIssue(apiCheckResult)?.detail}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Attach File (PDF, PNG, JPG)
-                </label>
-                <div className="border border-dashed border-gray-300 rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-lavender/30 transition">
-                  <input
-                    type="file"
-                    id="docFileInput"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setDocForm({
-                          ...docForm,
-                          fileName: file.name,
-                          fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-                        });
-                      }
-                    }}
-                  />
-                  <label
-                    htmlFor="docFileInput"
-                    className="cursor-pointer block"
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-primary-soft text-primary grid place-items-center mx-auto mb-1.5">
-                      <Icon name="plus" size={16} />
-                    </div>
-                    <span className="font-bold text-primary text-xs hover:underline block">
-                      Choose document file
-                    </span>
-                    <span className="text-[10px] text-muted mt-0.5 block">
-                      Selected: <strong>{docForm.fileName}</strong> (
-                      {docForm.fileSize})
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-muted font-semibold mb-1">
-                  Additional Notes / Validity (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={docForm.notes}
-                  onChange={(e) =>
-                    setDocForm({ ...docForm, notes: e.target.value })
-                  }
-                  placeholder="e.g. Primary verified business bank account"
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div className="pt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    setApiCheckResult(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:bg-gray-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading}
-                  className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-dark transition disabled:opacity-60 cursor-pointer"
-                >
-                  {uploading ? "Uploading…" : "Submit for Verification"}
-                </button>
-              </div>
-            </form>
-          </div>
+          <label className="px-3.5 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-2xs hover:bg-primary-dark transition flex items-center gap-1.5 cursor-pointer self-start sm:self-center">
+            <Icon name="plus" size={13} />
+            <span>{uploadingDocType === "OTHER" ? "Uploading..." : "Upload Additional Document"}</span>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              disabled={uploadingDocType === "OTHER"}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) triggerFileUpload(f, "OTHER", f.name);
+              }}
+            />
+          </label>
         </div>
-      )}
 
-      {/* Document Details Modal */}
-      {selectedDocForPreview && (
-        <div
-          className="vendor-modal-backdrop"
-          onClick={() => setSelectedDocForPreview(null)}
-        >
-          <div
-            className="vendor-modal-panel max-w-sm p-4 sm:p-6 space-y-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-              <h3 className="font-extrabold text-base text-navy">
-                {selectedDocForPreview.title}
-              </h3>
+        {otherDocs.length > 0 ? (
+          <div className="space-y-2">
+            {otherDocs.map((doc) => (
+              <ModuleDocumentCard key={doc._id} doc={doc} onPreview={setSelectedPreviewDoc} onDelete={handleDeleteDoc} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-muted dark:text-gray-400 italic p-3 rounded-xl border border-dashed border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-center">
+            No additional documents attached. Inline uploads for PAN, GST, and Bank above fulfill core onboarding.
+          </div>
+        )}
+      </div>
+
+      {/* DOCUMENT PREVIEW MODAL */}
+      {selectedPreviewDoc && (
+        <div className="vendor-modal-backdrop" onClick={() => setSelectedPreviewDoc(null)}>
+          <div className="vendor-modal-panel max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="font-extrabold text-base text-navy dark:text-gray-100">{selectedPreviewDoc.title}</h3>
               <button
                 type="button"
-                onClick={() => setSelectedDocForPreview(null)}
-                className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition cursor-pointer"
+                onClick={() => setSelectedPreviewDoc(null)}
+                className="w-7 h-7 rounded-full bg-lavender dark:bg-gray-800 text-ink/70 dark:text-gray-300 hover:text-ink grid place-items-center cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Category:</span>
-                <span className="font-bold text-navy">
-                  {selectedDocForPreview.type}
-                </span>
+            {selectedPreviewDoc.fileUrl?.startsWith("data:image/") ? (
+              <img src={selectedPreviewDoc.fileUrl} alt={selectedPreviewDoc.title} className="w-full max-h-60 object-contain rounded-xl border border-gray-200 dark:border-gray-700" />
+            ) : (
+              <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center text-xs text-muted dark:text-gray-300">
+                📄 Document file attached: <strong>{selectedPreviewDoc.fileName}</strong> ({selectedPreviewDoc.fileSize || "PDF"})
               </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Document ID:</span>
-                <span className="font-mono font-bold text-navy">
-                  {selectedDocForPreview.documentNumber || "N/A"}
-                </span>
+            )}
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-muted">Document Type:</span>
+                <span className="font-bold text-navy dark:text-gray-200">{selectedPreviewDoc.type}</span>
               </div>
-              {selectedDocForPreview.verificationSource && (
-                <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">
-                    Verification Engine:
-                  </span>
-                  <span className="font-bold text-navy">
-                    {selectedDocForPreview.verificationSource}
-                  </span>
+              {selectedPreviewDoc.documentNumber && (
+                <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-muted">Document Number:</span>
+                  <span className="font-mono font-bold text-navy dark:text-gray-200">{selectedPreviewDoc.documentNumber}</span>
                 </div>
               )}
-              {selectedDocForPreview.verificationResult?.legalName && (
-                <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">
-                    Verified Legal Name:
-                  </span>
-                  <span className="font-bold text-navy text-right max-w-[180px] truncate">
-                    {selectedDocForPreview.verificationResult.legalName}
-                  </span>
-                </div>
-              )}
-              {selectedDocForPreview.verificationResult?.entityType && (
-                <div className="flex justify-between py-1 border-b border-gray-50">
-                  <span className="text-muted font-medium">
-                    Entity Classification:
-                  </span>
-                  <span className="font-semibold text-navy">
-                    {selectedDocForPreview.verificationResult.entityType}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Attached File:</span>
-                <span className="font-semibold text-navy">
-                  {selectedDocForPreview.fileName}
+              <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-muted">Verification Status:</span>
+                <span className={`font-bold ${selectedPreviewDoc.status === "VERIFIED" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                  {selectedPreviewDoc.status}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Status:</span>
-                <span className="font-bold text-amber-700">
-                  {selectedDocForPreview.status}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-gray-50">
-                <span className="text-muted font-medium">Submitted On:</span>
-                <span className="text-navy">
-                  {new Date(
-                    selectedDocForPreview.createdAt,
-                  ).toLocaleDateString()}
-                </span>
-              </div>
-              {selectedDocForPreview.notes && (
-                <div className="pt-1">
-                  <span className="text-muted font-medium block">Notes:</span>
-                  <p className="text-navy mt-0.5 italic">
-                    {selectedDocForPreview.notes}
-                  </p>
+              {selectedPreviewDoc.notes && (
+                <div className="pt-1 text-muted italic">
+                  Notes: {selectedPreviewDoc.notes}
                 </div>
               )}
             </div>
 
             <button
               type="button"
-              onClick={() => setSelectedDocForPreview(null)}
+              onClick={() => setSelectedPreviewDoc(null)}
               className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark transition cursor-pointer"
             >
               Close
@@ -3632,22 +3568,15 @@ export function DocumentsManager({ isTab = false }) {
           </div>
         </div>
       )}
-    </div>
-  );
-
-  if (isTab) {
-    return content;
-  }
-
-  return (
-    <Page
-      title="Documents & Verification"
-      sub="KYC, tax registration and banking — secure, controlled storage for platform trust."
-    >
-      {content}
-    </Page>
+    </Card>
   );
 }
+
+/* ── Working Documents Manager (KYC & Verification Hub Wrapper) ─────────────── */
+export function DocumentsManager({ isTab = false }) {
+  return <VendorFinancialOnboardingCard />;
+}
+
 
 /* ── Working Settings Manager ────────────────────────────────────────────── */
 export function SettingsManager({ isTab = false }) {
@@ -3712,7 +3641,7 @@ export function SettingsManager({ isTab = false }) {
           <li className="flex items-center justify-between py-3">
             <div>
               <div className="font-bold text-navy">
-                Core Escrow & Payment Alerts
+                Payment and settlement alerts
               </div>
               <div className="text-muted text-[11px]">
                 Immediate notification when client payment is verified by Core
@@ -3840,6 +3769,7 @@ export function SettingsManager({ isTab = false }) {
 function GoogleBusinessSection({
   googlePlaceId,
   initialRating,
+  defaultLocation,
   onSavePlaceId,
 }) {
   const [isSearching, setIsSearching] = useState(!googlePlaceId);
@@ -3850,6 +3780,7 @@ function GoogleBusinessSection({
   const [currentPlace, setCurrentPlace] = useState(initialRating || null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [defaultCoordinates, setDefaultCoordinates] = useState(null);
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -3865,17 +3796,31 @@ function GoogleBusinessSection({
     }
   }, [initialRating]);
 
+  useEffect(() => {
+    if (!defaultLocation?.trim() || (currentPlace?.lat && currentPlace?.lng)) return;
+    let cancelled = false;
+    externalApi.call(`/vendor/google-places/search?query=${encodeURIComponent(`${defaultLocation.trim()}, India`)}`)
+      .then((res) => {
+        const match = res.ok && res.places?.find((place) => place.lat != null && place.lng != null && Number.isFinite(Number(place.lat)) && Number.isFinite(Number(place.lng)));
+        if (!cancelled && match) setDefaultCoordinates({ lat: Number(match.lat), lng: Number(match.lng) });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentPlace?.lat, currentPlace?.lng, defaultLocation]);
+
   // Leaflet map setup with Google Maps tiles
   useEffect(() => {
     if (!mapRef.current) return;
-    const lat = currentPlace?.lat || 19.076;
-    const lng = currentPlace?.lng || 72.8777;
-    const hasPin = Boolean(currentPlace?.lat && currentPlace?.lng);
+    const hasPin = Number.isFinite(Number(currentPlace?.lat)) && Number.isFinite(Number(currentPlace?.lng))
+      && Number(currentPlace?.lat) !== 0 && Number(currentPlace?.lng) !== 0;
+    const lat = hasPin ? Number(currentPlace.lat) : defaultCoordinates?.lat ?? 22.5937;
+    const lng = hasPin ? Number(currentPlace.lng) : defaultCoordinates?.lng ?? 78.9629;
+    const zoom = hasPin ? 15 : defaultCoordinates ? 11 : 4;
 
     if (!mapInstance.current) {
       const map = L.map(mapRef.current, {
         center: [lat, lng],
-        zoom: hasPin ? 15 : 12,
+        zoom,
         zoomControl: false,
       });
       L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -3892,8 +3837,8 @@ function GoogleBusinessSection({
       }
       mapInstance.current = map;
     } else {
+      mapInstance.current.setView([lat, lng], zoom);
       if (hasPin) {
-        mapInstance.current.setView([lat, lng], 15);
         if (markerInstance.current) {
           markerInstance.current.setLatLng([lat, lng]);
         } else {
@@ -3901,13 +3846,16 @@ function GoogleBusinessSection({
             icon: pinIcon,
           }).addTo(mapInstance.current);
         }
+      } else if (markerInstance.current) {
+        mapInstance.current.removeLayer(markerInstance.current);
+        markerInstance.current = null;
       }
     }
 
     return () => {
       // Keep instance intact across renders
     };
-  }, [currentPlace?.lat, currentPlace?.lng]);
+  }, [currentPlace?.lat, currentPlace?.lng, defaultCoordinates?.lat, defaultCoordinates?.lng]);
 
   function handleSearchChange(e) {
     const val = e.target.value;
@@ -4226,6 +4174,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
       if (profRes.ok && profRes.vendor) {
         setProfile({
           businessName: profRes.vendor.businessName || business || "",
+          brandName: profRes.vendor.brandName || "",
           category: profRes.vendor.category || "",
           location: profRes.vendor.location || "",
           phone: profRes.vendor.phone || user?.phone || "",
@@ -4515,10 +4464,10 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
             ) : (
               activation && (
                 <span
-                  className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.is100Percent ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                  className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.matchingEligible ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
                 >
                   {activation.completionPercentage ?? 0}%{" "}
-                  {activation.is100Percent ? "✓ Active" : "Setup"}
+                  {activation.matchingEligible ? "Active" : "Locked"}
                 </span>
               )
             )}
@@ -4572,9 +4521,6 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
 
           {/* Desktop-only readiness bar */}
           <div className="pt-3 mt-2 border-t border-gray-100 px-2 pb-1 hidden lg:block">
-            <div className="text-[11px] font-semibold text-muted">
-              Profile Readiness
-            </div>
             {loadingProfile && !activation ? (
               <div className="space-y-2 mt-2">
                 <div className="flex items-center justify-between">
@@ -4585,27 +4531,36 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between text-xs font-bold text-navy mt-1">
-                  <span>{activation?.completionPercentage ?? 0}% Complete</span>
+                <div className="flex items-center justify-between text-[11px] font-bold text-navy">
+                  <span>Readiness</span>
                   <span
                     className={
-                      activation?.is100Percent
+                      activation?.matchingEligible
                         ? "text-emerald-600"
                         : "text-amber-600"
                     }
                   >
-                    {activation?.is100Percent ? "✓ Active" : "● Setup Required"}
+                    {activation?.completionPercentage ?? 0}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      activation?.is100Percent ? "bg-emerald-500" : "bg-primary"
+                      activation?.matchingEligible ? "bg-emerald-500" : "bg-primary"
                     }`}
                     style={{
                       width: `${activation?.completionPercentage ?? 0}%`,
                     }}
                   />
+                </div>
+                <div
+                  className={`mt-1.5 text-[10px] font-bold ${
+                    activation?.matchingEligible ? "text-emerald-600" : "text-amber-600"
+                  }`}
+                >
+                  {activation?.matchingEligible
+                    ? "Active for matching"
+                    : activation?.missingRequirements?.[0] || "Core readiness locked"}
                 </div>
               </>
             )}
@@ -4764,11 +4719,30 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
-                        Brand / Business Name
+                        Brand / Display Name (Trade Name) *
                       </label>
                       <input
-                        placeholder="e.g. CineMandap Studios"
-                        value={profile.businessName}
+                        placeholder="e.g. Himalayan Heritage Pine Lawns & Resort"
+                        value={profile.brandName || ""}
+                        onChange={(e) =>
+                          setProfile({
+                            ...profile,
+                            brandName: e.target.value,
+                          })
+                        }
+                        className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-navy dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <span className="text-[10px] text-muted dark:text-gray-400 mt-0.5 block">
+                        Visible to customers on STARVNT marketplace
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                        Legal Business Entity Name (PAN / GST Name) *
+                      </label>
+                      <input
+                        placeholder="e.g. BILLIONEDGE INVESTMENT ADVISORS"
+                        value={profile.businessName || ""}
                         onChange={(e) =>
                           setProfile({
                             ...profile,
@@ -4776,36 +4750,17 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                           })
                         }
                         required
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-navy dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
+                      <span className="text-[10px] text-muted dark:text-gray-400 mt-0.5 block">
+                        Registered company/firm name used for PAN/GST verification
+                      </span>
                     </div>
                     <div>
                       <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
                         Primary Category
                       </label>
-                      <select
-                        value={profile.category}
-                        onChange={(e) =>
-                          setProfile({ ...profile, category: e.target.value })
-                        }
-                        required
-                        className="mt-1 w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      >
-                        <option value="">Select Primary Category...</option>
-                        <option value="Cinematic Production">
-                          Cinematic Production
-                        </option>
-                        <option value="Photography">Photography</option>
-                        <option value="Videography">Videography</option>
-                        <option value="Decor & Styling">Decor & Styling</option>
-                        <option value="Catering">Catering</option>
-                        <option value="Makeup & Styling">
-                          Makeup & Styling
-                        </option>
-                        <option value="DJ & Music">DJ & Music</option>
-                        <option value="Venue">Venue</option>
-                        <option value="Event Planning">Event Planning</option>
-                      </select>
+                      <VendorCategoryPicker value={profile.category} onChange={(category) => setProfile({ ...profile, category })} required />
                     </div>
                     <div>
                       <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
@@ -4885,6 +4840,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
               <GoogleBusinessSection
                 googlePlaceId={profile.googlePlaceId}
                 initialRating={googleRating}
+                defaultLocation={profile.location}
                 onSavePlaceId={handleUpdateGooglePlaceId}
               />
             </div>

@@ -5,11 +5,13 @@ export const customerApi = {
   profile: () => externalApi.call('/customer/profile'),
   planOptions: (eventType) => externalApi.call(`/customer/plan-options${eventType ? `?eventType=${encodeURIComponent(eventType)}` : ''}`),
   events: () => externalApi.call('/customer/events'),
+  deleteEvent: (id) => externalApi.call(`/customer/events/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   event: (id) => externalApi.call(`/customer/events/${id}`),
   patchEvent: (id, body) => externalApi.call(`/customer/events/${id}`, { method: 'PATCH', body }),
   confirmEvent: (id) => externalApi.call(`/customer/events/${id}/confirm`, { method: 'POST' }),
   home: () => externalApi.call('/customer/home'),
   dashboard: (id) => externalApi.call(`/customer/events/${id}/dashboard`),
+  financialTruth: (id) => externalApi.call(`/customer/events/${id}/financial-truth`),
   history: (id) => externalApi.call(`/customer/events/${id}/history`),
   requirements: (id) => externalApi.call(`/customer/events/${id}/requirements`),
   setRequirement: (id, category, body) =>
@@ -31,19 +33,30 @@ export const customerApi = {
     externalApi.call(`/customer/events/${id}/reservations/${reservationId}/coupon-preview`, { method: 'POST', body: { couponCode } }),
   pay: (id, reservationId, couponCode = '') =>
     externalApi.call(`/customer/events/${id}/reservations/${reservationId}/pay`, { method: 'POST', body: { couponCode } }),
-  devSuccessPayment: (id, reservationId) =>
-    externalApi.call(`/customer/events/${id}/reservations/${reservationId}/dev-success-payment`, { method: 'POST' }),
   checkoutComplete: (id, paymentId, body) =>
     externalApi.call(`/customer/events/${id}/payments/${paymentId}/checkout-complete`, { method: 'POST', body }),
   eventDay: (id) => externalApi.call(`/customer/events/${id}/event-day`),
   circle: (id) => externalApi.call(`/customer/events/${id}/circle`),
   messages: (id, ctx = {}) => {
-    const q = ctx.bookingId ? `?bookingId=${ctx.bookingId}` : ctx.requirementId ? `?requirementId=${ctx.requirementId}` : '';
-    return externalApi.call(`/customer/events/${id}/messages${q}`);
+    const params = new URLSearchParams();
+    if (ctx.bookingId) params.set('bookingId', ctx.bookingId);
+    if (ctx.requirementId) params.set('requirementId', ctx.requirementId);
+    if (ctx.threadId) params.set('threadId', ctx.threadId);
+    const qs = params.toString();
+    return externalApi.call(`/customer/events/${id}/messages${qs ? `?${qs}` : ''}`);
   },
   postMessage: (id, body) => externalApi.call(`/customer/events/${id}/messages`, { method: 'POST', body }),
   updates: () => externalApi.call('/customer/updates'),
+  threadMessages: (id) => externalApi.call(`/customer/messages/threads/${encodeURIComponent(id)}`),
+  postThreadMessage: (id, body) => externalApi.call(`/customer/messages/threads/${encodeURIComponent(id)}`, { method: 'POST', body: { body } }),
   readAll: () => externalApi.call('/customer/notifications/read-all', { method: 'POST' }),
+  readNotification: (id) => externalApi.call(`/customer/notifications/${id}/read`, { method: 'POST' }),
+  documents: () => externalApi.call('/customer/documents'),
+  createContractDocument: (body) => externalApi.call('/customer/documents/contracts', { method: 'POST', body }),
+  downloadDocument: (id) => externalApi.raw(`/customer/documents/${encodeURIComponent(id)}/download`).then(r => r.blob()),
+  favorites: () => externalApi.call('/customer/favorites'),
+  saveFavorite: (body) => externalApi.call('/customer/favorites', { method: 'POST', body }),
+  removeFavorite: (id) => externalApi.call(`/customer/favorites/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   createEvent: (body) => externalApi.call('/customer/events', { method: 'POST', body }),
   createMahimanDemoEnquiry: (body = {}) => externalApi.call('/customer/demo/mahiman-enquiry', { method: 'POST', body }),
   vendorQuotes: () => externalApi.call('/customer/vendor-quotes'),
@@ -58,11 +71,24 @@ export const customerApi = {
   reconcileVendorQuotePayment: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/reconcile-payment`, { method: 'POST' }),
   verifyVendorBookingCompletion: (bookingId, notes = '') =>
     externalApi.call(`/customer/bookings/${bookingId}/verify-completion`, { method: 'POST', body: { notes } }),
+  cancelBooking: (bookingId) => externalApi.call(`/customer/bookings/${bookingId}`, { method: 'DELETE' }),
   patchProfile: (body) => externalApi.call('/customer/profile', { method: 'PATCH', body }),
-  auraSession: (sid, eventId) =>
-    externalApi.call(`/aura/sessions/${encodeURIComponent(sid)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`),
+  auraSession: (sid, eventId, options = {}) =>
+    externalApi.call(`/aura/sessions/${encodeURIComponent(sid)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`, options),
   auraChat: (body) => externalApi.call('/aura/chat', { method: 'POST', body }),
   auraChatStream: (body, onEvent, signal) => externalApi.stream('/aura/chat', { method: 'POST', body, signal }, onEvent),
+  uploadMedia: (file, filename, mediaType = 'IMAGE') => {
+    if (file instanceof Blob) {
+      const body = new FormData();
+      body.append('file', file, filename || file.name || 'attachment');
+      body.append('mediaType', mediaType === 'VIDEO' || file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE');
+      return externalApi.call('/media/upload', { method: 'POST', body });
+    }
+    return externalApi.call('/media/upload', {
+      method: 'POST',
+      body: { file, filename, mediaType },
+    });
+  },
 };
 
 /** Human message for an API error. */

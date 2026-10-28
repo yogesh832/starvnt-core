@@ -1,161 +1,97 @@
 import { VendorBlockout } from '../models/VendorBlockout.js';
 import { VendorBookingSlot } from '../models/VendorBookingSlot.js';
 import { VendorCapability } from '../models/VendorCapability.js';
+import { VendorService } from '../models/VendorService.js';
+import { VendorResource } from '../models/VendorResource.js';
+import { CoreBooking } from '../../admin/models/CoreBooking.js';
+import { Booking, CustomerEvent, Reservation } from '../../customer/models/index.js';
+import { interval, overlaps, scopeApplies, normaliseCommitment } from '../../common/scheduleRules.js';
 import { estimateDistanceKm, estimateTravelDurationMinutes } from '../utils/geo.js';
 
-function parseTimeToMinutes(timeStr = '00:00') {
-  const [h, m] = timeStr.split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
+function timeSpan(row) {
+  if (row.startAt && row.endAt) return interval(row);
+  return interval(normaliseCommitment({ date: row.date || row.eventDate, endDate: row.endDate, allDay: row.allDay ?? !row.startTime, startTime: row.startTime, endTime: row.endTime, timezone: row.timezone }));
 }
 
-/**
- * True Availability & Operational Feasibility Calculator (Spec §5, §6).
- *
- * Formula:
- * DATE + TIME + LOCATION + TEAM + EQUIPMENT + CAPACITY = OPERATIONAL FEASIBILITY
- *
- * Golden Acceptance Test C:
- * Surfaces: "Calendar says available, but resource or travel constraints make this opportunity infeasible."
- */
-export async function checkTrueAvailability({
-  vendorId,
-  vendorServiceId,
-  date, // 'YYYY-MM-DD'
-  startTime = '10:00', // 'HH:mm'
-  endTime = '18:00', // 'HH:mm'
-  serviceLocation, // { address, locality, city, coordinates }
-  requestedResources = [], // array of Resource IDs
-}) {
+export async function loadSchedule(vendorId) {
+  const [blocks, slots, core, services] = await Promise.all([
+    VendorBlockout.find({ vendor: vendorId, status: { $ne: 'CANCELLED' } }).lean(),
+    VendorBookingSlot.find({ vendor: vendorId, status: { $in: ['CONFIRMED', 'SCHEDULED', 'IN_PROGRESS'] } }).lean(),
+    CoreBooking.find({ vendorId, bookingStatus: 'CONFIRMED' }).lean(),
+    VendorService.find({ vendor: vendorId }).select('_id requiredResourceIds').lean(),
+  ]);
+  const serviceOptions = services.map(s => `vs_${s._id}`);
+  const [customer, holds] = await Promise.all([
+    Booking.find({ optionId: { $in: serviceOptions }, status: 'confirmed' }).lean(),
+    Reservation.find({ optionId: { $in: serviceOptions }, status: { $in: ['pending_payment', 'held'] }, expiresAt: { $gt: new Date() } }).lean(),
+  ]);
+  const reservations = customer.length ? await Reservation.find({ _id: { $in: customer.map(b => b.reservation) } }).lean() : [];
+  const byReservation = new Map(reservations.map(r => [String(r._id), r]));
+  const coreQuotes = new Set(core.map(b => String(b.quoteId)));
+  const ownCustomer = customer.filter(b => !coreQuotes.has(String(byReservation.get(String(b.reservation))?.quote)));
+  const eventIds = [...ownCustomer, ...holds].map(b => b.event);
+  const events = eventIds.length ? await CustomerEvent.find({ _id: { $in: eventIds } }).lean() : [];
+  const byEvent = new Map(events.map(e => [String(e._id), e]));
+  const serviceMap = new Map(services.map(s => [String(s._id), s]));
+  return [
+    ...blocks.map(b => ({ ...b, kind: b.recordType || 'VENDOR_BLOCK', resourceIds: b.resourceIds?.length ? b.resourceIds : b.recordType === 'EXTERNAL_COMMITMENT' ? serviceMap.get(String(b.vendorService))?.requiredResourceIds || [] : [] })),
+    ...slots.map(s => ({ ...s, kind: 'EXTERNAL_COMMITMENT', resourceIds: s.assignedResources?.length ? s.assignedResources : serviceMap.get(String(s.vendorService))?.requiredResourceIds || [] })),
+    ...core.map(b => ({ ...b, kind: 'CONFIRMED_BOOKING', date: b.eventDate, scope: 'BUSINESS', allDay: true, resourceIds: b.assignedResources?.length ? b.assignedResources : serviceMap.get(String(b.vendorService))?.requiredResourceIds || [] })),
+    ...ownCustomer.map(b => ({ ...b, kind: 'CONFIRMED_BOOKING', date: byEvent.get(String(b.event))?.eventDate, allDay: true, serviceLocation: byEvent.get(String(b.event))?.location, resourceIds: serviceMap.get(String(b.optionId).replace(/^vs_/, ''))?.requiredResourceIds || [] })),
+    ...holds.map(b => ({ ...b, kind: 'PENDING_COMMITMENT', date: byEvent.get(String(b.event))?.eventDate, allDay: true, serviceLocation: byEvent.get(String(b.event))?.location })),
+  ].filter(r => r.date || r.startAt);
+}
+
+export function evaluateSchedule(request, rows, simultaneousLimit = 1) {
+  const requested = request.startAt ? interval(request) : timeSpan({ date: request.date, endDate: request.endDate, allDay: request.allDay ?? false, startTime: request.startTime || '00:00', endTime: request.endTime || '23:59', timezone: request.timezone });
   const conflicts = [];
-  let reqStartMins = parseTimeToMinutes(startTime);
-  let reqEndMins = parseTimeToMinutes(endTime);
-
-  // Handle overnight requested event (e.g. 22:00 -> 02:00)
-  if (reqEndMins < reqStartMins) {
-    reqEndMins += 1440;
-  }
-
-  // 1. Check explicit blockouts
-  const blockout = await VendorBlockout.findOne({ vendor: vendorId, date });
-  if (blockout) {
-    if (blockout.allDay) {
-      return {
-        feasible: false,
-        reason: `Vendor is unavailable on ${date}: ${blockout.reason}`,
-        conflicts: [{ type: 'BLOCKOUT', detail: blockout.reason }],
-      };
-    }
-    let bStart = parseTimeToMinutes(blockout.startTime);
-    let bEnd = parseTimeToMinutes(blockout.endTime);
-    if (bEnd < bStart) bEnd += 1440; // overnight blockout
-
-    if (!(reqEndMins <= bStart || reqStartMins >= bEnd)) {
-      return {
-        feasible: false,
-        reason: `Time slot overlaps with blocked hours (${blockout.startTime} - ${blockout.endTime})`,
-        conflicts: [{ type: 'BLOCKOUT', detail: blockout.reason }],
-      };
-    }
-  }
-
-  // 2. Load capability to inspect simultaneous capacity limits
-  let simultaneousLimit = 1;
-  if (vendorServiceId) {
-    const capability = await VendorCapability.findOne({ vendor: vendorId, vendorService: vendorServiceId });
-    if (capability && capability.simultaneousEventLimit) {
-      simultaneousLimit = capability.simultaneousEventLimit;
-    }
-  }
-
-  // 3. Find existing active bookings for that date
-  const existingBookings = await VendorBookingSlot.find({
-    vendor: vendorId,
-    date,
-    status: { $in: ['CONFIRMED', 'SCHEDULED', 'IN_PROGRESS'] },
-  });
-
-  // 3. Find concurrent bookings that directly overlap with requested time window
-  const concurrentBookings = existingBookings.filter((bk) => {
-    let bkStartMins = parseTimeToMinutes(bk.startTime);
-    let bkEndMins = parseTimeToMinutes(bk.endTime);
-    if (bkEndMins < bkStartMins) bkEndMins += 1440; // overnight booking
-
-    return !(reqEndMins <= bkStartMins || reqStartMins >= bkEndMins);
-  });
-
-  if (concurrentBookings.length >= simultaneousLimit) {
-    return {
-      feasible: false,
-      reason: `Maximum simultaneous event capacity reached (${concurrentBookings.length}/${simultaneousLimit}) for this time window`,
-      conflicts: [{ type: 'SIMULTANEOUS_CAPACITY_EXCEEDED', count: concurrentBookings.length }],
-    };
-  }
-
-  // 4. Operational Geographic & Travel Feasibility Buffer
-  // Check every existing booking on the same day for travel feasibility
-  for (const bk of existingBookings) {
-    let bkStartMins = parseTimeToMinutes(bk.startTime);
-    let bkEndMins = parseTimeToMinutes(bk.endTime);
-    if (bkEndMins < bkStartMins) bkEndMins += 1440;
-
-    // If time overlaps directly
-    const directOverlap = !(reqEndMins <= bkStartMins || reqStartMins >= bkEndMins);
-    if (directOverlap && simultaneousLimit <= 1) {
-      conflicts.push({
-        type: 'TIME_SLOT_COLLISION',
-        detail: `Direct schedule collision with booking (${bk.startTime} - ${bk.endTime})`,
-      });
-      break;
-    }
-
-    // Even if calendar time has a gap, check travel buffer between locations:
-    // Distance between existing booking location and new service location
-    const distKm = estimateDistanceKm(bk.serviceLocation, serviceLocation);
-    const travelMins = estimateTravelDurationMinutes(distKm);
-    const setupBufferMins = 45; // mandatory setup/teardown turnaround buffer
-    const totalRequiredTurnaround = travelMins + setupBufferMins;
-
-    // Case A: Existing booking is earlier in the day
-    if (bkEndMins <= reqStartMins) {
-      const availableGap = reqStartMins - bkEndMins;
-      if (availableGap < totalRequiredTurnaround) {
-        conflicts.push({
-          type: 'GEOGRAPHIC_TRAVEL_CONFLICT',
-          detail: `Calendar says available, but resource or travel constraints make this opportunity infeasible. Required travel & setup: ${totalRequiredTurnaround} mins (${distKm} km from ${bk.serviceLocation?.locality || 'earlier venue'}), available gap is only ${availableGap} mins.`,
-        });
+  const candidates = rows.filter(r => String(r._id) !== String(request.excludeId || '') && String(r._id) !== String(request.excludeBookingId || '') && !(r.kind === 'PENDING_COMMITMENT' && (String(r._id) === String(request.excludeReservationId || '') || String(r.event) === String(request.excludeEventId || ''))) && scopeApplies(r, request));
+  const overlapping = [];
+  const resourceUsage = new Map();
+  for (const row of candidates) {
+    const existing = timeSpan(row);
+    const overlap = overlaps(requested, existing);
+    const conflict = type => conflicts.push({ type, recordId: String(row._id), recordType: row.kind, date: row.date, detail: type.replaceAll('_', ' ').toLowerCase() });
+    if (overlap) {
+      if (row.kind === 'VENDOR_BLOCK' || request.blockAll) conflict('BLOCK_OR_BOOKING_OVERLAP');
+      else if (!row.vendorService || !request.vendorServiceId || String(row.vendorService) === String(request.vendorServiceId)) overlapping.push({ row, span: existing });
+      const resources = row.resourceIds || row.assignedResources || [];
+      for (const id of request.requestedResources || []) if (resources.map(String).includes(String(id))) {
+        const key = String(id);
+        if (!resourceUsage.has(key)) resourceUsage.set(key, []);
+        resourceUsage.get(key).push(existing);
       }
-    }
-    // Case B: Existing booking is later in the day
-    else if (reqEndMins <= bkStartMins) {
-      const availableGap = bkStartMins - reqEndMins;
-      if (availableGap < totalRequiredTurnaround) {
-        conflicts.push({
-          type: 'GEOGRAPHIC_TRAVEL_CONFLICT',
-          detail: `Calendar says available, but resource or travel constraints make this opportunity infeasible. Required travel & setup: ${totalRequiredTurnaround} mins (${distKm} km to ${bk.serviceLocation?.locality || 'next venue'}), available gap is only ${availableGap} mins.`,
-        });
-      }
-    }
-
-    // 5. Dedicated Resource Allocation Check
-    if (requestedResources.length > 0 && bk.assignedResources?.length > 0) {
-      const overlap = requestedResources.filter((rId) =>
-        bk.assignedResources.some((ar) => String(ar) === String(rId))
-      );
-      if (overlap.length > 0) {
-        conflicts.push({
-          type: 'RESOURCE_ALLOCATED_ELSEWHERE',
-          detail: `Required specialized team or equipment is already committed to another event on ${date}.`,
-        });
-      }
+    } else if (request.serviceLocation && row.serviceLocation && row.kind !== 'VENDOR_BLOCK') {
+      const gap = requested[0] >= existing[1] ? requested[0] - existing[1] : existing[0] - requested[1];
+      const minutes = estimateTravelDurationMinutes(estimateDistanceKm(row.serviceLocation, request.serviceLocation)) + Number(request.setupMinutes ?? 45);
+      if (gap < minutes * 60000 && (!request.requestedResources?.length || request.requestedResources.some(id => (row.resourceIds || []).map(String).includes(String(id))) || simultaneousLimit <= 1)) conflict('GEOGRAPHIC_TRAVEL_CONFLICT');
     }
   }
+  const endpoints = overlapping.flatMap(({ span }) => [[Math.max(requested[0], span[0]), 1], [Math.min(requested[1], span[1]), -1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let concurrent = 0, peak = 0;
+  for (const [, delta] of endpoints) { concurrent += delta; peak = Math.max(peak, concurrent); }
+  if (peak >= simultaneousLimit) conflicts.push({ type: 'SIMULTANEOUS_CAPACITY_EXCEEDED', detail: 'The concurrent job limit is reached.', recordIds: overlapping.map(x => String(x.row._id)) });
+  for (const id of request.requestedResources || []) {
+    const capacity = request.resourceCapacities?.[String(id)] ?? 1;
+    const changes = (resourceUsage.get(String(id)) || []).flatMap(span => [[Math.max(requested[0], span[0]), 1], [Math.min(requested[1], span[1]), -1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    let used = 0, maximum = 0;
+    for (const [, delta] of changes) { used += delta; maximum = Math.max(maximum, used); }
+    if (!request.blockAll && capacity <= maximum) conflicts.push({ type: 'RESOURCE_CAPACITY_EXCEEDED', resourceId: String(id), detail: 'Required resource capacity is unavailable.' });
+  }
+  return { feasible: !conflicts.length, conflicts, reason: conflicts[0]?.detail || null, capacityRemaining: Math.max(0, simultaneousLimit - peak) };
+}
 
-  const feasible = conflicts.length === 0;
-
-  return {
-    feasible,
-    reason: feasible ? null : conflicts[0].detail || conflicts[0].type,
-    conflicts,
-    capacityRemaining: Math.max(0, simultaneousLimit - existingBookings.length),
-  };
+export async function checkTrueAvailability(request) {
+  const [rows, capability, service] = await Promise.all([
+    loadSchedule(request.vendorId),
+    request.vendorServiceId ? VendorCapability.findOne({ vendor: request.vendorId, vendorService: request.vendorServiceId }).lean() : null,
+    request.vendorServiceId ? VendorService.findOne({ _id: request.vendorServiceId, vendor: request.vendorId }).lean() : null,
+  ]);
+  const requestedResources = request.requestedResources?.length ? request.requestedResources : service?.requiredResourceIds || [];
+  const resourceRows = requestedResources.length ? await VendorResource.find({ vendor: request.vendorId, _id: { $in: requestedResources } }).lean() : [];
+  const resourceCapacities = Object.fromEntries(requestedResources.map(id => {
+    const resource = resourceRows.find(r => String(r._id) === String(id));
+    return [String(id), resource && !['RETIRED', 'MAINTENANCE'].includes(resource.status) ? resource.capacityUnits || 1 : 0];
+  }));
+  return evaluateSchedule({ ...request, setupMinutes: service?.setupBufferMinutes ?? 45, requestedResources, resourceCapacities }, rows, capability?.simultaneousEventLimit || 1);
 }

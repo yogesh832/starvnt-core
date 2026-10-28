@@ -1,3 +1,4 @@
+import AuraMark from '../../components/AuraMark.jsx';
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
@@ -9,7 +10,6 @@ import Enquiries from './pages/Enquiries.jsx';
 import Quotes from './pages/Quotes.jsx';
 import Bookings from './pages/Bookings.jsx';
 import CalendarPage from './pages/CalendarPage.jsx';
-import Messages from './pages/Messages.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
 import { AnalyticsPage, PaymentsPage, ReviewsPage } from './pages/InsightPages.jsx';
 import {
@@ -20,6 +20,8 @@ import {
   SettingsPage,
 } from './pages/BusinessPages.jsx';
 import VendorAura from './VendorAura.jsx';
+import VendorUpdates from './VendorUpdates.jsx';
+import { unreadBadgeLabel } from './vendorNotificationUi.js';
 
 export default function VendorPortal() {
   const { user, logout } = useExternalAuth();
@@ -28,13 +30,20 @@ export default function VendorPortal() {
   const currentPage = location.pathname.split('/')[2] || 'dashboard';
   const [auraOpen, setAuraOpen] = useState(false);
   const [auraPrompt, setAuraPrompt] = useState(null);
+  const [auraConversationRequest, setAuraConversationRequest] = useState(null);
+
+  function openAuraConversation(options) {
+    setAuraPrompt(null);
+    setAuraConversationRequest({ ...options, id: crypto.randomUUID() });
+    setAuraOpen(true);
+  }
 
   function askAura(text) {
     if (text) setAuraPrompt({ id: Date.now(), text });
     setAuraOpen(true);
   }
 
-  // Profile setup status (same checklist as the dashboard's 5 onboarding steps).
+  // Profile setup status (same checklist as the dashboard's six operational steps).
   const [setup, setSetup] = useState(null);
   async function loadSetup() {
     try {
@@ -78,11 +87,9 @@ export default function VendorPortal() {
     setAuraOpen(true);
   }, [setup]);
   const [navOpen, setNavOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [isSidebarMini, setIsSidebarMini] = useState(false);
-  const notifRef = useRef(null);
   const profileRef = useRef(null);
   const sectionReadInFlightRef = useRef(new Set());
   const [businessName, setBusinessName] = useState(user?.fullName ? `${user.fullName}'s Brand` : 'My Brand');
@@ -122,51 +129,42 @@ export default function VendorPortal() {
   });
   const [dismissedBadges, setDismissedBadges] = useState({});
   const [notifications, setNotifications] = useState([]);
-  const badgeStorageKey = `starvnt.vendor.dismissedBadges.${
-    user?.vendorOrganization?._id || user?._id || 'guest'
-  }`;
-
-  function saveDismissedBadges(next) {
-    try {
-      window.localStorage.setItem(badgeStorageKey, JSON.stringify(next));
-    } catch {
-      // Badges are cosmetic; ignore storage failures.
-    }
-  }
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(badgeStorageKey);
-      setDismissedBadges(saved ? JSON.parse(saved) || {} : {});
-    } catch {
-      setDismissedBadges({});
-    }
-  }, [badgeStorageKey]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notificationsError, setNotificationsError] = useState('');
+  const [busyNotificationIds, setBusyNotificationIds] = useState([]);
+  const [markingAllNotifications, setMarkingAllNotifications] = useState(false);
+  const notificationRevision = useRef(0);
+  const pendingNotificationReads = useRef(new Set());
+  const markingAllRef = useRef(false);
 
   // Fetch real dynamic badge counts and notifications from backend
   async function fetchLiveBadges() {
-    try {
-      const [bRes, nRes] = await Promise.all([
-        externalApi.call('/vendor/badge-counts'),
-        externalApi.call('/vendor/notifications'),
-      ]);
-
-      if (bRes.ok) {
-        setBadgeCounts({
-          enquiriesCount: bRes.enquiriesCount || 0,
-          quotesCount: bRes.quotesCount || 0,
-          bookingsCount: bRes.bookingsCount || 0,
-          messagesCount: bRes.messagesCount || 0,
-          unreadNotificationsCount: bRes.unreadNotificationsCount || 0,
-        });
-      }
-
-      if (nRes.ok) {
-        setNotifications(nRes.notifications || []);
-      }
-    } catch (err) {
-      console.warn('[VendorPortal] Fetch badges error:', err.message);
+    const revision = ++notificationRevision.current;
+    setNotificationsLoading(true);
+    const [badges, activity] = await Promise.allSettled([
+      externalApi.call('/vendor/badge-counts'),
+      externalApi.call('/vendor/notifications'),
+    ]);
+    if (badges.status === 'fulfilled' && badges.value.ok) {
+      const b = badges.value;
+      setBadgeCounts((prev) => ({ ...prev,
+        enquiriesCount: b.enquiriesCount || 0,
+        quotesCount: b.quotesCount || 0,
+        bookingsCount: b.bookingsCount || 0,
+        messagesCount: b.messagesCount || 0,
+      }));
     }
+    if (revision !== notificationRevision.current) return;
+    if (activity.status === 'fulfilled' && activity.value.ok) {
+      if (!pendingNotificationReads.current.size && !markingAllRef.current) {
+        setNotifications(activity.value.notifications || []);
+        setBadgeCounts((prev) => ({ ...prev, unreadNotificationsCount: Math.max(0, Number(activity.value.unreadCount) || 0) }));
+        setNotificationsError('');
+      }
+    } else {
+      setNotificationsError('Could not refresh notifications. Please try again.');
+    }
+    setNotificationsLoading(false);
   }
 
   useEffect(() => {
@@ -233,9 +231,6 @@ export default function VendorPortal() {
   // Close header dropdowns on click outside
   useEffect(() => {
     function handleClickOutside(event) {
-      if (notifRef.current && !notifRef.current.contains(event.target)) {
-        setNotifOpen(false);
-      }
       if (profileRef.current && !profileRef.current.contains(event.target)) {
         setProfileOpen(false);
       }
@@ -244,38 +239,56 @@ export default function VendorPortal() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  async function handleMarkAsRead(notifId, link) {
+  async function handleMarkAsRead(notifId) {
+    const item = notifications.find((n) => n._id === notifId);
+    if (!item || item.isRead || pendingNotificationReads.current.has(notifId) || markingAllRef.current) return;
+    pendingNotificationReads.current.add(notifId);
+    notificationRevision.current += 1;
+    setNotificationsLoading(false);
+    setBusyNotificationIds([...pendingNotificationReads.current]);
     try {
-      await externalApi.call(`/vendor/notifications/${notifId}/read`, { method: 'PUT' });
-    } catch (err) {
-      // Local fallback
+      const res = await externalApi.call(`/vendor/notifications/${notifId}/read`, { method: 'PUT' });
+      if (!res.ok) throw new Error('READ_FAILED');
+      notificationRevision.current += 1;
+      setNotifications((prev) => prev.map((n) => n._id === notifId ? { ...n, isRead: true } : n));
+      setBadgeCounts((prev) => ({ ...prev, unreadNotificationsCount: Math.max(0, prev.unreadNotificationsCount - 1) }));
+      setNotificationsError('');
+    } catch {
+      setNotificationsError('Could not mark this notification as read. Please try again.');
+    } finally {
+      pendingNotificationReads.current.delete(notifId);
+      setBusyNotificationIds([...pendingNotificationReads.current]);
+      setNotificationsLoading(false);
     }
-    setNotifications((prev) =>
-      prev.map((n) => (n._id === notifId ? { ...n, isRead: true } : n))
-    );
-    setBadgeCounts((prev) => ({
-      ...prev,
-      unreadNotificationsCount: Math.max(0, prev.unreadNotificationsCount - 1),
-    }));
-    setNotifOpen(false);
-    if (link) navigate(link);
   }
 
   async function handleMarkAllAsRead() {
+    if (markingAllRef.current || pendingNotificationReads.current.size) return;
+    markingAllRef.current = true;
+    notificationRevision.current += 1;
+    setNotificationsLoading(false);
+    setMarkingAllNotifications(true);
     try {
-      await externalApi.call('/vendor/notifications/read-all', { method: 'PUT' });
-    } catch (err) {
-      // Local fallback
+      const res = await externalApi.call('/vendor/notifications/read-all', { method: 'PUT' });
+      if (!res.ok) throw new Error('READ_ALL_FAILED');
+      notificationRevision.current += 1;
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setBadgeCounts((prev) => ({ ...prev, unreadNotificationsCount: 0, messagesCount: 0 }));
+      setNotificationsError('');
+      window.dispatchEvent(new Event('vendorBadgesRefresh'));
+      fetchLiveBadges();
+    } catch {
+      setNotificationsError('Could not mark notifications as read. Please try again.');
+    } finally {
+      markingAllRef.current = false;
+      setMarkingAllNotifications(false);
     }
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setBadgeCounts((prev) => ({ ...prev, unreadNotificationsCount: 0 }));
   }
 
   async function handleLogout() {
     if (loggingOut) return;
     setLoggingOut(true);
     setProfileOpen(false);
-    setNotifOpen(false);
     setNavOpen(false);
     try {
       await logout();
@@ -324,9 +337,22 @@ export default function VendorPortal() {
     { to: 'payments', label: 'Payments', icon: 'payments' },
     { to: 'reviews', label: 'Reviews', icon: 'star' },
     { to: 'analytics', label: 'Analytics', icon: 'reports' },
-    { to: 'messages', label: 'Messages', icon: 'message', badge: navBadge('messages', badgeCounts.messagesCount) },
+    { to: 'updates', label: 'Messages & updates', icon: 'bell', badge: badgeCounts.unreadNotificationsCount || badgeCounts.messagesCount || null },
     { to: 'profile', label: 'Profile & Hub', icon: 'profile' },
   ];
+
+  const notificationProps = {
+    notifications,
+    unreadCount: badgeCounts.unreadNotificationsCount,
+    unreadConversationCount: badgeCounts.messagesCount,
+    loading: notificationsLoading,
+    error: notificationsError,
+    busyIds: busyNotificationIds,
+    markingAll: markingAllNotifications,
+    onRead: handleMarkAsRead,
+    onReadAll: handleMarkAllAsRead,
+    onRefresh: fetchLiveBadges,
+  };
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-lavender">
@@ -365,7 +391,7 @@ export default function VendorPortal() {
               className={({ isActive }) =>
                 `relative flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-[13px] transition ${
                   isActive
-                    ? 'bg-[#ede9fe] text-primary font-bold shadow-xs'
+                    ? 'bg-primary-soft text-primary font-bold shadow-xs'
                     : 'text-ink/70 font-medium hover:bg-lavender hover:text-navy'
                 } ${isSidebarMini ? 'lg:justify-center' : ''}`
               }
@@ -434,7 +460,7 @@ export default function VendorPortal() {
               className="hidden lg:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-gradient-to-r from-primary to-[#9b6dff] text-white text-xs font-bold shadow-md shadow-primary/25 hover:opacity-95 transition shrink-0"
               title="Ask Aura+"
             >
-              <Icon name="bolt" size={15} />
+              <Icon name="aura" size={15} />
               Aura+
             </button>
 
@@ -455,83 +481,21 @@ export default function VendorPortal() {
               <Icon name="calendar" size={18} />
             </button>
 
-            {/* Notification Bell with Dynamic Dot & Dedicated Relative Container */}
-            <div className="relative" ref={notifRef}>
-              <button
-                onClick={() => setNotifOpen(!notifOpen)}
-                className="w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer shrink-0"
-                title="Notifications"
-                aria-label="Notifications"
-              >
-                <Icon name="bell" size={18} />
-                {badgeCounts.unreadNotificationsCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
-                )}
-              </button>
-
-              {/* Notification Dropdown Panel */}
-              {notifOpen && (
-                <div className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 z-50 animate-[pop_.18s_ease-out]">
-                  <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-extrabold text-sm text-navy">Notifications</h3>
-                      {badgeCounts.unreadNotificationsCount > 0 && (
-                        <span className="text-[10px] font-bold bg-primary-soft text-primary px-2 py-0.5 rounded-full">
-                          {badgeCounts.unreadNotificationsCount} new
-                        </span>
-                      )}
-                    </div>
-                    {badgeCounts.unreadNotificationsCount > 0 && (
-                      <button
-                        onClick={handleMarkAllAsRead}
-                        className="text-[11px] font-bold text-primary hover:underline"
-                      >
-                        Mark all read
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto mt-2">
-                    {notifications.map((n) => (
-                      <div
-                        key={n._id}
-                        onClick={() => handleMarkAsRead(n._id, n.link)}
-                        className={`p-3 rounded-2xl transition cursor-pointer flex items-start gap-3 hover:bg-lavender/50 ${
-                          !n.isRead ? 'bg-primary-soft/30' : ''
-                        }`}
-                      >
-                        <div className="w-8 h-8 rounded-xl bg-lavender/70 text-primary grid place-items-center shrink-0 mt-0.5">
-                          <Icon
-                            name={
-                              n.type === 'ENQUIRY'
-                                ? 'message'
-                                : n.type === 'QUOTE'
-                                ? 'quotes'
-                                : n.type === 'PAYMENT'
-                                ? 'wallet'
-                                : 'bell'
-                            }
-                            size={14}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className={`text-xs font-bold truncate ${!n.isRead ? 'text-primary' : 'text-navy'}`}>
-                              {n.title}
-                            </span>
-                            {!n.isRead && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
-                          </div>
-                          <p className="text-[11px] text-muted line-clamp-2 mt-0.5">{n.message}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {notifications.length === 0 && (
-                      <div className="py-8 text-center text-xs text-muted">No notifications yet.</div>
-                    )}
-                  </div>
-                </div>
+            {/* Open the dedicated messages and updates page. */}
+            <button
+              type="button"
+              onClick={() => { navigate('/vendor/updates'); setProfileOpen(false); setAuraOpen(false); }}
+              className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-primary"
+              title={`${badgeCounts.unreadNotificationsCount} unread notifications`}
+              aria-label={`Messages and updates, ${badgeCounts.unreadNotificationsCount} unread notifications`}
+            >
+              <Icon name="bell" size={19} />
+              {badgeCounts.unreadNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold tabular-nums flex items-center justify-center ring-2 ring-white dark:ring-[#161926]" aria-hidden="true">
+                  {unreadBadgeLabel(badgeCounts.unreadNotificationsCount)}
+                </span>
               )}
-            </div>
+            </button>
 
             {/* Profile Menu */}
             <div className="relative" ref={profileRef}>
@@ -539,8 +503,7 @@ export default function VendorPortal() {
                 type="button"
                 onClick={() => {
                   setProfileOpen((open) => !open);
-                  setNotifOpen(false);
-                }}
+                              }}
                 className="flex items-center gap-2 hover:bg-gray-50 p-1.5 rounded-full sm:rounded-xl transition select-none cursor-pointer"
                 aria-label="Open profile menu"
                 aria-expanded={profileOpen}
@@ -642,27 +605,15 @@ export default function VendorPortal() {
             <Route path="quotes" element={<Quotes />} />
             <Route path="bookings" element={<Bookings />} />
             <Route path="calendar" element={<CalendarPage />} />
+            <Route path="notifications" element={<Navigate to="/vendor/updates" replace />} />
+            <Route path="updates" element={<VendorUpdates notificationProps={notificationProps} onOpenAura={openAuraConversation} />} />
             <Route path="portfolio" element={<PortfolioPage />} />
             <Route path="services" element={<ServicesPage />} />
             <Route path="availability" element={<AvailabilityPage />} />
             <Route path="payments" element={<PaymentsPage />} />
             <Route path="reviews" element={<ReviewsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
-            <Route
-              path="messages"
-              element={
-                <Messages
-                  onMessagesRead={() => {
-                    setBadgeCounts((prev) => ({ ...prev, messagesCount: 0 }));
-                    setDismissedBadges((prev) => {
-                      const next = { ...prev, messages: 0 };
-                      saveDismissedBadges(next);
-                      return next;
-                    });
-                  }}
-                />
-              }
-            />
+            <Route path="messages" element={<Navigate to={`/vendor/updates?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.search)), tab: 'messages' })}`} replace />} />
             <Route path="documents" element={<DocumentsPage user={user} business={businessName} />} />
             <Route path="profile" element={<ProfilePage user={user} business={businessName} />} />
             <Route path="settings" element={<SettingsPage user={user} business={businessName} />} />
@@ -673,14 +624,15 @@ export default function VendorPortal() {
 
         {/* Mobile Bottom Navigation Bar (Phone Screens) */}
         <div
-          className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-gray-200/80 px-2 pt-1.5 flex items-center justify-around shadow-lg"
+          onClick={() => setAuraOpen(false)}
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-white/95 dark:bg-[#161926]/95 backdrop-blur-md border-t border-gray-200/80 dark:border-gray-800 px-2 pt-1.5 flex items-center justify-around shadow-lg"
           style={{ paddingBottom: 'calc(0.375rem + env(safe-area-inset-bottom))' }}
         >
           <NavLink
             to="dashboard"
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+                isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
               }`
             }
           >
@@ -691,71 +643,58 @@ export default function VendorPortal() {
           <NavLink
             to="enquiries"
             className={({ isActive }) =>
-              `relative flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+              `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
+                isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
               }`
             }
           >
-            <Icon name="message" size={19} />
+            <div className="relative inline-flex items-center justify-center">
+              <Icon name="message" size={19} />
+              {navBadge('enquiries', badgeCounts.enquiriesCount) > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-[#161926] shadow-xs">
+                  {navBadge('enquiries', badgeCounts.enquiriesCount)}
+                </span>
+              )}
+            </div>
             <span>Leads</span>
-            {navBadge('enquiries', badgeCounts.enquiriesCount) > 0 && (
-              <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {navBadge('enquiries', badgeCounts.enquiriesCount)}
-              </span>
-            )}
           </NavLink>
+
+          <button type="button" aria-label="Aura+" aria-pressed={auraOpen} onClick={(event) => { event.stopPropagation(); setAuraOpen((open) => !open); }} className="aura-nav-button relative flex min-w-0 flex-1 flex-col items-center -mt-5 text-[10px] font-bold text-primary dark:text-[#c4b5fd]">
+            <AuraMark variant="orb" motion size={60} state={auraOpen ? 'active' : 'idle'} />
+            <span>Aura+</span>
+          </button>
 
           <NavLink
             to="bookings"
             className={({ isActive }) =>
-              `relative flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary' : 'text-muted hover:text-navy'
-              }`
-            }
-          >
-            <Icon name="bookings" size={19} />
-            <span>Bookings</span>
-            {navBadge('bookings', badgeCounts.bookingsCount) > 0 && (
-              <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {navBadge('bookings', badgeCounts.bookingsCount)}
-              </span>
-            )}
-          </NavLink>
-
-          <NavLink
-            to="calendar"
-            className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
-                isActive ? 'text-primary' : 'text-muted hover:text-navy'
+                isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
               }`
             }
           >
-            <Icon name="calendar" size={19} />
-            <span>Calendar</span>
+            <div className="relative inline-flex items-center justify-center">
+              <Icon name="bookings" size={19} />
+              {navBadge('bookings', badgeCounts.bookingsCount) > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-[#161926] shadow-xs">
+                  {navBadge('bookings', badgeCounts.bookingsCount)}
+                </span>
+              )}
+            </div>
+            <span>Bookings</span>
           </NavLink>
 
           <button
             onClick={() => setNavOpen(true)}
-            className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold text-muted hover:text-navy transition"
+            className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white transition cursor-pointer"
           >
             <Icon name="menu" size={19} />
             <span>More</span>
           </button>
         </div>
 
-        {/* Mobile Aura+ button, above the bottom navigation */}
-        {!auraOpen && (
-          <button
-            onClick={() => setAuraOpen(true)}
-            className="lg:hidden fixed right-4 bottom-20 z-30 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-lg shadow-primary/40 border-4 border-white dark:border-[#1a1d2e]"
-            aria-label="Ask Aura+"
-          >
-            <Icon name="bolt" size={18} />
-          </button>
-        )}
       </div>
 
-      <VendorAura open={auraOpen} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} setup={setup} />
+      <VendorAura open={auraOpen} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} setup={setup} conversationRequest={auraConversationRequest} />
     </div>
   );
 }
