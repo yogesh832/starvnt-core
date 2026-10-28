@@ -216,7 +216,9 @@ test("admin navigation obeys any-permission rules and super-admin-only access", 
   }).map((m) => m.key);
   assert.ok(modules.includes("bookings"));
   assert.ok(modules.includes("payments"));
+  assert.ok(modules.includes("financeGovernance"));
   assert.ok(!modules.includes("users"));
+  assert.ok(visibleModules({ role: "ADMIN", permissions: ["reports.read"] }).some((m) => m.key === "productMetrics"));
   assert.ok(
     visibleModules({ role: "SUPER_ADMIN" }).some((m) => m.key === "users"),
   );

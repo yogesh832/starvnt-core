@@ -1,4 +1,6 @@
 import { AdminAvailability } from './AdminAvailability';
+import { AdminFinance } from './AdminFinance';
+import { ProductMetrics } from './ProductMetrics';
 import React, { useEffect, useMemo, useState } from "react";
 import { usePush } from "../Push";
 import { View } from "react-native";
@@ -105,6 +107,8 @@ export function AdminModule({ route, navigation }: any) {
       </Page>
     );
   if (module.key === "availability") return <AdminAvailability />;
+  if (module.key === "financeGovernance") return <AdminFinance />;
+  if (module.key === "productMetrics") return <ProductMetrics />;
   return (
     <AdminModuleBody
       key={`${module.key}-${route.params.tab || ""}`}

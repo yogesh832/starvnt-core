@@ -90,6 +90,7 @@ export function AdminBooking({ route, navigation }: any) {
             <Txt>Execution: {human(b.executionStatus || "Not started")}</Txt>
             <Txt>Payment: {human(b.paymentStatus || "Pending")}</Txt>
             <Txt>Settlement: {human(b.settlementStatus || "Not eligible")}</Txt>
+            {b.payoutReviewAt && b.settlementStatus !== "SETTLEMENT_ELIGIBLE" && <Txt muted>Payout review opens {date(b.payoutReviewAt)}.</Txt>}
           </Card>
           {(b.disputes || []).map((item: Data, index: number) => (
             <Card key={item._id || index}>
