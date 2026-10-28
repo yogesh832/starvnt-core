@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY web/package.json web/package.json
 RUN npm ci -w web
+COPY shared ./shared
 COPY web ./web
 WORKDIR /app/web
 RUN npm run build
