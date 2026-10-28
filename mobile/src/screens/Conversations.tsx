@@ -22,6 +22,7 @@ import {
   validAuraSessionId,
 } from "../auraSessions";
 import { external } from "../api/runtime";
+import { ProductFeedback } from '../ProductFeedback';
 import type { Data } from "../api/client";
 import { useSession } from "../auth/Session";
 import { usePush } from "../Push";
@@ -168,6 +169,7 @@ export function UpdatesScreen({ navigation }: any) {
               }
             />
           )}
+          {!vendor && <ProductFeedback kind="NOTIFICATION" reference={id(n)} />}
         </Card>
       ))}
       {!r.data.notifications?.length && (

@@ -1,4 +1,5 @@
 import { NotificationPreferences } from '../NotificationPreferences';
+import { ProductFeedback } from '../ProductFeedback';
 import React, { useEffect, useState } from "react";
 import { Alert, View } from "react-native";
 import { DiscoveryOptions } from "./CustomerDiscovery";
@@ -215,6 +216,7 @@ export function EventScreen({ route, navigation }: any) {
       {r.data.experience?.daysUntilEvent != null && <Txt>{r.data.experience.daysUntilEvent} days from the event date</Txt>}
       {!!r.data.experience?.proposedRequirements?.length && <Card><Txt bold>Confirm Aura suggestions</Txt><Txt muted>These do not count as completed requirements until you confirm.</Txt>{r.data.experience.proposedRequirements.map((row: Data) => <View key={row.category}><Txt>{human(row.category)} · {human(row.status)} {row.value || ''}</Txt><Button title="Confirm this requirement" busy={a.busy} onPress={() => { void a.run(async () => { await external.call(`${eventPath(eventId)}/requirements/${row.category}/confirm`, 'POST'); r.refresh(); }); }} /></View>)}</Card>}
       <NotificationPreferences eventId={eventId} />
+      <ProductFeedback kind="EVENT" reference={eventId} />
       <Stats
         items={[
           ["Services planned", r.data.counts?.services ?? 0],

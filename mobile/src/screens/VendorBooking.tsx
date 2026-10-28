@@ -85,6 +85,7 @@ function VendorBookingBody({ route, navigation }: any) {
             <Pill>{human(b.executionStatus || "Scheduled")}</Pill>
             <Txt>{date(b.eventDate)}</Txt>
             <Txt muted>{human(b.paymentStatus)}</Txt>
+            {b.payoutReviewAt && b.settlementStatus !== 'SETTLEMENT_ELIGIBLE' && <Txt muted>Payout review opens {date(b.payoutReviewAt)}. Core will validate settlement eligibility then.</Txt>}
             <Txt bold>
               {money(b.totalAmount || b.pricingBreakdown?.totalAmount)}
             </Txt>
