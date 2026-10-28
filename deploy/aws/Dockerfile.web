@@ -6,6 +6,7 @@ COPY server/package.json ./server/package.json
 COPY web/package.json ./web/package.json
 RUN npm ci -w web
 COPY shared ./shared
+COPY server/src/common ./server/src/common
 COPY web ./web
 ARG DEPLOY_SHA
 ENV NODE_OPTIONS=--max-old-space-size=1024

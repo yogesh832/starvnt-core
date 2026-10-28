@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 COPY web/package.json web/package.json
 RUN npm ci -w web
 COPY shared ./shared
+COPY server/src/common ./server/src/common
 COPY web ./web
 WORKDIR /app/web
 RUN npm run build
