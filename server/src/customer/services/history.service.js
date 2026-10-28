@@ -49,6 +49,7 @@ function describe(row) {
       const fields = [...new Set((d.fields || []).map((f) => FIELD_WORDS[f]).filter(Boolean))];
       return { group: 'planning', text: fields.length ? `Updated ${fields.join(', ')}` : 'Updated event details' };
     }
+    case 'requirement_confirmed':
     case 'requirement_updated':
       return { group: 'planning', text: `${categoryLabel(d.category)}: ${STATUS_WORDS[d.status] || 'updated'}` };
     case 'preferences_updated':

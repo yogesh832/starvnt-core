@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { vendorCopy, normalizeVendorLocation, isVendorLocationSetupRequest } from '../../common/vendorAuraUi.js';
 import { VendorAuraSession, VendorAuraMessage } from '../models/VendorAura.js';
 import { VendorService } from '../models/VendorService.js';
@@ -57,7 +58,7 @@ export function setupFallback(message, vendor, context, pending = null, language
     if (settled !== null && pendingAmount !== null) {
       text += `According to your verified records: Total Settled is ${settled} and Pending Settlement is ${pendingAmount}. `;
     }
-    text += "You can track your complete escrow balances, payouts, and settlement ledger on the Payments page.";
+    text += "You can review recorded payment and settlement statuses on the Payments page.";
     return {
       reply: text,
       actions: [{ label: 'Payments & Settlements', to: '/vendor/payments' }],
@@ -203,7 +204,7 @@ async function saveTurn(sessionId, text, reply, actions, pending, language = 'en
     { session: sessionId, role: 'user', content: text },
     { session: sessionId, role: 'model', content: reply, actions },
   ]);
-  await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date(), pending: pending ?? null, language } });
+  await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date(), pending: pending ? { ...pending, idempotencyKey: pending.idempotencyKey || crypto.randomUUID() } : null, language } });
 }
 
 export async function chat({ vendor, user, sessionId, message, page, confirm, locationSelection }, options = {}) {

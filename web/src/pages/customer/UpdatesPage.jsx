@@ -1,3 +1,4 @@
+import ProductFeedback from '../../components/ProductFeedback.jsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
@@ -654,7 +655,7 @@ export default function UpdatesPage({ onRead }) {
               };
 
           return (
-            <ContentWrapper key={n.id || `notif-${idx}`} {...wrapperProps}>
+            <div key={n.id || `notif-${idx}`}><ContentWrapper {...wrapperProps}>
               <div className="flex items-center justify-between gap-2">
                 <span
                   className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider rounded-full px-2.5 py-0.5 border ${
@@ -681,6 +682,8 @@ export default function UpdatesPage({ onRead }) {
                 </span>
               </div>
             </ContentWrapper>
+            {notifications.some(row => row.id === n.id) && <div className="bg-white border rounded-xl p-3 mt-1"><ProductFeedback kind="NOTIFICATION" reference={n.id} /></div>}
+            </div>
           );
         })}
       </div>

@@ -254,7 +254,7 @@ const TEST_ADMINS = [
     name: 'Finance & Ledger Head',
     email: 'finance@starvnt.com',
     role: 'FINANCE',
-    desc: 'Escrow oversight, vendor settlement release & payouts',
+    desc: 'Payment verification, vendor settlement release & payouts',
     color: 'from-emerald-600 to-teal-600',
   },
   {

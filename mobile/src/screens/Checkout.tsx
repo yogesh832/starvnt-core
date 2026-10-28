@@ -263,7 +263,7 @@ function CheckoutBody({ route, navigation }: any) {
       subtitle="Review your payment before continuing."
     >
       <Card>
-        <Pill>SECURE CHECKOUT</Pill>
+        <Pill>PAYMENT CHECKOUT</Pill>
         <Txt bold size={23}>
           {quote?.serviceName || reservation?.packageName}
         </Txt>
@@ -300,7 +300,7 @@ function CheckoutBody({ route, navigation }: any) {
       ) : null}
       <ErrorNotice message={a.error} />
       <Button
-        title="Continue to secure payment"
+        title="Continue to payment"
         busy={a.busy}
         disabled={!!notice}
         onPress={() => {

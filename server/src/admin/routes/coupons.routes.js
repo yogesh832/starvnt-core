@@ -1,6 +1,6 @@
 import express from 'express';
 import { Coupon } from '../models/Coupon.js';
-import { requirePermission } from '../middleware/requireAdminAuth.js';
+import { requireAnyPermission } from '../middleware/requireAdminAuth.js';
 import { auditContext, recordAudit } from '../utils/audit.js';
 
 const router = express.Router();
@@ -49,7 +49,7 @@ export function couponPayload(body = {}) {
   };
 }
 
-router.get('/', requirePermission('settings.read'), async (req, res, next) => {
+router.get('/', requireAnyPermission('settings.read', 'financeCoupons.read'), async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
     const skip = parseInt(req.query.skip) || 0;
@@ -81,7 +81,7 @@ router.get('/', requirePermission('settings.read'), async (req, res, next) => {
   }
 });
 
-router.post('/', requirePermission('settings.update'), async (req, res, next) => {
+router.post('/', requireAnyPermission('settings.update', 'financeCoupons.manage'), async (req, res, next) => {
   try {
     const { payload, error } = couponPayload(req.body);
     if (error) return res.status(400).json({ error });
@@ -102,7 +102,7 @@ router.post('/', requirePermission('settings.update'), async (req, res, next) =>
   }
 });
 
-router.put('/:id', requirePermission('settings.update'), async (req, res, next) => {
+router.put('/:id', requireAnyPermission('settings.update', 'financeCoupons.manage'), async (req, res, next) => {
   try {
     const existing = await Coupon.findById(req.params.id).lean();
     if (!existing) return res.status(404).json({ error: 'COUPON_NOT_FOUND' });
@@ -125,7 +125,7 @@ router.put('/:id', requirePermission('settings.update'), async (req, res, next) 
   }
 });
 
-router.delete('/:id', requirePermission('settings.update'), async (req, res, next) => {
+router.delete('/:id', requireAnyPermission('settings.update', 'financeCoupons.manage'), async (req, res, next) => {
   try {
     const coupon = await Coupon.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
     if (!coupon) return res.status(404).json({ error: 'COUPON_NOT_FOUND' });

@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import { CoreBooking } from '../admin/models/CoreBooking.js';
 import { settlementMath } from '../admin/services/financeLedger.service.js';
+import { Quote as VendorQuote } from '../external/models/Quote.js';
+import { Opportunity } from '../external/models/Opportunity.js';
+import { normalizeCategory } from '../customer/services/planCatalog.js';
 import {
   Booking,
   CustomerEvent,
@@ -52,12 +55,12 @@ function eventBudget(event) {
   return { totalBudget: 0, budgetType: 'unset' };
 }
 
-function activeReservation(reservation) {
-  return ['pending_payment', 'held'].includes(reservation?.status);
+function activeReservation(reservation, now = new Date()) {
+  return ['pending_payment', 'held'].includes(reservation?.status) && new Date(reservation.expiresAt) > now;
 }
 
 function paymentIsPaid(payment) {
-  return ['paid', 'verified'].includes(payment?.status);
+  return payment?.status === 'verified';
 }
 
 function paymentIsFailed(payment) {
@@ -146,30 +149,33 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
     Payment.find({ event: event._id }).lean(),
     Booking.find({ event: event._id }).lean(),
     CustomerQuote.find({ event: event._id }).sort({ createdAt: -1 }).lean(),
-    CoreBooking.find({ customerId }).sort({ createdAt: -1 }).lean(),
+    CoreBooking.find({ customerId, bookingStatus: 'CONFIRMED' }).sort({ createdAt: -1 }).lean(),
   ]);
 
   const { totalBudget, budgetType } = eventBudget(event);
-  const activeReservations = reservations.filter(activeReservation);
-  const confirmedCustomerBookings = customerBookings.filter((b) => b.status !== 'cancelled');
-  const bookingCategories = new Set(confirmedCustomerBookings.map((b) => String(b.category || '').toLowerCase()));
+  const confirmedCustomerBookings = customerBookings.filter((b) => b.status === 'confirmed');
+  const bookedReservations = new Set(confirmedCustomerBookings.map(b => String(b.reservation)));
+  const representedQuotes = new Set(reservations.filter(r => bookedReservations.has(String(r._id))).map(r => String(r.quote)));
   const matchedCoreBookings = coreBookings.filter((b) => {
     if (b.customerEvent) return String(b.customerEvent) === String(event._id);
     // Legacy contracts need a quote link; a shared category does not identify an event.
     return Boolean(b.quoteId) && reservations.some(r => String(r.quote) === String(b.quoteId));
   });
+  const coreQuoteIds = new Set(matchedCoreBookings.map(b => String(b.quoteId)));
+  const activeReservations = reservations.filter(r => activeReservation(r, now) && !coreQuoteIds.has(String(r.quote)));
 
   const customerBookingCommitted = confirmedCustomerBookings.reduce((sum, b) => sum + bookingAmount(b), 0);
   const activeReservationCommitted = activeReservations.reduce((sum, r) => sum + money(r.packageTotal || r.amount), 0);
   const coreOnlyCommitted = matchedCoreBookings.reduce((sum, b) => {
-    const category = String(b.category || '').toLowerCase();
-    return bookingCategories.has(category) ? sum : sum + money(b.totalAmount);
+    return representedQuotes.has(String(b.quoteId)) ? sum : sum + money(b.totalAmount);
   }, 0);
   const committedAmount = money(customerBookingCommitted + activeReservationCommitted + coreOnlyCommitted);
 
   const paidFromPayments = payments.filter(paymentIsPaid).reduce((sum, p) => sum + money(p.amount), 0);
-  const paidFromCore = matchedCoreBookings.reduce((sum, b) => sum + corePaidAmount(b), 0);
-  const paidAmount = money(Math.max(paidFromPayments, paidFromCore));
+  const verifiedReservationIds = new Set(payments.filter(paymentIsPaid).map(p => String(p.reservation)));
+  const paidQuotes = new Set(reservations.filter(r => verifiedReservationIds.has(String(r._id))).map(r => String(r.quote)));
+  const paidFromCore = matchedCoreBookings.filter(b => b.paymentStatus === 'PAYMENT_VERIFIED' && !paidQuotes.has(String(b.quoteId))).reduce((sum, b) => sum + corePaidAmount(b), 0);
+  const paidAmount = money(paidFromPayments + paidFromCore);
 
   const obligations = [];
   for (const r of activeReservations) {
@@ -202,8 +208,7 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
     }
   }
   for (const b of matchedCoreBookings) {
-    const category = String(b.category || '').toLowerCase();
-    if (bookingCategories.has(category)) continue;
+    if (representedQuotes.has(String(b.quoteId))) continue;
     const amount = coreBalanceAmount(b);
     if (amount > 0) {
       obligations.push({
@@ -225,7 +230,18 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
     .reduce((sum, o) => sum + money(o.amount), 0);
 
   const latestQuoteTotal = money(customerQuotes.find((q) => ['draft', 'accepted'].includes(q.status))?.total);
-  const projectedTotal = money(Math.max(committedAmount, latestQuoteTotal));
+  const opportunities = await Opportunity.find({ customer: customerId, customerEvent: event._id }).select('_id').lean();
+  const vendorQuotes = opportunities.length ? await VendorQuote.find({ customer: customerId, opportunity: { $in: opportunities.map(o => o._id) }, status: { $in: ['SUBMITTED', 'APPROVED'] } }).lean() : [];
+  const committedCategories = new Set([...confirmedCustomerBookings, ...activeReservations, ...matchedCoreBookings].map(b => normalizeCategory(b.category) || String(b.category).toLowerCase()));
+  const estimates = new Map();
+  for (const quote of vendorQuotes) {
+    const category = normalizeCategory(quote.category) || String(quote.category || quote.vendorService);
+    if (committedCategories.has(category)) continue;
+    const amount = money(quote.pricingBreakdown?.totalAmount);
+    if (amount > 0) estimates.set(category, Math.min(estimates.get(category) ?? Infinity, amount));
+  }
+  const quotedEstimate = [...estimates.values()].reduce((sum, amount) => sum + amount, 0);
+  const projectedTotal = money(Math.max(committedAmount + quotedEstimate, latestQuoteTotal));
   const remainingAmount = totalBudget > 0 ? money(Math.max(0, totalBudget - projectedTotal)) : 0;
   const budgetVariance = totalBudget > 0 ? projectedTotal - totalBudget : 0;
 
@@ -287,17 +303,23 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
       remainingAmount,
       overdueAmount: money(overdueAmount),
       projectedTotal,
+      estimatedUncommittedAmount: Math.max(0, projectedTotal - committedAmount),
       budgetVariance,
     },
     counts: {
       reservations: activeReservations.length,
-      bookings: confirmedCustomerBookings.length + matchedCoreBookings.length,
+      bookings: confirmedCustomerBookings.length + matchedCoreBookings.filter(b => !representedQuotes.has(String(b.quoteId))).length,
       payments: payments.length,
       attentionItems: attentionItems.length,
     },
     attentionItems,
     obligations,
   };
+}
+
+export function financialBudgetSummary(truth) {
+  const m = truth.metrics;
+  return { target: m.budgetType === 'unset' ? null : m.totalBudget, committedCost: m.committedAmount, estimatedCost: m.estimatedUncommittedAmount, remaining: m.budgetType === 'unset' ? null : m.totalBudget - m.projectedTotal, paidAmount: m.paidAmount, variance: m.budgetVariance, source: 'CORE_FINANCIAL_TRUTH' };
 }
 
 export async function vendorFinancialTruth(vendorId, options = {}) {

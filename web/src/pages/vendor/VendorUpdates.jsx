@@ -62,6 +62,9 @@ export default function VendorUpdates({ notificationProps, onMessagesRead, onOpe
   const allItems = [...notificationProps.notifications, ...messageItems, ...auraItems]
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const important = allItems.filter(isImportantNotification);
+  const unreadMessageThreads = messageItems.filter((item) => !item.isRead).length;
+  const unreadAllItems = allItems.filter((item) => !item.isRead).length;
+  const unreadImportantItems = important.filter((item) => !item.isRead).length;
   const selectedItems = tab === 'aura' ? auraItems : tab === 'important' ? important : allItems;
 
   function changeTab(next) {
@@ -76,17 +79,17 @@ export default function VendorUpdates({ notificationProps, onMessagesRead, onOpe
           <p className="text-xs text-muted mt-1">Real-time alerts, enquiries, customer chats and Aura+ sessions.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {notificationProps.unreadCount > 0 && <button type="button" onClick={notificationProps.onReadAll} disabled={notificationProps.markingAll} className="rounded-xl border border-primary/30 bg-primary-soft text-primary px-3 py-2 text-xs font-bold disabled:opacity-50">{notificationProps.markingAll ? 'Marking…' : 'Mark all read'}</button>}
+          {(notificationProps.unreadCount > 0 || notificationProps.unreadConversationCount > 0) && <button type="button" onClick={notificationProps.onReadAll} disabled={notificationProps.markingAll} className="rounded-xl border border-primary/30 bg-primary-soft text-primary px-3 py-2 text-xs font-bold disabled:opacity-50">{notificationProps.markingAll ? 'Marking…' : 'Mark all read'}</button>}
           <button type="button" onClick={() => { notificationProps.onRefresh(); loadSources(); }} disabled={loading || notificationProps.loading} aria-label="Refresh messages and updates" className="w-9 h-9 rounded-xl border border-gray-200 bg-white text-muted grid place-items-center disabled:opacity-50"><Icon name="trend" size={15} /></button>
         </div>
       </div>
       <nav aria-label="Messages and updates tabs" className="flex gap-1 bg-white border border-gray-100 rounded-2xl p-1 shadow-xs overflow-x-auto">
         {[
-          ['all', 'All', allItems.length], ['messages', 'Messages', threads.length],
-          ['aura', 'Aura+', sessions.length], ['important', 'Important', important.length],
+          ['all', 'All', unreadAllItems], ['messages', 'Messages', unreadMessageThreads],
+          ['aura', 'Aura+', sessions.length], ['important', 'Important', unreadImportantItems],
         ].map(([key, label, count]) => (
           <button key={key} type="button" aria-current={tab === key ? 'page' : undefined} onClick={() => changeTab(key)} className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition focus-visible:outline-2 focus-visible:outline-primary ${tab === key ? 'bg-primary text-white' : 'text-muted hover:text-primary'}`}>
-            {label}<span className="ml-1.5 tabular-nums">{count}</span>
+            {label}{count > 0 && <span className="ml-1.5 tabular-nums">{count}</span>}
           </button>
         ))}
       </nav>

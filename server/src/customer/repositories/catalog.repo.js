@@ -1,3 +1,4 @@
+import { evaluateVendorActivation } from '../../external/services/vendorActivation.service.js';
 import mongoose from 'mongoose';
 import { VendorService } from '../../external/models/VendorService.js';
 import { VendorOrganization } from '../../external/models/VendorOrganization.js';
@@ -134,7 +135,9 @@ function extendedFallbackMeta(fit, cov) {
 export async function listBookableServices({ city, coordinates } = {}) {
   const regex = cityMatcher(city);
   const origin = coordsOf(coordinates);
-  const orgs = await VendorOrganization.find({ isCommerciallyActive: true }).select(ORG_FIELDS).lean();
+  const candidates = await VendorOrganization.find({ status: 'ACTIVE', 'activationReview.status': 'APPROVED', isRestricted: { $ne: true } }).select(ORG_FIELDS).lean();
+  const evaluated = await Promise.all(candidates.map(async org => ({ org, readiness: await evaluateVendorActivation(org._id) })));
+  const orgs = evaluated.filter(row => row.readiness.matchingEligible).map(row => row.org);
   if (!orgs.length) return [];
   const byId = new Map(orgs.map((o) => [String(o._id), o]));
   const vendorIds = orgs.map((o) => o._id);
@@ -205,6 +208,7 @@ export async function findBookableService(serviceId, { city, coordinates } = {})
   if (!service) return null;
   const vendor = await VendorOrganization.findOne({ _id: service.vendor, isCommerciallyActive: true }).select(ORG_FIELDS).lean();
   if (!vendor) return null;
+  if (!(await evaluateVendorActivation(vendor._id)).matchingEligible) return null;
   const origin = coordsOf(coordinates);
   if (!city && !origin) {
     const matchedLocation = await OperatingLocation.findOne({ vendor: vendor._id }).sort({ isPrimary: -1 }).lean();

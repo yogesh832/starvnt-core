@@ -1,3 +1,5 @@
+import { Linking } from 'react-native';
+import { VENDOR_SUPPORT } from '../../../shared/vendorSupport.js';
 import React, { useMemo } from "react";
 import { external, internal } from "../api/runtime";
 import { useSession } from "../auth/Session";
@@ -23,6 +25,7 @@ import {
   Stats,
   Txt,
   useResource,
+  useAction,
 } from "../ui";
 
 export function AdminHome({ navigation }: any) {
@@ -35,7 +38,7 @@ export function AdminHome({ navigation }: any) {
     }),
     [admin],
   );
-  const r = useResource(source, "dashboard");
+  const r = useResource(source, "dashboard", 30000);
   const data = r.data;
   const bookingStats = data.bookings?.stats;
   const eventStats = data.events?.stats;
@@ -186,8 +189,9 @@ export function VendorHome({ navigation }: any) {
     }),
     [],
   );
-  const r = useResource(source, "dashboard");
+  const r = useResource(source, "dashboard", 30000);
   const data = r.data;
+  const support = useAction();
   const readiness = data.activation?.status;
   const counts = data.counts;
   const metrics = data.financial?.financialTruth?.metrics;
@@ -235,9 +239,16 @@ export function VendorHome({ navigation }: any) {
       {readiness && (
         <Card>
           <Txt bold size={22}>
-            Workspace readiness
+            Profile Status
           </Txt>
           <Pill>{human(readiness.activationState)}</Pill>
+          <Txt>{readiness.activationState === 'UNDER_REVIEW' ? 'Your profile is under review. Our team will review your submission and update your activation status. If you need assistance, contact our support team.' : readiness.activationState === 'ACTIVE' ? 'Your profile is approved. Availability and service eligibility rules apply.' : 'Complete outstanding requirements or review the feedback below. Contact support if you need assistance.'}</Txt>
+          {!!readiness.reviewFeedback && <Txt>{readiness.reviewFeedback}</Txt>}
+          {!!readiness.lastStatusUpdate && <Txt muted>Last updated: {new Date(readiness.lastStatusUpdate).toLocaleString()}</Txt>}
+          <ErrorNotice message={support.error} />
+          <Button title="WhatsApp Support" secondary onPress={() => { void support.run(async () => { try { await Linking.openURL(VENDOR_SUPPORT.whatsapp); await external.call('/vendor/support-actions', 'POST', { action: 'WHATSAPP', outcome: 'OPENED' }).catch(() => {}); } catch (err) { await external.call('/vendor/support-actions', 'POST', { action: 'WHATSAPP', outcome: 'FAILED' }).catch(() => {}); throw err; } }); }} />
+          <Button title={`Call Support ${VENDOR_SUPPORT.number}`} secondary onPress={() => { void support.run(async () => { try { await Linking.openURL(VENDOR_SUPPORT.phone); await external.call('/vendor/support-actions', 'POST', { action: 'CALL', outcome: 'OPENED' }).catch(() => {}); } catch (err) { await external.call('/vendor/support-actions', 'POST', { action: 'CALL', outcome: 'FAILED' }).catch(() => {}); throw err; } }); }} />
+          {['DRAFT', 'PROFILE_INCOMPLETE'].includes(readiness.activationState) && readiness.commercialReadiness && <Button title="Submit profile for review" busy={support.busy} onPress={() => { void support.run(async () => { await external.call('/vendor/activation-review', 'POST'); r.refresh(); }); }} />}
           {(readiness.missingRequirements || []).map((item: string) => (
             <Txt key={item}>• {item}</Txt>
           ))}

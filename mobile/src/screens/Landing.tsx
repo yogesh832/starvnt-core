@@ -258,8 +258,8 @@ export function LandingScreen({ navigation }: any) {
         >
           <LogoWord />
           <Txt muted size={13} style={{ maxWidth: 460 }}>
-            The AI-native ecosystem for modern events. Plan, book, and celebrate
-            with verified vendors and transparent pricing.
+            Plan and manage events, compare vendor services, and review each
+            profile's verification status and listed pricing.
           </Txt>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
             <Button title="Plan an Event" onPress={() => begin(text)} />

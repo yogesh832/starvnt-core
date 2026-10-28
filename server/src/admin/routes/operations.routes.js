@@ -5,6 +5,7 @@ import { FinanceLedgerEntry } from '../models/FinanceLedgerEntry.js';
 import { AdminApprovalRequest } from '../models/AdminApprovalRequest.js';
 import { Payment } from '../../customer/models/index.js';
 import { recordRefund } from '../services/financeLedger.service.js';
+import { calculateEligibleAdvanceRefund } from '../../common/policyResolver.js';
 import {
   verifyPaymentFromCore,
   validateCompletionFromCore,
@@ -355,6 +356,20 @@ router.get('/finance-summary', requireAnyPermission('payments.read', 'settlement
   }
 });
 
+router.get('/finance-ledger', requireAnyPermission('payments.read', 'settlements.read'), async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
+    const skip = Math.max(Number(req.query.skip) || 0, 0);
+    const filter = {};
+    if (req.query.type && req.query.type !== 'All') filter.type = String(req.query.type).toUpperCase();
+    const [entries, total] = await Promise.all([
+      FinanceLedgerEntry.find(filter).sort({ postedAt: -1, createdAt: -1 }).skip(skip).limit(limit).lean(),
+      FinanceLedgerEntry.countDocuments(filter),
+    ]);
+    res.json({ ok: true, entries, total, count: entries.length, limit, skip });
+  } catch (err) { next(err); }
+});
+
 router.get('/approvals', requireAnyPermission('settlements.read', 'settlements.approve'), async (req, res, next) => {
   try {
     const status = String(req.query.status || 'PENDING').toUpperCase();
@@ -412,10 +427,34 @@ router.post('/bookings/:id/refund', requirePermission('payments.refund'), async 
     const booking = await CoreBooking.findById(req.params.id);
     if (!booking) return res.status(404).json({ error: 'BOOKING_NOT_FOUND' });
 
-    const amount = money(req.body?.amount ?? booking.paymentSummary?.paidAmount);
-    const reference = String(req.body?.reference || req.body?.transactionReference || '').trim();
+    const approvedRequest = req.body?.approvalId ? await AdminApprovalRequest.findOne({
+      _id: req.body.approvalId, type: 'REFUND', targetId: String(req.params.id), status: 'APPROVED',
+    }) : null;
+    const amount = money(req.body?.amount ?? approvedRequest?.payload?.amount ?? booking.paymentSummary?.paidAmount);
+    const reference = String(req.body?.reference || req.body?.transactionReference || approvedRequest?.payload?.reference || '').trim();
     if (amount <= 0) return res.status(400).json({ error: 'REFUND_AMOUNT_REQUIRED', message: 'Refund amount must be greater than zero.' });
     if (!reference) return res.status(400).json({ error: 'REFUND_REFERENCE_REQUIRED', message: 'A real refund/payment provider reference is required.' });
+
+    let refundLimit = null;
+    const refundTiers = booking.financialPolicySnapshot?.customerCancellationRefunds;
+    if (refundTiers && typeof refundTiers === 'object') {
+      const eventDate = String(booking.eventDate || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return res.status(409).json({ error: 'REFUND_EVENT_DATE_REQUIRED', message: 'The event date is required to calculate this booking’s approved refund terms.' });
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const daysBeforeEvent = Math.floor((Date.parse(`${eventDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+      const previousRefunds = await FinanceLedgerEntry.aggregate([
+        { $match: { booking: booking._id, type: 'REFUND' } },
+        { $group: { _id: null, amount: { $sum: '$amount' } } },
+      ]);
+      refundLimit = calculateEligibleAdvanceRefund({
+        eligibleAdvance: booking.paymentSummary?.advanceAmount ?? booking.paymentSummary?.paidAmount,
+        refundTiers,
+        daysBeforeEvent,
+        alreadyRefunded: previousRefunds[0]?.amount || 0,
+      });
+      if (!refundLimit) return res.status(409).json({ error: 'REFUND_POLICY_UNRESOLVED', message: 'This booking has no applicable approved refund tier for the current date.' });
+      if (amount > refundLimit.amount) return res.status(400).json({ error: 'REFUND_EXCEEDS_POLICY_LIMIT', maximumRefund: refundLimit.amount, eligiblePercent: refundLimit.percent });
+    }
 
     if (!req.body?.approvalId) {
       const existing = await AdminApprovalRequest.findOne({
@@ -445,17 +484,18 @@ router.post('/bookings/:id/refund', requirePermission('payments.refund'), async 
       });
     }
 
-    const approval = await AdminApprovalRequest.findOne({
-      _id: req.body.approvalId,
-      type: 'REFUND',
-      targetId: String(req.params.id),
-      status: 'APPROVED',
-    });
+    const approval = approvedRequest;
     if (!approval) {
       return res.status(403).json({ error: 'APPROVAL_REQUIRED', message: 'Approved maker-checker request is required before refund posting.' });
     }
     if (String(approval.requestedBy) === String(req.admin._id)) {
       return res.status(403).json({ error: 'MAKER_CHECKER_REQUIRED', message: 'The requesting admin cannot execute the same approved refund.' });
+    }
+
+    const approvedAmount = money(approval.payload?.amount);
+    const approvedReference = String(approval.payload?.reference || '').trim();
+    if (amount !== approvedAmount || reference !== approvedReference) {
+      return res.status(409).json({ error: 'APPROVED_REFUND_TERMS_MISMATCH', message: 'The refund amount and provider reference must match the approved request.' });
     }
 
     booking.paymentStatus = 'REFUNDED';
@@ -464,8 +504,8 @@ router.post('/bookings/:id/refund', requirePermission('payments.refund'), async 
     await recordRefund(
       booking,
       {
-        amount: req.body.amount ?? approval.payload?.amount,
-        reference: req.body.reference || req.body.transactionReference || approval.payload?.reference,
+        amount: approvedAmount,
+        reference: approvedReference,
         reason: req.body.reason || req.body.notes || approval.reason,
       },
       req.admin.email

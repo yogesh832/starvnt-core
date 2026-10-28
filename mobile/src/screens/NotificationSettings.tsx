@@ -1,15 +1,19 @@
+import { NotificationPreferences } from '../NotificationPreferences';
+import { useSession } from '../auth/Session';
 import React from "react";
 import { Linking } from "react-native";
 import { usePush } from "../Push";
 import { Button, Card, ErrorNotice, Page, Txt } from "../ui";
 export function NotificationSettings() {
   const push = usePush();
+  const session = useSession();
   return (
     <Page
       title="Notifications"
       subtitle="Stay up to date, even when STARVNT is closed."
     >
       <ErrorNotice message={push.error} />
+      {session.activeDomain !== "admin" && <NotificationPreferences surface={session.user?.accountType === "VENDOR" ? "vendor" : "customer"} />}
       <Card>
         <Txt bold>{push.status}</Txt>
         <Txt muted>

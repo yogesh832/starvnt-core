@@ -254,7 +254,7 @@ export function BudgetScreen({ route, navigation }: any) {
             )}
             <Stats
               items={[
-                ["Booked", money(budget.committedCost)],
+                ["Committed (including holds)", money(budget.committedCost)],
                 ["Still to arrange (estimate)", money(budget.estimatedCost)],
                 ["Paid", money(truth.paidAmount)],
                 ["Upcoming", money(truth.upcomingAmount)],

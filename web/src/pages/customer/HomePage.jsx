@@ -1,4 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import ProductFeedback from '../../components/ProductFeedback.jsx';
+import { externalApi } from '../../lib/api.js';
+import NotificationPreferences from '../../components/NotificationPreferences.jsx';
+import FinancialOverview from '../../components/FinancialOverview.jsx';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
@@ -415,14 +419,22 @@ function AuraShortcut({ firstName, event, chips }) {
 /* ── Workspace for the current event ──────────────────────────────────── */
 function Workspace({ firstName, event }) {
   const [tick, setTick] = useState(0);
+  const [proposalError, setProposalError] = useState('');
   const reload = useCallback(() => setTick((t) => t + 1), []);
   const dash = useLoad(() => customerApi.dashboard(event.id), [event.id, tick]);
   const hist = useLoad(() => customerApi.history(event.id), [event.id, tick]);
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState !== 'hidden') reload(); };
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh); };
+  }, [reload]);
   const ms = useMemo(() => milestones(hist.data?.history || []), [hist.data]);
 
   if (dash.loading && !dash.data) return <CustomerDashboardSkeleton />;
   if (dash.error) return <div className="text-sm text-red-500 dark:text-red-400">{errorText(dash.error)}</div>;
-  const { summary, steps, attention, payments = [] } = dash.data;
+  const { summary, steps, attention, payments = [], financialTruth, experience, bookings = [] } = dash.data;
   const ev = dash.data.event;
   const firstOpen = summary.items.find((i) => i.status === 'pending' || (i.status === 'missing' && i.tier === 'essential'));
   const chips = ['What is still missing?', 'Can I reduce the budget?', firstOpen && `Show me ${firstOpen.label.toLowerCase()} options`].filter(Boolean);
@@ -431,9 +443,13 @@ function Workspace({ firstName, event }) {
   return (
     <div className="max-w-[1400px] mx-auto space-y-5">
       <CustomerHero firstName={firstName} eventId={ev.id} />
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl p-4 border text-sm"><span><b>{experience?.lifecycle || 'Planning'}</b>{experience?.daysUntilEvent != null ? ` · ${experience.daysUntilEvent === 0 ? 'Event day' : experience.daysUntilEvent > 0 ? `${experience.daysUntilEvent} days to go` : `${Math.abs(experience.daysUntilEvent)} days since the event date`}` : ' · Date not set'}</span><span>{experience?.decisionsPending ?? 0} requirement{experience?.decisionsPending === 1 ? '' : 's'} awaiting a decision</span><button className="text-primary underline" onClick={reload}>Refresh</button></div>
+      {!!experience?.proposedRequirements?.length && <Section title="Confirm Aura suggestions"><p className="text-sm mb-3">These suggestions have not been confirmed by you and do not count as completed requirements.</p>{experience.proposedRequirements.map(r => <div key={r.category} className="border rounded-xl p-3 mb-2 text-sm"><p>{r.category} · {r.status.replaceAll('_', ' ')} {r.value || ''}</p><button className="underline text-primary" onClick={async () => { try { await externalApi.call(`/customer/events/${ev.id}/requirements/${r.category}/confirm`, { method: 'POST' }); setProposalError(''); reload(); } catch (err) { setProposalError(err.message); } }}>Confirm this requirement</button></div>)}{proposalError && <p role="alert">{proposalError}</p>}</Section>}
+      {!!experience?.risks?.length && <Section title="Changes to review">{experience.risks.map((risk, i) => <Link key={i} to={risk.actionUrl} className="block p-3 rounded-xl bg-amber-50 mb-2 text-sm"><b>{risk.title}</b><p>{risk.detail}</p></Link>)}</Section>}
+      {!!bookings.filter(b => b.status === 'confirmed').length && <Section title="Confirmed bookings"><ul className="grid sm:grid-cols-2 gap-3">{bookings.filter(b => b.status === 'confirmed').map(b => <li key={b.id}><Link className="block border rounded-xl p-3 text-sm" to={`/customer/events/${ev.id}/bookings#${b.id}`}><b>{b.vendorName}</b><p>{b.packageName} · {b.executionStatus || 'Confirmed'}</p></Link></li>)}</ul></Section>}
       <div className="customer-overview-grid">
         <EventSummary event={ev} summary={summary} steps={steps} payments={payments} />
-        <section className="customer-budget-panel"><h2>Budget overview</h2><BudgetOverview event={ev} summary={summary} /></section>
+        <section className="customer-budget-panel"><h2>Budget overview</h2><FinancialOverview truth={financialTruth} /></section>
       </div>
 
       {/* Row 2: event plan + budget */}
@@ -466,6 +482,8 @@ function Workspace({ firstName, event }) {
         </Section>
       </div>
 
+      <NotificationPreferences eventId={ev.id} />
+      <div className="bg-white border rounded-2xl p-4"><ProductFeedback kind="EVENT" reference={ev.id} /></div>
       {/* Row 3: recommendations + next actions */}
       <div className="grid xl:grid-cols-12 gap-5 items-start">
         <div className="xl:col-span-8 space-y-5">
@@ -490,7 +508,7 @@ function Workspace({ firstName, event }) {
                 ))}
               </ul>
             ) : (() => {
-              const unbookedItems = (summary?.items || []).filter((i) => ['missing', 'pending'].includes(i.status) && !i.selectedOption?.vendorName);
+              const unbookedItems = (summary?.items || []).filter((i) => (i.tier === 'essential' || i.status === 'pending') && ['missing', 'pending'].includes(i.status) && !i.selectedOption?.vendorName);
               if (unbookedItems.length > 0) {
                 return (
                   <div className="space-y-3">
@@ -531,7 +549,7 @@ function Workspace({ firstName, event }) {
                     You're all caught up for {ev?.title || 'your event'} 🎉
                   </div>
                   <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-1 leading-relaxed">
-                    All services are confirmed and on schedule. No pending customer action is required right now.
+                    No pending customer action was found in the current records. You can review your plan and bookings at any time.
                   </p>
                 </div>
               );

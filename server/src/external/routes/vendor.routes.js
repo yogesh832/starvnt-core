@@ -1,3 +1,6 @@
+import { observeProduct } from '../../common/productObservability.js';
+import { withVendorSchedule } from '../services/scheduleLock.js';
+import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { Router } from 'express';
 import { requireExternalAuth, requireAccountType } from '../middleware/requireExternalAuth.js';
@@ -8,6 +11,9 @@ import { OperatingLocation } from '../models/OperatingLocation.js';
 import { ServiceCoverage } from '../models/ServiceCoverage.js';
 import { TravelPolicy } from '../models/TravelPolicy.js';
 import { VendorResource } from '../models/VendorResource.js';
+import { saveCommitment, cancelCommitment, cancelLegacyCommitment } from '../services/commitments.service.js';
+import { checkTrueAvailability } from '../services/availability.service.js';
+import { normaliseCommitment } from '../../common/scheduleRules.js';
 import { VendorBlockout } from '../models/VendorBlockout.js';
 import { VendorBookingSlot } from '../models/VendorBookingSlot.js';
 import { Notification } from '../models/Notification.js';
@@ -80,6 +86,7 @@ async function resolveVendorContext(req, res, next) {
 }
 
 router.use(resolveVendorContext);
+router.use(notificationPreferencesRoutes('VENDOR'));
 
 // ── Aura+ assistant & Financial Onboarding ──────────────────────────────────
 router.use('/aura', vendorAuraRoutes);
@@ -244,6 +251,26 @@ req.vendor.profilePicUrl = profilePicUrl;
   }
 });
 
+router.post('/support-actions', async (req, res, next) => {
+  try {
+    const { action, outcome = 'OPEN_REQUESTED' } = req.body || {};
+    if (!['WHATSAPP', 'CALL'].includes(action) || !['OPEN_REQUESTED', 'OPENED', 'FAILED'].includes(outcome)) return res.status(400).json({ error: 'INVALID_SUPPORT_ACTION' });
+    await observeProduct('support_link', outcome, req.vendorId, true);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+router.post('/activation-review', async (req, res) => {
+  try {
+    await withVendorSchedule(req.vendorId, async assertLease => {
+      const status = await evaluateVendorActivation(req.vendorId);
+      if (['ACTIVE', 'UNDER_REVIEW'].includes(status.activationState)) return;
+      if (!status.commercialReadiness || !status.checklist.verified || ['REJECTED', 'SUSPENDED'].includes(status.activationState)) throw Object.assign(new Error('Complete the outstanding requirements or contact support before submission.'), { statusCode: 409, code: 'PROFILE_NOT_READY' });
+      await assertLease();
+      await VendorOrganization.updateOne({ _id: req.vendorId }, { $set: { status: 'UNDER_REVIEW', activationState: 'UNDER_REVIEW', 'activationReview.status': 'PENDING', 'activationReview.requestedAt': new Date() }, $push: { activationHistory: { actor: String(req.externalUser._id), role: 'VENDOR', at: new Date(), action: 'SUBMITTED', reason: 'Vendor submitted profile for activation review', fromState: status.activationState, toState: 'UNDER_REVIEW' } } });
+    });
+    res.json({ ok: true, status: await evaluateVendorActivation(req.vendorId) });
+  } catch (err) { res.status(err.statusCode || 400).json({ error: err.code || 'REVIEW_SUBMISSION_FAILED', message: err.message }); }
+});
 router.get('/activation-status', async (req, res, next) => {
   try {
     const status = await evaluateVendorActivation(req.vendorId);
@@ -312,6 +339,26 @@ router.post('/services', async (req, res, next) => {
   }
 });
 
+router.put('/services/:id/resources', async (req, res, next) => {
+  try {
+    const ids = [...new Set((req.body.requiredResourceIds || []).map(String))];
+    if (ids.length && await VendorResource.countDocuments({ _id: { $in: ids }, vendor: req.vendorId, status: { $ne: 'RETIRED' } }) !== ids.length) return res.status(403).json({ error: 'RESOURCE_NOT_OWNED_BY_VENDOR' });
+    const setup = Number(req.body.setupBufferMinutes ?? 45);
+    if (!Number.isFinite(setup) || setup < 0 || setup > 1440) return res.status(400).json({ error: 'INVALID_SETUP_BUFFER' });
+    const service = await withVendorSchedule(req.vendorId, async assertLease => {
+      const current = await VendorService.findOne({ _id: req.params.id, vendor: req.vendorId });
+      if (!current) return null;
+      const before = { requiredResourceIds: current.requiredResourceIds.map(String).sort(), setupBufferMinutes: current.setupBufferMinutes };
+      const after = { requiredResourceIds: ids.sort(), setupBufferMinutes: setup };
+      if (JSON.stringify(before) === JSON.stringify(after)) return current;
+      await assertLease();
+      return VendorService.findOneAndUpdate({ _id: req.params.id, vendor: req.vendorId }, { $set: after, $push: { schedulingHistory: { actor: req.externalUser._id, at: new Date(), before, after } } }, { new: true, runValidators: true });
+    });
+    if (!service) return res.status(404).json({ error: 'SERVICE_NOT_FOUND' });
+    res.json({ ok: true, service });
+  } catch (err) { next(err); }
+});
+
 router.put('/services/:id', async (req, res, next) => {
   try {
     const service = await VendorService.findOne({ _id: req.params.id, vendor: req.vendorId });
@@ -337,10 +384,21 @@ router.put('/services/:id', async (req, res, next) => {
 
 router.delete('/services/:id', async (req, res, next) => {
   try {
-    const deleted = await VendorService.findOneAndDelete({ _id: req.params.id, vendor: req.vendorId });
-    if (!deleted) {
+    const service = await VendorService.findOne({ _id: req.params.id, vendor: req.vendorId });
+    if (!service) {
       return res.status(404).json({ error: 'SERVICE_NOT_FOUND' });
     }
+    const [hasQuotes, hasBookings] = await Promise.all([
+      Quote.exists({ vendorService: service._id }),
+      CoreBooking.exists({ vendorService: service._id }),
+    ]);
+    if (hasQuotes || hasBookings) {
+      service.status = 'ARCHIVED';
+      await service.save();
+      const activation = await evaluateVendorActivation(req.vendorId);
+      return res.json({ ok: true, deleted: false, archived: true, service, activation });
+    }
+    await VendorService.deleteOne({ _id: service._id, vendor: req.vendorId });
     await VendorCapability.deleteMany({ vendorService: req.params.id });
     await ServiceCoverage.deleteMany({ vendorService: req.params.id });
     const activation = await evaluateVendorActivation(req.vendorId);
@@ -748,45 +806,35 @@ router.put('/availability/hours', async (req, res, next) => {
 
 router.get('/availability/blockouts', async (req, res, next) => {
   try {
-    const blockouts = await VendorBlockout.find({ vendor: req.vendorId }).sort({ date: 1 });
+    const blockouts = await VendorBlockout.find({ vendor: req.vendorId, status: { $ne: 'CANCELLED' } }).sort({ date: 1 });
     res.json({ ok: true, blockouts });
   } catch (err) {
     next(err);
   }
 });
 
-router.post('/availability/blockouts', async (req, res, next) => {
+const scheduleActor = req => ({ id: req.externalUser._id, role: 'VENDOR' });
+function scheduleFailure(res, err) {
+  return res.status(err.statusCode || 400).json({ error: err.code || 'SCHEDULE_ERROR', message: err.message, conflicts: err.conflicts || [] });
+}
+router.post('/availability/validateBlockout', async (req, res) => {
   try {
-    const { date, startTime, endTime, allDay, reason } = req.body || {};
-    if (!date) {
-      return res.status(400).json({ error: 'DATE_REQUIRED' });
-    }
-
-    const blockout = await VendorBlockout.create({
-      vendor: req.vendorId,
-      date,
-      startTime: startTime || '00:00',
-      endTime: endTime || '23:59',
-      allDay: allDay !== false,
-      reason: reason || 'Unavailable',
-    });
-
-    res.status(201).json({ ok: true, blockout });
-  } catch (err) {
-    next(err);
-  }
+    const data = normaliseCommitment(req.body);
+    const result = await checkTrueAvailability({ vendorId: req.vendorId, ...data, vendorServiceId: data.vendorService, requestedResources: data.resourceIds, excludeId: req.body.id, blockAll: data.recordType === 'VENDOR_BLOCK' });
+    res.status(result.feasible ? 200 : 409).json({ ok: result.feasible, ...result });
+  } catch (err) { scheduleFailure(res, err); }
 });
-
-router.delete('/availability/blockouts/:id', async (req, res, next) => {
-  try {
-    const deleted = await VendorBlockout.findOneAndDelete({ _id: req.params.id, vendor: req.vendorId });
-    if (!deleted) {
-      return res.status(404).json({ error: 'BLOCKOUT_NOT_FOUND' });
-    }
-    res.json({ ok: true, deleted: true });
-  } catch (err) {
-    next(err);
-  }
+router.post('/availability/blockouts', async (req, res) => {
+  try { res.status(201).json({ ok: true, blockout: await saveCommitment(req.vendorId, req.body, scheduleActor(req)) }); }
+  catch (err) { scheduleFailure(res, err); }
+});
+router.patch('/availability/blockouts/:id', async (req, res) => {
+  try { res.json({ ok: true, blockout: await saveCommitment(req.vendorId, req.body, scheduleActor(req), req.params.id) }); }
+  catch (err) { scheduleFailure(res, err); }
+});
+router.delete('/availability/blockouts/:id', async (req, res) => {
+  try { res.json({ ok: true, blockout: await cancelCommitment(req.vendorId, req.params.id, scheduleActor(req), req.body?.reason) }); }
+  catch (err) { scheduleFailure(res, err); }
 });
 
 router.get('/availability/bookings', async (req, res, next) => {
@@ -798,43 +846,17 @@ router.get('/availability/bookings', async (req, res, next) => {
   }
 });
 
-router.post('/availability/bookings', async (req, res, next) => {
+// Legacy clients use the same validated reported-commitment store.
+router.delete('/availability/bookings/:id', async (req, res) => {
+  try { res.json({ ok: true, slot: await cancelLegacyCommitment(req.vendorId, req.params.id, scheduleActor(req), req.body?.reason) }); }
+  catch (err) { scheduleFailure(res, err); }
+});
+router.post('/availability/bookings', async (req, res) => {
   try {
-    const { vendorServiceId, date, startTime, endTime, serviceLocation, assignedResources } = req.body || {};
-    if (!date || !vendorServiceId) {
-      return res.status(400).json({ error: 'DATE_AND_SERVICE_REQUIRED' });
-    }
-    const service = await VendorService.findOne({ _id: vendorServiceId, vendor: req.vendorId });
-    if (!service) {
-      return res.status(404).json({ error: 'SERVICE_NOT_FOUND' });
-    }
-    const resourceIds = Array.isArray(assignedResources) ? assignedResources.filter(Boolean) : [];
-    if (resourceIds.length) {
-      const ownedResourceCount = await VendorResource.countDocuments({
-        _id: { $in: resourceIds },
-        vendor: req.vendorId,
-        status: { $ne: 'RETIRED' },
-      });
-      if (ownedResourceCount !== new Set(resourceIds.map(String)).size) {
-        return res.status(403).json({ error: 'RESOURCE_NOT_OWNED_BY_VENDOR' });
-      }
-    }
-
-    const slot = await VendorBookingSlot.create({
-      vendor: req.vendorId,
-      vendorService: service._id,
-      date,
-      startTime: startTime || '09:00',
-      endTime: endTime || '18:00',
-      serviceLocation: serviceLocation || {},
-      assignedResources: resourceIds,
-      status: 'CONFIRMED',
-    });
-
+    const input = { ...req.body, recordType: 'EXTERNAL_COMMITMENT', scope: req.body.assignedResources?.length ? 'RESOURCE' : 'SERVICE', vendorService: req.body.vendorServiceId, resourceIds: req.body.assignedResources || [] };
+    const slot = await saveCommitment(req.vendorId, input, scheduleActor(req));
     res.status(201).json({ ok: true, slot });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { scheduleFailure(res, err); }
 });
 
 // ── Aura+ Growth Intelligence (Spec §16) ──────────────────────────────────
@@ -876,8 +898,18 @@ router.put('/notifications/:id/read', async (req, res, next) => {
 
 router.put('/notifications/read-all', async (req, res, next) => {
   try {
-    await Notification.updateMany({ vendor: req.vendorId, isRead: false }, { isRead: true, readAt: new Date(), status: 'READ' });
-    res.json({ ok: true, message: 'All notifications marked as read' });
+    const readAt = new Date();
+    const [notifications, conversations] = await Promise.all([
+      Notification.updateMany({ vendor: req.vendorId, isRead: false }, { isRead: true, readAt, status: 'READ' }),
+      VendorMessageThread.updateMany({ vendor: req.vendorId, status: { $ne: 'BLOCKED' }, unreadVendorCount: { $gt: 0 } }, { $set: { unreadVendorCount: 0 } }),
+    ]);
+    res.json({
+      ok: true,
+      message: 'All notifications and conversations marked as read',
+      markedNotifications: notifications.modifiedCount || 0,
+      markedConversations: conversations.modifiedCount || 0,
+      unread: 0,
+    });
   } catch (err) {
     next(err);
   }

@@ -4,26 +4,12 @@ import { LogoWord } from './ui.jsx';
 export default function PublicFooter({ showTrustStrip = true }) {
   return (
     <footer className="w-full mt-auto">
-      {/* Trust Strip */}
+      {/* Product information; market and custody claims are omitted until verified. */}
       {showTrustStrip && (
         <div className="bg-white/85 dark:bg-[#1a1d2e]/85 backdrop-blur-xs border-t border-b border-gray-100 dark:border-gray-800 py-6 px-6 sm:px-12">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-6">
-            <div className="text-xs font-bold text-muted uppercase tracking-wider">
-              Trusted by thousands across India
-            </div>
-            <div className="flex flex-wrap gap-8 sm:gap-14">
-              {[
-                ['10K+', 'Events Planned'],
-                ['4.8/5', 'Customer Rating'],
-                ['5K+', 'Verified Vendors'],
-                ['100%', 'Secure Payments'],
-              ].map(([v, l]) => (
-                <div key={l}>
-                  <div className="text-lg sm:text-xl font-extrabold text-navy">{v}</div>
-                  <div className="text-[11px] text-muted">{l}</div>
-                </div>
-              ))}
-            </div>
+            <div className="text-sm font-bold text-muted">Plan event details, discover vendor services, and manage booking information in one place.</div>
+            <div className="text-xs text-muted">Availability depends on each vendor’s listed service coverage.</div>
           </div>
         </div>
       )}
@@ -37,12 +23,9 @@ export default function PublicFooter({ showTrustStrip = true }) {
               <LogoWord />
             </Link>
             <p className="text-xs sm:text-sm text-muted max-w-sm leading-relaxed">
-              The AI-native ecosystem for modern events. Plan, book, and celebrate with verified vendors, transparent pricing, and 100% escrow protection.
+              Tools for planning events, discovering vendor services, and managing booking details.
             </p>
-            <div className="flex items-center gap-2 pt-1 text-xs font-semibold text-emerald-600">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Core Escrow & Settlement Active</span>
-            </div>
+            <p className="pt-1 text-xs text-muted">Payment status is shown after provider confirmation.</p>
           </div>
 
           {/* Column 1: Plan Events */}
@@ -98,7 +81,7 @@ export default function PublicFooter({ showTrustStrip = true }) {
               </li>
               <li>
                 <Link to="/login?as=vendor" className="hover:text-primary transition">
-                  Milestone Payouts
+                  Payment records
                 </Link>
               </li>
               <li>
@@ -114,24 +97,14 @@ export default function PublicFooter({ showTrustStrip = true }) {
             <div className="text-xs font-bold uppercase tracking-wider text-navy">Trust & Legal</div>
             <ul className="space-y-2 text-xs text-muted">
               <li>
-                <span className="cursor-pointer hover:text-primary transition">
-                  Core Escrow Protection
-                </span>
-              </li>
-              <li>
-                <span className="cursor-pointer hover:text-primary transition">
+                <Link to="/privacy" className="hover:text-primary transition">
                   Privacy Policy
-                </span>
+                </Link>
               </li>
               <li>
-                <span className="cursor-pointer hover:text-primary transition">
+                <Link to="/terms" className="hover:text-primary transition">
                   Terms of Service
-                </span>
-              </li>
-              <li>
-                <span className="cursor-pointer hover:text-primary transition">
-                  Verified Reviews Only
-                </span>
+                </Link>
               </li>
               <li className="pt-2">
                 <Link
@@ -149,7 +122,7 @@ export default function PublicFooter({ showTrustStrip = true }) {
         {/* Bottom Bar */}
         <div className="max-w-7xl mx-auto mt-10 pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-end gap-4 text-xs text-muted">
           <div className="flex items-center gap-6">
-            <span>Mumbai · Bengaluru · Delhi NCR · Goa</span>
+            <span>Vendor coverage varies by service and location.</span>
             <span className="text-primary font-semibold">Events. Simplified.</span>
           </div>
         </div>

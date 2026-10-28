@@ -1,3 +1,6 @@
+import { observeProduct } from '../../common/productObservability.js';
+import { AdminAuditLog } from '../models/AdminAuditLog.js';
+import { reviewActivation } from '../services/vendorActivationReview.js';
 import { Router } from 'express';
 import { requireAdminAuth, requirePermission, requireAnyPermission } from '../middleware/requireAdminAuth.js';
 import { externalConn } from '../../db/index.js';
@@ -668,6 +671,24 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
     res.json({ ok: true, organization, document, activation });
   } catch (err) {
     next(err);
+  }
+});
+
+router.post('/organizations/:id/activation', async (req, res, next) => {
+  if (req.admin?.role === 'SUPER_ADMIN' || req.admin?.permissions?.includes('vendors.approve')) return next();
+  try { await AdminAuditLog.create({ ...auditContext(req), action: 'VENDOR_ACTIVATION_DENIED', targetType: 'VendorOrganization', targetId: req.params.id, reason: 'Missing vendors.approve permission' }); }
+  catch { return res.status(503).json({ error: 'AUDIT_UNAVAILABLE' }); }
+  return res.status(403).json({ error: 'FORBIDDEN' });
+}, async (req, res) => {
+  try {
+    const result = await reviewActivation(req.params.id, req.body || {}, { id: req.admin._id, role: req.admin.role });
+    await recordAudit({ ...auditContext(req), action: 'VENDOR_ACTIVATION_REVIEW', targetType: 'VendorOrganization', targetId: req.params.id, reason: req.body.reason, toState: { status: result.status.activationState } });
+    await observeProduct('activation_review', 'SUCCESS');
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    await observeProduct('activation_review', 'FAILED');
+    await recordAudit({ ...auditContext(req), action: 'VENDOR_ACTIVATION_DENIED', targetType: 'VendorOrganization', targetId: req.params.id, reason: err.message });
+    res.status(err.statusCode || 400).json({ error: err.code || 'ACTIVATION_FAILED', message: err.message });
   }
 });
 

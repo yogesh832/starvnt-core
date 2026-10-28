@@ -50,7 +50,7 @@ export default function BudgetPage() {
           </>
         )}
         <div className="grid grid-cols-2 gap-2 mt-3 text-[11px]">
-          <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Booked</div><div className="font-bold text-navy">{formatINR(b.committedCost)}</div></div>
+          <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Committed (including holds)</div><div className="font-bold text-navy">{formatINR(b.committedCost)}</div></div>
           <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Est. still to arrange</div><div className="font-bold text-navy">{formatINR(b.estimatedCost)}</div></div>
           <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Paid</div><div className="font-bold text-navy">{formatINR(truth.paidAmount || 0)}</div></div>
           <div className="bg-lavender/60 rounded-xl p-2.5"><div className="text-muted">Upcoming</div><div className="font-bold text-navy">{formatINR(truth.upcomingAmount || 0)}</div></div>

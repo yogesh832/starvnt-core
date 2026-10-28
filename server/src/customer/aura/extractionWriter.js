@@ -101,6 +101,7 @@ export async function writeExtraction({ customerId, event, extracted, yearStated
   }
 
   const statements = [];
+  const tentative = extracted.tentativeCategory;
   const provided = new Set(extracted.providedCategories || []);
   for (const category of provided) {
     if (category !== extracted.providedCategory) statements.push([category, { kind: 'provided', value: category === 'venue' ? extracted.venueName : null }]);
@@ -111,6 +112,7 @@ export async function writeExtraction({ customerId, event, extracted, yearStated
     if (!provided.has(c) && c !== extracted.providedCategory && c !== extracted.needsHelpCategory) statements.push([c, { kind: 'needed' }]);
   }
   for (const [category, st] of statements) {
+    if (category === tentative) continue;
     const r = await core.applyServiceStatement(customerId, eventId, category, st);
     if (r.applied) written.push(`requirement.${category}`);
     else if (r.reason !== 'unchanged') skipped.push({ field: `requirement.${category}`, reason: r.reason });

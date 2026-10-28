@@ -412,7 +412,7 @@ export default function Bookings() {
             </div>
             <h3 className="text-base font-extrabold text-navy">No Bookings Yet</h3>
             <p className="text-xs text-muted max-w-md mx-auto mt-1 leading-relaxed">
-              When client quotes are approved and advance payments are verified into Core Platform escrow, scheduled bookings will appear here for execution and deliverable verification.
+              When client quotes are approved and advance payments are provider-verified, scheduled bookings will appear here for execution and deliverable verification.
             </p>
           </Card>
         )}
@@ -629,7 +629,7 @@ export default function Bookings() {
               </div>
 
               <div className="bg-primary-soft/50 dark:bg-primary/10 border border-primary/20 dark:border-primary/30 rounded-xl p-3 text-[11px] text-navy dark:text-slate-200">
-                <b className="text-navy dark:text-white">Core Platform Guarantee:</b> Once submitted, Core Operations verifies your deliverables against customer requirements. Upon validation, settlement unlocks automatically.
+                <b className="text-navy dark:text-white">Review process:</b> Core Operations reviews submitted deliverables against the booking requirements. Settlement eligibility and status update after that review; submitting evidence alone does not guarantee release.
               </div>
             </div>
 

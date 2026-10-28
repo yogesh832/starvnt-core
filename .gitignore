@@ -69,3 +69,6 @@ desktop.ini
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Disposable unified acceptance preview assets
+web/dist-unified-preview/

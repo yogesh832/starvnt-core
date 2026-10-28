@@ -1,3 +1,4 @@
+import { checkTrueAvailability } from '../../external/services/availability.service.js';
 import * as catalogRepo from '../repositories/catalog.repo.js';
 import * as commerceRepo from '../repositories/commerce.repo.js';
 import { normalizeCategory, categoryLabel } from './planCatalog.js';
@@ -270,19 +271,12 @@ async function allOptions(event) {
  */
 async function withAvailability(options, event) {
   if (!event?.eventDate) return options.map((o) => ({ ...o, availability: 'no_event_date' }));
-  const vendorIds = [...new Set(options.filter((o) => o.vendorId).map((o) => o.vendorId))];
-  const [{ blocked, booked }, ours] = await Promise.all([
-    catalogRepo.vendorCommitments(vendorIds, event.eventDate),
-    commerceRepo.bookedOptionDates(options.map((o) => o.id), event.eventDate),
-  ]);
-  // Booked through STARVNT by another event on this date.
-  const bookedByOthers = new Set(ours.filter((r) => String(r.event) !== String(event._id)).map((r) => r.optionId));
-  return options.map((o) => {
-    let availability = o.requiresVendorConfirmation ? 'requires_vendor_confirmation' : 'unconfirmed';
-    if (o.vendorId && blocked.has(o.vendorId)) availability = 'blocked';
-    else if ((o.vendorId && booked.has(o.vendorId)) || bookedByOthers.has(o.id)) availability = 'booked';
+  return Promise.all(options.map(async o => {
+    if (!o.vendorId) return { ...o, availability: 'unconfirmed' };
+    const result = await checkTrueAvailability({ vendorId: o.vendorId, vendorServiceId: o.id.replace(/^vs_/, ''), date: event.eventDate, allDay: true, serviceLocation: event.location, excludeEventId: event._id });
+    const availability = !result.feasible ? 'blocked' : o.requiresVendorConfirmation ? 'requires_vendor_confirmation' : 'unconfirmed';
     return { ...o, availability };
-  });
+  }));
 }
 
 export const isBookable = (o) => !o.requiresVendorConfirmation && o.availability !== 'blocked' && o.availability !== 'booked';

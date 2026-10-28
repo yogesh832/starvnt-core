@@ -10,7 +10,7 @@ export function vendorInsightTotals(bookings: Data[]) {
         booking.paymentStatus === "PAYMENT_VERIFIED" &&
         booking.bookingStatus === "CONFIRMED"
       )
-        total.escrow += amount(booking.paymentSummary?.paidAmount);
+        total.verifiedAdvances += amount(booking.paymentSummary?.paidAmount);
       if (booking.settlementStatus === "SETTLED")
         total.released += amount(
           booking.settlementDetails?.vendorPayable ??
@@ -20,7 +20,7 @@ export function vendorInsightTotals(bookings: Data[]) {
         );
       return total;
     },
-    { advanceReceived: 0, recordedBookingValue: 0, escrow: 0, released: 0 },
+    { advanceReceived: 0, recordedBookingValue: 0, verifiedAdvances: 0, released: 0 },
   );
 }
 export function reviewText(review: Data): string {

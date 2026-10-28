@@ -74,7 +74,7 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
           <div className="font-extrabold text-navy text-base">{formatINR(total)}</div>
         </div>
         <div className="rounded-xl bg-emerald-50 p-3">
-          <div className="text-emerald-700 text-[10px] font-bold">Pay now ({quote.advancePercentage || 30}%)</div>
+          <div className="text-emerald-700 text-[10px] font-bold">Pay now ({quote.advancePercentage ?? 30}%)</div>
           <div className="font-extrabold text-emerald-700 text-base">{formatINR(advance)}</div>
         </div>
         <div className="rounded-xl bg-gray-50 p-3">

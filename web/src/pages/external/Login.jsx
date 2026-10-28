@@ -6,6 +6,7 @@ import { useTheme } from "../../lib/ThemeContext.jsx";
 import PublicNavbar from "../../components/PublicNavbar.jsx";
 import PublicFooter from "../../components/PublicFooter.jsx";
 import { LogoWord } from "../../components/ui.jsx";
+import { DEV_SHORTCUTS_ENABLED } from "../../lib/devShortcuts.js";
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -547,8 +548,8 @@ export default function ExternalLogin() {
 
               <p className="mt-2.5 text-white/85 text-xs sm:text-sm leading-relaxed max-w-sm">
                 {accountType === "VENDOR"
-                  ? "Manage incoming verified client leads, send instant calendar quotes, and secure milestone payouts."
-                  : "Sign in to access your AI event planner Aura+, verified vendor quotes, and 100% escrow-protected bookings."}
+                  ? "Manage client enquiries, send quotes, and review booking and payment records."
+                  : "Sign in to plan your event, review vendor quotes, and manage booking details."}
               </p>
 
               {/* Trust highlights */}
@@ -566,8 +567,8 @@ export default function ExternalLogin() {
                     />
                   </svg>
                   <span>
-                    <b className="font-semibold text-white">100% Core Escrow</b>{" "}
-                    payment protection
+                    <b className="font-semibold text-white">Payment status tracking</b>{" "}
+                    after provider confirmation
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-white/90 bg-white/10 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-white/10">
@@ -586,16 +587,16 @@ export default function ExternalLogin() {
                     {accountType === "VENDOR" ? (
                       <>
                         <b className="font-semibold text-white">
-                          Direct Client Requests
+                          Client Requests
                         </b>{" "}
-                        with verified budgets
+                        with submitted event details
                       </>
                     ) : (
                       <>
                         <b className="font-semibold text-white">
-                          Top 1% Verified Vendors
+                          Vendor profiles and services
                         </b>{" "}
-                        and studios
+                        for your event
                       </>
                     )}
                   </span>
@@ -637,6 +638,7 @@ export default function ExternalLogin() {
           <main className="p-6 sm:p-10 flex flex-col justify-center bg-white">
             <div className="w-full">
               {/* Developer POV Test Login Workbench Banner Button */}
+              {DEV_SHORTCUTS_ENABLED && <>
               <div className="mb-5 p-3.5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 border border-purple-500/40 text-white flex items-center justify-between gap-3 shadow-lg shadow-purple-950/30">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 grid place-items-center font-bold text-sm shrink-0 border border-purple-400/30">
@@ -659,6 +661,7 @@ export default function ExternalLogin() {
                   <span>→</span>
                 </button>
               </div>
+              </>}
               {/* Persona Switcher: Customer vs Vendor */}
               <div className="flex items-center justify-between pb-4 border-b border-gray-100 gap-4">
                 <div>
@@ -1325,7 +1328,7 @@ export default function ExternalLogin() {
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-muted">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  <span>Protected by Core Escrow</span>
+                  <span>Payment status follows provider confirmation</span>
                 </div>
               </div>
             </div>

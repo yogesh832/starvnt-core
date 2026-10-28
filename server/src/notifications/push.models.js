@@ -33,6 +33,9 @@ const job = new Schema(
     subscription: { type: Schema.Types.ObjectId, required: true },
     bindingId: { type: String, required: true },
     sourceId: { type: String, required: true },
+    type: String,
+    priorityRank: { type: Number, default: 2 },
+    attemptLog: [{ at: Date, status: String, error: String, ticketId: String }],
     title: String,
     body: String,
     actionUrl: String,
@@ -58,6 +61,7 @@ const job = new Schema(
 );
 job.index({ subscription: 1, bindingId: 1, sourceId: 1 }, { unique: true });
 job.index({ status: 1, nextAttemptAt: 1, lockedUntil: 1 });
+job.index({ status: 1, priorityRank: 1, nextAttemptAt: 1, lockedUntil: 1 });
 export const PushSubscription = adminConn.model(
   "PushSubscription",
   subscription,

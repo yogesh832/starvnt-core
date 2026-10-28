@@ -49,7 +49,7 @@ export function PaymentsPage() {
     loadPayments();
   }, [loadPayments]);
 
-  const escrowAmount = bookings
+  const verifiedAdvanceAmount = bookings
     .filter((b) => b.paymentStatus === 'PAYMENT_VERIFIED' && b.bookingStatus === 'CONFIRMED')
     .reduce((sum, b) => sum + paidAdvance(b), 0);
 
@@ -74,8 +74,8 @@ export function PaymentsPage() {
 
   const stats = [
     {
-      label: 'In Escrow',
-      value: `₹${escrowAmount.toLocaleString()}`,
+      label: 'Verified Advances',
+      value: `₹${verifiedAdvanceAmount.toLocaleString()}`,
       foot: 'Advance paid by customers',
       iconBg: 'bg-orange-50 text-orange-500',
       icon: 'wallet',
@@ -97,7 +97,7 @@ export function PaymentsPage() {
   ];
 
   return (
-    <Page title="Payments" sub="Read-only payment truth from Core — escrow, releases and settlement state.">
+    <Page title="Payments" sub="Read-only payment and settlement records from Core.">
       <div className="grid sm:grid-cols-3 gap-3.5">
         {stats.map((s) => (
           <Card key={s.label} className="flex items-center gap-3">
@@ -149,7 +149,7 @@ export function PaymentsPage() {
         </Card>
       </div>
 
-      <Card className="!p-0 overflow-x-auto" title="Payment history & Core Escrow">
+      <Card className="!p-0 overflow-x-auto" title="Payment and settlement history">
         <table className="w-full text-[13px] min-w-[620px]">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100">
@@ -671,7 +671,7 @@ export function AnalyticsPage() {
     ['Total Enquiries Received', String(enquiriesCount), enquiriesCount > 0 ? 'Active' : 'Awaiting Leads'],
     ['Enquiry → Quote Conversion', enqToQuoteRate, enquiriesCount > 0 ? 'Live Funnel' : 'No Data Yet'],
     ['Total Quotes Generated', String(quotesCount), quotesCount > 0 ? 'In Progress' : '0 Quotes'],
-    ['Quote → Booking Conversion', quoteToBookingRate, quotesCount > 0 ? 'Core Escrow' : 'No Data Yet'],
+    ['Quote → Booking Conversion', quoteToBookingRate, quotesCount > 0 ? 'Recorded bookings' : 'No Data Yet'],
     ['Confirmed Bookings', String(bookingsCount), bookingsCount > 0 ? 'Verified' : '0 Bookings'],
     ['Advance Received', `₹${advanceReceived.toLocaleString()}`, advanceReceived > 0 ? 'Payment Verified' : '₹0'],
     ['Confirmed Quote Value', `₹${quoteValue.toLocaleString()}`, quoteValue > 0 ? 'Booked Value' : '₹0'],

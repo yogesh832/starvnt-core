@@ -72,80 +72,12 @@ import mongoose from 'mongoose';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 
 registerEventHandler('QUOTE_APPROVED', async (payload) => {
-  const {
-    quoteId,
-    vendorId,
-    customerId,
-    amount,
-    eventDate,
-    serviceName,
-    serviceLocation,
-    pricing,
-    opportunityId,
-  } = payload;
-  const idempotencyKey = `booking-req-for-quote-${quoteId}`;
-
-  const { duplicate, result } = await withIdempotency(
-    idempotencyKey,
-    'BOOKING_CREATION',
-    async () => {
-      const vId = mongoose.isValidObjectId(vendorId)
-        ? vendorId
-        : new mongoose.Types.ObjectId();
-      const cId = mongoose.isValidObjectId(customerId)
-        ? customerId
-        : new mongoose.Types.ObjectId();
-      const totalAmount = Number(amount || pricing?.totalAmount || 0);
-      const advanceAmount = Math.ceil(totalAmount * 0.3);
-
-      const coreBooking = await CoreBooking.findOneAndUpdate(
-        { quoteId },
-        {
-          $setOnInsert: {
-            quoteId,
-            opportunityId: opportunityId || null,
-            vendorId: vId,
-            customerId: cId,
-            serviceName: serviceName || 'Photography Service',
-            eventDate: eventDate || new Date().toISOString().split('T')[0],
-            serviceLocation: serviceLocation || {},
-            pricing: pricing || { totalAmount },
-            totalAmount,
-            paymentSummary: {
-              advancePercentage: 30,
-              advanceAmount,
-              paidAmount: 0,
-              balanceAmount: totalAmount,
-              provider: 'razorpay',
-            },
-            bookingStatus: 'CONFIRMED',
-            paymentStatus: 'PENDING',
-            executionStatus: 'NOT_STARTED',
-            settlementStatus: 'NOT_ELIGIBLE',
-          },
-        },
-        { new: true, upsert: true }
-      );
-
-      return {
-        bookingId: coreBooking.bookingReference,
-        coreBookingId: coreBooking._id.toString(),
-        quoteId,
-        vendorId,
-        amount,
-        eventDate,
-        status: 'CONFIRMED',
-        paymentVerificationRequired: true,
-        createdAt: coreBooking.createdAt,
-      };
-    }
-  );
-
-  return {
-    handled: true,
-    duplicate,
-    booking: result,
-  };
+  if (!mongoose.isValidObjectId(payload.quoteId)) throw new Error('INVALID_QUOTE_ID');
+  const { Quote } = await import('../../external/models/Quote.js');
+  const quote = await Quote.findById(payload.quoteId).lean();
+  if (!quote || quote.status !== 'APPROVED') throw new Error('QUOTE_NOT_APPROVED');
+  const booking = await CoreBooking.findOne({ quoteId: String(quote._id) }).lean();
+  return { handled: true, quoteId: String(quote._id), bookingId: booking?._id || null, status: booking ? booking.bookingStatus : 'AWAITING_VERIFIED_PAYMENT', paymentVerificationRequired: !booking };
 });
 
 /**

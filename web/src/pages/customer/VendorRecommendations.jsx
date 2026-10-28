@@ -198,7 +198,7 @@ export default function VendorRecommendations({ onBack, onSelectVendor }) {
             <span>Back to Event</span>
           </button>
           <h1 className="text-2xl font-extrabold text-navy">Vendor Recommendations</h1>
-          <p className="text-xs text-muted">Photography Options · 3 pre-qualified vendors available</p>
+          <p className="text-xs text-muted">Photography options · example comparison</p>
         </div>
         <button
           onClick={() => setShowCompare(true)}
@@ -208,6 +208,10 @@ export default function VendorRecommendations({ onBack, onSelectVendor }) {
           <Icon name="chevronDown" size={12} />
         </button>
       </div>
+
+      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        Example comparison only. Vendor names, prices, ratings, reviews, availability, and match scores below are illustrative, not live listings.
+      </p>
 
       {/* 3 Vendor Cards */}
       <div className="grid md:grid-cols-3 gap-5 items-stretch">

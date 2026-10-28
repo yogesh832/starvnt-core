@@ -8,6 +8,7 @@ export type AdminModule = {
   paged?: boolean;
 };
 export const adminModules: AdminModule[] = [
+  { key: 'availability', title: 'Availability & External Commitments', path: '/availability', collection: 'records', permissions: ['vendors.read'] },
   {
     key: "customers",
     title: "Customers",

@@ -36,6 +36,8 @@ const coreBookingSchema = new Schema(
       required: true,
       index: true,
     },
+    vendorService: { type: Schema.Types.ObjectId, default: null },
+    assignedResources: [{ type: Schema.Types.ObjectId }],
     vendorName: {
       type: String,
       default: '',
@@ -92,7 +94,7 @@ const coreBookingSchema = new Schema(
       required: true,
     },
     paymentSummary: {
-      advancePercentage: { type: Number, default: 30 },
+      advancePercentage: { type: Number, default: null },
       advanceAmount: { type: Number, default: 0 },
       paidAmount: { type: Number, default: 0 },
       balanceAmount: { type: Number, default: 0 },
@@ -147,6 +149,8 @@ const coreBookingSchema = new Schema(
       default: 'NOT_ELIGIBLE',
       index: true,
     },
+    financialPolicySnapshot: { type: Schema.Types.Mixed, default: null },
+    payoutReviewAt: { type: Date, default: null, index: true },
     completionEvidence: [
       {
         submittedBy: String,

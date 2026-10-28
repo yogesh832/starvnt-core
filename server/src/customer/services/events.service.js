@@ -38,9 +38,12 @@ import * as catalog from './catalog.service.js';
 import { serviceDetailsJsonSchema, serviceFields, validateDetails, validateServiceLocation, LOCATION_SENSITIVE, ROUTE_CATEGORIES } from './serviceRequirements.js';
 import { computeEventSummary, eventSteps, attentionFor } from './summary.js';
 import { customerHistory } from './history.service.js';
-import { customerFinancialTruth } from '../../common/financialTruth.service.js';
+import { customerFinancialTruth, financialBudgetSummary } from '../../common/financialTruth.service.js';
 import { Opportunity } from '../../external/models/Opportunity.js';
 import { serviceRequirementSummary } from './enquiryBrief.js';
+import { dashboardExperience } from './dashboardPolicy.js';
+import { notifyCustomer } from '../../notifications/notification.service.js';
+import { Quote as VendorQuote } from '../../external/models/Quote.js';
 
 const EDITABLE_STATUSES = ['draft', 'planning'];
 // Arranged elsewhere or reset: an earlier option choice no longer applies.
@@ -313,6 +316,12 @@ export async function patchEvent(customerId, eventId, input, { actorType = 'cust
   }
   if (!Object.keys(clean).length) return event;
 
+  for (const key of Object.keys(clean)) {
+    const current = key.split('.').reduce((value, part) => value?.[part], event);
+    if (JSON.stringify(current ?? null) === JSON.stringify(clean[key] ?? null)) delete clean[key];
+  }
+  if (!Object.keys(clean).length) return event;
+
   const updated = await eventsRepo.updateEventFields(customerId, eventId, clean, { onlyStatuses: EDITABLE_STATUSES });
   if (!updated) throw conflict('EVENT_LOCKED', 'Event details can no longer be changed here');
   // A date the customer typed with a year is no longer "assumed".
@@ -320,13 +329,14 @@ export async function patchEvent(customerId, eventId, input, { actorType = 'cust
     await auraRepo.setContext(event._id, 'event.date', { value: { date: clean.eventDate }, state: 'KNOWN', source: 'customer' });
   }
   if (clean['location.venueName']) await syncVenueRequirement(updated, clean['location.venueName'], { actorType, actorId });
-  await eventsRepo.appendHistory({
+  const changeHistory = await eventsRepo.appendHistory({
     eventId: event._id,
     actorType,
     actorId,
     action: 'event_details_updated',
     details: { fields: [...new Set(Object.keys(clean).filter((k) => !['budgetMin', 'budgetMax'].includes(k)).map((k) => (k.startsWith('location.') ? k.slice(9) : k)))] },
   });
+  if (event.status !== 'draft') await notifyCustomer({ customerId, eventId: event._id, type: 'event_change', title: 'Event details updated', body: 'Review existing quotes and arrangements against your updated requirements.', actionUrl: `/customer/events/${event._id}/history`, idempotencyKey: `event-change:${changeHistory._id}` });
   return updated;
 }
 
@@ -348,9 +358,24 @@ export async function confirmEvent(customerId, eventId) {
   const t = templateFor(event.eventType);
   await reqRepo.insertMissingRequirements(event._id, [...t.essential, ...t.recommended, ...t.optional]);
   if (moved) {
+    // The customer explicitly confirmed the displayed event plan.
+    const rows = await reqRepo.listRequirements(event._id);
+    for (const row of rows.filter(r => r.source === 'aura_inferred')) await reqRepo.upsertRequirement(event._id, row.category, { source: 'customer' }, { onlyIfStatusIn: ['missing', 'pending', 'customer_provided'] });
+    await auraRepo.setContext(event._id, 'event.date', { value: { date: event.eventDate }, state: 'KNOWN', source: 'customer' });
     await eventsRepo.appendHistory({ eventId: event._id, actorType: 'customer', actorId: customerId, action: 'event_confirmed', details: {} });
   }
   return { ...(await eventDetail(customerId, eventId)), alreadyConfirmed: !moved };
+}
+
+export async function confirmRequirement(customerId, eventId, category) {
+  const event = await getOwnedEventOr404(customerId, eventId);
+  if (CLOSED_EVENT_STATUSES.includes(event.status)) throw conflict('EVENT_CLOSED', 'The event is closed.');
+  const row = await reqRepo.findRequirement(event._id, category);
+  if (!row) throw notFound('Requirement not found');
+  if (row.source !== 'aura_inferred') return serializeRequirement(event.eventType, row);
+  const result = await reqRepo.upsertRequirement(event._id, category, { source: 'customer' }, { onlyIfStatusIn: ['missing', 'pending', 'customer_provided'] });
+  if (result.changed) await eventsRepo.appendHistory({ eventId: event._id, actorType: 'customer', actorId: customerId, action: 'requirement_confirmed', details: { category, status: result.row.status, confirmation: true } });
+  return serializeRequirement(event.eventType, result.row);
 }
 
 /**
@@ -368,24 +393,25 @@ export async function applyServiceStatement(customerId, eventId, category, { kin
   if (existing && LOCKED_REQUIREMENT_STATUSES.includes(existing.status)) return { applied: false, reason: 'locked' };
 
   let result;
+  const statementSource = actorType === 'aura' ? 'aura_inferred' : 'customer';
   if (kind === 'provided') {
     // "Catering is already arranged" needs no name; a name, when given, is kept.
     const v = String(value || '').trim().slice(0, 200) || null;
     result = await reqRepo.upsertRequirement(
       event._id,
       cat,
-      { status: 'customer_provided', source: 'customer', ...(v || existing?.status !== 'customer_provided' ? { providedValue: v } : {}), ...NO_SELECTION },
+      { status: 'customer_provided', source: statementSource, ...(v || existing?.status !== 'customer_provided' ? { providedValue: v } : {}), ...NO_SELECTION },
       { onlyIfStatusIn: ['missing', 'pending', 'customer_provided'] }
     );
     if (cat === 'venue' && v) await syncLocationVenue(event, v);
   } else if (kind === 'needs_help') {
     // An explicit "help me find one" may reopen something the customer said they had.
-    result = await reqRepo.upsertRequirement(event._id, cat, { status: 'pending', source: 'customer', providedValue: null }, {
+    result = await reqRepo.upsertRequirement(event._id, cat, { status: 'pending', source: statementSource, providedValue: null }, {
       onlyIfStatusIn: ['missing', 'pending', 'customer_provided'],
     });
   } else if (kind === 'needed') {
     // A general "I need X" never downgrades something already arranged.
-    result = await reqRepo.upsertRequirement(event._id, cat, { status: 'pending', source: 'customer' }, { onlyIfStatusIn: ['missing'] });
+    result = await reqRepo.upsertRequirement(event._id, cat, { status: 'pending', source: statementSource }, { onlyIfStatusIn: ['missing'] });
   } else {
     return { applied: false, reason: 'unknown_kind' };
   }
@@ -549,7 +575,7 @@ export async function requirementsDetail(customerId, eventId) {
 
 export async function dashboard(customerId, eventId) {
   const event = await getOwnedEventOr404(customerId, eventId);
-  const [requirements, contextRows, stats, recent, signals, allBookings, payments, financialTruth] = await Promise.all([
+  const [requirements, contextRows, stats, recent, signals, allBookings, payments, financialTruth, historyRows] = await Promise.all([
     reqRepo.listRequirements(event._id),
     auraRepo.listContext(event._id),
     event.status === 'draft' ? new Map() : catalog.optionStats(event),
@@ -558,15 +584,26 @@ export async function dashboard(customerId, eventId) {
     commerceRepo.listBookings(event._id),
     commerceRepo.listPayments(event._id),
     customerFinancialTruth(customerId, event._id),
+    eventsRepo.listHistory(event._id, 20),
   ]);
   const summary = computeEventSummary(event, requirements, stats, allBookings.filter((b) => b.status === 'confirmed'));
+  summary.budget = { ...summary.budget, ...financialBudgetSummary(financialTruth), estimateUsesDemoData: false };
   const attention = attentionFor(event, signals(event._id));
+  const experience = dashboardExperience(event, requirements, allBookings, payments, historyRows);
+  const opportunities = await Opportunity.find({ customer: customerId, customerEvent: event._id }).select('_id').lean();
+  const offers = opportunities.length ? await VendorQuote.find({ customer: customerId, opportunity: { $in: opportunities.map(o => o._id) }, status: 'SUBMITTED' }).populate('vendor', 'businessName').lean() : [];
+  const quoteActions = offers.map(q => ({ type: 'vendor_quote_awaiting_decision', quoteId: String(q._id), title: `Review ${q.vendor?.businessName || 'vendor'} quote`, detail: `${q.serviceName}: a vendor offer is awaiting your decision.`, actionUrl: `/customer/events/${event._id}/quotes?quote=${q._id}` }));
+  if (experience.lifecycle === 'Planning' && offers.length) experience.lifecycle = 'Comparing';
+  if (['Planning', 'Comparing'].includes(experience.lifecycle) && financialTruth.counts.reservations > 0) experience.lifecycle = 'Booking';
+  const actions = [...quoteActions, ...attention, ...financialTruth.attentionItems];
+  const seenActions = new Set();
+  const nextActions = actions.filter(a => { const key = `${a.type}:${a.quoteId || a.bookingId || a.reservationId || ''}`; if (seenActions.has(key)) return false; seenActions.add(key); return true; }).map(a => ({ ...a, eventId: String(event._id) }));
   return {
     event: serializeEvent(event),
     summary,
     counts: {
       services: requirements.length,
-      handled: requirements.filter((r) => HANDLED_STATUSES.includes(r.status)).length,
+      handled: requirements.filter((r) => r.source !== 'aura_inferred' && HANDLED_STATUSES.includes(r.status)).length,
       needHelp: requirements.filter((r) => r.status === 'pending').length,
       notArranged: requirements.filter((r) => r.status === 'missing').length,
       bookings: allBookings.filter((b) => b.status !== 'cancelled').length,
@@ -574,10 +611,11 @@ export async function dashboard(customerId, eventId) {
     },
     bookings: allBookings.map(serializeBooking),
     payments: payments.map(serializePayment),
-    attention,
-    attentionCount: attention.length,
+    attention: nextActions,
+    attentionCount: nextActions.length,
+    experience,
     financialTruth,
-    steps: eventSteps(event, requirements),
+    steps: eventSteps(event, requirements, payments, allBookings),
     understanding: event.status === 'draft' ? buildUnderstanding(event, requirements, contextRows) : null,
     recentHistory: recent,
   };

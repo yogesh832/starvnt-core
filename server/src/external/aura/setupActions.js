@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+import { saveCommitment } from '../services/commitments.service.js';
 import { describeVendorAction } from '../../common/vendorAuraUi.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { VendorService } from '../models/VendorService.js';
@@ -8,9 +10,10 @@ import { VendorBlockout } from '../models/VendorBlockout.js';
 import { Quote } from '../models/Quote.js';
 import { Opportunity } from '../models/Opportunity.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
-import { createQuote } from '../services/quoteStateMachine.service.js';
+import { createQuote, assertQuoteSubmission } from '../services/quoteStateMachine.service.js';
 import { notifyCustomer } from '../../notifications/notification.service.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
+import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
 
 /**
  * Operational & profile-setup actions Vendor Aura+ can carry out from chat/voice:
@@ -700,25 +703,11 @@ export async function executeAction(vendor, a) {
 
   if (a.kind === 'block_date') {
     const b = a.blockout;
-    const existing = await VendorBlockout.findOne({ vendor: vendorId, date: b.date });
-    const isUpdate = Boolean(existing);
-    if (existing) {
-      existing.reason = b.reason || existing.reason;
-      existing.startTime = b.startTime || '00:00';
-      existing.endTime = b.endTime || '23:59';
-      existing.allDay = b.allDay !== false;
-      await existing.save();
-    } else {
-      await VendorBlockout.create({
-        vendor: vendorId,
-        date: b.date,
-        startTime: b.startTime || '00:00',
-        endTime: b.endTime || '23:59',
-        allDay: b.allDay !== false,
-        reason: b.reason || 'Unavailable',
-      });
-    }
-    return { kind: 'block_date', date: b.date, reason: b.reason, isUpdate };
+    const candidates = a.isUpdate ? await VendorBlockout.find({ vendor: vendorId, date: b.date, status: { $ne: 'CANCELLED' }, recordType: 'VENDOR_BLOCK', scope: 'BUSINESS' }).limit(2) : [];
+    if (candidates.length > 1) throw new Error('Several blocks exist on this date. Edit the specific record in Calendar.');
+    const existing = candidates[0] || null;
+    const row = await saveCommitment(vendorId, { ...b, date: b.date, allDay: b.allDay !== false, startTime: b.startTime || '00:00', endTime: b.endTime || '23:59', revision: existing?.revision || 0, idempotencyKey: a.idempotencyKey || `aura:${crypto.createHash('sha256').update(JSON.stringify(a)).digest('hex')}` }, { id: vendor.owner || vendorId, role: 'VENDOR' }, existing?._id || null);
+    return { kind: 'block_date', date: row.date, reason: row.reason, isUpdate: !!existing };
   }
 
   if (a.kind === 'revise_quote') {
@@ -755,13 +744,29 @@ export async function executeAction(vendor, a) {
     const rawNotes = String(q.notes || '').trim();
     const reasonText = rawNotes ? `Vendor revised offer: ${rawNotes}` : `Vendor revised offer to ₹${totalAmount.toLocaleString('en-IN')}`;
 
+    const currentPolicy = await getCommercialPolicyForCategory(vendor.category || quote.category);
+    await assertQuoteSubmission({
+      vendor: quote.vendor, vendorService: quote.vendorService, eventDate: quote.eventDate,
+      serviceLocation: quote.serviceLocation, category: vendor.category || quote.category, advancePolicy: currentPolicy,
+    });
     const previousStatus = quote.status;
     quote.pricingBreakdown = pricing;
     if (rawNotes) quote.notes = rawNotes;
     quote.status = 'SUBMITTED';
     quote.validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    quote.category = vendor.category || quote.category || '';
     quote.advancePayment = {
-      percentage: 30,
+      percentage: currentPolicy.minimumReservationPercent,
+      policySnapshot: {
+        category: currentPolicy.policyCategory, version: currentPolicy.policyVersion, source: currentPolicy.policySource,
+        policyId: currentPolicy.policyId, effectiveFrom: currentPolicy.effectiveFrom,
+        authorId: currentPolicy.draftAuthorId, approverId: currentPolicy.approverId, appliedAt: new Date(),
+        terms: {
+          vendorCancellationPenaltyPercent: currentPolicy.vendorCancellationPenaltyPercent,
+          customerCancellationRefunds: currentPolicy.customerCancellationRefunds,
+          settlementCondition: currentPolicy.settlementCondition, settlementDelayDays: currentPolicy.settlementDelayDays,
+        },
+      },
       amount: 0,
       status: 'NOT_STARTED',
       provider: 'razorpay',
@@ -849,6 +854,7 @@ export async function executeAction(vendor, a) {
     const travelFee = Math.round(Number(q.travelFee) || 0);
     const totalAmount = Math.round(Number(q.totalAmount) || (basePrice + travelFee));
 
+    const advancePolicy = await getCommercialPolicyForCategory(vendor.category);
     const quote = await createQuote({
       opportunityId: opportunityId || null,
       vendorId,
@@ -864,6 +870,8 @@ export async function executeAction(vendor, a) {
         additionalFee: 0,
         totalAmount,
       },
+      category: vendor.category || '',
+      advancePolicy,
       notes: q.notes || '',
       status: 'SUBMITTED',
       actor: vendor.businessName || 'Vendor',

@@ -19,6 +19,14 @@ const corePolicySchema = new Schema(
       unique: true,
       index: true,
     },
+    policyVersion: { type: Number, default: 1, min: 1 },
+    history: [{
+      version: Number,
+      changedAt: { type: Date, default: Date.now },
+      changedBy: { type: String, default: 'SYSTEM' },
+      reason: { type: String, default: '' },
+      values: { type: Schema.Types.Mixed, default: {} },
+    }],
     minimumReservationPercent: {
       type: Number,
       default: 10,

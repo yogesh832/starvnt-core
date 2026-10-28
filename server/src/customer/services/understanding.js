@@ -147,7 +147,7 @@ export function serializeEvent(event) {
 export function progressOf(event, requirements) {
   const essentials = templateFor(event.eventType).essential;
   const byCat = new Map((requirements || []).map((r) => [r.category, r]));
-  const handled = essentials.filter((c) => HANDLED_STATUSES.includes(byCat.get(c)?.status)).length;
+  const handled = essentials.filter((c) => byCat.get(c)?.source !== 'aura_inferred' && HANDLED_STATUSES.includes(byCat.get(c)?.status)).length;
   return {
     essentialsTotal: essentials.length,
     essentialsHandled: handled,
@@ -275,7 +275,8 @@ export function buildContextStates(event, requirements, contextRows) {
   for (const c of [...t.essential, ...t.recommended, ...t.optional, ...byCat.keys()]) {
     const r = byCat.get(c);
     let s = 'RECOMMENDED';
-    if (r && CONFIRMED_STATUSES.includes(r.status)) s = 'CONFIRMED';
+    if (r?.source === 'aura_inferred') s = 'INFERRED';
+    else if (r && CONFIRMED_STATUSES.includes(r.status)) s = 'CONFIRMED';
     else if (r && ['customer_provided', 'pending'].includes(r.status)) s = 'KNOWN';
     states[`requirement.${c}`] = s;
   }

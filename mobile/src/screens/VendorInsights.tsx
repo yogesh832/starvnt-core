@@ -75,7 +75,7 @@ export function VendorPayments({ navigation }: any) {
       {!bookings.loading && !bookings.error && (
         <Stats
           items={[
-            ["In escrow", money(totals.escrow)],
+            ["Verified advances", money(totals.verifiedAdvances)],
             ["Released & settled", money(totals.released)],
             ["Expected settlements", money(metrics.expectedSettlements)],
           ]}

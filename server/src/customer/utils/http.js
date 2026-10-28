@@ -20,6 +20,7 @@ export const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, 
 
 // eslint-disable-next-line no-unused-vars
 export function jsonErrorHandler(err, req, res, next) {
+  if (err?.statusCode && err.statusCode < 500) return res.status(err.statusCode).json({ error: err.code || 'INVALID_REQUEST', message: err.message, conflicts: err.conflicts || [] });
   if (err instanceof HttpError) {
     return res.status(err.status).json({ error: err.code, message: err.message, ...err.extra });
   }

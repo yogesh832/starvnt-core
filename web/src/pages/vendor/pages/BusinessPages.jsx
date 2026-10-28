@@ -1421,6 +1421,7 @@ export function ServicesPage() {
 
 /* ── Availability ─────────────────────────────────────────────────────────── */
 export function AvailabilityPage() {
+  const blockRequestKey = useRef(crypto.randomUUID());
   const [blockouts, setBlockouts] = useState([]);
   const [resources, setResources] = useState([]);
   const [loadingAvailability, setLoadingAvailability] = useState(true);
@@ -1622,11 +1623,13 @@ export function AvailabilityPage() {
         method: "POST",
         body: {
           date: blockDate,
+          idempotencyKey: blockRequestKey.current,
           reason: blockReason || "Unavailable",
           allDay: true,
         },
       });
       setShowBlockModal(false);
+      blockRequestKey.current = crypto.randomUUID();
       setBlockDate("");
       setBlockReason("");
       await loadAvailability();
@@ -3537,7 +3540,7 @@ export function SettingsManager({ isTab = false }) {
           <li className="flex items-center justify-between py-3">
             <div>
               <div className="font-bold text-navy">
-                Core Escrow & Payment Alerts
+                Payment and settlement alerts
               </div>
               <div className="text-muted text-[11px]">
                 Immediate notification when client payment is verified by Core
@@ -3665,6 +3668,7 @@ export function SettingsManager({ isTab = false }) {
 function GoogleBusinessSection({
   googlePlaceId,
   initialRating,
+  defaultLocation,
   onSavePlaceId,
 }) {
   const [isSearching, setIsSearching] = useState(!googlePlaceId);
@@ -3675,6 +3679,7 @@ function GoogleBusinessSection({
   const [currentPlace, setCurrentPlace] = useState(initialRating || null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [defaultCoordinates, setDefaultCoordinates] = useState(null);
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -3690,17 +3695,31 @@ function GoogleBusinessSection({
     }
   }, [initialRating]);
 
+  useEffect(() => {
+    if (!defaultLocation?.trim() || (currentPlace?.lat && currentPlace?.lng)) return;
+    let cancelled = false;
+    externalApi.call(`/vendor/google-places/search?query=${encodeURIComponent(`${defaultLocation.trim()}, India`)}`)
+      .then((res) => {
+        const match = res.ok && res.places?.find((place) => place.lat != null && place.lng != null && Number.isFinite(Number(place.lat)) && Number.isFinite(Number(place.lng)));
+        if (!cancelled && match) setDefaultCoordinates({ lat: Number(match.lat), lng: Number(match.lng) });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentPlace?.lat, currentPlace?.lng, defaultLocation]);
+
   // Leaflet map setup with Google Maps tiles
   useEffect(() => {
     if (!mapRef.current) return;
-    const lat = currentPlace?.lat || 19.076;
-    const lng = currentPlace?.lng || 72.8777;
-    const hasPin = Boolean(currentPlace?.lat && currentPlace?.lng);
+    const hasPin = Number.isFinite(Number(currentPlace?.lat)) && Number.isFinite(Number(currentPlace?.lng))
+      && Number(currentPlace?.lat) !== 0 && Number(currentPlace?.lng) !== 0;
+    const lat = hasPin ? Number(currentPlace.lat) : defaultCoordinates?.lat ?? 22.5937;
+    const lng = hasPin ? Number(currentPlace.lng) : defaultCoordinates?.lng ?? 78.9629;
+    const zoom = hasPin ? 15 : defaultCoordinates ? 11 : 4;
 
     if (!mapInstance.current) {
       const map = L.map(mapRef.current, {
         center: [lat, lng],
-        zoom: hasPin ? 15 : 12,
+        zoom,
         zoomControl: false,
       });
       L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -3717,8 +3736,8 @@ function GoogleBusinessSection({
       }
       mapInstance.current = map;
     } else {
+      mapInstance.current.setView([lat, lng], zoom);
       if (hasPin) {
-        mapInstance.current.setView([lat, lng], 15);
         if (markerInstance.current) {
           markerInstance.current.setLatLng([lat, lng]);
         } else {
@@ -3726,13 +3745,16 @@ function GoogleBusinessSection({
             icon: pinIcon,
           }).addTo(mapInstance.current);
         }
+      } else if (markerInstance.current) {
+        mapInstance.current.removeLayer(markerInstance.current);
+        markerInstance.current = null;
       }
     }
 
     return () => {
       // Keep instance intact across renders
     };
-  }, [currentPlace?.lat, currentPlace?.lng]);
+  }, [currentPlace?.lat, currentPlace?.lng, defaultCoordinates?.lat, defaultCoordinates?.lng]);
 
   function handleSearchChange(e) {
     const val = e.target.value;
@@ -4717,6 +4739,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
               <GoogleBusinessSection
                 googlePlaceId={profile.googlePlaceId}
                 initialRating={googleRating}
+                defaultLocation={profile.location}
                 onSavePlaceId={handleUpdateGooglePlaceId}
               />
             </div>

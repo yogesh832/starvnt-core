@@ -1,3 +1,6 @@
+import ServiceResources from '../../../components/ServiceResources.jsx';
+import NotificationPreferences from '../../../components/NotificationPreferences.jsx';
+import CommitmentForm from '../../../components/CommitmentForm.jsx';
 import { useState, useEffect, useCallback } from 'react';
 import { Page, Card} from './shared.jsx';
 import Icon from '../../../components/Icon.jsx';
@@ -21,57 +24,48 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
   const [bookings, setBookings] = useState([]);
   const [blockouts, setBlockouts] = useState([]);
-  const [newBlockoutDate, setNewBlockoutDate] = useState('');
-  const [newBlockoutReason, setNewBlockoutReason] = useState('');
   const [showBlockModal, setShowBlockModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [services, setServices] = useState([]);
+  const [resources, setResources] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
   const loadCalendarData = useCallback(async () => {
     try {
-      const [bkRes, blRes] = await Promise.all([
+      const [bkRes, blRes, serviceRes, resourceRes, legacyRes] = await Promise.all([
         externalApi.call('/vendor/bookings'),
         externalApi.call('/vendor/availability/blockouts'),
+        externalApi.call('/vendor/services'),
+        externalApi.call('/vendor/resources'),
+        externalApi.call('/vendor/availability/bookings'),
       ]);
 
+      setServices(serviceRes.services || []);
+      setResources(resourceRes.resources || []);
+      setLoadError('');
       if (bkRes.ok && bkRes.bookings) {
         setBookings(bkRes.bookings);
       }
       if (blRes.ok && blRes.blockouts) {
-        setBlockouts(blRes.blockouts);
+        setBlockouts([...blRes.blockouts, ...(legacyRes.bookings || []).filter(row => !['CANCELLED', 'COMPLETED'].includes(row.status)).map(row => ({ ...row, sourceModel: 'VendorBookingSlot', recordType: 'EXTERNAL_COMMITMENT', verificationStatus: 'REPORTED', allDay: false, reason: 'Legacy vendor-reported commitment', scope: row.assignedResources?.length ? 'RESOURCE' : 'SERVICE' }))]);
       }
     } catch (err) {
-      console.warn('[CalendarPage] Failed to fetch live calendar data:', err.message);
+      setLoadError(err.message);
     }
   }, []);
 
   useEffect(() => {
     loadCalendarData();
+    const timer = setInterval(loadCalendarData, 30000);
+    window.addEventListener('focus', loadCalendarData);
+    return () => { clearInterval(timer); window.removeEventListener('focus', loadCalendarData); };
   }, [loadCalendarData]);
 
-  async function handleAddBlockout(e) {
-    e.preventDefault();
-    if (!newBlockoutDate) return;
-    try {
-      await externalApi.call('/vendor/availability/blockouts', {
-        method: 'POST',
-        body: {
-          date: newBlockoutDate,
-          reason: newBlockoutReason || 'Unavailable',
-          allDay: true,
-        },
-      });
-      setShowBlockModal(false);
-      setNewBlockoutDate('');
-      setNewBlockoutReason('');
-      await loadCalendarData();
-    } catch (err) {
-      alert(`Could not block date: ${err.message}`);
-    }
-  }
-
   async function handleDeleteBlockout(id) {
-    if (!confirm('Are you sure you want to unblock this date?')) return;
+    if (!confirm('Cancel this availability record? Existing STARVNT bookings remain unchanged.')) return;
     try {
-      await externalApi.call(`/vendor/availability/blockouts/${id}`, { method: 'DELETE' });
+      const record = blockouts.find(row => row._id === id);
+      await externalApi.call(`/vendor/availability/${record?.sourceModel === 'VendorBookingSlot' ? 'bookings' : 'blockouts'}/${id}`, { method: 'DELETE' });
       await loadCalendarData();
     } catch (err) {
       alert(`Could not remove blockout: ${err.message}`);
@@ -111,20 +105,12 @@ export default function CalendarPage() {
 
   // Map blockouts by day number
   blockouts.forEach((bl) => {
-    const parsed = parseLocalDate(bl.date);
-    if (parsed && parsed.year === year && parsed.month === month) {
-      const dayNum = parsed.day;
-      eventsByDay[dayNum] = eventsByDay[dayNum] || [];
-      eventsByDay[dayNum].push({
-        id: bl._id,
-        date: bl.date,
-        reason: bl.reason || 'Unavailable',
-        title: `Blocked: ${bl.reason || 'Unavailable'}`,
-        time: bl.allDay ? 'All day' : `${bl.startTime} - ${bl.endTime}`,
-        place: 'Blocked Date (Unavailable for matching)',
-        type: 'BLOCKOUT',
-      });
-    }
+    days.forEach(d => {
+      const day = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      if (day < bl.date || day > (bl.endDate || bl.date) || (!bl.allDay && day === bl.endDate && bl.endTime === '00:00')) return;
+      eventsByDay[d] = eventsByDay[d] || [];
+      eventsByDay[d].push({ id: bl._id, date: bl.date, reason: bl.reason, title: `${bl.recordType === 'EXTERNAL_COMMITMENT' ? 'External commitment' : 'Blocked'}: ${bl.reason}`, time: bl.allDay ? 'All day' : `${bl.startTime} – ${bl.endTime}`, place: `${bl.scope || 'BUSINESS'} · ${bl.timezone || 'Asia/Kolkata'} · Reported`, type: 'BLOCKOUT' });
+    });
   });
 
   const selectedEvents = eventsByDay[selectedDay] || [];
@@ -135,13 +121,14 @@ export default function CalendarPage() {
       sub="Operational feasibility view — calendar + travel + team + equipment together."
       action={
         <button
-          onClick={() => setShowBlockModal(true)}
+          onClick={() => { setEditing(null); setShowBlockModal(true); }}
           className="rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2.5 shadow-xs inline-flex items-center gap-1.5 hover:bg-primary-dark transition"
         >
           <Icon name="plus" size={14} /> Block Date
         </button>
       }
     >
+      {loadError && <p role="alert" className="text-red-700 mb-3">Could not refresh calendar: {loadError}</p>}
       <div className="grid lg:grid-cols-[1fr_340px] gap-5">
         <Card>
           <div className="flex items-center justify-between mb-4">
@@ -275,7 +262,7 @@ export default function CalendarPage() {
                   </div>
                   {e.type === 'BLOCKOUT' && (
                     <div className="text-[10px] text-red-600 font-semibold mt-1.5">
-                      Excluded from client search matching and Aura+ recommendations.
+                      The affected interval and scope are checked by customer matching.
                     </div>
                   )}
                   {e.amount && <div className="text-primary font-bold text-sm mt-1.5">{e.amount}</div>}
@@ -288,15 +275,15 @@ export default function CalendarPage() {
             <ul className="space-y-2.5 text-xs text-muted">
               <li className="flex items-start gap-2">
                 <span className="text-emerald-500 mt-0.5 shrink-0"><Icon name="check" size={13} /></span>
-                <span>All active bookings are strictly validated against transit buffer and team limit.</span>
+                <span>Booking conflicts, resource assignments and concurrent-job limits are checked on save.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-500 mt-0.5 shrink-0"><Icon name="shieldCheck" size={13} /></span>
-                <span>Back-to-back bookings require minimum 2-hour buffer between different localities.</span>
+                <span>Travel feasibility includes estimated transit and a 45-minute setup buffer.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-red-500 mt-0.5 shrink-0"><Icon name="calendar" size={13} /></span>
-                <span className="text-red-700 font-medium">Blocked dates are excluded from customer search matching before proposals run.</span>
+                <span className="text-red-700 font-medium">Existing confirmed STARVNT bookings cannot be overridden by a block.</span>
               </li>
             </ul>
           </Card>
@@ -306,7 +293,7 @@ export default function CalendarPage() {
       {/* Blocked Dates Registry Card (All Blockouts from DB) */}
       <Card className="mt-5" title={`Blocked Dates Registry (${blockouts.length} active in DB)`}>
         {blockouts.length === 0 ? (
-          <p className="text-xs text-muted">No blocked dates currently registered. All calendar slots are open for client bookings.</p>
+          <p className="text-xs text-muted">No availability blocks or external commitments recorded. Booking eligibility still depends on capacity and verification.</p>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {blockouts.map((bl) => (
@@ -314,16 +301,16 @@ export default function CalendarPage() {
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-red-600" />
-                    <span className="text-xs font-black text-red-900">{bl.date}</span>
+                    <span className="text-xs font-black text-red-900">{bl.date}{bl.endDate && bl.endDate !== bl.date ? ` – ${bl.endDate}` : ''}</span>
                   </div>
-                  <div className="text-[11px] text-red-800 font-bold mt-0.5">Reason: {bl.reason || 'Unavailable'}</div>
+                  <div className="text-[11px] text-red-800 font-bold mt-0.5">{bl.recordType || 'VENDOR_BLOCK'} · {bl.scope || 'BUSINESS'}<br />Reason: {bl.reason || 'Unavailable'}</div>
                   <div className="text-[10px] text-red-600">{bl.allDay ? 'All Day Slot' : `${bl.startTime} - ${bl.endTime}`}</div>
                 </div>
                 <button
-                  onClick={() => handleDeleteBlockout(bl._id)}
+                  onClick={() => { if (bl.sourceModel === 'VendorBookingSlot') { handleDeleteBlockout(bl._id); return; } setEditing(bl); setShowBlockModal(true); }}
                   className="p-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 hover:text-red-900 transition"
-                  title="Unblock date"
-                  aria-label="Unblock"
+                  title={bl.sourceModel === 'VendorBookingSlot' ? 'Cancel legacy commitment' : 'Edit record'}
+                  aria-label={bl.sourceModel === 'VendorBookingSlot' ? 'Cancel legacy commitment' : 'Edit record'}
                 >
                   <Icon name="close" size={13} />
                 </button>
@@ -333,60 +320,9 @@ export default function CalendarPage() {
         )}
       </Card>
 
-      {/* Modal for Blocking Date */}
-      {showBlockModal && (
-        <div className="vendor-modal-backdrop">
-          <div className="vendor-modal-panel max-w-sm p-4 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <h3 className="font-extrabold text-base text-navy">Block Calendar Date</h3>
-              <button
-                onClick={() => setShowBlockModal(false)}
-                className="w-7 h-7 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
-                aria-label="Close"
-              >
-                <Icon name="close" size={13} />
-              </button>
-            </div>
-            <form onSubmit={handleAddBlockout} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-muted font-semibold mb-1">Date to Block</label>
-                <input
-                  type="date"
-                  required
-                  value={newBlockoutDate}
-                  onChange={(e) => setNewBlockoutDate(e.target.value)}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-bold text-navy outline-none focus:border-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-muted font-semibold mb-1">Reason / Notes</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Vacation, Maintenance, Personal"
-                  value={newBlockoutReason}
-                  onChange={(e) => setNewBlockoutReason(e.target.value)}
-                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2 font-medium text-navy outline-none focus:border-primary"
-                />
-              </div>
-              <div className="vendor-modal-actions pt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowBlockModal(false)}
-                  className="flex-1 py-2 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:text-navy"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs transition"
-                >
-                  Confirm Block
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ServiceResources services={services} resources={resources} onSaved={loadCalendarData} />
+      <NotificationPreferences surface="vendor" />
+      {showBlockModal && <div className="vendor-modal-backdrop"><div role="dialog" aria-modal="true" aria-label="Availability record" className="vendor-modal-panel max-w-xl p-5 max-h-[90vh] overflow-auto"><CommitmentForm initial={editing} services={services} resources={resources} onSaved={() => { setShowBlockModal(false); loadCalendarData(); }} onCancel={() => setShowBlockModal(false)} /></div></div>}
     </Page>
   );
 }

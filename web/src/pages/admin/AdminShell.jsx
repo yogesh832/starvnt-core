@@ -1,3 +1,5 @@
+import ProductMetrics from './ProductMetrics.jsx';
+import Availability from './Availability.jsx';
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
@@ -11,6 +13,7 @@ import UsersAccess from './UsersAccess.jsx';
 import AuditLogs from './AuditLogs.jsx';
 import Notifications from './Notifications.jsx';
 import Operations from './Operations.jsx';
+import Finance from './Finance.jsx';
 import { loadAdminNotifications, notificationReadKey } from '../../lib/adminNotifications.js';
 
 /**
@@ -22,14 +25,15 @@ const MODULES = [
   { path: 'dashboard', label: 'Dashboard', icon: 'dashboard', anyOf: null },
   { path: 'notifications', label: 'Notifications', icon: 'bell', anyOf: null },
   { path: 'customers', label: 'Customers', icon: 'customers', anyOf: ['customers.read'] },
+  { path: 'availability', label: 'Availability & External Commitments', icon: 'calendar', anyOf: ['vendors.read'] },
   { path: 'vendors', label: 'Vendors', icon: 'vendors', anyOf: ['vendors.read'] },
   { path: 'events', label: 'Events', icon: 'events', anyOf: ['events.read'] },
   { path: 'bookings', label: 'Bookings', icon: 'bookings', anyOf: ['bookings.read'] },
-  { path: 'payments', label: 'Payments', icon: 'payments', anyOf: ['payments.read', 'settlements.read'] },
+  { path: 'finance', label: 'Finance', icon: 'payments', anyOf: ['payments.read', 'settlements.read', 'financePolicies.read', 'financeCoupons.read', 'settings.read'] },
   { path: 'operations', label: 'Operations', icon: 'operations', anyOf: ['execution.read', 'automation.read'] },
+  { path: 'product-outcomes', label: 'Product outcomes', icon: 'reports', anyOf: ['analytics.read', 'reports.read'] },
   { path: 'reports', label: 'Reports', icon: 'reports', anyOf: ['analytics.read', 'reports.read'] },
   { path: 'automation', label: 'Automation', icon: 'automation', anyOf: ['automation.read'] },
-  { path: 'coupons', label: 'Coupons', icon: 'payments', anyOf: ['settings.read'] },
   { path: 'users', label: 'Users & Access', icon: 'access', superOnly: true },
   { path: 'audit', label: 'Audit Logs', icon: 'audit', anyOf: ['audit.read'] },
   { path: 'settings', label: 'Settings', icon: 'settings', anyOf: ['settings.read'] },
@@ -335,14 +339,17 @@ export default function AdminShell() {
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="notifications" element={<Notifications items={notificationItems} loading={notificationsLoading} error={notificationError} refresh={loadNotifications} open={goNotification} markAllRead={() => markRead(notificationItems)} />} />
               <Route path="customers" element={<ModuleTable kind="customers" />} />
+              <Route path="availability" element={<Availability />} />
               <Route path="vendors" element={<ModuleTable kind="vendors" />} />
               <Route path="events" element={<ModuleTable kind="events" />} />
               <Route path="bookings" element={<ModuleTable kind="bookings" />} />
-              <Route path="payments" element={<ModuleTable kind="payments" />} />
+              <Route path="finance" element={<Finance />} />
+              <Route path="payments" element={<Navigate to="/admin/finance" replace />} />
               <Route path="operations" element={<Operations />} />
+              <Route path="product-outcomes" element={<ProductMetrics />} />
               <Route path="reports" element={<ModuleTable kind="reports" />} />
               <Route path="automation" element={<ModuleTable kind="automation" />} />
-              <Route path="coupons" element={<ModuleTable kind="coupons" />} />
+              <Route path="coupons" element={<Navigate to="/admin/finance?view=coupons" replace />} />
               <Route path="users" element={<UsersAccess />} />
               <Route path="audit" element={<AuditLogs />} />
               <Route path="settings" element={<ModuleTable kind="settings" />} />

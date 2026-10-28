@@ -1,9 +1,12 @@
+import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import { useState, useEffect, useCallback } from 'react';
 import { adminApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { StatusChip } from '../../components/ui.jsx';
 
 export default function VendorKycModal({ vendor, onClose, onRefresh }) {
+  const { can } = useAdminAuth();
+  const [readiness, setReadiness] = useState(null);
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [organization, setOrganization] = useState(vendor);
@@ -20,6 +23,7 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
       setLoading(true);
       const res = await adminApi.call(`/external-users/organizations/${vendorId}/documents`);
       if (res.ok) {
+        if (res.activation) setReadiness(res.activation);
         if (res.organization) setOrganization(res.organization);
         if (Array.isArray(res.documents)) setDocuments(res.documents);
       }
@@ -57,7 +61,7 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
       if (res.ok) {
         setFeedback({
           type: 'success',
-          text: `Vendor KYC successfully ${approved ? 'approved' : 'rejected'}. Activation status updated.`,
+          text: `Vendor KYC successfully ${approved ? 'approved' : 'rejected'}. Activation requires a separate review.`,
         });
         setActionNotes('');
         await loadData();
@@ -72,9 +76,20 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
     }
   }
 
+  async function activate(action) {
+    if (!actionNotes.trim()) { setFeedback({ type: 'error', text: 'Enter a reason before changing activation.' }); return; }
+    if (!window.confirm(`Confirm ${action.replaceAll('_', ' ').toLowerCase()} for this vendor?`)) return;
+    setProcessing(true);
+    try {
+      await adminApi.call(`/external-users/organizations/${vendorId}/activation`, { method: 'POST', body: { action, reason: actionNotes.trim(), idempotencyKey: crypto.randomUUID() } });
+      setFeedback({ type: 'success', text: 'Activation review saved.' }); await loadData(); onRefresh?.();
+    } catch (err) { setFeedback({ type: 'error', text: err.data?.message || err.message }); }
+    finally { setProcessing(false); }
+  }
+
   if (!vendor) return null;
 
-  const isOverallVerified = Boolean(organization?.verification?.isVerified);
+  const isOverallVerified = readiness?.readiness?.verificationStatus === 'VERIFIED';
   const manualReview = organization?.manualReview || {};
   const owner = organization?.owner || {};
 
@@ -352,6 +367,16 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
               </div>
             )}
           </div>
+
+          <section className="border rounded-2xl p-4 space-y-3 text-sm">
+            <h3 className="font-bold">Profile activation review</h3>
+            <p>Current status: {readiness?.activationState || organization.status}</p>
+            <p>Profile completion: {readiness?.completionPercentage ?? '—'}% · Verification: {readiness?.readiness?.verificationStatus || 'Unknown'}</p>
+            <ul>{readiness?.missingRequirements?.map(item => <li key={item}>• {item}</li>)}</ul>
+            <p className="text-xs text-muted">Verification and profile completion do not activate the vendor. Use an authorised activation decision below.</p>
+            {can('vendors.approve') && <div className="flex flex-wrap gap-2">{[['APPROVE', 'Approve activation'], ['REJECT', 'Reject profile'], ['REQUEST_INFORMATION', 'Request information'], ['SUSPEND', 'Suspend']].map(([action, label]) => <button key={action} disabled={processing} onClick={() => activate(action)} className="border rounded-xl px-3 py-2">{label}</button>)}</div>}
+            <details><summary>Activation history</summary>{organization.activationHistory?.map((row, i) => <p key={i}>{new Date(row.at).toLocaleString()} · {row.role} · {row.fromState} → {row.toState} · {row.reason}</p>)}</details>
+          </section>
 
           {/* Admin Decision & Notes Form */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-gray-200 space-y-3">

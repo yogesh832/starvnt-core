@@ -26,6 +26,7 @@ import {
   human,
   id,
   MenuRow,
+  MultiChoice,
   money,
   Page,
   Pill,
@@ -460,6 +461,7 @@ export function VendorForm({ route, navigation }: any) {
 }
 function VendorFormBody({ route, navigation }: any) {
   const { kind, item = {}, revise } = route.params;
+  const serviceResources = useResource(external, "/vendor/resources", 0, kind === "services");
   const a = useAction();
   const [form, setForm] = useState<Data>({
     name: item.name || "",
@@ -468,6 +470,9 @@ function VendorFormBody({ route, navigation }: any) {
     unit: item.pricing?.unit || "event",
     leadTimeDays: String(item.leadTimeDays ?? 7),
     serviceStatus: item.status || "ACTIVE",
+    requiredResourceIds: item.requiredResourceIds || [],
+    setupBufferMinutes: String(item.setupBufferMinutes ?? 45),
+    idempotencyKey: `${Date.now()}-${Math.random()}`,
     taxIncluded: item.pricing?.taxIncluded === false ? "no" : "yes",
     price: String(
       item.pricing?.basePrice ?? item.pricingBreakdown?.basePrice ?? "",
@@ -518,7 +523,7 @@ function VendorFormBody({ route, navigation }: any) {
         !form.unit.trim()
       )
         throw new Error("Enter a service name, category, and valid price.");
-      await external.call(
+      const result = await external.call(
         `/vendor/services${id(item) ? `/${id(item)}` : ""}`,
         id(item) ? "PUT" : "POST",
         {
@@ -535,6 +540,8 @@ function VendorFormBody({ route, navigation }: any) {
           status: form.serviceStatus,
         },
       );
+
+      await external.call(`/vendor/services/${id(result.service) || id(item)}/resources`, "PUT", { requiredResourceIds: form.requiredResourceIds, setupBufferMinutes: Number(form.setupBufferMinutes) });
     } else if (kind === "availability") {
       if (
         !/^\d{4}-\d{2}-\d{2}$/.test(form.date) ||
@@ -543,6 +550,7 @@ function VendorFormBody({ route, navigation }: any) {
         throw new Error("Enter a valid date in YYYY-MM-DD format.");
       await external.call("/vendor/availability/blockouts", "POST", {
         date: form.date,
+        idempotencyKey: form.idempotencyKey,
         allDay: true,
         reason: form.reason,
       });
@@ -629,6 +637,8 @@ function VendorFormBody({ route, navigation }: any) {
             onChange={(v) => setForm((f) => ({ ...f, taxIncluded: v }))}
           />
           {field("leadTimeDays", "Lead time in days", true)}
+          {field("setupBufferMinutes", "Setup / teardown buffer (minutes)", true)}
+          <MultiChoice label="Dedicated service resources" values={(serviceResources.data.resources || []).map((resource: Data) => id(resource))} labels={Object.fromEntries((serviceResources.data.resources || []).map((resource: Data) => [id(resource), resource.name]))} selected={form.requiredResourceIds} onChange={requiredResourceIds => setForm(current => ({ ...current, requiredResourceIds }))} />
           <Choice
             label="Service status"
             values={["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED"]}

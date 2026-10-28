@@ -179,7 +179,7 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
         <button onClick={pay} disabled={!canPay} className="mt-4 w-full rounded-2xl bg-primary text-white text-sm font-extrabold py-3 disabled:opacity-60">
           {busy ? 'Opening payment...' : couponBusy ? 'Checking coupon...' : `Confirm & Pay Advance ${formatINR(payableAdvance)}`}
         </button>
-        <div className="text-[11px] text-center text-muted mt-2">🔒 100% secure payments via Razorpay</div>
+        <div className="text-[11px] text-center text-muted mt-2">Payment confirmation is based on provider verification.</div>
         <div className="text-[10px] text-center text-muted mt-1">Your booking is confirmed only after STARVNT verifies the payment.</div>
         <button onClick={onClose} disabled={busy} className="mt-3 w-full text-xs font-bold text-muted">Not now</button>
       </div>

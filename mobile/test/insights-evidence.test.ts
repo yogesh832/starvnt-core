@@ -14,7 +14,7 @@ test("payment metrics preserve a recorded zero vendor payable rather than replac
     },
   ]);
   assert.equal(totals.released, 0);
-  assert.equal(totals.escrow, 300);
+  assert.equal(totals.verifiedAdvances, 300);
   assert.equal(totals.recordedBookingValue, 1000);
 });
 test("Google and STARVNT review formats become readable text", () => {

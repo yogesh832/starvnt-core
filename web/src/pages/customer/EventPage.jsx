@@ -37,7 +37,7 @@ function FinancialPicture({ truth, eventId }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-extrabold text-navy">My event financial picture</div>
-          <div className="text-[11px] text-muted mt-0.5">Calculated from bookings, payments and Core escrow truth.</div>
+          <div className="text-[11px] text-muted mt-0.5">Calculated from recorded bookings and provider-verified payments.</div>
         </div>
         <Link to={`/customer/events/${eventId}/budget`} className="text-xs font-bold text-primary shrink-0">Budget →</Link>
       </div>

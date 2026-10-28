@@ -229,8 +229,9 @@ export default function VendorPortal() {
       if (!res.ok) throw new Error('READ_ALL_FAILED');
       notificationRevision.current += 1;
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      setBadgeCounts((prev) => ({ ...prev, unreadNotificationsCount: 0 }));
+      setBadgeCounts((prev) => ({ ...prev, unreadNotificationsCount: 0, messagesCount: 0 }));
       setNotificationsError('');
+      window.dispatchEvent(new Event('vendorBadgesRefresh'));
       fetchLiveBadges();
     } catch {
       setNotificationsError('Could not mark notifications as read. Please try again.');
@@ -295,6 +296,7 @@ export default function VendorPortal() {
   const notificationProps = {
     notifications,
     unreadCount: badgeCounts.unreadNotificationsCount,
+    unreadConversationCount: badgeCounts.messagesCount,
     loading: notificationsLoading,
     error: notificationsError,
     busyIds: busyNotificationIds,

@@ -47,7 +47,7 @@ const TEST_ADMINS: TestAccount[] = [
     role: "FINANCE_ADMIN",
     name: "Finance & Ledger Head",
     email: "finance@starvnt.com",
-    subtitle: "Escrow oversight, vendor settlement release & payouts",
+    subtitle: "Payment verification, vendor settlements & payouts",
     icon: "wallet-outline",
     badge: "Finance",
   },

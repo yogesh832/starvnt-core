@@ -29,6 +29,7 @@ const vendorBookingSlotSchema = new Schema(
       index: true,
     },
     assignedResources: [{ type: Schema.Types.ObjectId, ref: 'VendorResource' }],
+    history: [{ actor: String, role: String, at: Date, action: String, reason: String, before: Schema.Types.Mixed, after: Schema.Types.Mixed }],
   },
   { timestamps: true }
 );

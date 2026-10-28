@@ -8,6 +8,7 @@ import { VendorFinancialProfile } from '../models/VendorFinancialProfile.js';
 import { VendorDocument } from '../models/VendorDocument.js';
 import { VendorResource } from '../models/VendorResource.js';
 import { vendorVerification } from '../../common/vendorVerification.js';
+import { activationDecision } from '../../common/activationPolicy.js';
 
 const REASON_LABELS = {
   PROFILE_INCOMPLETE: 'Brand profile details are incomplete',
@@ -85,14 +86,6 @@ export async function evaluateVendorActivation(vendorId) {
     reasonCodes.add('BANK_VERIFICATION_PENDING');
   }
 
-  if (isFinancialVerified && !vendor.verification?.isVerified) {
-    vendor.verification = {
-      ...(vendor.verification?.toObject?.() || vendor.verification || {}),
-      isVerified: true,
-      verifiedAt: vendor.verification?.verifiedAt || new Date(),
-      notes: 'Auto-verified via financial identity and bank verification',
-    };
-  }
 
   // 1. Profile completeness check (Brand & City)
   let hasProfile = false;
@@ -198,33 +191,18 @@ export async function evaluateVendorActivation(vendorId) {
     hasCoverage &&
     hasAvailability;
   const commercialReadiness = isModelComplete && hasPortfolio && completionPercentage === 100;
-  const matchingEligible = isFinancialVerified && commercialReadiness;
+  const { activationState: targetState, matchingEligible } = activationDecision(vendor, { hasProfile, isFinancialVerified, commercialReadiness });
   const leadActivationStatus = matchingEligible ? 'ACTIVE' : 'INACTIVE';
-
-  let targetState = vendor.activationState || 'REGISTERED';
-  if (!hasProfile) {
-    targetState = 'PROFILE_INCOMPLETE';
-  } else if (!isFinancialVerified) {
-    targetState = 'VERIFICATION_PENDING';
-  } else if (isFinancialVerified && !isModelComplete) {
-    targetState = 'VERIFIED';
-  } else if (matchingEligible) {
-    targetState = 'ACTIVE';
-  } else {
-    targetState = 'ELIGIBLE';
-  }
 
   const isCommerciallyActive = matchingEligible;
 
-  vendor.activationState = targetState;
-  vendor.status = targetState;
-  vendor.isCommerciallyActive = isCommerciallyActive;
-  await vendor.save();
 
   return {
     vendorId: vendor._id,
     businessName: vendor.businessName,
     activationState: targetState,
+    lastStatusUpdate: vendor.activationReview?.reviewedAt || vendor.activationReview?.requestedAt || vendor.updatedAt,
+    reviewFeedback: vendor.activationReview?.reason || vendor.manualReview?.notes || vendor.manualReview?.reason || '',
     isCommerciallyActive,
     isModelComplete,
     commercialReadiness,

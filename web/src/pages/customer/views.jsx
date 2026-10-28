@@ -177,6 +177,9 @@ function AskCard({ onOpenAura }) {
 function VendorOptions({ selected, onSelect }) {
   return (
     <Card>
+      <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        Example comparison only. Vendor names, prices, ratings, reviews, and availability below are illustrative, not live listings.
+      </p>
       <div className="flex items-center justify-between gap-2 mb-3">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wide text-primary">Vendor recommendations</div>
@@ -372,7 +375,7 @@ function BookingPayment({ opt }) {
       </div>
       <p className="text-[9px] text-muted mt-2 leading-relaxed inline-flex items-center gap-1">
         <Icon name="shieldCheck" size={12} className="text-emerald-600 shrink-0" />
-        <span>100% secure — payment shows as confirmed only after provider-side verification.</span>
+        <span>Payment is marked confirmed after provider-side verification.</span>
       </p>
     </Card>
   );
@@ -614,7 +617,7 @@ export function UpdatesView({ events }) {
           items.push({
             t: 'Just now',
             kind: 'Vendor Match',
-            text: `Aura+ is analyzing verified vendors for your ${req.name} requirement for ${e.name}.`,
+            text: `Aura+ is checking vendor profiles marked verified for your ${req.name} requirement for ${e.name}.`,
             tone: 'primary'
           });
         } else if (lower.includes('confirm') || lower.includes('approve')) {

@@ -67,6 +67,7 @@ import {
 import { AdminEntity } from "./screens/AdminEntity";
 import { AdminAccess, AdminFinance } from "./screens/AdminActions";
 import { AccountScreen, ProfileScreen, LibraryScreen } from "./screens/Account";
+import { LegalNoticeScreen } from "./screens/LegalNotice";
 import { TestAuthScreen } from "./screens/TestAuth";
 import { TEST_AUTH_ENABLED } from "./testAuth";
 import { Button, ErrorNotice, Icon, Page, Txt, usePalette } from "./ui";
@@ -275,6 +276,7 @@ function Navigation() {
               component={AuthScreen}
               options={{ headerShown: false, statusBarStyle: 'light' }}
             />
+            <Stack.Screen name="LegalNotice" component={LegalNoticeScreen} options={{ title: 'Legal information' }} />
             {TEST_AUTH_ENABLED && (
               <Stack.Screen
                 name="TestAuth"

@@ -279,7 +279,7 @@ function CategoryOptions({ eventId, category }) {
               <Icon name="info" size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <span className="font-extrabold">No direct vendors in {event.city || 'your immediate location'}.</span>{" "}
-                Showing top verified regional options available in nearby areas that cover your event:
+                Showing vendor options from nearby areas with coverage recorded for this event. Confirm final availability and terms with the vendor:
               </div>
             </div>
           )}

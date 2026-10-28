@@ -12,8 +12,9 @@ import AdminLogin from './pages/admin/AdminLogin.jsx';
 import AdminShell from './pages/admin/AdminShell.jsx';
 import DevApiTest from './pages/DevApiTest.jsx';
 import DevSingleClickAuth from './pages/DevSingleClickAuth.jsx';
+import PublicPolicyPage from './pages/PublicPolicyPage.jsx';
 
-const DEV_TOOLS_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_TOOLS === 'true';
+const DEV_TOOLS_ENABLED = import.meta.env.DEV;
 
 
 class ErrorBoundary extends React.Component {
@@ -141,6 +142,9 @@ export default function App() {
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />
       <Route path="/register" element={<ExternalLogin />} />
+      <Route path="/privacy" element={<PublicPolicyPage kind="privacy" />} />
+      <Route path="/terms" element={<PublicPolicyPage kind="terms" />} />
+      {DEV_TOOLS_ENABLED && <>
       <Route
         path="/customer/*"
         element={
@@ -214,6 +218,7 @@ export default function App() {
       <Route path="/api/test" element={<DevApiTest />} />
       <Route path="/api-test" element={<DevApiTest />} />
       <Route path="/test" element={<DevApiTest />} />
+      </>}
       <Route path="*" element={<RootRedirect />} />
     </Routes>
   );

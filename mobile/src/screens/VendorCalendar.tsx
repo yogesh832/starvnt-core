@@ -32,7 +32,7 @@ const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 export function VendorCalendar({ navigation }: any) {
   const c = usePalette();
   const bookings = useResource(external, "/vendor/bookings");
-  const blockouts = useResource(external, "/vendor/availability/blockouts");
+  const blockouts = useResource(external, "/vendor/availability/blockouts", 30000);
   const slots = useResource(external, "/vendor/availability/bookings");
   const services = useResource(external, "/vendor/services");
   const resources = useResource(external, "/vendor/resources");
@@ -53,6 +53,9 @@ export function VendorCalendar({ navigation }: any) {
     locality: "",
     address: "",
     assignedResources: [],
+    endDate: '', scope: 'BUSINESS', timezone: 'Asia/Kolkata',
+    customerName: '', customerPhone: '', eventType: '', notes: '', reference: '',
+    idempotencyKey: `${Date.now()}-${Math.random()}`, editId: '', revision: 0,
   });
   const field = (key: string) => ({
     value: String(form[key] || ""),
@@ -81,7 +84,7 @@ export function VendorCalendar({ navigation }: any) {
       calendarDate: dayKey(slot.date),
     })),
   ];
-  const selectedRows = rows.filter((row) => row.calendarDate === selected);
+  const selectedRows = rows.filter((row) => row.calendarDate <= selected && (row.endDate || row.calendarDate) >= selected && !(!row.allDay && row.endDate === selected && row.endTime === '00:00'));
   const firstDay = month.getDay();
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const moveMonth = (delta: number) => {
@@ -102,36 +105,22 @@ export function VendorCalendar({ navigation }: any) {
     if (
       (mode === "slot" || allDay === "no") &&
       (!timePattern.test(form.startTime) ||
-        !timePattern.test(form.endTime) ||
-        form.startTime >= form.endTime)
+        !timePattern.test(form.endTime))
     )
       throw new Error(
-        "Enter start and end times as HH:mm, with the end after the start.",
+        "Enter start and end times as HH:mm. An earlier end time continues into the next day.",
       );
-    if (mode === "blockout") {
-      await external.call("/vendor/availability/blockouts", "POST", {
-        date: form.date,
-        allDay: allDay === "yes",
-        startTime: allDay === "yes" ? "00:00" : form.startTime,
-        endTime: allDay === "yes" ? "23:59" : form.endTime,
-        reason: form.reason.trim() || "Unavailable",
-      });
-    } else {
-      if (!form.vendorServiceId)
-        throw new Error("Choose the service for this calendar commitment.");
-      await external.call("/vendor/availability/bookings", "POST", {
-        vendorServiceId: form.vendorServiceId,
-        date: form.date,
-        startTime: form.startTime,
-        endTime: form.endTime,
-        serviceLocation: {
-          city: form.city.trim(),
-          locality: form.locality.trim(),
-          address: form.address.trim(),
-        },
-        assignedResources: form.assignedResources,
-      });
-    }
+    const payload = {
+      date: form.date, endDate: form.endDate || form.date, timezone: form.timezone,
+      allDay: allDay === 'yes', startTime: form.startTime, endTime: form.endTime,
+      reason: form.reason.trim() || (mode === 'slot' ? 'External Customer Booking' : 'Other'),
+      recordType: mode === 'slot' ? 'EXTERNAL_COMMITMENT' : 'VENDOR_BLOCK',
+      scope: form.scope, vendorService: form.vendorServiceId, resourceIds: form.assignedResources,
+      idempotencyKey: form.idempotencyKey, revision: form.revision,
+      serviceLocation: { address: form.address, locality: form.locality, city: form.city },
+      external: mode === 'slot' ? { customerName: form.customerName, customerPhone: form.customerPhone, eventType: form.eventType, location: [form.address, form.locality, form.city].filter(Boolean).join(', '), notes: form.notes, reference: form.reference } : undefined,
+    };
+    await external.call(`/vendor/availability/blockouts${form.editId ? `/${form.editId}` : ''}`, form.editId ? 'PATCH' : 'POST', payload);
     setSelected(form.date);
     const chosen = new Date(`${form.date}T12:00:00`);
     setMonth(new Date(chosen.getFullYear(), chosen.getMonth(), 1));
@@ -195,7 +184,7 @@ export function VendorCalendar({ navigation }: any) {
             const key = iso(
               new Date(month.getFullYear(), month.getMonth(), number),
             );
-            const entries = rows.filter((row) => row.calendarDate === key);
+            const entries = rows.filter((row) => row.calendarDate <= key && (row.endDate || row.calendarDate) >= key && !(!row.allDay && row.endDate === key && row.endTime === '00:00'));
             return (
               <Pressable
                 accessibilityRole="button"
@@ -262,7 +251,7 @@ export function VendorCalendar({ navigation }: any) {
         <Card key={`${row.calendarKind}-${id(row) || index}`}>
           <Pill>
             {row.calendarKind === "blockout"
-              ? "UNAVAILABLE"
+              ? row.recordType === "EXTERNAL_COMMITMENT" ? "EXTERNAL COMMITMENT · REPORTED" : "UNAVAILABLE"
               : row.calendarKind === "slot"
                 ? "CALENDAR COMMITMENT"
                 : human(row.bookingStatus || row.status || "Booking")}
@@ -290,6 +279,10 @@ export function VendorCalendar({ navigation }: any) {
               }
             />
           )}
+          {row.calendarKind === "blockout" && <Button title="Edit record" secondary onPress={() => {
+            setForm(current => ({ ...current, ...row, editId: id(row), revision: row.revision || 0, endDate: row.endDate || row.date, vendorServiceId: row.vendorService || '', assignedResources: row.resourceIds || [], customerName: row.external?.customerName || '', customerPhone: row.external?.customerPhone || '', eventType: row.external?.eventType || '', address: row.external?.location || '', city: '', locality: '', notes: row.external?.notes || '', reference: row.external?.reference || '' }));
+            setAllDay(row.allDay ? 'yes' : 'no'); setMode(row.recordType === 'EXTERNAL_COMMITMENT' ? 'slot' : 'blockout');
+          }} />}
           {row.calendarKind === "blockout" && (
             <Button
               title="Remove unavailable time"
@@ -298,7 +291,7 @@ export function VendorCalendar({ navigation }: any) {
               onPress={() =>
                 confirm(
                   "Remove unavailable time?",
-                  "This time will become available for matching again.",
+                  "This record will be cancelled. Remaining bookings and availability rules still apply.",
                   () => {
                     void action.run(async () => {
                       await external.call(
@@ -324,15 +317,15 @@ export function VendorCalendar({ navigation }: any) {
         title="Block unavailable time"
         secondary
         onPress={() => {
-          setForm((value) => ({ ...value, date: selected }));
+          setForm((value) => ({ ...value, date: selected, endDate: selected, editId: "", revision: 0, idempotencyKey: `${Date.now()}-${Math.random()}` }));
           setMode("blockout");
         }}
       />
       <Button
-        title="Add calendar commitment"
+        title="Add external customer commitment"
         secondary
         onPress={() => {
-          setForm((value) => ({ ...value, date: selected }));
+          setForm((value) => ({ ...value, date: selected, endDate: selected, editId: "", revision: 0, idempotencyKey: `${Date.now()}-${Math.random()}` }));
           setMode("slot");
         }}
       />
@@ -348,7 +341,18 @@ export function VendorCalendar({ navigation }: any) {
               setForm((current) => ({ ...current, date: value }))
             }
           />
-          {mode === "blockout" && (
+          <EventDateField label="End date" value={form.endDate} onChange={endDate => setForm(current => ({ ...current, endDate }))} />
+          <Field label="Timezone" {...field('timezone')} />
+          <Choice label="Scope" value={form.scope} values={['BUSINESS', 'SERVICE', 'RESOURCE']} labels={{ BUSINESS: 'Entire business', SERVICE: 'Specific service', RESOURCE: 'Specific team/equipment/vehicle' }} onChange={scope => setForm(current => ({ ...current, scope }))} />
+          {mode === 'slot' && <>
+            <Txt muted>Vendor-reported commitment. This does not create or verify a STARVNT booking.</Txt>
+            <Field label="Customer name (optional)" {...field('customerName')} />
+            <Field label="Customer phone with country code (optional)" {...field('customerPhone')} />
+            <Field label="Event type" {...field('eventType')} />
+            <Field label="Notes (optional)" {...field('notes')} />
+            <Field label="External reference (optional)" {...field('reference')} />
+          </>}
+          {mode && (
             <>
               <Choice
                 label="All day?"
@@ -375,7 +379,7 @@ export function VendorCalendar({ navigation }: any) {
               />
             </>
           )}
-          {mode === "slot" && (
+          {(mode === "slot" || form.scope !== "BUSINESS") && (
             <>
               <ErrorNotice
                 message={services.error || resources.error}

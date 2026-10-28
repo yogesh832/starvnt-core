@@ -28,12 +28,12 @@ export function AuthLayout({ children, navigation, vendor, register, admin, veri
               </View>
               {!verify && <View style={{ marginTop: 'auto', paddingBottom: 30, gap: 10 }}>
                 <AuthText size={register ? 25 : 31} bold>{admin ? 'Welcome to STARVNT Core.' : register ? vendor ? 'Create your Vendor account' : 'Create your account' : 'Welcome back.'}</AuthText>
-                <AuthText size={16} color="#e2e8f0">{admin ? 'Manage your team and operations in one place.' : register ? vendor ? 'Join as a verified vendor and get instant leads, bookings and payouts.' : 'Plan your next event with trusted vendors and protected bookings.' : 'Sign in to access your events, verified vendors and 100% escrow-protected bookings.'}</AuthText>
+            <AuthText size={16} color="#e2e8f0">{admin ? 'Manage your team and operations in one place.' : register ? vendor ? 'Create a vendor profile and manage enquiries, bookings and payment records.' : 'Plan your next event and manage booking details.' : 'Sign in to access your events, vendor quotes and booking details.'}</AuthText>
               </View>}
             </View>
           </ImageBackground>
           <View style={{ paddingHorizontal: 24, gap: 22 }}>{children}</View>
-          {!register && !verify && <View style={{ marginTop: 'auto', paddingTop: 52, flexDirection: 'row', gap: 7, justifyContent: 'center' }}><Icon name="shield-outline" size={16} color="#91a4c4"/><AuthText size={11} color="#91a4c4">Protected by Core Escrow</AuthText></View>}
+          {!register && !verify && <View style={{ marginTop: 'auto', paddingTop: 28, gap: 14, alignItems: 'center' }}><View style={{ flexDirection: 'row', gap: 20 }}><Pressable accessibilityRole="link" onPress={() => navigation.navigate('LegalNotice', { kind: 'privacy' })}><AuthText size={11} color="#b9c5da">Privacy Policy</AuthText></Pressable><Pressable accessibilityRole="link" onPress={() => navigation.navigate('LegalNotice', { kind: 'terms' })}><AuthText size={11} color="#b9c5da">Terms of Service</AuthText></Pressable></View><View style={{ flexDirection: 'row', gap: 7 }}><Icon name="shield-outline" size={16} color="#91a4c4"/><AuthText size={11} color="#91a4c4">Payment status follows provider confirmation</AuthText></View></View>}
         </View>
       </KeyboardScrollView>
     </KeyboardAvoidingView>
