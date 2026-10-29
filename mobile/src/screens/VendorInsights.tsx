@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Linking } from "react-native";
+import React, { useMemo, useState } from "react";
+import { Linking, View } from "react-native";
 import { external } from "../api/runtime";
 import type { Data } from "../api/client";
 import {
@@ -16,6 +16,7 @@ import {
   ErrorNotice,
   human,
   id,
+  Field,
   money,
   Page,
   Pill,
@@ -23,12 +24,23 @@ import {
   Txt,
   useAction,
   useResource,
+  confirm,
 } from "../ui";
+import { formatVendorResponseTime, vendorSalesMetrics } from "../vendorInsights";
 
 export function VendorAnalytics() {
   const counts = useResource(external, "/vendor/badge-counts");
   const bookings = useResource(external, "/vendor/bookings");
+  const enquiries = useResource(external, "/vendor/opportunities");
+  const quotes = useResource(external, "/quotes");
+  const [periodDays, setPeriodDays] = useState("30");
+  const firstResponse = useResource(external, `/vendor/metrics/first-response?periodDays=${periodDays}`);
   const totals = vendorInsightTotals(bookings.data.bookings || []);
+  const cohort = useMemo(() => vendorSalesMetrics({
+    enquiries: enquiries.data.opportunities || [],
+    quotes: quotes.data.quotes || [],
+    bookings: bookings.data.bookings || [],
+  }, Number(periodDays)), [enquiries.data, quotes.data, bookings.data, periodDays]);
   return (
     <Page
       {...counts}
@@ -52,12 +64,86 @@ export function VendorAnalytics() {
           ]}
         />
       )}
+      <ErrorNotice message={enquiries.error || quotes.error} retry={() => { enquiries.refresh(); quotes.refresh(); }} />
+      <Card>
+        <Txt bold size={21}>Conversion pipeline</Txt>
+        <Choice label="Matured enquiry cohort" value={periodDays} values={["30", "60", "90"]} onChange={setPeriodDays} />
+        <Txt muted>Enquiries received {periodDays}–{Number(periodDays) + 30} days ago. Newer leads are excluded until the 30-day attribution window closes.</Txt>
+        {enquiries.error || quotes.error || bookings.error ? <Txt muted>Unavailable: source data failed to load. Retry before relying on these metrics.</Txt> : <Stats items={[
+          ["Eligible enquiries", cohort.eligible],
+          ["Lead → quote", cohort.quoteRate === null ? "Insufficient data" : `${Math.round(cohort.quoteRate * 100)}%`],
+          ["Lead → booking", cohort.bookingRate === null ? "Insufficient data" : `${Math.round(cohort.bookingRate * 100)}%`],
+          ["Avg. quote turnaround", formatVendorResponseTime(cohort.avgQuoteMs)],
+        ]} />}
+        <Txt muted>{cohort.quoted} enquiries with a submitted quote · {cohort.booked} confirmed bookings · quote samples {cohort.quoteSamples}</Txt>
+        {Object.keys(cohort.declineReasons).length > 0 && <Txt>Recorded decline reasons: {Object.entries(cohort.declineReasons).sort((a,b) => b[1]-a[1]).slice(0,3).map(([reason, count]) => `${reason} (${count})`).join(" · ")}</Txt>}
+        <ErrorNotice message={firstResponse.error} retry={firstResponse.refresh} />
+        {firstResponse.data.metrics && <Txt>First response: {formatVendorResponseTime(firstResponse.data.metrics.averageFirstResponseMs ?? null)} · sample {firstResponse.data.metrics.respondedEnquiries ?? 0}{firstResponse.data.metrics.complete === false ? " · partial data" : ""}</Txt>}
+        {!firstResponse.error && !firstResponse.loading && !firstResponse.data.metrics && <Txt muted>First-response data is not available yet.</Txt>}
+      </Card>
+      <VendorBusinessGoals />
       <Txt muted>
         Counts reflect the current backend state. Recorded booking value is not
         the amount released to your bank.
       </Txt>
     </Page>
   );
+}
+
+function VendorBusinessGoals() {
+  const r = useResource(external, "/vendor/goals");
+  const action = useAction();
+  const [editing, setEditing] = useState<Data | null>(null);
+  const [name, setName] = useState("");
+  const [metric, setMetric] = useState("SUBMITTED_QUOTES");
+  const [target, setTarget] = useState("3");
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() => { const end = new Date(); end.setDate(end.getDate() + 7); return end.toISOString().slice(0, 10); });
+  const goals: Data[] = r.data.goals || [];
+  const activeCount = goals.filter((goal) => goal.status === "ACTIVE").length;
+  const reset = () => { setEditing(null); setName(""); setMetric("SUBMITTED_QUOTES"); setTarget("3"); };
+  const refresh = () => { void r.refresh(); };
+  const save = () => action.run(async () => {
+    const result = await external.call(editing ? `/vendor/goals/${id(editing)}` : "/vendor/goals", editing ? "PATCH" : "POST", { name, metric, targetValue: Number(target), startDate, endDate });
+    if (result?.error || result?.ok === false) throw new Error(result.message || result.error || "Goal could not be saved.");
+    reset(); await r.refresh();
+  });
+  const changeStatus = (goal: Data, status: string) => action.run(async () => {
+    const result = await external.call(`/vendor/goals/${id(goal)}`, "PATCH", { status });
+    if (result?.error || result?.ok === false) throw new Error(result.message || result.error || "Goal could not be updated.");
+    await r.refresh();
+  });
+  const remove = (goal: Data) => confirm("Remove goal?", `Remove “${goal.name}” from your goal list?`, () => action.run(async () => {
+    const result = await external.call(`/vendor/goals/${id(goal)}`, "DELETE");
+    if (result?.error || result?.ok === false) throw new Error(result.message || result.error || "Goal could not be removed.");
+    await r.refresh();
+  }));
+  return <Card>
+    <Txt bold size={21}>Business goals</Txt>
+    <Txt muted>Track progress from saved platform records. Up to three goals may be active ({activeCount}/3).</Txt>
+    <ErrorNotice message={r.error || action.error} retry={r.refresh} />
+    {goals.map((goal) => <Card key={id(goal)}>
+      <Txt bold>{goal.name}</Txt><Pill>{human(goal.status)}</Pill>
+      <Txt muted>{human(goal.metric)} · {String(goal.periodStart).slice(0,10)} to {String(goal.periodEnd).slice(0,10)}</Txt>
+      <Txt>{goal.metricAvailable ? `${goal.currentValue} / ${goal.targetValue} · ${goal.progressPercent}%` : "Progress unavailable"}</Txt>
+      <Txt muted>{goal.metricAvailable ? "Measured from saved platform records." : "Source records could not be measured; no zero value is substituted."}</Txt>
+      <View style={{ gap: 8 }}>
+        {goal.status !== "COMPLETED" && <Button title="Edit goal" secondary onPress={() => { setEditing(goal); setName(goal.name); setMetric(goal.metric); setTarget(String(goal.targetValue)); setStartDate(String(goal.periodStart).slice(0,10)); setEndDate(String(goal.periodEnd).slice(0,10)); }} />}
+        {goal.status === "ACTIVE" && <Button title={goal.targetReached ? "Mark complete" : "Pause goal"} secondary onPress={() => changeStatus(goal, goal.targetReached ? "COMPLETED" : "PAUSED")} />}
+        {goal.status === "PAUSED" && <Button title="Resume goal" secondary onPress={() => changeStatus(goal, "ACTIVE")} />}
+        <Button title="Remove goal" danger secondary onPress={() => remove(goal)} />
+      </View>
+    </Card>)}
+    {!r.loading && !goals.length && <Empty title="No goals saved" description="Create a goal to track submitted quotes, confirmed bookings, or completed bookings." />}
+    <Field label="Goal name" value={name} onChangeText={setName} maxLength={80} />
+    <Choice label="Metric" value={metric} values={["SUBMITTED_QUOTES", "CONFIRMED_BOOKINGS", "COMPLETED_BOOKINGS"]} onChange={setMetric} />
+    <Field label="Target count" keyboardType="number-pad" value={target} onChangeText={setTarget} />
+    <Field label="Start date (YYYY-MM-DD)" value={startDate} onChangeText={setStartDate} />
+    <Field label="End date (YYYY-MM-DD)" value={endDate} onChangeText={setEndDate} />
+    <Button title={editing ? "Save goal changes" : "Create business goal"} busy={action.busy} disabled={!editing && activeCount >= 3} onPress={save} />
+    {editing && <Button title="Cancel editing" secondary onPress={reset} />}
+    <Button title="Refresh goal progress" secondary onPress={refresh} />
+  </Card>;
 }
 export function VendorPayments({ navigation }: any) {
   const bookings = useResource(external, "/vendor/bookings");
@@ -92,6 +178,15 @@ export function VendorPayments({ navigation }: any) {
             ["Overdue", money(metrics.overdueAmount)],
           ]}
         />
+      </Card>
+      <Card>
+        <Txt bold size={21}>Settlement states</Txt>
+        <Stats items={[
+          ["Eligible for settlement", money(metrics.expectedSettlements)],
+          ["On hold", money(metrics.settlementHoldAmount)],
+          ["Settled", money(metrics.settledAmount)],
+        ]} />
+        <Txt muted>Eligibility, hold and completed payout are separate Core states.</Txt>
       </Card>
       {truth.agingBreakdown && (
         <Card>

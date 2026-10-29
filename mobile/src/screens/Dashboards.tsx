@@ -1,6 +1,6 @@
 import { Linking } from 'react-native';
 import { VENDOR_SUPPORT } from '../../../shared/vendorSupport.js';
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { external, internal } from "../api/runtime";
 import { useSession } from "../auth/Session";
 import { visibleModules } from "../adminModules";
@@ -10,6 +10,7 @@ import {
   dashboardSources,
 } from "../dashboardData";
 import type { Data } from "../api/client";
+import { vendorActionItems, vendorWeeklySummary } from "../vendorInsights";
 import {
   Button,
   Card,
@@ -185,11 +186,17 @@ export function VendorHome({ navigation }: any) {
           quotes: "/quotes",
           bookings: "/vendor/bookings",
           financial: "/vendor/financial-truth",
+          reviews: "/vendor/reviews",
+          recommendations: "/vendor/intelligence/recommendations",
         }),
     }),
     [],
   );
   const r = useResource(source, "dashboard", 30000);
+  const [lastCompleteRefresh, setLastCompleteRefresh] = useState<Date | null>(null);
+  useEffect(() => {
+    if (Array.isArray(r.data.failed) && r.data.failed.length === 0) setLastCompleteRefresh(new Date());
+  }, [r.data]);
   const data = r.data;
   const support = useAction();
   const readiness = data.activation?.status;
@@ -224,6 +231,20 @@ export function VendorHome({ navigation }: any) {
           retry={r.refresh}
         />
       )}
+      <Card>
+        <Txt bold size={22}>Today’s action center</Txt>
+        <Txt muted>Priority follow-ups from saved bookings, enquiries, quotes, reviews and profile status.</Txt>
+        {vendorActionItems(data).map((action: Data) => (
+          <MenuRow key={action.key} title={action.title} subtitle={action.detail} onPress={() => {
+            if (action.module === "messages") navigation.navigate("Updates");
+            else if (action.module === "profile") navigation.navigate("Profile");
+            else navigation.navigate("VendorModule", { module: action.module });
+          }} />
+        ))}
+        {!vendorActionItems(data).length && !data.failed?.length && <Txt muted>No supported follow-up is currently recorded.</Txt>}
+        {!!data.failed?.length && <Txt muted>Some action sources failed to load; this list may be incomplete.</Txt>}
+      </Card>
+      <Txt muted>{lastCompleteRefresh ? `Last complete refresh ${lastCompleteRefresh.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Dashboard refresh time unavailable until all sources load successfully."}</Txt>
       <Button
         title="Ask Aura+ about your business"
         onPress={() => navigation.navigate("Chat")}
@@ -236,6 +257,47 @@ export function VendorHome({ navigation }: any) {
           ["Unread", counts?.unreadNotificationsCount ?? "—"],
         ]}
       />
+      <Card>
+        <Txt bold size={21}>Financial clarity</Txt>
+        {metrics ? <Stats items={[
+          ["Customer balance outstanding", money(metrics.expectedReceivables)],
+          ["Due this week", money(metrics.dueThisWeek)],
+          ["Overdue customer balance", money(metrics.overdueAmount)],
+          ["Settlement eligible", money(metrics.expectedSettlements)],
+          ["Settlement on hold", money(metrics.settlementHoldAmount)],
+          ["Settlements completed", money(metrics.settledAmount)],
+        ]} /> : <Txt muted>Core financial data is unavailable. Open Payments or retry before relying on a balance.</Txt>}
+        <Txt muted>Customer receivables are separate from vendor earnings, eligible settlements and completed payouts.</Txt>
+        <Button title="Open payments" secondary onPress={() => navigation.navigate("VendorModule", { module: "payments" })} />
+      </Card>
+      <Card>
+        <Txt bold size={21}>Weekly performance review</Txt>
+        <Txt muted>Current elapsed UTC week compared with the same elapsed period last week.</Txt>
+        {(() => {
+          const summary = vendorWeeklySummary({ enquiries: data.enquiries?.opportunities || [], quotes: data.quotes?.quotes || [], bookings: data.bookings?.bookings || [], reviews: data.reviews?.reviews || [] });
+          return ([
+            ["Enquiries", "enquiries"], ["Submitted quotes", "submittedQuotes"], ["Confirmed bookings", "confirmedBookings"], ["Published reviews", "publishedReviews"],
+          ] as const).map(([label, key]) => <Txt key={key}>{label}: {data.failed?.length ? "Source may be incomplete" : summary.current[key]} · previous comparable period: {summary.previous[key]}</Txt>);
+        })()}
+      </Card>
+      {readiness && <Card>
+        <Txt bold size={21}>Operating readiness</Txt>
+        <Txt>Profile completion: {Number.isFinite(Number(readiness.completionPercentage)) ? `${readiness.completionPercentage}%` : "Unavailable"}</Txt>
+        <Txt>Identity: {readiness.checklist?.identityVerified === true ? "Complete" : readiness.checklist?.identityVerified === false ? "Incomplete" : "Unavailable"}</Txt>
+        <Txt>Bank: {readiness.checklist?.bankVerified === true ? "Complete" : readiness.checklist?.bankVerified === false ? "Incomplete" : "Unavailable"}</Txt>
+        <Txt>Activation: {human(readiness.activationState || "Unavailable")}</Txt>
+        <Txt>Matching: {readiness.matchingEligible === true ? "Eligible" : readiness.matchingEligible === false ? "Locked" : "Unavailable"}</Txt>
+        <Txt>Services and capacity: {readiness.checklist?.services === true && readiness.checklist?.capacity === true && readiness.checklist?.resources === true ? "Complete" : readiness.checklist?.services === false || readiness.checklist?.capacity === false || readiness.checklist?.resources === false ? "Incomplete" : "Unavailable"}</Txt>
+        {(readiness.missingRequirements || []).slice(0, 5).map((item: string) => <Txt key={item}>• {item}</Txt>)}
+        <Button title="Review profile readiness" secondary onPress={() => navigation.navigate("Profile")} />
+      </Card>}
+      {data.recommendations?.recommendations && <Card>
+        <Txt bold size={21}>Vendor improvement</Txt>
+        {!data.recommendations.recommendations.length ? <Txt muted>No improvement suggestions are supported by the current records.</Txt> : data.recommendations.recommendations.slice(0, 4).map((item: Data, index: number) => <Card key={`${item.signal || "suggestion"}-${item.targetId || index}`}>
+          <Txt bold>{item.title}</Txt><Pill>{human(item.priority || "INFO")}</Pill><Txt>{item.message}</Txt>
+          <Button title={item.action || "Review"} secondary onPress={() => navigation.navigate("VendorModule", { module: item.signal === "PORTFOLIO_GAP" ? "portfolio" : item.signal === "LOCATION_DEMAND" ? "services" : item.signal === "BOOKING_RISK" ? "bookings" : "enquiries" })} />
+        </Card>)}
+      </Card>}
       {readiness && (
         <Card>
           <Txt bold size={22}>
@@ -327,6 +389,12 @@ export function VendorHome({ navigation }: any) {
         />
       </Card>
       <Card>
+        <Txt bold size={21}>Service quality</Txt>
+        {data.reviews?.stats ? <Txt>{data.reviews.stats.totalReviews ? `${data.reviews.stats.averageRating} / 5 · ${data.reviews.stats.totalReviews} published STARVNT reviews` : "No published STARVNT reviews yet."}</Txt> : <Txt muted>{data.failed?.includes("reviews") ? "Review data unavailable; no rating is inferred." : "No published STARVNT reviews yet."}</Txt>}
+        {(data.reviews?.reviews || []).slice(0, 3).map((review: Data) => <Txt key={id(review)}>{review.rating} / 5 · {review.serviceName || "Service"} · {review.vendorReply?.text ? "Reply posted" : "No reply recorded"}</Txt>)}
+        <Button title="Review & reputation" secondary onPress={() => navigation.navigate("VendorModule", { module: "reviews" })} />
+      </Card>
+      <Card>
         <Txt bold size={22}>
           Upcoming & active bookings
         </Txt>
@@ -345,6 +413,7 @@ export function VendorHome({ navigation }: any) {
           onPress={() => navigation.navigate("VendorCalendar")}
         />
       </Card>
+      <Button title="Business analytics & goals" secondary onPress={() => navigation.navigate("VendorModule", { module: "analytics" })} />
     </Page>
   );
 }
