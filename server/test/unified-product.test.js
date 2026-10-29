@@ -10,9 +10,11 @@ import { ExternalUser } from '../src/external/models/ExternalUser.js';
 import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
 import { VendorService } from '../src/external/models/VendorService.js';
+import { Opportunity } from '../src/external/models/Opportunity.js';
 import { VendorBlockout } from '../src/external/models/VendorBlockout.js';
 import { Notification } from '../src/external/models/Notification.js';
 import { VendorMessageThread } from '../src/external/models/VendorMessageThread.js';
+import { VendorReview } from '../src/external/models/VendorReview.js';
 import { CoreBooking } from '../src/admin/models/CoreBooking.js';
 import { AdminUser } from '../src/admin/models/AdminUser.js';
 import { AdminSession } from '../src/admin/models/AdminSession.js';
@@ -43,8 +45,9 @@ import { EventRequirement } from '../src/customer/models/index.js';
 import { applyServiceStatement } from '../src/customer/services/events.service.js';
 import { AdminAuditLog } from '../src/admin/models/AdminAuditLog.js';
 import { Payment, Booking, Reservation } from '../src/customer/models/index.js';
-import { customerFinancialTruth } from '../src/common/financialTruth.service.js';
+import { customerFinancialTruth, vendorFinancialTruth } from '../src/common/financialTruth.service.js';
 import { VendorBookingSlot } from '../src/external/models/VendorBookingSlot.js';
+import { VendorBusinessGoal } from '../src/external/models/VendorBusinessGoal.js';
 import { executeAction } from '../src/external/aura/setupActions.js';
 import { createQuote as createVendorQuote } from '../src/external/services/quoteStateMachine.service.js';
 import { recordLifecycleEventMessage } from '../src/customer/services/circle.service.js';
@@ -54,6 +57,7 @@ import { devToolsAllowed } from '../src/config.js';
 import { CorePolicyRevision } from '../src/admin/models/CorePolicyRevision.js';
 import { getCommercialPolicyForCategory } from '../src/common/policyResolver.js';
 import { calculateEligibleAdvanceRefund } from '../src/common/policyResolver.js';
+import { buildVendorRecommendations } from '../src/external/services/auraIntelligence.service.js';
 
 let mongo, app, vendor, customer, vendorToken, customerToken, adminToken, restrictedAdminToken, actor;
 before(async () => {
@@ -89,6 +93,12 @@ test('vendor mark-all-read clears unread notifications and conversations togethe
   const notification = await Notification.create({ vendor: vendor._id, title: 'Unread test notice', message: 'Test only', type: 'MESSAGE', isRead: false });
   const conversation = await VendorMessageThread.create({ vendor: vendor._id, clientName: 'Read-state test', unreadVendorCount: 3, status: 'ACTIVE' });
   const blockedConversation = await VendorMessageThread.create({ vendor: vendor._id, clientName: 'Blocked test', unreadVendorCount: 2, status: 'BLOCKED' });
+
+  const actionItems = await request(app).get('/api/vendor/badge-counts').set(auth(vendorToken)).expect(200);
+  assert.equal(actionItems.body.messagesCount, 1);
+  assert.deepEqual(actionItems.body.messageActionItems.map((item) => item.threadId), [String(conversation._id)]);
+  assert.ok(!Object.hasOwn(actionItems.body.messageActionItems[0], 'clientName'));
+  assert.ok(!Object.hasOwn(actionItems.body.messageActionItems[0], 'lastMessageText'));
 
   const response = await request(app).put('/api/vendor/notifications/read-all').set(auth(vendorToken)).expect(200);
   assert.equal(response.body.unread, 0);
@@ -392,6 +402,53 @@ test('Aura suggestions remain inferred until an explicit customer confirmation',
   assert.ok(response.body.summary.progressPercent > 0);
 });
 
+test('vendor recommendations cite only saved evidence and omit unsupported location or traffic claims', () => {
+  const recommendations = buildVendorRecommendations({
+    now: new Date('2026-10-29T12:00:00.000Z'),
+    opportunities: [
+      { _id: 'new-1', status: 'NEW', serviceName: 'Photography', createdAt: '2026-10-25T12:00:00.000Z', serviceLocation: { locality: 'Pune' } },
+      { _id: 'other-1', status: 'RESPONDED', createdAt: '2026-10-26T12:00:00.000Z', serviceLocation: { locality: 'Pune' } },
+      { _id: 'old-1', status: 'RESPONDED', createdAt: '2026-09-01T12:00:00.000Z', serviceLocation: { locality: 'Jaipur' } },
+    ],
+    bookings: [{ bookingStatus: 'CONFIRMED', serviceLocation: { locality: 'Mumbai' } }],
+    coverages: [{ localities: ['Mumbai'] }],
+  });
+  const text = JSON.stringify(recommendations);
+  assert.match(text, /Pune/);
+  assert.match(text, /Mumbai/);
+  assert.doesNotMatch(text, /Jaipur/);
+  assert.doesNotMatch(text, /Kisan Palace|New Town|Barasat|peak traffic|45-min transit/);
+  assert.doesNotMatch(text, /increases match ranking|High-Match|PORTFOLIO_GAP/);
+  assert.equal(recommendations.find((item) => item.signal === 'NEW_ENQUIRY')?.targetId, 'new-1');
+});
+
+test('vendor financial truth separates settlement eligibility and holds from completion verification', async () => {
+  const financialVendorId = new mongoose.Types.ObjectId();
+  const booking = (settlementStatus, executionStatus, vendorPayable, bookingReference) => ({
+    vendorId: financialVendorId,
+    customerId: customer._id,
+    serviceName: 'Finance test booking',
+    eventDate: '2027-03-01',
+    totalAmount: vendorPayable,
+    bookingStatus: 'CONFIRMED',
+    settlementStatus,
+    executionStatus,
+    taxSummary: { vendorPayable },
+    bookingReference,
+  });
+  await CoreBooking.create([
+    booking('SETTLEMENT_ELIGIBLE', 'COMPLETION_VERIFIED', 200, 'ELIGIBLE'),
+    booking('SETTLEMENT_HOLD', 'COMPLETION_VERIFIED', 300, 'HELD'),
+    booking('NOT_ELIGIBLE', 'COMPLETION_VERIFIED', 400, 'REVIEW_DELAY'),
+    { ...booking('SETTLED', 'COMPLETION_VERIFIED', 500, 'SETTLED'), settlementDetails: { vendorPayable: 500 } },
+  ]);
+  const truth = await vendorFinancialTruth(financialVendorId, { now: new Date('2026-10-29T12:00:00.000Z') });
+  assert.equal(truth.metrics.expectedSettlements, 200);
+  assert.equal(truth.metrics.settlementHoldAmount, 300);
+  assert.equal(truth.metrics.settledAmount, 500);
+  assert.equal(truth.nextBestActions.filter((item) => item.type === 'settlement_ready').length, 1);
+});
+
 test('budget totals count verified money, exclude pending/cancelled contracts and deduplicate linked Core bookings', async () => {
   const event = await CustomerEvent.create({ customer: customer._id, eventType: 'wedding', eventDate: '2027-09-10', budget: 10000, status: 'draft' });
   const requirement = new mongoose.Types.ObjectId();
@@ -483,4 +540,224 @@ test('production hard-disables developer authentication even when explicitly ena
     if (previousMode === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousMode;
     if (previousFlag === undefined) delete process.env.ENABLE_DEV_TOOLS; else process.env.ENABLE_DEV_TOOLS = previousFlag;
   }
+});
+
+test('Razorpay webhook requires a raw-body signature and deduplicates provider event IDs', async () => {
+  const previousSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  process.env.RAZORPAY_WEBHOOK_SECRET = 'test-webhook-secret-only';
+  try {
+    const rawBody = Buffer.from(JSON.stringify({
+      id: 'evt-isolation-fixture',
+      event: 'payment.captured',
+      payload: { payment: { entity: { order_id: 'order-not-in-test-db', id: 'pay-test' } } },
+    }));
+    const signature = crypto.createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET).update(rawBody).digest('hex');
+    const invalid = await request(app).post('/api/webhooks/razorpay').set('Content-Type', 'application/json').set('x-razorpay-signature', 'invalid').send(rawBody.toString('utf8')).expect(400);
+    assert.equal(invalid.body.error, 'INVALID_SIGNATURE');
+
+    const accepted = await request(app).post('/api/webhooks/razorpay').set('Content-Type', 'application/json').set('x-razorpay-signature', signature).set('x-razorpay-event-id', 'evt-isolation-fixture').send(rawBody.toString('utf8'));
+    assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+    assert.equal(accepted.body.ignored, true);
+    const duplicate = await request(app).post('/api/webhooks/razorpay').set('Content-Type', 'application/json').set('x-razorpay-signature', signature).set('x-razorpay-event-id', 'evt-isolation-fixture').send(rawBody.toString('utf8')).expect(200);
+    assert.equal(duplicate.body.duplicate, true);
+  } finally {
+    if (previousSecret === undefined) delete process.env.RAZORPAY_WEBHOOK_SECRET;
+    else process.env.RAZORPAY_WEBHOOK_SECRET = previousSecret;
+  }
+});
+
+test('vendor business goals are validated, capped, progress from Core truth, and isolated by owner', async () => {
+  const badPeriod = await request(app).post('/api/vendor/goals').set(auth(vendorToken)).send({
+    name: 'Complete bookings', metric: 'COMPLETED_BOOKINGS', targetValue: 2,
+    startDate: '2026-02-30', endDate: '2026-03-10',
+  }).expect(400);
+  assert.equal(badPeriod.body.error, 'INVALID_GOAL_PERIOD');
+
+  await CoreBooking.create({
+    vendorId: vendor._id,
+    customerId: customer._id,
+    serviceName: 'Goal test booking',
+    eventDate: '2026-10-15',
+    totalAmount: 2500,
+    bookingStatus: 'CONFIRMED',
+    executionStatus: 'COMPLETION_VERIFIED',
+    validationAudit: { verifiedBy: 'CORE_ADMIN', verifiedAt: new Date('2026-10-15T12:00:00.000Z'), notes: 'Fixture only' },
+  });
+  const goalService = await VendorService.create({ vendor: vendor._id, name: 'Goal quote service', category: 'Photography', pricing: { basePrice: 1000 } });
+  await Quote.create({
+    vendor: vendor._id,
+    customer: customer._id,
+    vendorService: goalService._id,
+    serviceName: 'Goal quote',
+    eventDate: '2026-10-20',
+    status: 'REJECTED',
+    pricingBreakdown: { basePrice: 1000, totalAmount: 1000 },
+    history: [
+      { fromStatus: 'DRAFT', toStatus: 'SUBMITTED', changedBy: 'VENDOR', timestamp: new Date('2026-10-10T12:00:00.000Z') },
+      { fromStatus: 'SUBMITTED', toStatus: 'REJECTED', changedBy: 'CUSTOMER', timestamp: new Date('2026-10-11T12:00:00.000Z') },
+    ],
+  });
+
+  const goalData = (name) => ({
+    name, metric: 'COMPLETED_BOOKINGS', targetValue: 2,
+    startDate: '2026-10-01', endDate: '2026-10-31',
+  });
+  const created = [];
+  for (let i = 1; i <= 3; i++) {
+    const response = await request(app).post('/api/vendor/goals').set(auth(vendorToken)).send(goalData(`Goal ${i}`)).expect(201);
+    created.push(response.body.goal);
+  }
+  assert.equal(created[0].currentValue, 1);
+  assert.equal(created[0].progressPercent, 50);
+  await request(app).patch(`/api/vendor/goals/${created[0].id}`).set(auth(vendorToken)).send({ status: 'COMPLETED' }).expect(409);
+  await request(app).post('/api/vendor/goals').set(auth(vendorToken)).send(goalData('Goal 4')).expect(409);
+
+  await request(app).patch(`/api/vendor/goals/${created[0].id}`).set(auth(vendorToken)).send({ status: 'PAUSED' }).expect(200);
+  const fourth = await request(app).post('/api/vendor/goals').set(auth(vendorToken)).send({ ...goalData('Goal 4'), metric: 'SUBMITTED_QUOTES', targetValue: 1 }).expect(201);
+  assert.equal(fourth.body.goal.currentValue, 1);
+  await request(app).patch(`/api/vendor/goals/${created[0].id}`).set(auth(vendorToken)).send({ status: 'ACTIVE' }).expect(409);
+
+  const otherOwner = await ExternalUser.create({ email: `goal-owner-${key()}@unified.test`, fullName: 'Other Vendor', accountType: 'VENDOR' });
+  const otherOrganization = await VendorOrganization.create({ owner: otherOwner._id, businessName: 'Other Vendor Organization' });
+  otherOwner.vendorOrganization = otherOrganization._id;
+  await otherOwner.save();
+  const otherSession = await ExternalSession.create({ user: otherOwner._id, refreshTokenHash: crypto.randomUUID(), expiresAt: new Date(Date.now() + 3600000) });
+  const otherToken = signExternalAccessToken(otherOwner, otherSession._id);
+  const foreignGoal = await request(app).post('/api/vendor/goals').set(auth(otherToken)).send(goalData('Private goal')).expect(201);
+
+  const ownGoals = await request(app).get('/api/vendor/goals').set(auth(vendorToken)).expect(200);
+  assert.equal(ownGoals.body.goals.length, 4);
+  assert.ok(!ownGoals.body.goals.some((goal) => goal.id === foreignGoal.body.goal.id));
+  await request(app).patch(`/api/vendor/goals/${foreignGoal.body.goal.id}`).set(auth(vendorToken)).send({ status: 'PAUSED' }).expect(404);
+  await request(app).delete(`/api/vendor/goals/${foreignGoal.body.goal.id}`).set(auth(vendorToken)).expect(404);
+
+  await request(app).delete(`/api/vendor/goals/${fourth.body.goal.id}`).set(auth(vendorToken)).expect(200);
+  const tombstone = await VendorBusinessGoal.findById(fourth.body.goal.id).lean();
+  assert.ok(tombstone.deletedAt);
+  assert.equal(tombstone.history.at(-1).action, 'DELETED');
+  await request(app).get('/api/vendor/goals').set(auth(customerToken)).expect(403);
+});
+
+test('vendor APIs isolate another vendor quotes, bookings and enquiry mutations by owner', async () => {
+  const otherOwner = await ExternalUser.create({ email: `isolation-${key()}@unified.test`, fullName: 'Isolation Vendor', accountType: 'VENDOR' });
+  const otherOrganization = await VendorOrganization.create({ owner: otherOwner._id, businessName: 'Isolation Vendor Organization' });
+  otherOwner.vendorOrganization = otherOrganization._id;
+  await otherOwner.save();
+  const otherSession = await ExternalSession.create({ user: otherOwner._id, refreshTokenHash: key(), expiresAt: new Date(Date.now() + 3600000) });
+  const otherToken = signExternalAccessToken(otherOwner, otherSession._id);
+
+  const service = await VendorService.create({ vendor: otherOrganization._id, name: 'Private service', category: 'Photography', pricing: { basePrice: 2500 } });
+  const opportunity = await Opportunity.create({
+    vendor: otherOrganization._id,
+    customer: customer._id,
+    vendorService: service._id,
+    customerName: 'Private fixture',
+    serviceName: service.name,
+    eventDate: '2027-11-14',
+    status: 'NEW',
+  });
+  const quote = await Quote.create({
+    vendor: otherOrganization._id,
+    customer: customer._id,
+    vendorService: service._id,
+    opportunity: opportunity._id,
+    serviceName: service.name,
+    eventDate: '2027-11-14',
+    status: 'SUBMITTED',
+    pricingBreakdown: { basePrice: 2500, totalAmount: 2500 },
+  });
+  const booking = await CoreBooking.create({
+    vendorId: otherOrganization._id,
+    customerId: customer._id,
+    quoteId: String(quote._id),
+    serviceName: service.name,
+    eventDate: '2027-11-14',
+    totalAmount: 2500,
+    bookingStatus: 'CONFIRMED',
+  });
+  const review = await VendorReview.create({
+    vendor: otherOrganization._id,
+    customer: customer._id,
+    customerName: 'Private review fixture',
+    rating: 5,
+    reviewText: 'Vendor B private review',
+    status: 'PUBLISHED',
+  });
+  const thread = await VendorMessageThread.create({
+    vendor: otherOrganization._id,
+    customer: customer._id,
+    clientName: 'Private message fixture',
+    status: 'ACTIVE',
+    unreadVendorCount: 1,
+    messages: [{ sender: 'CLIENT', senderName: 'Customer', text: 'Private Vendor B message', isRead: false }],
+  });
+
+  const vendorQuotes = await request(app).get('/api/vendor/quotes').set(auth(vendorToken)).expect(200);
+  assert.ok(!vendorQuotes.body.quotes.some((item) => String(item._id) === String(quote._id)));
+  const genericQuotes = await request(app).get('/api/quotes').set(auth(vendorToken)).expect(200);
+  assert.ok(!genericQuotes.body.quotes.some((item) => String(item._id) === String(quote._id)));
+  await request(app).get(`/api/quotes/${quote._id}`).set(auth(vendorToken)).expect(404);
+  await request(app).post(`/api/quotes/${quote._id}/transition`).set(auth(vendorToken)).send({ targetStatus: 'SUBMITTED' }).expect(404);
+  const vendorBookings = await request(app).get('/api/vendor/bookings').set(auth(vendorToken)).expect(200);
+  assert.ok(!vendorBookings.body.bookings.some((item) => String(item._id) === String(booking._id)));
+  const vendorReviews = await request(app).get('/api/vendor/reviews').set(auth(vendorToken)).expect(200);
+  assert.ok(!vendorReviews.body.reviews.some((item) => String(item._id) === String(review._id)));
+  const vendorThreads = await request(app).get('/api/vendor/messages/threads').set(auth(vendorToken)).expect(200);
+  assert.ok(!vendorThreads.body.threads.some((item) => String(item._id) === String(thread._id)));
+  await request(app).get(`/api/vendor/messages/threads/${thread._id}`).set(auth(vendorToken)).expect(404);
+  await request(app).post(`/api/vendor/messages/threads/${thread._id}`).set(auth(vendorToken)).send({ text: 'Unauthorized cross-vendor message' }).expect(404);
+  await request(app).post(`/api/vendor/reviews/${review._id}/reply`).set(auth(vendorToken)).send({ text: 'Unauthorized cross-vendor reply' }).expect(404);
+
+  await request(app).post(`/api/vendor/opportunities/${opportunity._id}/decline`).set(auth(vendorToken)).send({ reason: 'Wrong vendor scope fixture' }).expect(409);
+  assert.equal((await Opportunity.findById(opportunity._id)).status, 'NEW');
+  assert.equal((await Quote.findById(quote._id)).status, 'SUBMITTED');
+  assert.equal((await CoreBooking.findById(booking._id)).bookingStatus, 'CONFIRMED');
+  assert.equal((await VendorReview.findById(review._id)).vendorReply?.text, '');
+  const unchangedThread = await VendorMessageThread.findById(thread._id).lean();
+  assert.equal(unchangedThread.unreadVendorCount, 1);
+  assert.equal(unchangedThread.messages.length, 1);
+
+  assert.ok((await request(app).get('/api/vendor/quotes').set(auth(otherToken)).expect(200)).body.quotes.some((item) => String(item._id) === String(quote._id)));
+  assert.ok((await request(app).get('/api/vendor/bookings').set(auth(otherToken)).expect(200)).body.bookings.some((item) => String(item._id) === String(booking._id)));
+  assert.ok((await request(app).get('/api/vendor/reviews').set(auth(otherToken)).expect(200)).body.reviews.some((item) => String(item._id) === String(review._id)));
+  assert.ok((await request(app).get('/api/vendor/messages/threads').set(auth(otherToken)).expect(200)).body.threads.some((item) => String(item._id) === String(thread._id)));
+});
+
+test('first-response dashboard metric is vendor-authenticated, period-bounded and omits message content', async () => {
+  await request(app).get('/api/vendor/metrics/first-response?periodDays=31').set(auth(vendorToken)).expect(400);
+  const response = await request(app).get('/api/vendor/metrics/first-response?periodDays=30').set(auth(vendorToken)).expect(200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.metrics.periodDays, 30);
+  assert.ok(Object.hasOwn(response.body.metrics, 'averageFirstResponseMs'));
+  assert.ok(!Object.hasOwn(response.body.metrics, 'messages'));
+  assert.ok(!Object.hasOwn(response.body.metrics, 'customerName'));
+});
+
+test('vendor review replies are restricted to owned published reviews and cannot be duplicated', async () => {
+  const published = await VendorReview.create({ vendor: vendor._id, customer: customer._id, customerName: 'Review fixture', rating: 5, reviewText: 'Good service', status: 'PUBLISHED' });
+  const pending = await VendorReview.create({ vendor: vendor._id, customer: customer._id, customerName: 'Pending fixture', rating: 4, reviewText: 'Pending review', status: 'PENDING' });
+  await request(app).post(`/api/vendor/reviews/${pending._id}/reply`).set(auth(vendorToken)).send({ text: 'Thanks' }).expect(404);
+  const response = await request(app).post(`/api/vendor/reviews/${published._id}/reply`).set(auth(vendorToken)).send({ text: 'Thank you for your feedback.' }).expect(200);
+  assert.equal(response.body.review.vendorReply.text, 'Thank you for your feedback.');
+  await request(app).post(`/api/vendor/reviews/${published._id}/reply`).set(auth(vendorToken)).send({ text: 'Second reply' }).expect(409);
+});
+
+test('vendor opportunity declines require and persist an internal reason', async () => {
+  const service = await VendorService.create({ vendor: vendor._id, name: 'Decline reason service', category: 'Photography', pricing: { basePrice: 1000 } });
+  const opportunity = await Opportunity.create({
+    vendor: vendor._id,
+    customer: customer._id,
+    vendorService: service._id,
+    serviceName: service.name,
+    eventDate: '2027-08-10',
+    status: 'NEW',
+  });
+  const url = `/api/vendor/opportunities/${opportunity._id}/decline`;
+  await request(app).post(url).set(auth(vendorToken)).send({}).expect(400);
+  const response = await request(app).post(url).set(auth(vendorToken)).send({ reason: 'Unavailable on the event date.' }).expect(200);
+  assert.equal(response.body.declineReason, 'Unavailable on the event date.');
+  const saved = await Opportunity.findById(opportunity._id).lean();
+  assert.equal(saved.status, 'DECLINED');
+  assert.equal(saved.declineReason, 'Unavailable on the event date.');
+  assert.ok(saved.declinedAt);
 });

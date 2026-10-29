@@ -1,6 +1,4 @@
 import { Quote } from '../models/Quote.js';
-import { Opportunity } from '../models/Opportunity.js';
-import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
 import { evaluateVendorActivation } from './vendorActivation.service.js';
 import { checkTrueAvailability } from './availability.service.js';

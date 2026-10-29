@@ -29,10 +29,6 @@ const cookieSecure =
   process.env.COOKIE_SECURE === undefined
     ? isProduction
     : String(process.env.COOKIE_SECURE).toLowerCase() === "true";
-const enableDevTools =
-  process.env.ENABLE_DEV_TOOLS === undefined
-    ? !isProduction
-    : String(process.env.ENABLE_DEV_TOOLS).toLowerCase() === "true";
 
 /**
  * ONE server, TWO identity domains.

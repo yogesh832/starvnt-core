@@ -58,6 +58,8 @@ const opportunitySchema = new Schema(
     },
     slaResponseTimeMs: { type: Number, default: null },
     slaExpiresAt: { type: Date, default: null },
+    declineReason: { type: String, trim: true, default: '' },
+    declinedAt: { type: Date, default: null },
     action: { type: String, default: 'Respond / Quote' },
   },
   { timestamps: true }
