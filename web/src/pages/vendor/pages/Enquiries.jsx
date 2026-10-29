@@ -26,6 +26,8 @@ export default function Enquiries() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [quoteModalOpp, setQuoteModalOpp] = useState(null);
+  const [declineTarget, setDeclineTarget] = useState(null);
+  const [declineReason, setDeclineReason] = useState('');
   const [basePrice, setBasePrice] = useState(0);
   const [travelFee, setTravelFee] = useState(0);
   const [equipmentFee, setEquipmentFee] = useState(0);
@@ -89,15 +91,19 @@ export default function Enquiries() {
     setNotes('');
   }
 
-  async function declineOpportunity(opportunity) {
+  async function declineOpportunity(opportunity, reason) {
     if (declining) return;
     setDeclining(opportunity.id);
     try {
-      await externalApi.call(`/vendor/opportunities/${opportunity.dbId}/decline`, { method: 'POST' });
-      setOpportunities((rows) => rows.map((row) => row.id === opportunity.id ? { ...row, status: 'DECLINED' } : row));
-      setFeedback('Enquiry declined. This status is saved.');
+      const result = await externalApi.call(`/vendor/opportunities/${opportunity.dbId}/decline`, { method: 'POST', body: { reason: reason.trim() } });
+      setOpportunities((rows) => rows.map((row) => row.id === opportunity.id ? { ...row, status: 'DECLINED', declineReason: result.declineReason || reason.trim() } : row));
+      setFeedback('Enquiry declined. The reason is saved for your sales reporting.');
+      setDeclineTarget(null);
+      setDeclineReason('');
+      return true;
     } catch (error) {
       setFeedback(`Notice: ${error.message}`);
+      return false;
     } finally {
       setDeclining(null);
     }
@@ -230,6 +236,7 @@ export default function Enquiries() {
                         ]
                       : []),
                     ['Guest count', `${o.guests} guests`],
+                    ...(o.status === 'DECLINED' && o.declineReason ? [['Recorded decline reason', o.declineReason]] : []),
                   ].map(([k, v]) => (
                     <div key={k} className="bg-white border border-gray-100 rounded-xl p-3 shadow-xs">
                       <div className="text-muted text-[10px] uppercase tracking-wide font-extrabold">{k}</div>
@@ -271,7 +278,7 @@ export default function Enquiries() {
                       </button>
                       <button
                         disabled={Boolean(declining)}
-                        onClick={() => declineOpportunity(o)}
+                        onClick={() => { setDeclineTarget(o); setDeclineReason(''); }}
                         className="rounded-xl text-xs font-semibold px-4 py-2.5 text-muted hover:text-red-500 transition cursor-pointer"
                       >
                         Decline
@@ -410,6 +417,24 @@ export default function Enquiries() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {declineTarget && (
+        <div className="vendor-modal-backdrop animate-fade" role="presentation">
+          <section role="dialog" aria-modal="true" aria-labelledby="decline-reason-title" className="vendor-modal-panel max-w-md p-4 sm:p-6 space-y-4">
+            <div>
+              <h2 id="decline-reason-title" className="text-base font-extrabold text-navy">Record why you’re declining</h2>
+              <p className="text-xs text-muted mt-1">This note is for your business reporting and is not sent to the customer.</p>
+            </div>
+            <label htmlFor="decline-reason" className="block text-xs font-semibold text-muted">Reason (required)</label>
+            <textarea id="decline-reason" value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} maxLength={500} rows={4} className="w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-navy focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" placeholder="For example, unavailable on the event date or outside your service area." />
+            <div className="text-right text-[10px] text-muted">{declineReason.length}/500</div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => { setDeclineTarget(null); setDeclineReason(''); }} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-muted">Cancel</button>
+              <button type="button" disabled={Boolean(declining) || !declineReason.trim()} onClick={() => declineOpportunity(declineTarget, declineReason)} className="flex-1 rounded-xl bg-rose-600 py-2.5 text-xs font-bold text-white disabled:opacity-50">{declining ? 'Saving…' : 'Save reason & decline'}</button>
+            </div>
+          </section>
         </div>
       )}
     </Page>

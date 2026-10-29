@@ -16,8 +16,8 @@ import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
  * CURRENT DATA for Vendor Aura+. Kept deliberately small: a large context
  * pushes Gemini past the 12s timeout. Every query is scoped to this vendor.
  *
- * generateVendorInsights() is intentionally not used: several of its messages are
- * hard-coded (fixed localities/venues) and Aura must only speak from real data.
+ * Dashboard intelligence recommendations are built only from vendor-owned
+ * records; Aura context separately applies the same evidence-first boundary.
  * evaluateVendorActivation() is the same recompute the dashboard runs on load.
  */
 

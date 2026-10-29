@@ -3,6 +3,7 @@ import { withVendorSchedule } from '../services/scheduleLock.js';
 import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import { requireExternalAuth, requireAccountType } from '../middleware/requireExternalAuth.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
@@ -24,6 +25,7 @@ import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
 import { VendorDocument } from '../models/VendorDocument.js';
+import { validateVendorGoalInput, listVendorBusinessGoals, createVendorBusinessGoal, updateVendorBusinessGoal, deleteVendorBusinessGoal } from '../services/vendorBusinessGoals.service.js';
 import { Booking as CustomerBooking, EventMessage } from '../../customer/models/index.js';
 import { notifyCustomer } from '../../notifications/notification.service.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
@@ -34,6 +36,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import vendorAuraRoutes from './vendorAura.routes.js';
 import financialRoutes from './financial.routes.js';
 import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
+import { getVendorFirstResponseMetrics } from '../services/vendorFirstResponseMetrics.service.js';
 import rateLimit from 'express-rate-limit';
 import { openBookingThread, openServiceThread, draftThreadMessage, draftVendorMessage } from '../services/vendorMessaging.service.js';
 
@@ -286,6 +289,59 @@ router.get('/financial-truth', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+router.get('/metrics/first-response', async (req, res, next) => {
+  const periodDays = Number(req.query.periodDays ?? 30);
+  if (![30, 60, 90].includes(periodDays)) return res.status(400).json({ ok: false, error: 'INVALID_PERIOD_DAYS' });
+  try {
+    res.json({ ok: true, metrics: await getVendorFirstResponseMetrics(req.vendorId, { periodDays }) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Vendor-owned business goals ───────────────────────────────────────────
+router.get('/goals', async (req, res, next) => {
+  try {
+    res.json({ ok: true, goals: await listVendorBusinessGoals(req.vendorId) });
+  } catch (err) { next(err); }
+});
+
+router.post('/goals', async (req, res) => {
+  const validated = validateVendorGoalInput(req.body || {});
+  if (validated.error) return res.status(400).json({ ok: false, error: validated.error });
+  try {
+    const goal = await createVendorBusinessGoal({ vendorId: req.vendorId, userId: req.externalUser._id, values: validated.value });
+    res.status(201).json({ ok: true, goal });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.code || 'GOAL_CREATE_FAILED', message: err.message });
+  }
+});
+
+router.patch('/goals/:goalId', async (req, res) => {
+  const body = req.body || {};
+  if (!mongoose.isValidObjectId(req.params.goalId)) return res.status(400).json({ ok: false, error: 'INVALID_GOAL_ID' });
+  const hasConfiguration = ['name', 'metric', 'targetValue', 'startDate', 'endDate'].some((key) => Object.hasOwn(body, key));
+  if (!hasConfiguration && body.status === undefined) return res.status(400).json({ ok: false, error: 'EMPTY_GOAL_UPDATE' });
+  const validated = hasConfiguration ? validateVendorGoalInput(body) : null;
+  if (validated?.error) return res.status(400).json({ ok: false, error: validated.error });
+  try {
+    const goal = await updateVendorBusinessGoal({ vendorId: req.vendorId, userId: req.externalUser._id, goalId: req.params.goalId, values: validated?.value, status: body.status });
+    if (!goal) return res.status(404).json({ ok: false, error: 'GOAL_NOT_FOUND' });
+    res.json({ ok: true, goal });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.code || 'GOAL_UPDATE_FAILED', message: err.message });
+  }
+});
+
+router.delete('/goals/:goalId', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.goalId)) return res.status(400).json({ ok: false, error: 'INVALID_GOAL_ID' });
+  try {
+    const goal = await deleteVendorBusinessGoal({ vendorId: req.vendorId, userId: req.externalUser._id, goalId: req.params.goalId });
+    if (!goal) return res.status(404).json({ ok: false, error: 'GOAL_NOT_FOUND' });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 // ── Services & Capabilities ────────────────────────────────────────────────
@@ -917,7 +973,7 @@ router.put('/notifications/read-all', async (req, res, next) => {
 
 router.get('/badge-counts', async (req, res, next) => {
   try {
-    const [enquiriesCount, quotesCount, bookingsCount, messagesCount, unreadNotificationsCount] = await Promise.all([
+    const [enquiriesCount, quotesCount, bookingsCount, messagesCount, unreadNotificationsCount, messageActionItems] = await Promise.all([
       Opportunity.countDocuments({ vendor: req.vendorId, status: 'NEW' }),
       Quote.countDocuments({ vendor: req.vendorId, status: { $in: ['DRAFT', 'SUBMITTED'] } }),
       CoreBooking.countDocuments({ vendorId: req.vendorId, bookingStatus: 'CONFIRMED' }),
@@ -927,6 +983,11 @@ router.get('/badge-counts', async (req, res, next) => {
         unreadVendorCount: { $gt: 0 },
       }),
       Notification.countDocuments({ vendor: req.vendorId, isRead: false }),
+      VendorMessageThread.find({ vendor: req.vendorId, status: { $ne: 'BLOCKED' }, unreadVendorCount: { $gt: 0 } })
+        .select('_id eventName eventDate unreadVendorCount lastMessageAt')
+        .sort({ lastMessageAt: -1 })
+        .limit(6)
+        .lean(),
     ]);
 
     res.json({
@@ -937,12 +998,20 @@ router.get('/badge-counts', async (req, res, next) => {
         quotesCount: 'Quote.status in DRAFT,SUBMITTED',
         bookingsCount: 'CoreBooking.bookingStatus=CONFIRMED',
         messagesCount: 'VendorMessageThread.unreadVendorCount',
+        messageActionItems: 'VendorMessageThread.unreadVendorCount>0; vendor-scoped summary fields only',
         unreadNotificationsCount: 'Notification.isRead=false',
       },
       enquiriesCount,
       quotesCount,
       bookingsCount,
       messagesCount,
+      messageActionItems: messageActionItems.map((thread) => ({
+        threadId: String(thread._id),
+        eventName: thread.eventName || 'Customer conversation',
+        eventDate: thread.eventDate || null,
+        unreadCount: Number(thread.unreadVendorCount || 0),
+        lastMessageAt: thread.lastMessageAt || null,
+      })),
       unreadNotificationsCount,
     });
   } catch (err) {
@@ -1026,9 +1095,12 @@ router.post('/reviews/:id/reply', async (req, res, next) => {
       return res.status(400).json({ error: 'REPLY_TEXT_REQUIRED' });
     }
 
-    const review = await VendorReview.findOne({ _id: req.params.id, vendor: req.vendorId });
+    const review = await VendorReview.findOne({ _id: req.params.id, vendor: req.vendorId, status: 'PUBLISHED' });
     if (!review) {
-      return res.status(404).json({ error: 'REVIEW_NOT_FOUND' });
+      return res.status(404).json({ error: 'ELIGIBLE_REVIEW_NOT_FOUND' });
+    }
+    if (review.vendorReply?.text?.trim()) {
+      return res.status(409).json({ error: 'REVIEW_ALREADY_REPLIED' });
     }
 
     review.vendorReply = {

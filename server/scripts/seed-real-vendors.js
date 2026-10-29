@@ -11,6 +11,7 @@ import { CoreBooking } from '../src/admin/models/CoreBooking.js';
 import { PortfolioItem } from '../src/external/models/PortfolioItem.js';
 import { Notification } from '../src/external/models/Notification.js';
 import { VendorReview } from '../src/external/models/VendorReview.js';
+import { VendorFinancialProfile } from '../src/external/models/VendorFinancialProfile.js';
 import { AdminUser } from '../src/admin/models/AdminUser.js';
 import { hashPassword } from '../src/external/utils/password.js';
 import { DemoListing } from '../src/customer/models/index.js';
@@ -20,6 +21,7 @@ export const COMMON_PASSWORD = 'Password123';
 export const REAL_VENDORS = [
   // ─── 1. PHOTOGRAPHY (3 Vendors) ─────────────────────────────────────────────
   {
+    testFullyActive: true,
     owner: {
       fullName: 'Arun Roy',
       email: 'vendor@starvnt.com',
@@ -1884,6 +1886,16 @@ export async function seedRealVendors() {
       org.verification = { isVerified: true, verifiedAt: new Date() };
       org.rating = vData.org.rating;
       org.googlePlaceId = vData.org.googlePlaceId;
+      if (vData.testFullyActive) {
+        const reviewedAt = new Date();
+        org.activationReview = {
+          status: 'APPROVED',
+          reason: 'Approved synthetic QA fixture for dashboard testing.',
+          requestedAt: reviewedAt,
+          reviewedAt,
+          reviewedBy: admin._id,
+        };
+      }
       await org.save();
     } else {
       org = await VendorOrganization.create({
@@ -1900,6 +1912,15 @@ export async function seedRealVendors() {
         isCommerciallyActive: true,
         isProfileCompleted: true,
         verification: { isVerified: true, verifiedAt: new Date() },
+        ...(vData.testFullyActive ? {
+          activationReview: {
+            status: 'APPROVED',
+            reason: 'Approved synthetic QA fixture for dashboard testing.',
+            requestedAt: new Date(),
+            reviewedAt: new Date(),
+            reviewedBy: admin._id,
+          },
+        } : {}),
         rating: vData.org.rating,
         googlePlaceId: vData.org.googlePlaceId,
       });
@@ -1907,6 +1928,25 @@ export async function seedRealVendors() {
 
     user.vendorOrganization = org._id;
     await user.save();
+
+    if (vData.testFullyActive) {
+      const verifiedAt = new Date();
+      await VendorFinancialProfile.findOneAndUpdate(
+        { vendor: org._id },
+        {
+          $set: {
+            'pan.legalName': vData.owner.fullName,
+            'pan.verificationStatus': 'VERIFIED',
+            'pan.verifiedAt': verifiedAt,
+            'bankAccount.verificationStatus': 'VERIFIED',
+            'bankAccount.nameMatchStatus': 'EXACT',
+            'bankAccount.lastVerifiedAt': verifiedAt,
+            isSettlementEligible: false,
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      );
+    }
 
     // 3. Operating Location
     await OperatingLocation.findOneAndUpdate(
@@ -1948,37 +1988,33 @@ export async function seedRealVendors() {
 
     const primaryService = createdServices[0];
 
-    // 5. Capability
+    // 5. Capabilities are service-scoped; do not leave stale references when services are reseeded.
     if (vData.capabilities) {
-      await VendorCapability.findOneAndUpdate(
-        { vendor: org._id },
-        {
+      await VendorCapability.deleteMany({ vendor: org._id });
+      await VendorCapability.create(createdServices.map((service) => ({
           vendor: org._id,
+          vendorService: service._id,
           category: vData.org.category,
           styles: vData.capabilities.styles,
           deliverables: vData.capabilities.deliverables,
           teamSize: vData.capabilities.teamSize,
+          simultaneousEventLimit: vData.capabilities.simultaneousEventLimit || 1,
           equipment: vData.capabilities.equipment,
-        },
-        { upsert: true, new: true }
-      );
+        })));
     }
 
-    // 6. Coverage & Travel
+    // 6. Coverage is service-scoped; seed every service consistently with the UI and matcher.
     if (primaryService && vData.coverage) {
-      await ServiceCoverage.findOneAndUpdate(
-        { vendor: org._id, vendorService: primaryService._id },
-        {
+      await ServiceCoverage.deleteMany({ vendor: org._id });
+      await ServiceCoverage.create(createdServices.map((service) => ({
           vendor: org._id,
-          vendorService: primaryService._id,
+          vendorService: service._id,
           coverageType: 'CITY',
           city: vData.coverage.city,
           localities: vData.coverage.localities,
           radiusKm: vData.coverage.radiusKm,
           confidence: 'VERIFIED',
-        },
-        { upsert: true, new: true }
-      );
+        })));
 
       await TravelPolicy.findOneAndUpdate(
         { vendor: org._id },

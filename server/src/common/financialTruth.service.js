@@ -342,6 +342,7 @@ export async function vendorFinancialTruth(vendorId, options = {}) {
   let dueThisWeek = 0;
   let overdueAmount = 0;
   let expectedSettlements = 0;
+  let settlementHoldAmount = 0;
   let settledAmount = 0;
   const overdueBookings = [];
   const nextBestActions = [];
@@ -377,7 +378,9 @@ export async function vendorFinancialTruth(vendorId, options = {}) {
 
     if (booking.settlementStatus === 'SETTLED') {
       settledAmount += vendorPayable;
-    } else if (booking.settlementStatus === 'SETTLEMENT_ELIGIBLE' || booking.executionStatus === 'COMPLETION_VERIFIED') {
+    } else if (booking.settlementStatus === 'SETTLEMENT_HOLD') {
+      settlementHoldAmount += vendorPayable;
+    } else if (booking.settlementStatus === 'SETTLEMENT_ELIGIBLE') {
       expectedSettlements += vendorPayable;
       nextBestActions.push({
         type: 'settlement_ready',
@@ -407,6 +410,7 @@ export async function vendorFinancialTruth(vendorId, options = {}) {
       dueThisWeek: money(dueThisWeek),
       overdueAmount: money(overdueAmount),
       expectedSettlements: money(expectedSettlements),
+      settlementHoldAmount: money(settlementHoldAmount),
       settledAmount: money(settledAmount),
     },
     agingBreakdown,

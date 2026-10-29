@@ -5,9 +5,9 @@ import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 import VendorMessageField from '../VendorMessageField.jsx';
+import { buildVendorAnalyticsMetrics } from '../analyticsMetrics.js';
 
 const paidAdvance = (booking) => Number(booking?.paymentSummary?.paidAmount || 0);
-const advanceDue = (booking) => Number(booking?.paymentSummary?.advanceAmount || Math.ceil((Number(booking?.totalAmount || 0) * 30) / 100));
 const balanceDue = (booking) => Number(
   booking?.paymentSummary?.balanceAmount ?? Math.max(0, Number(booking?.totalAmount || 0) - paidAdvance(booking))
 );
@@ -631,31 +631,27 @@ export function ReviewsPage() {
 export function AnalyticsPage() {
   const [counts, setCounts] = useState({
     enquiriesCount: 0,
+    quotedEnquiriesCount: 0,
     quotesCount: 0,
     bookingsCount: 0,
-    advanceReceived: 0,
-    quoteValue: 0,
+    linkedBookingsCount: 0,
+    verifiedAdvanceReceived: 0,
+    confirmedBookingValue: 0,
   });
 
   useEffect(() => {
     async function loadCounts() {
       try {
-        const [res, bookingsRes] = await Promise.all([
-          externalApi.call('/vendor/badge-counts'),
+        const [enquiriesRes, quotesRes, bookingsRes] = await Promise.all([
+          externalApi.call('/vendor/opportunities'),
+          externalApi.call('/vendor/quotes'),
           externalApi.call('/vendor/bookings'),
         ]);
+        const enquiries = Array.isArray(enquiriesRes?.opportunities) ? enquiriesRes.opportunities : [];
+        const quotes = Array.isArray(quotesRes?.quotes) ? quotesRes.quotes : [];
         const bookings = Array.isArray(bookingsRes?.bookings) ? bookingsRes.bookings : [];
-        const advanceReceived = bookings.reduce((sum, b) => sum + paidAdvance(b), 0);
-        const quoteValue = bookings.reduce((sum, b) => sum + Number(b.totalAmount || 0), 0);
-        if (res.ok) {
-          setCounts({
-            enquiriesCount: res.enquiriesCount || 0,
-            quotesCount: res.quotesCount || 0,
-            bookingsCount: res.bookingsCount || 0,
-            advanceReceived,
-            quoteValue,
-          });
-        }
+        const linkedMetrics = buildVendorAnalyticsMetrics({ enquiries, quotes, bookings });
+        setCounts(linkedMetrics);
       } catch (err) {
         console.warn('[AnalyticsPage] Failed to load counts:', err.message);
       }
@@ -663,18 +659,18 @@ export function AnalyticsPage() {
     loadCounts();
   }, []);
 
-  const { enquiriesCount, quotesCount, bookingsCount, advanceReceived, quoteValue } = counts;
-  const enqToQuoteRate = enquiriesCount > 0 ? `${Math.round((quotesCount / enquiriesCount) * 100)}%` : '—';
-  const quoteToBookingRate = quotesCount > 0 ? `${Math.round((bookingsCount / quotesCount) * 100)}%` : '—';
+  const { enquiriesCount, quotedEnquiriesCount, quotesCount, bookingsCount, linkedBookingsCount, verifiedAdvanceReceived, confirmedBookingValue } = counts;
+  const enqToQuoteRate = enquiriesCount > 0 ? `${Math.round((quotedEnquiriesCount / enquiriesCount) * 100)}%` : '—';
+  const quoteToBookingRate = quotesCount > 0 ? `${Math.round((linkedBookingsCount / quotesCount) * 100)}%` : '—';
 
   const rows = [
     ['Total Enquiries Received', String(enquiriesCount), enquiriesCount > 0 ? 'Active' : 'Awaiting Leads'],
-    ['Enquiry → Quote Conversion', enqToQuoteRate, enquiriesCount > 0 ? 'Live Funnel' : 'No Data Yet'],
+    ['Enquiry → Quote Conversion', enqToQuoteRate, enquiriesCount > 0 ? `${quotedEnquiriesCount} enquiries with quotes` : 'No Data Yet'],
     ['Total Quotes Generated', String(quotesCount), quotesCount > 0 ? 'In Progress' : '0 Quotes'],
-    ['Quote → Booking Conversion', quoteToBookingRate, quotesCount > 0 ? 'Recorded bookings' : 'No Data Yet'],
+    ['Quote → Booking Conversion', quoteToBookingRate, quotesCount > 0 ? `${linkedBookingsCount} linked confirmed quotes` : 'No Data Yet'],
     ['Confirmed Bookings', String(bookingsCount), bookingsCount > 0 ? 'Verified' : '0 Bookings'],
-    ['Advance Received', `₹${advanceReceived.toLocaleString()}`, advanceReceived > 0 ? 'Payment Verified' : '₹0'],
-    ['Confirmed Quote Value', `₹${quoteValue.toLocaleString()}`, quoteValue > 0 ? 'Booked Value' : '₹0'],
+    ['Advance Received', `₹${verifiedAdvanceReceived.toLocaleString()}`, verifiedAdvanceReceived > 0 ? 'Payment Verified' : '₹0'],
+    ['Confirmed Booking Value', `₹${confirmedBookingValue.toLocaleString()}`, confirmedBookingValue > 0 ? 'Core-confirmed value' : '₹0'],
   ];
 
   return (
@@ -694,8 +690,8 @@ export function AnalyticsPage() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-semibold">
-                <span className="text-muted">Quotes Sent</span>
-                <span className="text-navy font-bold">{quotesCount} ({enqToQuoteRate})</span>
+                <span className="text-muted">Enquiries Quoted</span>
+                <span className="text-navy font-bold">{quotedEnquiriesCount} ({enqToQuoteRate})</span>
               </div>
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                 <div className="h-full bg-purple-500" style={{ width: enqToQuoteRate === '—' ? '0%' : enqToQuoteRate }} />
@@ -708,7 +704,7 @@ export function AnalyticsPage() {
                 <span className="text-navy font-bold">{bookingsCount} ({quoteToBookingRate})</span>
               </div>
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500" style={{ width: quoteToBookingRate === '—' ? '0%' : quoteToBookingRate }} />
+                <div className="h-full bg-emerald-500" style={{ width: quoteToBookingRate === '—' ? '0%' : `${Math.min(100, Number.parseInt(quoteToBookingRate, 10))}%` }} />
               </div>
             </div>
           </div>

@@ -32,11 +32,15 @@ function startProductionKeepAlive() {
 async function main() {
   await connectDB();
   const app = createApp();
+  const databaseName = (uri) => {
+    try { return new URL(uri).pathname.replace(/^\//, '') || 'unconfigured'; }
+    catch { return 'unconfigured'; }
+  };
   app.listen(config.port, () => {
     console.log(
       `[starvnt] unified server on :${config.port}\n` +
-        `  external domain  → aud=${config.audience}   db=starvnt_external\n` +
-        `  admin domain     → aud=${config.adminAudience} db=starvnt_admin`,
+        `  external domain  → aud=${config.audience}   db=${databaseName(config.mongoUriExternal)}\n` +
+        `  admin domain     → aud=${config.adminAudience} db=${databaseName(config.mongoUriAdmin)}`,
     );
     setInterval(() => {
       console.log(`[starvnt] server is running on :${config.port}`);

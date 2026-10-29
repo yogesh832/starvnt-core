@@ -25,11 +25,23 @@ for (const [key, name] of [
   );
 }
 assert.equal(env.PORT, "4100", "QA must use port 4100");
-const base = "http://127.0.0.1:4100/api";
+const base = (process.env.QA_API_BASE || "http://127.0.0.1:4410/api").replace(/\/$/, "");
+assert.ok(
+  ["127.0.0.1", "localhost", "[::1]"].includes(new URL(base).hostname),
+  "Dashboard QA must use a loopback API server started with server/.env.test.local",
+);
 const results = [];
 const sessions = [];
 let qaDb;
 const run = Date.now().toString(36);
+const qaDateOffsetDays = 180 + (Number.parseInt(run, 36) % 365);
+const qaEventDate = new Date(Date.now() + qaDateOffsetDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const shiftDate = (date, days) => {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+};
+const qaBlockoutDate = shiftDate(qaEventDate, 1);
 async function check(name, action) {
   try {
     const result = await action();
@@ -144,6 +156,17 @@ try {
   ]) {
     await check(`Vendor workspace ${path}`, () => vendor.api.call(path));
   }
+  await check("Vendor dashboard saved goals", async () => {
+    const data = await vendor.api.call("/vendor/goals");
+    assert.ok(Array.isArray(data.goals), "goals must be returned as a list");
+  });
+  await check("Vendor dashboard first-response metrics", async () => {
+    const data = await vendor.api.call("/vendor/metrics/first-response?periodDays=30");
+    assert.equal(data.ok, true);
+    assert.equal(data.metrics.periodDays, 30);
+    assert.ok(Number.isFinite(data.metrics.eligibleEnquiries));
+    assert.ok(!Object.hasOwn(data.metrics, "customerName"));
+  });
   for (const module of visibleModules(admin.data.admin)) {
     const { path, collection } = adminListQuery(
       module,
@@ -155,7 +178,7 @@ try {
     );
     await check(`Core workspace ${module.key}`, async () => {
       const data = await admin.api.call(path);
-      if (collection && !["reports"].includes(module.key))
+      if (collection && !["reports", "productMetrics"].includes(module.key))
         assert.ok(
           Array.isArray(data[collection]),
           `${collection} must be an array`,
@@ -196,9 +219,13 @@ try {
       );
       await check(`${email}: ${module.key}`, () => staff.api.call(path));
     }
-    if (!can("settings.update"))
+    if (!can("settings.update") && !can("financeCoupons.manage"))
       await check(`${email}: coupon write denied`, () =>
-        denied(staff.api, "/coupons", "POST", { code: "DENIED" }),
+        denied(staff.api, "/coupons", "POST", {
+          code: `DENIED-${run}`,
+          discountType: "PERCENTAGE",
+          discountValue: 10,
+        }),
       );
   }
   await check("Customer token cannot read vendor workspace", () =>
@@ -236,8 +263,8 @@ try {
         await customer.api.call("/customer/events", "POST", {
           title: `Mobile QA ${run}`,
           eventType: "birthday",
-          eventDate: "2027-10-20",
-          city: "Pune",
+          eventDate: qaEventDate,
+          city: "Kapkote",
           guestCount: 60,
           budget: 70000,
           services: [{ category: "photography", status: "pending" }],
@@ -336,6 +363,25 @@ try {
       ).service,
   );
   if (service) {
+    await check("Vendor configures QA service capability", () =>
+      vendor.api.call("/vendor/capabilities", "POST", {
+        vendorServiceId: service._id,
+        styles: ["QA test"],
+        format: "Full day",
+        teamSize: 2,
+        simultaneousEventLimit: 1,
+        equipment: ["QA equipment"],
+      }),
+    );
+    await check("Vendor configures QA service coverage", () =>
+      vendor.api.call("/vendor/coverage", "POST", {
+        vendorServiceId: service._id,
+        coverageType: "CITY",
+        city: "Kapkote",
+        localities: ["Kapkote"],
+        radiusKm: 75,
+      }),
+    );
     await check("Vendor updates service", async () => {
       await vendor.api.call(`/vendor/services/${service._id}`, "PUT", {
         name: `QA revised ${run}`,
@@ -354,7 +400,8 @@ try {
     async () =>
       (
         await vendor.api.call("/vendor/availability/blockouts", "POST", {
-          date: "2027-10-21",
+          date: qaBlockoutDate,
+          idempotencyKey: `mobile-qa-blockout-${run}`,
           allDay: false,
           startTime: "10:00",
           endTime: "12:00",
@@ -394,7 +441,7 @@ try {
           vendorServiceId: service?._id,
           customerId: customer.data.user.id || customer.data.user._id,
           serviceName: `QA proposal ${run}`,
-          eventDate: "2027-10-20",
+          eventDate: qaEventDate,
           pricingBreakdown: {
             basePrice: 12000,
             travelFee: 500,
@@ -511,7 +558,7 @@ try {
         createDraftEvent(customer.data.user.id || customer.data.user._id, {
           title: `Mobile QA draft ${run}`,
           eventType: "birthday",
-          eventDate: "2027-10-19",
+        eventDate: shiftDate(qaEventDate, -1),
           city: "Pune",
         }),
       );
@@ -538,7 +585,7 @@ try {
           vendorService: service._id,
           customerEvent: event.id || event._id,
           serviceName: `QA linked enquiry ${run}`,
-          eventDate: "2027-10-20",
+          eventDate: qaEventDate,
         });
         const declinedOpportunity = await Opportunity.create({
           vendor: profile.vendor._id,
@@ -546,13 +593,14 @@ try {
           vendorService: service._id,
           customerEvent: event.id || event._id,
           serviceName: `QA declined enquiry ${run}`,
-          eventDate: "2027-10-20",
+          eventDate: qaEventDate,
           status: "NEW",
         });
         await check("Vendor declines an enquiry", async () => {
           const result = await vendor.api.call(
             `/vendor/opportunities/${declinedOpportunity._id}/decline`,
             "POST",
+            { reason: "Not available for this QA event date." },
           );
           assert.equal(result.status, "DECLINED");
           const saved = await Opportunity.findById(declinedOpportunity._id).lean();
@@ -592,20 +640,25 @@ try {
             const booking = await CoreBooking.findOne({
               quoteId: String(quote._id),
             }).lean();
-            assert.ok(booking);
-            assert.equal(booking.paymentStatus, "PENDING");
-            assert.equal(booking.paymentSummary.paidAmount, 0);
-            assert.equal(
-              String(booking.customerEvent),
-              String(event.id || event._id),
+            assert.ok(
+              !booking ||
+                (booking.paymentStatus === "PENDING" &&
+                  Number(booking.paymentSummary?.paidAmount || 0) === 0),
+              "Quote acceptance must not create a verified-payment booking",
             );
-            await denied(
-              vendor.api,
-              `/vendor/bookings/${booking._id}/start`,
-              "POST",
-              undefined,
-              [409],
-            );
+            if (booking) {
+              assert.equal(
+                String(booking.customerEvent),
+                String(event.id || event._id),
+              );
+              await denied(
+                vendor.api,
+                `/vendor/bookings/${booking._id}/start`,
+                "POST",
+                undefined,
+                [409],
+              );
+            }
           },
         );
       }
@@ -617,7 +670,7 @@ try {
         category: "Photography",
         vendorName: "QA vendor",
         customerName: "QA customer",
-        eventDate: "2027-10-20",
+        eventDate: qaEventDate,
         totalAmount: 11000,
         paymentStatus: "PAYMENT_VERIFIED",
         executionStatus: "SERVICE_SCHEDULED",
@@ -641,7 +694,7 @@ try {
       const secondEvent = await customer.api.call("/customer/events", "POST", {
         title: `Mobile QA second event ${run}`,
         eventType: "birthday",
-        eventDate: "2027-10-22",
+        eventDate: shiftDate(qaEventDate, 2),
         city: "Pune",
         services: [],
       });

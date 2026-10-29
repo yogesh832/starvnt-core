@@ -1,12 +1,13 @@
 import ProfileStatus from '../../../components/ProfileStatus.jsx';
 import { VENDOR_SETUP_STEPS } from '../../../../../server/src/common/vendorSetupSteps.js';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../../components/Icon.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import { externalApi } from '../../../lib/api.js';
 import VendorMessageField from '../VendorMessageField.jsx';
 import { useExternalAuth } from '../../../auth/ExternalAuthContext.jsx';
+import { buildDashboardQuotePayload, buildVendorActionItems, buildVendorSalesMetrics, buildVendorWeeklySummary, formatRate, formatResponseTime, getDashboardFreshness, getVendorActivationPresentation } from '../dashboardMetrics.js';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_NAMES = [
@@ -102,7 +103,7 @@ function VendorDashboardSkeleton({ business = 'Your Brand' }) {
  * Live Interactive Mini Calendar
  * Strictly driven by the current real date and authentic vendor bookings.
  */
-export function MiniCalendar({ bookings = [], blockouts = [] }) {
+export function MiniCalendar({ bookings = [], blockouts = [], available = true }) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const year = currentDate.getFullYear();
@@ -241,6 +242,7 @@ export function MiniCalendar({ bookings = [], blockouts = [] }) {
           <span>Current Day</span>
         </div>
       </div>
+      {!available && <p role="status" className="mt-2 text-[10px] text-amber-800">Some booking or availability records failed to load; calendar markers may be incomplete.</p>}
     </div>
   );
 }
@@ -249,14 +251,29 @@ export function MiniCalendar({ bookings = [], blockouts = [] }) {
  * Authentic Funnel Performance Widget
  * Accurately derives conversion rates from real opportunities, proposals, and bookings.
  */
-export function Performance({ enquiries = [], quotes = [], bookings = [] }) {
-  const leadCount = enquiries.length;
-  const quoteCount = quotes.length;
-  const bookingCount = bookings.length;
+export function Performance({ enquiries = [], quotes = [], bookings = [], available = true }) {
+  const [periodDays, setPeriodDays] = useState(30);
+  const [firstResponseMetric, setFirstResponseMetric] = useState(null);
+  const [firstResponseState, setFirstResponseState] = useState('loading');
+  const metrics = useMemo(() => buildVendorSalesMetrics({ enquiries, quotes, bookings, periodDays }), [enquiries, quotes, bookings, periodDays]);
+  const quoteRate = formatRate(metrics.enquiryToQuoteRate);
+  const bookingRate = formatRate(metrics.enquiryToBookingRate);
+  const quoteTurnaround = formatResponseTime(metrics.averageQuoteTurnaroundMs);
 
-  const quoteRate = leadCount > 0 ? `${Math.min(100, Math.round((quoteCount / leadCount) * 100))}%` : '—';
-  const bookingRate = quoteCount > 0 ? `${Math.min(100, Math.round((bookingCount / quoteCount) * 100))}%` : '—';
-  const overallConversion = leadCount > 0 ? `${Math.min(100, Math.round((bookingCount / leadCount) * 100))}%` : '—';
+  useEffect(() => {
+    let active = true;
+    setFirstResponseState('loading');
+    externalApi.call(`/vendor/metrics/first-response?periodDays=${periodDays}`)
+      .then((response) => {
+        if (!response?.ok || !response.metrics) throw new Error('First-response metrics are unavailable.');
+        if (active) {
+          setFirstResponseMetric(response.metrics);
+          setFirstResponseState('ready');
+        }
+      })
+      .catch(() => { if (active) setFirstResponseState('error'); });
+    return () => { active = false; };
+  }, [periodDays]);
 
   return (
     <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
@@ -267,73 +284,99 @@ export function Performance({ enquiries = [], quotes = [], bookings = [] }) {
           </div>
           <h3 className="font-extrabold text-sm text-navy">Conversion Pipeline</h3>
         </div>
-        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-          Live Data
-        </span>
+        <label className="flex items-center gap-1.5 text-[10px] font-semibold text-muted">
+          Enquiry cohort
+          <select aria-label="Sales performance cohort period" value={periodDays} onChange={(event) => setPeriodDays(Number(event.target.value))} className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] text-navy focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+            <option value={30}>30 days</option>
+            <option value={60}>60 days</option>
+            <option value={90}>90 days</option>
+          </select>
+        </label>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-center pb-3 border-b border-gray-100">
+      {!available ? (
+        <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          Sales performance is unavailable because one or more source records could not be loaded. Retry the dashboard to refresh these metrics.
+        </div>
+      ) : (
+      <>
+      <p className="mb-3 text-[10px] leading-relaxed text-muted">
+        Matured cohort: enquiries received {periodDays}–{periodDays + metrics.attributionWindowDays} days ago. Each enquiry has a 30-day attribution window; newer enquiries are excluded until that window closes.
+      </p>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pb-3 border-b border-gray-100">
         <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
-          <div className="text-[10px] text-muted font-semibold truncate">Inbound Leads</div>
-          <div className="font-extrabold text-base text-navy mt-0.5">{leadCount}</div>
-          <div className="text-[9px] text-muted font-medium mt-0.5 truncate">Matched</div>
+          <div className="text-[10px] text-muted font-semibold truncate">Eligible enquiries</div>
+          <div className="font-extrabold text-base text-navy mt-0.5">{metrics.eligibleEnquiries}</div>
+          <div className="text-[9px] text-muted font-medium mt-0.5 truncate">Matured cohort</div>
         </div>
         <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
           <div className="text-[10px] text-muted font-semibold truncate">Lead → Quote</div>
           <div className="font-extrabold text-base text-navy mt-0.5">{quoteRate}</div>
-          <div className="text-[9px] text-emerald-600 font-bold mt-0.5 truncate">{quoteCount} sent</div>
+          <div className="text-[9px] text-emerald-600 font-bold mt-0.5 truncate">{metrics.enquiriesWithSubmittedQuote} enquiries</div>
         </div>
         <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
           <div className="text-[10px] text-muted font-semibold truncate">Quote → Booked</div>
           <div className="font-extrabold text-base text-navy mt-0.5">{bookingRate}</div>
-          <div className="text-[9px] text-emerald-600 font-bold mt-0.5 truncate">{bookingCount} locked</div>
+          <div className="text-[9px] text-emerald-600 font-bold mt-0.5 truncate">{metrics.confirmedBookings} confirmed</div>
+        </div>
+        <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
+          <div className="text-[10px] text-muted font-semibold truncate">Declined with reason</div>
+          <div className="font-extrabold text-base text-navy mt-0.5">{metrics.declinedWithRecordedReasonCount}</div>
+          <div className="text-[9px] text-muted font-medium mt-0.5 truncate">Recorded in cohort</div>
         </div>
       </div>
+      {metrics.declineReasonBreakdown.length > 0 && <p className="mb-3 text-[10px] text-muted">Recorded reasons: {metrics.declineReasonBreakdown.map((item) => `${item.reason} (${item.count})`).join(' · ')}</p>}
 
-      {leadCount === 0 ? (
+      {metrics.eligibleEnquiries === 0 ? (
         <div className="pt-4 text-center">
           <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-lavender text-muted mb-2">
             <Icon name="trend" size={18} />
           </div>
-          <p className="text-xs font-bold text-navy">Pipeline Awaiting Activity</p>
+          <p className="text-xs font-bold text-navy">Insufficient mature cohort data</p>
           <p className="text-[11px] text-muted mt-1 leading-relaxed">
-            Real conversion percentages will compute as incoming customer requests progress to proposals and confirmed bookings.
+            No eligible enquiries were received in this completed cohort period. Newer enquiries remain outside this calculation until their attribution window matures.
           </p>
         </div>
       ) : (
         <div className="mt-4 space-y-2.5">
           <div className="space-y-1">
             <div className="flex justify-between text-[11px]">
-              <span className="font-semibold text-muted">Proposal Response Rate</span>
+              <span className="font-semibold text-muted">Enquiries with submitted quote</span>
               <span className="font-extrabold text-navy">{quoteRate}</span>
             </div>
             <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-primary h-full rounded-full transition-all duration-500"
-                style={{ width: quoteRate === '—' ? '0%' : quoteRate }}
-              />
+              <div className="bg-primary h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (metrics.enquiryToQuoteRate || 0) * 100)}%` }} />
             </div>
           </div>
           <div className="space-y-1">
             <div className="flex justify-between text-[11px]">
-              <span className="font-semibold text-muted">Booking Close Rate</span>
+              <span className="font-semibold text-muted">Enquiry-to-confirmed booking rate</span>
               <span className="font-extrabold text-navy">{bookingRate}</span>
             </div>
             <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                style={{ width: bookingRate === '—' ? '0%' : bookingRate }}
-              />
+              <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (metrics.enquiryToBookingRate || 0) * 100)}%` }} />
             </div>
           </div>
           <div className="pt-1 flex items-center justify-between text-[10px] text-muted">
-            <span>Overall Win Rate: <strong className="text-navy">{overallConversion}</strong></span>
-            <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
-              <Icon name="shieldCheck" size={12} />
-              <span>Payment verified</span>
-            </span>
+            <span>Average time to first submitted quote: <strong className="text-navy">{quoteTurnaround}</strong></span>
+            <span className="text-right">Based on {metrics.quoteTurnaroundSampleSize} recorded submission{metrics.quoteTurnaroundSampleSize === 1 ? '' : 's'}</span>
           </div>
         </div>
+      )}
+      <div className="mt-4 grid sm:grid-cols-2 gap-2.5 border-t border-gray-100 pt-3">
+        <div className="rounded-xl bg-gray-50/70 p-3 min-w-0">
+          <div className="text-[10px] font-semibold text-muted">Average first vendor response (quote or message)</div>
+          <div className="mt-1 text-sm font-extrabold text-navy">{!available || firstResponseState === 'error' || (firstResponseState === 'ready' && !firstResponseMetric?.complete) ? 'Unavailable' : firstResponseState === 'loading' ? 'Loading…' : formatResponseTime(firstResponseMetric?.averageFirstResponseMs)}</div>
+          <div className="mt-1 text-[9px] text-muted">Matured {periodDays}-day enquiry cohort · {firstResponseState === 'ready' && firstResponseMetric.complete ? `${firstResponseMetric.respondedEnquiries} of ${firstResponseMetric.eligibleEnquiries} enquiries with response records` : firstResponseState === 'ready' ? 'Source volume exceeded the complete calculation limit' : 'Waiting for response records'}</div>
+        </div>
+        <div className="rounded-xl bg-gray-50/70 p-3 min-w-0">
+          <div className="text-[10px] font-semibold text-muted">Quote submission turnaround</div>
+          <div className="mt-1 text-sm font-extrabold text-navy">{quoteTurnaround}</div>
+          <div className="mt-1 text-[9px] text-muted">From enquiry receipt to first submitted quote · sample {metrics.quoteTurnaroundSampleSize}</div>
+        </div>
+      </div>
+      </>
       )}
     </div>
   );
@@ -423,11 +466,35 @@ function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
  * Quote Builder Dialog
  */
 function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
-  const initialBase = enquiry?.budgetNumber || enquiry?.basePrice || 0;
-  const [basePrice, setBasePrice] = useState(initialBase);
+  const [basePrice, setBasePrice] = useState(0);
   const [quoteMessage, setQuoteMessage] = useState('');
   const [travelFee, setTravelFee] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const total = (Number(basePrice) || 0) + (Number(travelFee) || 0);
+  const validAmounts = Number.isFinite(Number(basePrice)) && Number(basePrice) > 0
+    && Number.isFinite(Number(travelFee)) && Number(travelFee) >= 0 && total > 0;
+
+  async function submitQuote(status) {
+    if (!enquiry?.opportunityId) {
+      setSubmitError('This enquiry is missing its record link. Refresh the dashboard and try again.');
+      return;
+    }
+    if (!validAmounts) {
+      setSubmitError('Enter a base price greater than ₹0 and a travel amount of ₹0 or more.');
+      return;
+    }
+    setSaving(true);
+    setSubmitError('');
+    try {
+      await onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, notes: quoteMessage, status });
+      onClose();
+    } catch (error) {
+      setSubmitError(error?.message || 'The quote could not be saved. Check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="vendor-modal-backdrop">
@@ -438,8 +505,10 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
             <p className="text-xs text-muted">{enquiry?.title || 'Service Proposal'} · {enquiry?.date || 'Upcoming'}</p>
           </div>
           <button
+            type="button"
+            disabled={saving}
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
+            className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition disabled:opacity-50"
             aria-label="Close quote modal"
           >
             <Icon name="close" size={16} />
@@ -451,6 +520,8 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
             <label className="block text-muted font-semibold mb-1">Base Service Price (₹)</label>
             <input
               type="number"
+              min="1"
+              step="1"
               value={basePrice || ''}
               placeholder="Enter base service pricing"
               onChange={(e) => setBasePrice(e.target.value)}
@@ -462,6 +533,8 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
             <label className="block text-muted font-semibold mb-1">Travel & Transit Allowance (₹)</label>
             <input
               type="number"
+              min="0"
+              step="1"
               value={travelFee || ''}
               placeholder="0 (Included or custom allowance)"
               onChange={(e) => setTravelFee(e.target.value)}
@@ -476,27 +549,27 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
             <span className="font-extrabold text-navy">Total Proposed Amount</span>
             <span className="font-extrabold text-lg text-primary">₹{total.toLocaleString()}</span>
           </div>
+          {!validAmounts && <p role="status" className="text-[11px] text-amber-800">Enter a base price greater than ₹0 and a travel amount of ₹0 or more to save this quote.</p>}
         </div>
 
         <VendorMessageField value={quoteMessage} onChange={setQuoteMessage} context={{ type: 'opportunity', id: enquiry?.opportunityId }} label="Message with quote (optional)" placeholder="e.g. Describe package inclusions, timing or any conditions for this offer." />
+        {submitError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{submitError}</p>}
         <div className="vendor-modal-actions pt-2 flex gap-3">
           <button
-            onClick={() => {
-              onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, notes: quoteMessage, status: 'DRAFT' });
-              onClose();
-            }}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:text-navy transition"
+            type="button"
+            disabled={saving || !validAmounts}
+            onClick={() => submitQuote('DRAFT')}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:text-navy transition disabled:opacity-60"
           >
-            Save Draft
+            {saving ? 'Saving…' : 'Save Draft'}
           </button>
           <button
-            onClick={() => {
-              onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, notes: quoteMessage, status: 'SUBMITTED' });
-              onClose();
-            }}
-            className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark shadow-md shadow-primary/25 transition"
+            type="button"
+            disabled={saving || !validAmounts}
+            onClick={() => submitQuote('SUBMITTED')}
+            className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark shadow-md shadow-primary/25 transition disabled:opacity-60"
           >
-            Submit Quote
+            {saving ? 'Saving…' : 'Submit Quote'}
           </button>
         </div>
       </div>
@@ -504,15 +577,15 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
   );
 }
 
-function ScheduledEventsCard({ bookings = [] }) {
+function ScheduledEventsCard({ bookings = [], available = true }) {
   return (
     <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-extrabold text-sm text-navy">{bookings.length} Scheduled Events</h3>
+        <h3 className="font-extrabold text-sm text-navy">{available ? `${bookings.length} Scheduled Events` : 'Scheduled Events'}</h3>
         <Link to="/vendor/bookings" className="text-[11px] font-bold text-primary hover:underline">View all</Link>
       </div>
       <ul className="space-y-2.5 text-xs">
-        {bookings.slice(0, 3).map((b, idx) => (
+        {!available ? <li role="status" className="text-amber-800 text-center py-3 text-[11px]">Booking data is unavailable.</li> : bookings.slice(0, 3).map((b, idx) => (
           <li key={b.id || idx} className="flex justify-between items-center py-1 border-b border-gray-50 last:border-0">
             <span className="flex items-center gap-2 font-medium truncate pr-2">
               <span className={`w-2 h-2 rounded-full shrink-0 ${idx === 0 ? 'bg-primary' : idx === 1 ? 'bg-emerald-500' : 'bg-orange-400'}`} />
@@ -523,7 +596,7 @@ function ScheduledEventsCard({ bookings = [] }) {
             </span>
           </li>
         ))}
-        {bookings.length === 0 && (
+        {available && bookings.length === 0 && (
           <li className="text-muted text-center py-3 text-[11px]">
             No upcoming event dates scheduled
           </li>
@@ -536,6 +609,7 @@ function ScheduledEventsCard({ bookings = [] }) {
 function NotificationsCard({
   notifications = [],
   unreadNotifCount = 0,
+  available = true,
   onMarkRead,
   onMarkAllRead,
 }) {
@@ -561,7 +635,7 @@ function NotificationsCard({
       </div>
 
       <ul className="space-y-2.5 text-xs">
-        {notifications.slice(0, 4).map((n) => (
+        {!available ? <li role="status" className="text-amber-800 text-center py-4 text-[11px]">Notifications are unavailable. Retry the dashboard.</li> : notifications.slice(0, 4).map((n) => (
           <li
             key={n._id}
             onClick={() => onMarkRead && onMarkRead(n._id)}
@@ -596,7 +670,7 @@ function NotificationsCard({
             </div>
           </li>
         ))}
-        {notifications.length === 0 && (
+        {available && notifications.length === 0 && (
           <li className="text-muted text-center py-4 text-[11px]">
             You're all caught up! No unread notifications.
           </li>
@@ -651,6 +725,390 @@ function AskAuraCard({ onAsk }) {
   );
 }
 
+function ActionCenter({ enquiries, quotes, bookings, reviews, messagesCount, messageThreads, failedSources, today, profileNeedsCompletion }) {
+  const actions = buildVendorActionItems({ enquiries, quotes, bookings, reviews, messagesCount, messageThreads, today, profileNeedsCompletion });
+  const unavailableLabels = [
+    ['enquiries', 'enquiries'],
+    ['quotes', 'quotes'],
+    ['bookings', 'bookings'],
+    ['reviews', 'published reviews'],
+    ['message counts', 'unread message count'],
+    ['activation status', 'profile readiness'],
+  ].filter(([source]) => failedSources.includes(source)).map(([, label]) => label);
+
+  return (
+    <section aria-labelledby="vendor-action-center-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <h2 id="vendor-action-center-title" className="font-extrabold text-base text-navy">Today’s Action Center</h2>
+          <p className="text-[11px] text-muted mt-0.5">Prioritized work from current booking, enquiry, quote, message and profile records.</p>
+        </div>
+        <Icon name="bolt" size={19} />
+      </div>
+      {actions.length ? (
+        <ul className="grid sm:grid-cols-2 gap-2.5">
+          {actions.map((action) => (
+            <li key={action.key} className="min-w-0 rounded-2xl border border-gray-100 p-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs font-bold text-navy">{action.title}</div>
+                <div className="text-[10px] text-muted truncate mt-1">{action.detail}</div>
+                <div className="text-[10px] text-muted mt-1">{action.state} · Needs attention · no deadline recorded</div>
+                <div className="text-[10px] text-muted mt-0.5">{action.reason}</div>
+              </div>
+              <Link to={action.href} className="shrink-0 text-[11px] font-bold text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary rounded">{action.label} →</Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-xs text-emerald-800">No supported vendor action is currently recorded.</p>
+      )}
+      {unavailableLabels.length > 0 && <p role="status" className="mt-2 text-[10px] text-amber-800">Some action sources are unavailable: {unavailableLabels.join(', ')}. Items from those sources may be missing.</p>}
+    </section>
+  );
+}
+
+function FinancialClarity({ financialTruth, available }) {
+  if (!available) {
+    return <section aria-labelledby="dashboard-finance-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100"><h2 id="dashboard-finance-title" className="font-extrabold text-base text-navy">Financial clarity</h2><p role="status" className="mt-2 text-xs text-amber-800">Core financial figures are unavailable. Open Payments or retry the dashboard before relying on a balance.</p></section>;
+  }
+  const metrics = financialTruth?.metrics || {};
+  const values = [
+    ['Customer balance outstanding', metrics.expectedReceivables],
+    ['Customer balance due this week', metrics.dueThisWeek],
+    ['Overdue customer balance', metrics.overdueAmount],
+    ['Settlement eligible', metrics.expectedSettlements],
+    ['Settlement on hold', metrics.settlementHoldAmount],
+    ['Vendor settlements completed', metrics.settledAmount],
+  ];
+  return (
+    <section aria-labelledby="dashboard-finance-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div><h2 id="dashboard-finance-title" className="font-extrabold text-base text-navy">Financial clarity</h2><p className="mt-1 text-[10px] text-muted">Core booking and settlement records · all time</p></div>
+        <Link to="/vendor/payments" className="shrink-0 text-xs font-bold text-primary hover:underline">Open payments →</Link>
+      </div>
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+        {values.map(([label, value]) => (
+          <div key={label} className="min-w-0 rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+            <div className="text-[10px] font-semibold text-muted">{label}</div>
+            <div className="mt-1 break-words text-lg font-extrabold text-navy">{value !== null && value !== undefined && Number.isFinite(Number(value)) ? `₹${Number(value).toLocaleString('en-IN')}` : 'Unavailable'}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[10px] leading-relaxed text-muted">Customer balances are receivables, not vendor earnings. Eligibility, holds and completed payouts are separate Core states; the current model has no separate payout-initiated state.</p>
+      <p className="mt-1 text-[9px] text-muted">Data generated {new Date(financialTruth.generatedAt).toLocaleString()}</p>
+    </section>
+  );
+}
+
+function ServiceQualitySummary({ reviews, stats, available }) {
+  return (
+    <section aria-labelledby="dashboard-quality-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div><h2 id="dashboard-quality-title" className="font-extrabold text-base text-navy">Service quality</h2><p className="mt-1 text-[10px] text-muted">Published STARVNT reviews; Google Maps is shown separately in your profile.</p></div>
+        <Link to="/vendor/reviews" className="shrink-0 text-xs font-bold text-primary hover:underline">Open reviews →</Link>
+      </div>
+      {!available ? (
+        <p role="status" className="text-xs text-amber-800">Review information is unavailable. No rating or review count is being inferred.</p>
+      ) : Number(stats?.totalReviews || 0) === 0 ? (
+        <p className="rounded-xl bg-lavender/40 p-3 text-xs text-muted">No published STARVNT reviews yet.</p>
+      ) : (
+        <>
+          <p className="text-sm font-bold text-navy">{stats.averageRating} / 5 · {stats.totalReviews} published review{stats.totalReviews === 1 ? '' : 's'}</p>
+          <ul className="mt-3 grid sm:grid-cols-3 gap-2">
+            {reviews.slice(0, 3).map((review) => (
+              <li key={review._id} className="rounded-xl border border-gray-100 p-3 min-w-0">
+                <div className="text-xs font-bold text-navy">{review.rating} / 5 · {review.serviceName || 'Service'}</div>
+                <div className="mt-1 text-[10px] text-muted">{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : 'Date not recorded'}</div>
+                <div className="mt-2 text-[10px] text-muted">{review.vendorReply?.text ? 'Reply posted' : 'Reply status available in Reviews'}</div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+function VendorImprovement({ recommendations, available }) {
+  return (
+    <section aria-labelledby="dashboard-improvement-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div><h2 id="dashboard-improvement-title" className="font-extrabold text-base text-navy">Vendor improvement</h2><p className="mt-1 text-[10px] text-muted">Suggestions are based on saved vendor records and refresh with your dashboard.</p></div>
+      </div>
+      {!available ? (
+        <p role="status" className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Recommendations are unavailable. No suggestions have been inferred from missing data.</p>
+      ) : recommendations.length ? (
+        <ul className="grid sm:grid-cols-2 gap-2.5">
+          {recommendations.map((item, index) => {
+            const href = item.signal === 'NEW_ENQUIRY' ? '/vendor/enquiries'
+              : item.signal === 'LOCATION_DEMAND' ? '/vendor/services?action=coverage'
+              : item.signal === 'PORTFOLIO_GAP' ? '/vendor/portfolio'
+              : '/vendor/bookings';
+            return <li key={`${item.signal}-${item.targetId || index}`} className="rounded-2xl border border-gray-100 bg-gray-50/60 p-3 min-w-0">
+              <div className="flex items-start justify-between gap-2"><h3 className="text-xs font-bold text-navy">{item.title}</h3><span className="shrink-0 rounded-full bg-lavender px-2 py-0.5 text-[9px] font-bold text-primary">{item.priority || 'INFO'}</span></div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-muted">{item.message}</p>
+              <Link to={href} className="mt-2 inline-block text-[11px] font-bold text-primary hover:underline">{item.action || 'Review'} →</Link>
+            </li>;
+          })}
+        </ul>
+      ) : <p className="rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800">No improvement suggestions are supported by the current records.</p>}
+    </section>
+  );
+}
+
+function OperatingReadiness({ activation, available }) {
+  if (!available || !activation) {
+    return <section aria-labelledby="dashboard-readiness-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100"><h2 id="dashboard-readiness-title" className="font-extrabold text-base text-navy">Operating readiness</h2><p role="status" className="mt-2 text-xs text-amber-800">Readiness information is unavailable. No eligibility state is inferred.</p></section>;
+  }
+  const checklist = activation.checklist || {};
+  const label = (value) => value === true ? 'Complete' : value === false ? 'Incomplete' : 'Unavailable';
+  const items = [
+    ['Profile completion', `${Number(activation.completionPercentage || 0)}%`],
+    ['Identity verification', label(checklist.identityVerified)],
+    ['Bank verification', label(checklist.bankVerified)],
+    ['Account activation', String(activation.activationState || 'Unavailable').replaceAll('_', ' ')],
+    ['Matching eligibility', label(activation.matchingEligible)],
+    ['Services and capacity', label(checklist.services && checklist.capacity && checklist.resources)],
+    ['Availability', label(checklist.availability)],
+    ['Operating location and coverage', label(checklist.locations && checklist.coverage)],
+    ['Portfolio', label(checklist.portfolio)],
+  ];
+  const blockers = Array.isArray(activation.missingRequirements) ? activation.missingRequirements : [];
+  return (
+    <section aria-labelledby="dashboard-readiness-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div><h2 id="dashboard-readiness-title" className="font-extrabold text-base text-navy">Operating readiness</h2><p className="mt-1 text-[10px] text-muted">Profile setup, verification, activation and matching are separate platform checks.</p></div>
+        <Link to="/vendor/profile" className="shrink-0 text-xs font-bold text-primary hover:underline">Review profile →</Link>
+      </div>
+      <dl className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {items.map(([term, value]) => (
+          <div key={term} className="flex items-start justify-between gap-2 rounded-xl border border-gray-100 p-3 min-w-0">
+            <dt className="text-[10px] text-muted">{term}</dt>
+            <dd className={`text-right text-[10px] font-bold ${value === 'Complete' || value === 'ELIGIBLE' || value === 'ACTIVE' ? 'text-emerald-700' : value === 'Unavailable' ? 'text-muted' : 'text-amber-800'}`}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {!activation.matchingEligible && blockers.length > 0 && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-[10px] font-bold text-amber-950">Matching is locked. Current readiness findings:</p>
+          <ul className="mt-1 list-disc pl-4 text-[10px] text-amber-900">{blockers.slice(0, 5).map((item) => <li key={item}>{item}</li>)}</ul>
+          <p className="mt-2 text-[10px] text-amber-900">Profile and verification items can be completed by you; activation approval may require the authorized team.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function WeeklyPerformanceReview({ enquiries, quotes, bookings, reviews, availability }) {
+  const summary = useMemo(() => buildVendorWeeklySummary({ enquiries, quotes, bookings, reviews }), [enquiries, quotes, bookings, reviews]);
+  const rows = [
+    ['Enquiries received', 'enquiries'],
+    ['Quotes submitted', 'submittedQuotes'],
+    ['Core-confirmed bookings', 'confirmedBookings'],
+    ['Published STARVNT reviews', 'publishedReviews'],
+  ];
+  const comparison = (current, previous) => {
+    if (previous === 0 && current > 0) return `${current} this period · prior period 0; percentage comparison unavailable`;
+    const difference = current - previous;
+    if (difference === 0) return `No change from comparable prior period (${previous})`;
+    return `${difference > 0 ? '+' : ''}${difference} vs comparable prior period (${previous})`;
+  };
+  return (
+    <section aria-labelledby="dashboard-weekly-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
+      <h2 id="dashboard-weekly-title" className="font-extrabold text-base text-navy">Weekly performance review</h2>
+      <p className="mt-1 text-[10px] text-muted">Current elapsed UTC week vs the same elapsed period last week. No growth rate is shown when the previous count is zero.</p>
+      <dl className="mt-3 grid sm:grid-cols-2 gap-2">
+        {rows.map(([label, key]) => (
+          <div key={key} className="rounded-xl border border-gray-100 p-3 flex items-center justify-between gap-3">
+            <dt className="min-w-0 text-[10px] font-semibold text-muted">{label}</dt>
+            <dd className="text-right"><div className="text-sm font-extrabold text-navy">{availability[key] ? summary.current[key] : 'Unavailable'}</div><div className="text-[9px] text-muted">{availability[key] ? comparison(summary.current[key], summary.previous[key]) : key === 'enquiries' ? 'Activation approval required' : 'Source unavailable'}</div></dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 text-[10px] text-muted">Response-time samples and operational task completion do not have a reliable shared event source, so they are not included.</p>
+    </section>
+  );
+}
+
+const GOAL_METRICS = {
+  SUBMITTED_QUOTES: 'Submitted quotes',
+  CONFIRMED_BOOKINGS: 'Confirmed bookings',
+  COMPLETED_BOOKINGS: 'Core-verified completions',
+};
+
+function localDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function BusinessGoals() {
+  const [goals, setGoals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [dashboardActionFeedback, setDashboardActionFeedback] = useState(null);
+  const dashboardRequestSequence = useRef(0);
+  const [lastCompleteDashboardRefreshAt, setLastCompleteDashboardRefreshAt] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [name, setName] = useState('');
+  const [metric, setMetric] = useState('SUBMITTED_QUOTES');
+  const [targetValue, setTargetValue] = useState('3');
+  const [startDate, setStartDate] = useState(() => localDateInput(new Date()));
+  const [endDate, setEndDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 7);
+    return localDateInput(date);
+  });
+
+  const loadGoals = useCallback(async () => {
+    try {
+      const response = await externalApi.call('/vendor/goals');
+      if (!response?.ok || !Array.isArray(response.goals)) throw new Error('Goal data is unavailable.');
+      setGoals(response.goals);
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Could not load your goals.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadGoals(); }, [loadGoals]);
+
+  async function createGoal(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await externalApi.call(editingId ? `/vendor/goals/${editingId}` : '/vendor/goals', {
+        method: editingId ? 'PATCH' : 'POST',
+        body: { name, metric, targetValue: Number(targetValue), startDate, endDate },
+      });
+      if (!response?.ok) throw new Error(response?.message || response?.error || 'Goal could not be saved.');
+      setName('');
+      setEditingId(null);
+      setNotice(editingId ? 'Goal updated. Progress is calculated from saved platform records.' : 'Goal saved. Progress is calculated from saved platform records.');
+      await loadGoals();
+    } catch (err) {
+      setError(err.message || 'Goal could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function editGoal(goal) {
+    setEditingId(goal.id);
+    setName(goal.name);
+    setMetric(goal.metric);
+    setTargetValue(String(goal.targetValue));
+    setStartDate(goal.periodStart);
+    setEndDate(goal.periodEnd);
+    setError('');
+    setNotice('');
+  }
+
+  function cancelGoalEdit() {
+    setEditingId(null);
+    setName('');
+    setTargetValue('3');
+    setStartDate(localDateInput(new Date()));
+    const end = new Date();
+    end.setDate(end.getDate() + 7);
+    setEndDate(localDateInput(end));
+  }
+
+  async function changeGoal(goal, update) {
+    setError('');
+    setNotice('');
+    try {
+      const response = await externalApi.call(`/vendor/goals/${goal.id}`, { method: 'PATCH', body: update });
+      if (!response?.ok) throw new Error(response?.message || response?.error || 'Goal could not be updated.');
+      setNotice(update.status === 'COMPLETED' ? 'Goal marked complete.' : update.status === 'PAUSED' ? 'Goal paused.' : 'Goal resumed.');
+      await loadGoals();
+    } catch (err) {
+      setError(err.message || 'Goal could not be updated.');
+    }
+  }
+
+  async function removeGoal(goal) {
+    setError('');
+    setNotice('');
+    try {
+      const response = await externalApi.call(`/vendor/goals/${goal.id}`, { method: 'DELETE' });
+      if (!response?.ok) throw new Error(response?.error || 'Goal could not be removed.');
+      setNotice('Goal removed from your active list.');
+      await loadGoals();
+    } catch (err) {
+      setError(err.message || 'Goal could not be removed.');
+    }
+  }
+
+  const activeCount = goals.filter((goal) => goal.status === 'ACTIVE').length;
+
+  return (
+    <section aria-labelledby="vendor-goals-title" className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 id="vendor-goals-title" className="font-extrabold text-base text-navy">Business goals</h2>
+          <p className="text-[11px] text-muted mt-1">Set up to three active goals. Progress comes from saved platform records; no baseline is assumed.</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0"><button type="button" onClick={loadGoals} disabled={loading} className="rounded-lg border border-gray-200 px-2.5 py-1 text-[10px] font-bold text-navy disabled:opacity-50">Refresh progress</button><span className="text-[10px] font-bold rounded-full bg-lavender px-2.5 py-1 text-navy">{activeCount}/3 active</span></div>
+      </div>
+
+      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{error}</p>}
+      {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</p>}
+      {loading ? <p role="status" className="text-xs text-muted">Loading saved goals…</p> : goals.length > 0 ? (
+        <ul className="grid lg:grid-cols-2 gap-3">
+          {goals.map((goal) => (
+            <li key={goal.id} className="rounded-2xl border border-gray-100 p-4 min-w-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-navy break-words">{goal.name}</h3>
+                  <p className="text-[10px] text-muted mt-1">{GOAL_METRICS[goal.metric] || 'Business metric'} · {goal.periodStart} to {goal.periodEnd}</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-extrabold ${goal.status === 'ACTIVE' ? 'bg-sky-50 text-sky-700' : goal.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{goal.status.toLowerCase()}</span>
+              </div>
+              <div className="mt-3 flex items-baseline justify-between gap-2 text-xs">
+                <span className="text-muted">Progress</span>
+                <strong className="text-navy">{goal.metricAvailable ? `${goal.currentValue} / ${goal.targetValue}` : 'Progress unavailable'}</strong>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-label={`${goal.name} progress`} aria-valuemin={0} aria-valuemax={goal.targetValue} aria-valuenow={goal.metricAvailable ? Math.min(goal.currentValue, goal.targetValue) : undefined} aria-valuetext={goal.metricAvailable ? `${goal.currentValue} of ${goal.targetValue}` : 'Progress unavailable'}>
+                <div className={`h-full rounded-full transition-all ${goal.metricAvailable ? 'bg-primary' : 'bg-gray-300'}`} style={{ width: `${goal.progressPercent ?? 0}%` }} />
+              </div>
+              {!goal.metricAvailable && <p role="status" className="mt-1 text-[10px] text-amber-800">Progress could not be measured from the source records. No zero value is substituted.</p>}
+              <p className="mt-1 text-[9px] text-muted">Measured {new Date(goal.measuredAt).toLocaleTimeString()}</p>
+              {goal.targetReached && goal.status === 'ACTIVE' && <p className="mt-2 text-[10px] font-semibold text-emerald-700">Target reached. Mark complete when you’re ready.</p>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {goal.status !== 'COMPLETED' && <button type="button" onClick={() => editGoal(goal)} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[10px] font-bold text-navy hover:bg-gray-50">Edit</button>}
+                {goal.status === 'ACTIVE' && <button type="button" onClick={() => changeGoal(goal, { status: goal.targetReached ? 'COMPLETED' : 'PAUSED' })} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[10px] font-bold text-navy hover:bg-gray-50">{goal.targetReached ? 'Mark complete' : 'Pause'}</button>}
+                {goal.status === 'PAUSED' && <button type="button" onClick={() => changeGoal(goal, { status: 'ACTIVE' })} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[10px] font-bold text-navy hover:bg-gray-50">Resume</button>}
+                <button type="button" onClick={() => { if (window.confirm(`Remove “${goal.name}” from your goal list?`)) removeGoal(goal); }} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[10px] font-bold text-rose-700 hover:bg-rose-50">Remove</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="rounded-xl bg-lavender/40 p-3 text-xs text-muted">No goals yet. Add a measurable goal below when you’re ready.</p>}
+
+      {(editingId || activeCount < 3) && (
+        <form onSubmit={createGoal} className="grid sm:grid-cols-2 xl:grid-cols-5 gap-3 border-t border-gray-100 pt-4">
+          <h3 className="sm:col-span-2 xl:col-span-5 text-xs font-bold text-navy">{editingId ? 'Edit goal' : 'Add a business goal'}</h3>
+          <p className="sm:col-span-2 xl:col-span-5 -mt-2 text-[10px] text-muted">Goal dates are interpreted as UTC calendar dates. Periods can be up to one year.</p>
+          <label className="text-[10px] font-semibold text-muted sm:col-span-2 xl:col-span-1">Goal name<input required minLength={2} maxLength={80} value={name} onChange={(event) => setName(event.target.value)} className="mt-1 block w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-navy" placeholder="e.g. Submit more quotes" /></label>
+          <label className="text-[10px] font-semibold text-muted">Metric<select value={metric} onChange={(event) => setMetric(event.target.value)} className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-navy">{Object.entries(GOAL_METRICS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="text-[10px] font-semibold text-muted">Target<input required type="number" min="1" max="1000000" step="1" value={targetValue} onChange={(event) => setTargetValue(event.target.value)} className="mt-1 block w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-navy" /></label>
+          <label className="text-[10px] font-semibold text-muted">Start date<input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-1 block w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-navy" /></label>
+          <label className="text-[10px] font-semibold text-muted">End date<input required type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 block w-full rounded-xl border border-gray-200 px-3 py-2 text-xs text-navy" /></label>
+          <div className="sm:col-span-2 xl:col-span-5 flex gap-2"><button type="submit" disabled={saving} className="rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-white hover:bg-primary-dark disabled:opacity-60">{saving ? 'Saving…' : editingId ? 'Save changes' : 'Add goal'}</button>{editingId && <button type="button" onClick={cancelGoalEdit} className="rounded-xl border border-gray-200 px-4 py-2.5 text-xs font-bold text-navy">Cancel</button>}</div>
+        </form>
+      )}
+    </section>
+  );
+}
+
 export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const { user } = useExternalAuth();
   const [selectedEnquiry, setSelectedEnquiry] = useState(null);
@@ -664,13 +1122,20 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const [reviewStats, setReviewStats] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [unreadMessageThreadCount, setUnreadMessageThreadCount] = useState(null);
+  const [unreadMessageActionItems, setUnreadMessageActionItems] = useState(null);
   const [activation, setActivation] = useState(null);
   const [vendorProfile, setVendorProfile] = useState(null);
   const [googleRating, setGoogleRating] = useState(null);
   const [gotItAcknowledged, setGotItAcknowledged] = useState(() => localStorage.getItem('vendorOnboardingDismissed') === 'true');
   const [loading, setLoading] = useState(true);
+  const [failedDashboardSources, setFailedDashboardSources] = useState([]);
+  const [enquiriesAccessBlocked, setEnquiriesAccessBlocked] = useState(false);
+  const [financialTruth, setFinancialTruth] = useState(null);
+  const [vendorRecommendations, setVendorRecommendations] = useState([]);
 
   const loadLiveDashboard = useCallback(async () => {
+    const requestSequence = ++dashboardRequestSequence.current;
     try {
       setLoading(true);
       // Fetch all authentic live data in parallel
@@ -683,18 +1148,49 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         blRes,
         svcRes,
         revRes,
-        notifRes
+        notifRes,
+        financeRes,
+        badgeRes,
+        recommendationsRes
       ] = await Promise.all([
         externalApi.call('/vendor/activation-status').catch(() => ({ ok: false })),
         externalApi.call('/vendor/profile').catch(() => ({ ok: false })),
-        externalApi.call('/vendor/opportunities').catch(() => ({ ok: false })),
+        externalApi.call('/vendor/opportunities').catch((error) => ({ ok: false, errorCode: error?.data?.error, message: error?.message })),
         externalApi.call('/quotes').catch(() => ({ ok: false })),
         externalApi.call('/vendor/bookings').catch(() => ({ ok: false })),
         externalApi.call('/vendor/availability/blockouts').catch(() => ({ ok: false })),
         externalApi.call('/vendor/services').catch(() => ({ ok: false })),
         externalApi.call('/vendor/reviews').catch(() => ({ ok: false })),
         externalApi.call('/vendor/notifications').catch(() => ({ ok: false })),
+        externalApi.call('/vendor/financial-truth').catch(() => ({ ok: false })),
+        externalApi.call('/vendor/badge-counts').catch(() => ({ ok: false })),
+        externalApi.call('/vendor/intelligence/recommendations').catch(() => ({ ok: false })),
       ]);
+      // Polling, focus and manual retries can overlap; only apply the newest snapshot.
+      if (requestSequence !== dashboardRequestSequence.current) return;
+
+      const accessBlocked = oppsRes?.errorCode === 'ACTIVATION_REQUIRED';
+      setEnquiriesAccessBlocked(accessBlocked);
+      const failedSources = [
+        !actRes?.ok && 'activation status',
+        !profRes?.ok && 'business profile',
+        !accessBlocked && !(oppsRes?.ok && Array.isArray(oppsRes.opportunities)) && 'enquiries',
+        !(quotesRes?.ok && Array.isArray(quotesRes.quotes)) && 'quotes',
+        !(bkRes?.ok && Array.isArray(bkRes.bookings)) && 'bookings',
+        !(blRes?.ok && Array.isArray(blRes.blockouts)) && 'availability',
+        !(svcRes?.ok && Array.isArray(svcRes.services)) && 'services',
+        !(revRes?.ok && Array.isArray(revRes.reviews)) && 'reviews',
+        !(notifRes?.ok && Array.isArray(notifRes.notifications)) && 'notifications',
+        !(financeRes?.ok && financeRes.financialTruth?.metrics) && 'financial data',
+        !(badgeRes?.ok && Number.isFinite(Number(badgeRes.messagesCount)) && Array.isArray(badgeRes.messageActionItems)) && 'message counts',
+        !(recommendationsRes?.ok && Array.isArray(recommendationsRes.recommendations)) && 'recommendations',
+      ].filter(Boolean);
+      setFailedDashboardSources(failedSources);
+      if (failedSources.length === 0) setLastCompleteDashboardRefreshAt(new Date());
+      if (financeRes?.ok && financeRes.financialTruth?.metrics) setFinancialTruth(financeRes.financialTruth);
+      setUnreadMessageThreadCount(badgeRes?.ok && Number.isFinite(Number(badgeRes.messagesCount)) ? Number(badgeRes.messagesCount) : null);
+      setUnreadMessageActionItems(badgeRes?.ok && Array.isArray(badgeRes.messageActionItems) ? badgeRes.messageActionItems : null);
+      setVendorRecommendations(recommendationsRes?.ok && Array.isArray(recommendationsRes.recommendations) ? recommendationsRes.recommendations : []);
 
       // 0. Activation & Profile
       if (actRes?.ok && actRes.status) {
@@ -734,6 +1230,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           return {
             id: o._id,
             opportunityId: o._id,
+            createdAt: o.createdAt,
             customerId: o.customer?._id || o.customer,
             customerName,
             eventType,
@@ -746,6 +1243,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
               o.requiredCapability || null,
             ].filter(Boolean),
             status: o.status === 'NEW' ? 'New' : o.status || 'Active',
+            declineReason: o.declineReason || '',
             ago: 'Matched opportunity',
             guestCount: o.guestCount,
             location: locStr,
@@ -765,6 +1263,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       if (quotesRes?.ok && Array.isArray(quotesRes.quotes)) {
         const liveQuotes = quotesRes.quotes.map((q) => ({
           _id: q._id,
+          opportunityId: q.opportunity?._id || q.opportunity,
+          createdAt: q.createdAt,
+          history: q.history,
           id: q.quoteReference || q._id,
           quoteReference: q.quoteReference,
           client: q.customer?.fullName || q.customer?.email || 'Customer',
@@ -785,6 +1286,10 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       if (bkRes?.ok && Array.isArray(bkRes.bookings)) {
         const liveBks = bkRes.bookings.map((b) => ({
           id: b.bookingReference || b._id,
+          opportunityId: b.opportunityId,
+          createdAt: b.createdAt,
+          bookingStatus: b.bookingStatus,
+          executionStatus: b.executionStatus,
           bookingReference: b.bookingReference,
           title: `${b.serviceName || 'Event'} (${b.customerName || 'Client'})`,
           serviceName: b.serviceName,
@@ -793,7 +1298,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           eventDate: b.eventDate,
           date: b.eventDate,
           totalAmount: b.totalAmount || 0,
-          advancePaid: Number(b.paymentSummary?.paidAmount || 0),
+          advancePaid: b.paymentStatus === 'PAYMENT_VERIFIED' ? Number(b.paymentSummary?.paidAmount || 0) : 0,
           balanceAmount: Number(b.paymentSummary?.balanceAmount ?? Math.max(0, Number(b.totalAmount || 0) - Number(b.paymentSummary?.paidAmount || 0))),
           status: b.bookingStatus === 'CONFIRMED'
             ? (b.executionStatus === 'SERVICE_STARTED' ? 'In Progress' : 'Confirmed')
@@ -830,9 +1335,10 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         setUnreadNotifCount(0);
       }
     } catch (err) {
+      if (requestSequence !== dashboardRequestSequence.current) return;
       console.warn('[DashboardHome] Load error:', err.message);
     } finally {
-      setLoading(false);
+      if (requestSequence === dashboardRequestSequence.current) setLoading(false);
     }
   }, []);
 
@@ -840,40 +1346,31 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
     loadLiveDashboard();
     const timer = setInterval(loadLiveDashboard, 30000);
     window.addEventListener('focus', loadLiveDashboard);
-    return () => { clearInterval(timer); window.removeEventListener('focus', loadLiveDashboard); };
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', loadLiveDashboard);
+      dashboardRequestSequence.current += 1;
+    };
   }, [loadLiveDashboard]);
 
   async function handleSendQuote(q, enquiry) {
     try {
-      if (enquiry?.opportunityId) {
-        await externalApi.call('/quotes', {
-          method: 'POST',
-          body: {
-            opportunityId: enquiry.opportunityId,
-            customerId: enquiry.customerId,
-            vendorServiceId: enquiry.serviceId,
-            serviceName: enquiry.title,
-            eventDate: enquiry.date,
-            serviceLocation: { address: enquiry.location },
-            pricingBreakdown: {
-              basePrice: Number(q.base),
-              travelFee: Number(q.travel),
-              totalAmount: Number(q.total),
-            },
-            status: q.status || 'SUBMITTED',
-            notes: q.notes?.trim() || '',
-          },
-        });
-      }
+      if (!enquiry?.opportunityId) throw new Error('This enquiry is missing its record link. Refresh the dashboard and try again.');
+      await externalApi.call('/quotes', {
+        method: 'POST',
+        body: buildDashboardQuotePayload(q, enquiry),
+      });
       await loadLiveDashboard();
     } catch (err) {
       console.error('[DashboardHome] Quote submit error:', err);
+      throw new Error(err?.data?.message || err?.message || 'The quote could not be saved. Check your connection and try again.');
     }
   }
 
   async function handleQuoteAction(q) {
     if (q.status === 'Draft' || q.status === 'DRAFT') {
       try {
+        setDashboardActionFeedback(null);
         await externalApi.call(`/quotes/${q._id}/transition`, {
           method: 'POST',
           body: {
@@ -882,39 +1379,48 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           },
         });
         await loadLiveDashboard();
+        setDashboardActionFeedback({ kind: 'success', message: 'Quote submitted. The customer can now review it.' });
       } catch (err) {
         console.error('[DashboardHome] Transition quote error:', err);
+        setDashboardActionFeedback({ kind: 'error', message: err?.data?.message || err?.message || 'The quote could not be submitted. Retry after checking your connection.' });
       }
     }
   }
 
   async function handleMarkNotificationRead(id) {
     try {
+      setDashboardActionFeedback(null);
       await externalApi.call(`/vendor/notifications/${id}/read`, { method: 'PUT' });
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, isRead: true } : n))
       );
       setUnreadNotifCount((prev) => Math.max(0, prev - 1));
+      setDashboardActionFeedback({ kind: 'success', message: 'Notification marked as read.' });
     } catch (err) {
       console.error('Failed to mark read:', err);
+      setDashboardActionFeedback({ kind: 'error', message: err?.data?.message || err?.message || 'The notification could not be marked as read. Retry.' });
     }
   }
 
   async function handleMarkAllNotificationsRead() {
     try {
+      setDashboardActionFeedback(null);
       await externalApi.call('/vendor/notifications/read-all', { method: 'PUT' });
       setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
       setUnreadNotifCount(0);
+      setDashboardActionFeedback({ kind: 'success', message: 'All notifications are marked as read.' });
     } catch (err) {
       console.error('Failed to mark all read:', err);
+      setDashboardActionFeedback({ kind: 'error', message: err?.data?.message || err?.message || 'Notifications could not be marked as read. Retry.' });
     }
   }
 
   // Live profile completion calculations
-  const completionPercentage = activation?.completionPercentage !== undefined
-    ? activation.completionPercentage
-    : 0;
-  const isMatchingEligible = Boolean(activation?.matchingEligible || activation?.isCommerciallyActive);
+  const activationPresentation = getVendorActivationPresentation(activation, failedDashboardSources.includes('activation status'));
+  const completionPercentage = activationPresentation.completionPercentage ?? 0;
+  const activationStatusUnavailable = !activationPresentation.available;
+  const isMatchingEligible = activationPresentation.matchingEligible;
+  const dashboardFreshness = getDashboardFreshness(lastCompleteDashboardRefreshAt);
 
   const checklist = activation?.checklist || {
     profile: false,
@@ -929,9 +1435,11 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const completedStepsCount = VENDOR_SETUP_STEPS.filter(step => step.done(checklist)).length;
 
   // Real KPI calculations
-  const advanceReceived = bookings.reduce((sum, b) => sum + (Number(b.advancePaid) || 0), 0);
-  const confirmedBookingValue = bookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
-  const activeBookingsCount = bookings.filter((b) => b.status !== 'CANCELLED').length;
+  const confirmedBookings = bookings.filter((booking) => booking.bookingStatus === 'CONFIRMED');
+  const todayDateOnly = localDateInput(new Date());
+  const upcomingConfirmedBookings = confirmedBookings.filter((booking) => typeof booking.eventDate === 'string' && booking.eventDate.slice(0, 10) >= todayDateOnly);
+  const advanceReceived = confirmedBookings.reduce((sum, b) => sum + (Number(b.advancePaid) || 0), 0);
+  const confirmedBookingValue = confirmedBookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
   const activeEnquiriesCount = enquiries.filter((e) => e.status === 'New' || e.status === 'NEW').length;
   const hasStarvntReviews = (reviewStats?.totalReviews || 0) > 0;
   const avgRatingDisplay = hasStarvntReviews && reviewStats.averageRating !== '0.0'
@@ -948,33 +1456,33 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
   const dynamicStats = [
     {
-      label: 'Advance Received',
-      value: `₹${advanceReceived.toLocaleString()}`,
-      foot: confirmedBookingValue > 0 ? `₹${confirmedBookingValue.toLocaleString()} confirmed booking value` : '₹0 received yet',
+      label: 'Verified Advance Received',
+      value: failedDashboardSources.includes('bookings') ? '—' : `₹${advanceReceived.toLocaleString()}`,
+      foot: failedDashboardSources.includes('bookings') ? 'Payment data unavailable' : confirmedBookingValue > 0 ? `On ₹${confirmedBookingValue.toLocaleString()} confirmed booking value` : 'No confirmed booking value yet',
       footClass: advanceReceived > 0 ? 'text-emerald-600' : 'text-muted',
       icon: 'wallet',
       iconBg: 'bg-emerald-50 text-emerald-600',
     },
     {
-      label: 'Active Bookings',
-      value: activeBookingsCount,
-      foot: bookings[0] ? `Next: ${bookings[0].eventDate || bookings[0].date}` : 'No upcoming bookings',
-      footClass: bookings.length > 0 ? 'text-sky-600' : 'text-muted',
+      label: 'Upcoming Confirmed Bookings',
+      value: failedDashboardSources.includes('bookings') ? '—' : upcomingConfirmedBookings.length,
+      foot: failedDashboardSources.includes('bookings') ? 'Booking data unavailable' : upcomingConfirmedBookings[0] ? `Next: ${upcomingConfirmedBookings[0].eventDate}` : 'No upcoming confirmed bookings',
+      footClass: upcomingConfirmedBookings.length > 0 ? 'text-sky-600' : 'text-muted',
       icon: 'bookings',
       iconBg: 'bg-sky-50 text-sky-600',
     },
     {
       label: 'Inbound Enquiries',
-      value: enquiries.length,
-      foot: activeEnquiriesCount > 0 ? `${activeEnquiriesCount} new leads require reply` : 'Qualified matching leads',
+      value: enquiriesAccessBlocked || failedDashboardSources.includes('enquiries') ? '—' : enquiries.length,
+      foot: enquiriesAccessBlocked ? 'Activation approval required to access enquiries' : failedDashboardSources.includes('enquiries') ? 'Enquiry data unavailable' : activeEnquiriesCount > 0 ? `${activeEnquiriesCount} new leads require reply` : 'Matched opportunities',
       footClass: activeEnquiriesCount > 0 ? 'text-primary' : 'text-muted',
       icon: 'message',
       iconBg: 'bg-primary-soft text-primary',
     },
     {
       label: googleRating?.rating && !hasStarvntReviews ? 'Google Maps Rating' : 'Client Rating',
-      value: avgRatingDisplay,
-      foot: ratingFoot,
+      value: failedDashboardSources.includes('reviews') ? '—' : avgRatingDisplay,
+      foot: failedDashboardSources.includes('reviews') ? 'Review data unavailable' : ratingFoot,
       footClass: (hasStarvntReviews || googleRating?.rating) ? 'text-amber-500 font-bold' : 'text-muted',
       icon: 'star',
       iconBg: 'bg-amber-50 text-amber-500',
@@ -989,7 +1497,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       label: 'Messages',
       icon: 'message',
       to: '/vendor/messages',
-      badge: unreadNotifCount > 0 ? String(unreadNotifCount) : null,
+      badge: unreadMessageThreadCount > 0 ? String(unreadMessageThreadCount) : null,
       bg: 'bg-rose-50 text-rose-500',
     },
   ];
@@ -1009,6 +1517,18 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   return (
     <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
       <div className="col-span-full"><ProfileStatus /></div>
+      {failedDashboardSources.length > 0 && (
+        <div role="status" className="col-span-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 flex flex-wrap items-center justify-between gap-3">
+          <span>Some dashboard information could not be loaded: {failedDashboardSources.join(', ')}. Values that depend on those sources may be unavailable.</span>
+          <button type="button" onClick={loadLiveDashboard} className="font-bold underline underline-offset-2">Retry</button>
+        </div>
+      )}
+      {dashboardActionFeedback && (
+        <div role={dashboardActionFeedback.kind === 'error' ? 'alert' : 'status'} className={`col-span-full rounded-2xl border px-4 py-3 text-xs flex items-center justify-between gap-3 ${dashboardActionFeedback.kind === 'error' ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}>
+          <span>{dashboardActionFeedback.message}</span>
+          <button type="button" onClick={() => setDashboardActionFeedback(null)} className="font-bold underline underline-offset-2">Dismiss</button>
+        </div>
+      )}
       {/* Main Operations Stream */}
       <div className="space-y-6 min-w-0 w-full">
 
@@ -1031,7 +1551,12 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                 <h1 className="text-base sm:text-xl md:text-2xl font-extrabold text-navy tracking-tight truncate max-w-full sm:max-w-md">
                   Welcome, {business}!
                 </h1>
-                {isMatchingEligible ? (
+                {activationStatusUnavailable ? (
+                  <span role="status" className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-gray-100 text-gray-700 border border-gray-200 shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-gray-500" />
+                    Profile status unavailable
+                  </span>
+                ) : isMatchingEligible ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1061,6 +1586,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     <span className="text-navy font-semibold">{vendorProfile.city}</span>
                   </>
                 )}
+                <span>·</span>
+                <span role="status" className={dashboardFreshness.state === 'stale' ? 'text-amber-700 font-semibold' : ''}>{dashboardFreshness.label}</span>
               </p>
             </div>
           </div>
@@ -1086,8 +1613,20 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         {/* Aura+ assistant */}
         {onAskAura && <AskAuraCard onAsk={onAskAura} />}
 
+        <ActionCenter
+          enquiries={enquiries}
+          quotes={quotes}
+          bookings={bookings}
+          reviews={reviews}
+          messagesCount={unreadMessageThreadCount}
+          messageThreads={unreadMessageActionItems}
+          failedSources={failedDashboardSources}
+          today={localDateInput(new Date())}
+          profileNeedsCompletion={Number.isFinite(Number(activation?.completionPercentage)) && Number(activation.completionPercentage) < 100}
+        />
+
         {/* 6-STEP MANDATORY ONBOARDING READINESS */}
-        {(!isMatchingEligible || !gotItAcknowledged) && (
+        {!activationStatusUnavailable && (!isMatchingEligible || !gotItAcknowledged) && (
           <div className={`rounded-3xl p-5 sm:p-6 border transition shadow-sm ${
             isMatchingEligible
               ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50'
@@ -1247,7 +1786,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     </div>
                     <div className="font-extrabold text-xs text-navy truncate">2. Services & Pricing</div>
                     <p className="text-[11px] text-muted mt-1 leading-snug break-words">
-                      {checklist.services ? `${services.length} active service(s) configured` : 'Define service packages, deliverables, and base rates.'}
+                      {failedDashboardSources.includes('services') ? 'Service details unavailable. Retry the dashboard.' : checklist.services ? `${services.length} active service(s) configured` : 'Define service packages, deliverables, and base rates.'}
                     </p>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-gray-100">
@@ -1431,6 +1970,22 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           ))}
         </div>
 
+        <FinancialClarity financialTruth={financialTruth} available={!failedDashboardSources.includes('financial data')} />
+        <ServiceQualitySummary reviews={reviews} stats={reviewStats} available={!failedDashboardSources.includes('reviews')} />
+        <OperatingReadiness activation={activation} available={!failedDashboardSources.includes('activation status')} />
+        <WeeklyPerformanceReview
+          enquiries={enquiries}
+          quotes={quotes}
+          bookings={bookings}
+          reviews={reviews}
+          availability={{
+            enquiries: !enquiriesAccessBlocked && !failedDashboardSources.includes('enquiries'),
+            submittedQuotes: !failedDashboardSources.includes('quotes'),
+            confirmedBookings: !failedDashboardSources.includes('bookings'),
+            publishedReviews: !failedDashboardSources.includes('reviews'),
+          }}
+        />
+
         {/* 2-Column Section: Recent Enquiries & Upcoming Bookings */}
         <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 min-w-0">
 
@@ -1483,20 +2038,34 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                           ))}
                           <StatusChip status={e.status} />
                         </div>
-                        <button
-                          onClick={() => setSelectedEnquiry(e)}
-                          className="text-xs font-bold text-primary hover:underline shrink-0 ml-auto cursor-pointer"
-                        >
-                          {['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED'].includes(e.status) ? '✓ View Offer →' : 'Respond →'}
-                        </button>
+                        {['DECLINED', 'EXPIRED', 'CANCELLED', 'CLOSED'].includes(String(e.status).toUpperCase()) ? (
+                          <span className="text-xs font-semibold text-muted shrink-0 ml-auto" aria-label="This enquiry is closed; no response is available">Closed</span>
+                        ) : (
+                          <button
+                            onClick={() => setSelectedEnquiry(e)}
+                            className="text-xs font-bold text-primary hover:underline shrink-0 ml-auto cursor-pointer"
+                          >
+                            {['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED'].includes(e.status) ? '✓ View Offer →' : 'Respond →'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
                 ))}
 
-                {enquiries.length === 0 && (
+                {enquiriesAccessBlocked ? (
+                  <p role="status" className="py-6 text-center text-xs text-amber-800">{activationStatusUnavailable ? 'Activation status is unavailable, so the dashboard cannot confirm enquiry access. Retry the dashboard data.' : 'Enquiries are locked until authorized activation approval. Complete the listed setup and verification steps above.'}</p>
+                ) : failedDashboardSources.includes('enquiries') ? (
+                  <p role="status" className="py-6 text-center text-xs text-amber-800">Enquiry data is unavailable. Retry the dashboard.</p>
+                ) : enquiries.length === 0 && (
                   <div className="py-8 text-center px-4">
-                    {!isMatchingEligible ? (
+                    {activationStatusUnavailable ? (
+                      <div role="status" className="p-4 rounded-2xl bg-gray-50 border border-gray-200 text-xs text-gray-700 space-y-2 text-left">
+                        <div className="font-extrabold">Activation status unavailable</div>
+                        <p className="text-[11px] leading-relaxed">The dashboard could not confirm whether enquiries are unlocked. Retry the dashboard before changing your setup.</p>
+                        <button type="button" onClick={loadLiveDashboard} className="text-xs font-bold text-primary underline">Retry dashboard data</button>
+                      </div>
+                    ) : !isMatchingEligible ? (
                       <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 space-y-2 text-left">
                         <div className="font-extrabold flex items-center gap-1.5 text-amber-950">
                           <Icon name="lock" size={14} className="text-amber-800 shrink-0" />
@@ -1538,9 +2107,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     <Icon name="bookings" size={15} />
                   </div>
                   <h2 className="font-extrabold text-base text-navy">Upcoming Bookings</h2>
-                  {bookings.length > 0 && (
+                  {upcomingConfirmedBookings.length > 0 && (
                     <span className="text-[10px] font-extrabold bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full shrink-0">
-                      {bookings.length}
+                      {upcomingConfirmedBookings.length}
                     </span>
                   )}
                 </div>
@@ -1550,7 +2119,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
               </div>
 
               <div className="space-y-3 min-w-0">
-                {bookings.slice(0, 3).map((b) => (
+                {upcomingConfirmedBookings.slice(0, 3).map((b) => (
                   <div
                     key={b.id}
                     className="flex gap-3.5 items-center border border-gray-100 rounded-2xl p-3.5 hover:shadow-xs hover:border-gray-200 transition bg-white min-w-0"
@@ -1565,7 +2134,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                       </div>
                       <div className="text-[11px] text-muted truncate mt-0.5">{b.meta}</div>
                       <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-                        <span className="text-[10px] font-bold text-emerald-600 truncate">Advance verified</span>
+                        <span className={`text-[10px] font-bold truncate ${b.paymentStatus === 'PAYMENT_VERIFIED' ? 'text-emerald-600' : 'text-muted'}`}>
+                          {b.paymentStatus === 'PAYMENT_VERIFIED' ? 'Payment verified' : 'Payment not verified'}
+                        </span>
                         <Link to="/vendor/bookings" className="text-xs font-bold text-primary hover:underline shrink-0 ml-auto">
                           View Details →
                         </Link>
@@ -1574,7 +2145,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                   </div>
                 ))}
 
-                {bookings.length === 0 && (
+                {failedDashboardSources.includes('bookings') ? (
+                  <p role="status" className="py-6 text-center text-xs text-amber-800">Booking data is unavailable. Retry the dashboard.</p>
+                ) : upcomingConfirmedBookings.length === 0 && (
                   <div className="py-8 text-center px-4 space-y-1.5">
                     <div className="w-10 h-10 rounded-2xl bg-lavender text-muted grid place-items-center mx-auto mb-2">
                       <Icon name="bookings" size={18} />
@@ -1646,7 +2219,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     </td>
                   </tr>
                 ))}
-                {quotes.length === 0 && (
+                {failedDashboardSources.includes('quotes') ? (
+                  <tr><td colSpan="6" role="status" className="py-8 text-center text-xs text-amber-800">Quote data is unavailable. Retry the dashboard.</td></tr>
+                ) : quotes.length === 0 && (
                   <tr>
                     <td colSpan="6" className="py-8 text-center text-xs text-muted">
                       <div className="space-y-1">
@@ -1660,6 +2235,12 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             </table>
           </div>
         </div>
+
+        <BusinessGoals />
+        <VendorImprovement
+          recommendations={vendorRecommendations}
+          available={!failedDashboardSources.includes('recommendations')}
+        />
 
       </div>
 
@@ -1694,12 +2275,12 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
         {/* Live Interactive Mini Calendar */}
         <div className="min-w-0">
-          <MiniCalendar bookings={bookings} blockouts={blockouts} />
+          <MiniCalendar bookings={confirmedBookings} blockouts={blockouts} available={!failedDashboardSources.some((source) => ['bookings', 'availability'].includes(source))} />
         </div>
 
         {/* Scheduled Upcoming Events */}
         <div className="min-w-0">
-          <ScheduledEventsCard bookings={bookings} />
+          <ScheduledEventsCard bookings={upcomingConfirmedBookings} available={!failedDashboardSources.includes('bookings')} />
         </div>
 
         {/* Notifications & System Alerts */}
@@ -1707,6 +2288,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           <NotificationsCard
             notifications={notifications}
             unreadNotifCount={unreadNotifCount}
+            available={!failedDashboardSources.includes('notifications')}
             onMarkRead={handleMarkNotificationRead}
             onMarkAllRead={handleMarkAllNotificationsRead}
           />
@@ -1714,7 +2296,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
         {/* Conversion Funnel Performance */}
         <div className="md:col-span-2 xl:col-span-1 min-w-0">
-          <Performance enquiries={enquiries} quotes={quotes} bookings={bookings} />
+          <Performance enquiries={enquiries} quotes={quotes} bookings={bookings} available={!failedDashboardSources.some((source) => ['enquiries', 'quotes', 'bookings'].includes(source))} />
         </div>
       </aside>
 
@@ -1732,9 +2314,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           enquiry={quoteEnquiry}
           vendorCity={vendorProfile?.city}
           onClose={() => setQuoteEnquiry(null)}
-          onSubmitQuote={(q) => {
-            handleSendQuote(q, quoteEnquiry);
-          }}
+          onSubmitQuote={(q) => handleSendQuote(q, quoteEnquiry)}
         />
       )}
     </div>

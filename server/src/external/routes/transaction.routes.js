@@ -481,15 +481,20 @@ router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VEN
 router.post('/vendor/opportunities/:id/decline', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'INVALID_OPPORTUNITY_ID' });
+    const declineReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!declineReason || declineReason.length > 500) {
+      return res.status(400).json({ error: 'DECLINE_REASON_REQUIRED', message: 'Add a reason (up to 500 characters) to save this decline.' });
+    }
     const vendor = req.externalUser.vendorOrganization;
     if (!vendor) return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+    const declinedAt = new Date();
     const opportunity = await Opportunity.findOneAndUpdate(
       { _id: req.params.id, vendor, status: { $in: ['NEW', 'VIEWED', 'DECLINED'] } },
-      { $set: { status: 'DECLINED' } },
+      { $set: { status: 'DECLINED', declineReason, declinedAt } },
       { new: true },
     );
     if (!opportunity) return res.status(409).json({ error: 'OPPORTUNITY_NOT_ACTIONABLE', message: 'This enquiry is no longer available to decline.' });
-    res.json({ ok: true, status: opportunity.status });
+    res.json({ ok: true, status: opportunity.status, declineReason: opportunity.declineReason, declinedAt: opportunity.declinedAt });
   } catch (error) { next(error); }
 });
 

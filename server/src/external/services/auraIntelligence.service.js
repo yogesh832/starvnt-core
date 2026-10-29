@@ -1,36 +1,17 @@
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { Opportunity } from '../models/Opportunity.js';
-import { PortfolioItem } from '../models/PortfolioItem.js';
 import { ServiceCoverage } from '../models/ServiceCoverage.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 
-/**
- * Aura+ & Vendor Growth Intelligence Service (Spec §16).
- *
- * "Aura+ sits above deterministic domain systems. It should not become a
- * second CRM, pricing authority, booking engine or settlement system.
- * Aura+ understands and recommends. Vendor approves where a business-setting
- * change is required. Core stores the resulting truth."
- */
-export async function generateVendorInsights(vendorId) {
-  const vendor = await VendorOrganization.findById(vendorId);
-  if (!vendor) {
-    throw new Error(`Vendor ${vendorId} not found`);
-  }
-
-  const [opportunities, bookings, portfolioItems, coverages] = await Promise.all([
-    Opportunity.find({ vendor: vendorId }).sort({ createdAt: -1 }).limit(20),
-    CoreBooking.find({ vendorId }).sort({ createdAt: -1 }).limit(20),
-    PortfolioItem.find({ vendor: vendorId }),
-    ServiceCoverage.find({ vendor: vendorId }),
-  ]);
-
+/** Recommendations below use only passed, vendor-owned records. */
+export function buildVendorRecommendations({ opportunities = [], bookings = [], coverages = [], now = new Date() }) {
   const recommendations = [];
 
   // 1. Signal: Location Performance
   const localityBookingsCount = {};
-  for (const b of bookings) {
-    const loc = b.serviceLocation?.locality || 'Kolkata';
+  for (const b of bookings.filter((item) => item.bookingStatus === 'CONFIRMED')) {
+    const loc = b.serviceLocation?.locality || b.serviceLocation?.city;
+    if (!loc) continue;
     localityBookingsCount[loc] = (localityBookingsCount[loc] || 0) + 1;
   }
   const topLocality = Object.entries(localityBookingsCount).sort((a, b) => b[1] - a[1])[0];
@@ -38,18 +19,9 @@ export async function generateVendorInsights(vendorId) {
     recommendations.push({
       signal: 'LOCATION_PERFORMANCE',
       type: 'GROWTH',
-      title: 'Strongest Service Area',
-      message: `${topLocality[0]} is currently your strongest service area with ${topLocality[1]} confirmed bookings.`,
-      action: 'Promote Locality',
-      priority: 'MEDIUM',
-    });
-  } else {
-    recommendations.push({
-      signal: 'LOCATION_PERFORMANCE',
-      type: 'GROWTH',
-      title: 'Target Locality Focus',
-      message: 'New Town is currently the highest demand service area for your category.',
-      action: 'View Demand',
+      title: 'Bookings by service area',
+      message: `${topLocality[0]} has the highest confirmed-booking count in the records inspected (${topLocality[1]}). This is a historical count, not a demand forecast.`,
+      action: 'Review bookings',
       priority: 'MEDIUM',
     });
   }
@@ -58,23 +30,28 @@ export async function generateVendorInsights(vendorId) {
   const coveredLocalities = new Set();
   for (const c of coverages) {
     (c.localities || []).forEach((l) => coveredLocalities.add(l.toLowerCase().trim()));
+    if (c.city) coveredLocalities.add(c.city.toLowerCase().trim());
   }
   const demandLocalities = {};
+  const recentWindowStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   for (const opp of opportunities) {
+    const createdAt = opp.createdAt ? new Date(opp.createdAt) : null;
+    if (!createdAt || !Number.isFinite(createdAt.getTime()) || createdAt < recentWindowStart || createdAt > now) continue;
     const loc = (opp.serviceLocation?.locality || '').trim();
     if (loc) {
       demandLocalities[loc] = (demandLocalities[loc] || 0) + 1;
     }
   }
   for (const [loc, count] of Object.entries(demandLocalities)) {
-    if (!coveredLocalities.has(loc.toLowerCase())) {
+    if (count >= 2 && !coveredLocalities.has(loc.toLowerCase())) {
       recommendations.push({
         signal: 'LOCATION_DEMAND',
-        type: 'OPPORTUNITY',
-        title: 'Expand Verified Coverage',
-        message: `You received repeated enquiries from ${loc}; consider expanding verified service coverage.`,
-        action: 'Add Coverage Area',
+        type: 'REVIEW',
+        title: 'Review service-area coverage',
+        message: `${count} recent enquiries list ${loc}. Review the saved coverage for this area; do not change coverage unless the business can serve it.`,
+        action: 'Review coverage',
         priority: 'HIGH',
+        evidence: { enquiryCount: count, locality: loc },
       });
       break;
     }
@@ -84,43 +61,33 @@ export async function generateVendorInsights(vendorId) {
   const newOpp = opportunities.find((o) => o.status === 'NEW');
   if (newOpp) {
     recommendations.push({
-      signal: 'OPPORTUNITY_QUALITY',
-      type: 'CONVERSION',
-      title: 'High-Match Opportunity',
-      message: `This opportunity for ${newOpp.serviceName} matches your service, coverage, capacity and proven venue experience at ${newOpp.serviceLocation?.address || 'Kisan Palace'}.`,
-      action: 'Respond & Quote',
+      signal: 'NEW_ENQUIRY',
+      type: 'ACTION',
+      title: 'Respond to a new enquiry',
+      message: `A new enquiry for ${newOpp.serviceName || 'your service'} is recorded${newOpp.serviceLocation?.locality || newOpp.serviceLocation?.city ? ` for ${[newOpp.serviceLocation.locality, newOpp.serviceLocation.city].filter(Boolean).join(', ')}` : ''}. Review its details before deciding whether to quote.`,
+      action: 'Open enquiry',
       priority: 'HIGH',
       targetId: newOpp._id,
+      evidence: { opportunityId: String(newOpp._id), status: newOpp.status },
     });
   }
 
-  // 4. Signal: Portfolio Gap
-  const photos = portfolioItems.filter((i) => i.mediaType === 'IMAGE');
-  const videos = portfolioItems.filter((i) => ['VIDEO', 'REEL', 'HIGHLIGHT_FILM'].includes(i.mediaType));
-  if (photos.length > 0 && videos.length < 3) {
-    recommendations.push({
-      signal: 'PORTFOLIO_GAP',
-      type: 'OPTIMIZATION',
-      title: 'Add Video Evidence',
-      message: 'Your portfolio contains many wedding photos but limited cinematic video evidence for this service. Adding 4K teasers increases match ranking.',
-      action: 'Upload Media',
-      priority: 'MEDIUM',
-    });
-  }
+  return recommendations;
+}
 
-  // 5. Signal: Operational Logistics & Risk
-  recommendations.push({
-    signal: 'RISK_LOGISTICS',
-    type: 'INTELLIGENCE',
-    title: 'Logistics Optimization',
-    message: 'Barasat to New Town route has peak traffic between 16:00 and 19:00. Ensure 45-min transit turnaround buffer.',
-    action: 'View Transit Policy',
-    priority: 'LOW',
-  });
+export async function generateVendorInsights(vendorId) {
+  const vendor = await VendorOrganization.findById(vendorId);
+  if (!vendor) throw new Error(`Vendor ${vendorId} not found`);
 
+  const [opportunities, bookings, coverages] = await Promise.all([
+    Opportunity.find({ vendor: vendorId }).sort({ createdAt: -1 }).limit(100).lean(),
+    CoreBooking.find({ vendorId: { $in: [vendorId, String(vendorId)] } }).sort({ createdAt: -1 }).limit(100).lean(),
+    ServiceCoverage.find({ vendor: vendorId }).lean(),
+  ]);
+  const recommendations = buildVendorRecommendations({ opportunities, bookings, coverages });
   return {
-    vendorId,
-    timestamp: new Date(),
+    vendorId: String(vendorId),
+    timestamp: new Date().toISOString(),
     signalsCount: recommendations.length,
     recommendations,
   };
