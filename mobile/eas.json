@@ -8,7 +8,10 @@
     },
     "preview": {
       "distribution": "internal",
-      "env": { "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1009726530856-34nc725qvptbshmfbrtpjcis8j3pu1iq.apps.googleusercontent.com" },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://app.starvnt.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1009726530856-34nc725qvptbshmfbrtpjcis8j3pu1iq.apps.googleusercontent.com"
+      },
       "android": { "buildType": "apk" }
     },
     "appetize-ios": {
