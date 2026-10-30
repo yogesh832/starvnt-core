@@ -149,6 +149,13 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage, portfol
   ].filter(Boolean).join(', ');
   const vendorLocation = locationLabel || vendor.location || '';
   const portfolioImages = (portfolio || []).map((p) => p.thumbnailUrl || p.url).filter(Boolean);
+  const portfolioSamples = (portfolio || []).filter(p => p.thumbnailUrl || p.url).slice(0, 4).map(p => ({
+    title: p.title || p.projectName || 'Project sample',
+    eventType: p.eventType || null,
+    mediaType: p.mediaType || 'IMAGE',
+    imageUrl: p.thumbnailUrl || p.url,
+    url: p.url || p.thumbnailUrl,
+  }));
   const images = [...(vendor.profilePicUrl ? [vendor.profilePicUrl] : []), ...portfolioImages];
   return {
     id: vsId(service._id),
@@ -158,6 +165,8 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage, portfol
     description: service.description || '',
     vendorId: String(vendor._id),
     vendorName: vendor.businessName,
+    profilePicUrl: vendor.profilePicUrl || null,
+    portfolioSamples,
     vendorLocation,
     vendorBio: vendor.bio || '',
     price,
@@ -412,6 +421,8 @@ export async function auraCatalogOptions(event) {
   return (await withAvailability((await allOptions(event)).filter(option => !option.isDemo), event)).map(option => ({
     id: option.id, vendorId: option.vendorId || null, category: option.category,
     service: categoryLabel(option.category), vendor: option.vendorName,
+    profilePicUrl: option.profilePicUrl || null,
+    portfolioSamples: option.portfolioSamples || [],
     package: option.packageName, price: option.price,
     basePrice: option.basePrice ?? null, pricingType: option.pricingType || null, unit: option.unit || null,
     location: option.vendorLocation || option.location?.city || null,

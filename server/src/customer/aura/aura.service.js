@@ -59,6 +59,9 @@ async function stateFor(customerId, eventId) {
 async function refreshCatalog(memory, event) {
   const scope = catalogScopeFor(memory, event);
   if (!scope) return { vendorSuggestions: [], vendorSearch: null };
+  if (!hasVerifiedEventLocation(scope)) {
+    return { vendorSuggestions: [], vendorSearch: { source: 'customer_catalog_api', query: memory.query, city: scope.city || null, date: scope.eventDate || null, resultCount: null, status: 'location_required' } };
+  }
   const vendorSuggestions = selectVendorRows(await core.vendorCatalog(scope), memory.query);
   return { vendorSuggestions, vendorSearch: { source: 'customer_catalog_api', query: memory.query, city: scope.city || null, date: scope.eventDate || null, guestCount: scope.guestCount || null, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(scope, event), checkedAt: new Date().toISOString() } };
 }
@@ -254,7 +257,7 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
     ...(vendorRequest && parseGuests(text) ? { guestCount: parseGuests(text) } : {}),
     ...(vendorRequest && parseDate(text) ? { eventDate: parseDate(text).date } : {}),
   };
-  const { prompt: context } = await buildContext({ customer, event, catalogScope: searchScope });
+  const { prompt: context, catalogRows } = await buildContext({ customer, event, catalogScope: searchScope });
   const history = await auraRepo.recentMessages(sessionId, 12);
   const language = conversationLanguage(text, history);
   tracker.markContextEnd();
@@ -274,7 +277,7 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
       await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: reply }]);
       return { reply, ...state, vendorSuggestions: [], vendorSearch: { source: 'customer_catalog_api', query: searchMessage, resultCount: null, status: 'location_required' }, written: [], skipped: [], createdEventId: null };
     }
-    const vendorSuggestions = selectVendorRows(context.vendors, searchMessage);
+    const vendorSuggestions = selectVendorRows(catalogRows, searchMessage);
     const reply = vendorTruthReply(vendorSuggestions, searchScope, language, searchMessage);
     await auraRepo.setCatalogSearch(sessionId, rememberCatalog(searchMessage, searchScope, event));
     await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: reply }]);
