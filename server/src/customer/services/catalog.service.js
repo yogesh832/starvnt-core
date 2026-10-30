@@ -265,15 +265,26 @@ async function allOptions(event) {
   return [...real.map((r) => fromVendor(r, event || {})), ...demo.map(fromDemo)].filter((o) => o.category);
 }
 
+function availabilityDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  }
+  return null;
+}
+
 /**
  * Honest availability for the event date:
  * no_event_date | blocked | booked | unconfirmed. Never assumed "available".
  */
 async function withAvailability(options, event) {
-  if (!event?.eventDate) return options.map((o) => ({ ...o, availability: 'no_event_date' }));
+  const date = availabilityDate(event?.eventDate);
+  if (!date) return options.map((o) => ({ ...o, availability: 'no_event_date' }));
   return Promise.all(options.map(async o => {
     if (!o.vendorId) return { ...o, availability: 'unconfirmed' };
-    const result = await checkTrueAvailability({ vendorId: o.vendorId, vendorServiceId: o.id.replace(/^vs_/, ''), date: event.eventDate, allDay: true, serviceLocation: event.location, excludeEventId: event._id });
+    const result = await checkTrueAvailability({ vendorId: o.vendorId, vendorServiceId: o.id.replace(/^vs_/, ''), date, allDay: true, serviceLocation: event.location, excludeEventId: event._id });
     const availability = !result.feasible ? 'blocked' : o.requiresVendorConfirmation ? 'requires_vendor_confirmation' : 'unconfirmed';
     return { ...o, availability };
   }));

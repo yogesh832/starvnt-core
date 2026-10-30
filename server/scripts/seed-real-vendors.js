@@ -675,6 +675,9 @@ export const REAL_VENDORS = [
 
   // ─── 4. VENUE (3 Vendors) ──────────────────────────────────────────────────
   {
+    // One synthetic venue is fully approved so customer catalogue journeys can
+    // exercise real (non-demo) venue results in the isolated QA environment.
+    testFullyActive: true,
     owner: {
       fullName: 'Raghav Singhania',
       email: 'venue@starvnt.com',
