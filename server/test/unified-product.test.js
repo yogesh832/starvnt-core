@@ -58,6 +58,7 @@ import { CorePolicyRevision } from '../src/admin/models/CorePolicyRevision.js';
 import { getCommercialPolicyForCategory } from '../src/common/policyResolver.js';
 import { calculateEligibleAdvanceRefund } from '../src/common/policyResolver.js';
 import { buildVendorRecommendations } from '../src/external/services/auraIntelligence.service.js';
+import { listBookableServices, findBookableService } from '../src/customer/repositories/catalog.repo.js';
 
 let mongo, app, vendor, customer, vendorToken, customerToken, adminToken, restrictedAdminToken, actor;
 before(async () => {
@@ -154,6 +155,28 @@ test('complete profile needs separate activation approval; Admin decision reache
   await request(app).post(`/api/admin/external-users/organizations/${complete._id}/activation`).set(auth(adminToken)).send({ action: 'SUSPEND', reason: 'Operational issue', idempotencyKey: key() }).expect(200);
   assert.equal((await evaluateVendorActivation(complete._id)).matchingEligible, false);
   assert.equal((await VendorOrganization.findById(complete._id)).status, 'SUSPENDED');
+});
+
+test('customer catalogue finds approved active services across Kapkote and Bageshwar with multiple coverage records', async () => {
+  const owner = await ExternalUser.create({ email: `regional-${key()}@unified.test`, fullName: 'Regional Vendor', accountType: 'VENDOR' });
+  const regionalVendor = await VendorOrganization.create({ businessName: 'Bageshwar Regional Vendor', category: 'Catering', location: 'Kapkot, Uttarakhand', owner: owner._id, isProfileCompleted: true, manualReview: { status: 'APPROVED' } });
+  const service = await VendorService.create({ vendor: regionalVendor._id, name: 'Regional Catering', category: 'Catering', status: 'ACTIVE', pricing: { basePrice: 12000 } });
+  await VendorCapability.create({ vendor: regionalVendor._id, vendorService: service._id, teamSize: 4, simultaneousEventLimit: 1 });
+  await VendorFinancialProfile.create({ vendor: regionalVendor._id, pan: { verificationStatus: 'VERIFIED' }, bankAccount: { verificationStatus: 'VERIFIED' } });
+  await OperatingLocation.create({ vendor: regionalVendor._id, label: 'Kapkot kitchen', city: 'Kapkot', state: 'Uttarakhand', isPrimary: true });
+  await ServiceCoverage.create({ vendor: regionalVendor._id, vendorService: service._id, coverageType: 'DISTRICT', city: 'Bageshwar', state: 'Uttarakhand' });
+  await ServiceCoverage.create({ vendor: regionalVendor._id, vendorService: service._id, coverageType: 'STATE', state: 'Uttarakhand' });
+  await PortfolioItem.create({ vendor: regionalVendor._id, mediaType: 'IMAGE', url: 'https://example.test/regional-catering.jpg' });
+  owner.vendorOrganization = regionalVendor._id;
+  await owner.save();
+  const session = await ExternalSession.create({ user: owner._id, refreshTokenHash: key(), expiresAt: new Date(Date.now() + 3600000) });
+  const token = signExternalAccessToken(owner, session._id);
+  await request(app).post('/api/vendor/activation-review').set(auth(token)).send({}).expect(200);
+  await request(app).post(`/api/admin/external-users/organizations/${regionalVendor._id}/activation`).set(auth(adminToken)).send({ action: 'APPROVE', reason: 'Regional test vendor approved', idempotencyKey: key() }).expect(200);
+
+  const rows = await listBookableServices({ city: 'Kapkote, Bageshwar' });
+  assert.ok(rows.some(row => String(row.service._id) === String(service._id)));
+  assert.equal((await findBookableService(service._id, { city: 'Bageshwar' }))?.service?._id.toString(), service._id.toString());
 });
 
 test('approving a quote does not manufacture a confirmed booking or verified payment', async () => {
