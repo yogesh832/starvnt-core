@@ -26,6 +26,30 @@ function coordsOf(value) {
   return Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0) ? { lat, lng } : null;
 }
 
+const REGIONAL_CENTRES = [
+  { aliases: ['kapkote', 'kapkot'], district: 'bageshwar', state: 'uttarakhand', coordinates: { lat: 29.9458, lng: 79.9042 } },
+  { aliases: ['bageshwar'], district: 'bageshwar', state: 'uttarakhand', coordinates: { lat: 29.8398, lng: 79.7712 } },
+];
+
+function normalizedPlace(value) {
+  return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+function regionalPlaceCoordinates(value) {
+  const normalized = normalizedPlace(value);
+  const match = REGIONAL_CENTRES.find((centre) => centre.aliases.some((alias) => normalized.includes(alias)));
+  return match?.coordinates || null;
+}
+
+function regionalPlace(value) {
+  const normalized = normalizedPlace(value);
+  return REGIONAL_CENTRES.find((centre) => centre.aliases.some((alias) => normalized.includes(alias))) || null;
+}
+
+function placeCoordinates(value, fallback) {
+  return coordsOf(value?.coordinates) || regionalPlaceCoordinates([value?.locality, value?.city, value?.address, value?.state].filter(Boolean).join(' ')) || fallback || null;
+}
+
 function haversineKm(a, b) {
   if (!a || !b) return null;
   const toRad = (v) => (v * Math.PI) / 180;
@@ -40,6 +64,10 @@ function haversineKm(a, b) {
 
 function cityMatcher(city) {
   if (!city) return null;
+  const normalized = normalizedPlace(city);
+  if (/\b(?:kapkote?|kapkot|bageshwar)\b/.test(normalized)) {
+    return /kapkote?|kapkot|bageshwar/i;
+  }
   return new RegExp(escapeRegex(city), 'i');
 }
 
@@ -101,15 +129,27 @@ function coverageFit({ regex, origin, vendor, loc, cov }) {
         regex.test(String(cov.state || '')) ||
         (cov.localities || []).some((locality) => regex.test(String(locality || ''))))
   );
+  const requestedCityRegion = regionalPlace(regex?.source || '');
+  const requestedState = requestedCityRegion?.state || null;
+  const requestedDistrict = requestedCityRegion?.district || null;
+  const declaredStateMatches = Boolean(
+    cov?.coverageType === 'STATE' && requestedState && normalizedPlace(cov.state) === requestedState,
+  );
+  const declaredDistrictMatches = Boolean(
+    cov?.coverageType === 'DISTRICT' && requestedDistrict &&
+      normalizedPlace(cov.city || cov.localities?.join(' ')).includes(requestedDistrict),
+  );
+  const regionalCoverageMatches = declaredStateMatches || declaredDistrictMatches;
   const radiusKm = Number(cov?.radiusKm || 40);
-  const distanceKm = haversineKm(origin, coordsOf(loc?.coordinates));
+  const locationPoint = placeCoordinates(loc, regionalPlaceCoordinates(vendor.location));
+  const distanceKm = haversineKm(origin, locationPoint);
   const coordinateMatches = distanceKm != null && distanceKm <= radiusKm;
   const radiusIsAuthoritative = Boolean(cov?.coverageType === 'RADIUS' && distanceKm != null);
   const isNormal = radiusIsAuthoritative
     ? coordinateMatches
-    : Boolean(profileMatches || locationTextMatches || coverageTextMatches || coordinateMatches);
+    : Boolean(profileMatches || locationTextMatches || coverageTextMatches || coordinateMatches || regionalCoverageMatches);
 
-  return { isNormal, radiusKm, distanceKm, profileMatches, locationTextMatches, coverageTextMatches, coordinateMatches };
+  return { isNormal, radiusKm, distanceKm, profileMatches, locationTextMatches, coverageTextMatches, coordinateMatches, regionalCoverageMatches };
 }
 
 function extendedFallbackMeta(fit, cov) {
@@ -134,7 +174,7 @@ function extendedFallbackMeta(fit, cov) {
  */
 export async function listBookableServices({ city, coordinates } = {}) {
   const regex = cityMatcher(city);
-  const origin = coordsOf(coordinates);
+  const origin = coordsOf(coordinates) || regionalPlaceCoordinates(city);
   const candidates = await VendorOrganization.find({ status: 'ACTIVE', 'activationReview.status': 'APPROVED', isRestricted: { $ne: true } }).select(ORG_FIELDS).lean();
   const evaluated = await Promise.all(candidates.map(async org => ({ org, readiness: await evaluateVendorActivation(org._id) })));
   const orgs = evaluated.filter(row => row.readiness.matchingEligible).map(row => row.org);
@@ -159,30 +199,47 @@ export async function listBookableServices({ city, coordinates } = {}) {
     if (!portfolioByVendor.has(key)) portfolioByVendor.set(key, []);
     portfolioByVendor.get(key).push(p);
   }
-  const coveragesByService = new Map(coverages.map((c) => [String(c.vendorService), c]));
+  const coveragesByService = new Map();
+  for (const coverage of coverages) {
+    const key = String(coverage.vendorService);
+    if (!coveragesByService.has(key)) coveragesByService.set(key, []);
+    coveragesByService.get(key).push(coverage);
+  }
 
   const mapped = services
     .map((s) => {
       const vendor = byId.get(String(s.vendor));
       if (!vendor) return null;
       const vendorId = String(vendor._id);
-      const matchedCoverage = coveragesByService.get(String(s._id));
+      const serviceCoverages = coveragesByService.get(String(s._id)) || [];
       const vendorLocations = locationsByVendor.get(vendorId) || [];
-      const matchedLocation = nearestLocation(vendorLocations, origin);
       const portfolio = portfolioByVendor.get(vendorId) || [];
-      const fit = coverageFit({ regex, origin, vendor, loc: matchedLocation, cov: matchedCoverage });
-      const extendedService = fit.isNormal ? null : extendedFallbackMeta(fit, matchedCoverage);
+      const locationCandidates = vendorLocations.length ? vendorLocations : [null];
+      const fitCandidates = serviceCoverages.flatMap((cov) => locationCandidates.map((loc) => ({
+        cov,
+        loc,
+        fit: coverageFit({ regex, origin, vendor, loc, cov }),
+      })));
+      fitCandidates.sort((a, b) => Number(b.fit.isNormal) - Number(a.fit.isNormal) ||
+        (a.fit.distanceKm ?? Infinity) - (b.fit.distanceKm ?? Infinity));
+      const bestFit = fitCandidates[0] || null;
+      const matchedCoverage = bestFit?.cov || null;
+      const matchedLocation = bestFit?.loc || nearestLocation(vendorLocations, origin);
+      const fit = bestFit?.fit || coverageFit({ regex, origin, vendor, loc: matchedLocation, cov: null });
+      const missingServiceCoverage = Boolean((regex || origin) && !serviceCoverages.length);
+      const isExactMatch = !missingServiceCoverage && fit.isNormal;
+      const extendedService = isExactMatch || missingServiceCoverage ? null : extendedFallbackMeta(fit, matchedCoverage);
 
       return {
         service: s,
         vendor,
         matchedLocation: publicLocation(matchedLocation),
         portfolio,
-        isExactMatch: fit.isNormal,
+        isExactMatch,
         distanceKm: fit.distanceKm,
         matchedCoverage: publicCoverage(matchedCoverage),
         extendedService,
-        coverageStatus: fit.isNormal ? 'normal' : extendedService ? 'extended_fallback' : 'out_of_coverage',
+        coverageStatus: isExactMatch ? 'normal' : extendedService ? 'extended_fallback' : 'out_of_coverage',
       };
     })
     .filter(Boolean);
@@ -209,19 +266,30 @@ export async function findBookableService(serviceId, { city, coordinates } = {})
   const vendor = await VendorOrganization.findOne({ _id: service.vendor, isCommerciallyActive: true }).select(ORG_FIELDS).lean();
   if (!vendor) return null;
   if (!(await evaluateVendorActivation(vendor._id)).matchingEligible) return null;
-  const origin = coordsOf(coordinates);
+  const origin = coordsOf(coordinates) || regionalPlaceCoordinates(city);
   if (!city && !origin) {
     const matchedLocation = await OperatingLocation.findOne({ vendor: vendor._id }).sort({ isPrimary: -1 }).lean();
     const matchedCoverage = await ServiceCoverage.findOne({ vendor: vendor._id, vendorService: service._id }).lean();
     return { service, vendor, matchedLocation: publicLocation(matchedLocation), matchedCoverage, isExactMatch: true };
   }
   const regex = cityMatcher(city);
-  const [matchedLocation, matchedCoverage] = await Promise.all([
+  const [matchedLocations, serviceCoverages] = await Promise.all([
     OperatingLocation.find({ vendor: vendor._id }).lean(),
-    ServiceCoverage.findOne({ vendor: vendor._id, vendorService: service._id }).lean(),
+    ServiceCoverage.find({ vendor: vendor._id, vendorService: service._id }).lean(),
   ]);
-  const loc = Array.isArray(matchedLocation) ? nearestLocation(matchedLocation, origin) : matchedLocation;
-  const fit = coverageFit({ regex, origin, vendor, loc, cov: matchedCoverage });
+  const locationCandidates = matchedLocations.length ? matchedLocations : [null];
+  const fitCandidates = serviceCoverages.flatMap((cov) => locationCandidates.map((loc) => ({
+    cov,
+    loc,
+    fit: coverageFit({ regex, origin, vendor, loc, cov }),
+  })));
+  fitCandidates.sort((a, b) => Number(b.fit.isNormal) - Number(a.fit.isNormal) ||
+    (a.fit.distanceKm ?? Infinity) - (b.fit.distanceKm ?? Infinity));
+  const bestFit = fitCandidates[0] || null;
+  const matchedCoverage = bestFit?.cov || null;
+  const loc = bestFit?.loc || nearestLocation(matchedLocations, origin);
+  const fit = bestFit?.fit || coverageFit({ regex, origin, vendor, loc, cov: null });
+  if ((regex || origin) && !serviceCoverages.length) return null;
   const extendedService = fit.isNormal ? null : extendedFallbackMeta(fit, matchedCoverage);
   if (!fit.isNormal && !extendedService) return null;
 
