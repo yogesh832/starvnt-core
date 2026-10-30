@@ -356,7 +356,7 @@ export function nextQuestion(event, requirements, contextRows) {
     return { topic: 'event.date', question: `What date are you planning the ${typeWord}?`, options: [] };
   }
   if (!event.city && !skipped.has('event.city')) {
-    return { topic: 'event.city', question: 'Which city will it be in?', options: [] };
+    return { topic: 'event.city', question: 'Where will your event take place? Search for and select the town or area below so we can match the correct location.', options: [] };
   }
   if (!event.guestCount && !skipped.has('event.guest_count')) {
     return {

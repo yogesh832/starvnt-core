@@ -667,6 +667,13 @@ export async function createManualEvent(customerId, body = {}, { idempotencyKey:
   if (!facts.eventType) missing.push({ field: 'eventType', label: 'Event type' });
   if (!facts.eventDate) missing.push({ field: 'eventDate', label: 'Date' });
   if (!facts.city) missing.push({ field: 'city', label: 'Location' });
+  const coordinates = facts['location.coordinates'];
+  const hasVerifiedMapPoint = Number.isFinite(Number(coordinates?.lat)) &&
+    Number.isFinite(Number(coordinates?.lng)) &&
+    Math.abs(Number(coordinates.lat)) <= 90 &&
+    Math.abs(Number(coordinates.lng)) <= 180 &&
+    (Number(coordinates.lat) !== 0 || Number(coordinates.lng) !== 0);
+  if (facts.city && !hasVerifiedMapPoint) missing.push({ field: 'location.coordinates', label: 'Select a location from search' });
   if (missing.length) throw badRequest('MISSING_DETAILS', `Please add: ${missing.map((m) => m.label).join(', ')}`, { missing });
   if (idempotencyKey) {
     const existing = await eventsRepo.findEventByIdempotencyKey(customerId, idempotencyKey);

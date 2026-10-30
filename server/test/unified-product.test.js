@@ -179,6 +179,22 @@ test('customer catalogue finds approved active services across Kapkote and Bages
   assert.equal((await findBookableService(service._id, { city: 'Bageshwar' }))?.service?._id.toString(), service._id.toString());
 });
 
+test('customer location search is authenticated and ignores too-short queries without contacting a provider', async () => {
+  const result = await request(app).get('/api/customer/locations/search?q=k').set(auth(customerToken)).expect(200);
+  assert.deepEqual(result.body.places, []);
+  await request(app).get('/api/customer/locations/search?q=Kapkote').expect(401);
+});
+
+test('manual customer events reject city-only locations without a selected map point', async () => {
+  const result = await request(app).post('/api/customer/events').set(auth(customerToken)).send({
+    eventType: 'wedding',
+    eventDate: '2027-10-01',
+    city: 'Kapkote',
+  }).expect(400);
+  assert.equal(result.body.error, 'MISSING_DETAILS');
+  assert.ok(result.body.missing.some((item) => item.field === 'location.coordinates'));
+});
+
 test('approving a quote does not manufacture a confirmed booking or verified payment', async () => {
   const service = await VendorService.create({ vendor: vendor._id, name: 'Quote test service', category: 'Photography', pricing: { basePrice: 5000 } });
   const quote = await Quote.create({ vendor: vendor._id, customer: customer._id, vendorService: service._id, serviceName: 'Quote test', eventDate: '2027-10-01', status: 'SUBMITTED', pricingBreakdown: { basePrice: 5000, totalAmount: 5000 } });
