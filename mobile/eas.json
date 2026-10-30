@@ -30,6 +30,12 @@
         "EXPO_PUBLIC_DISABLE_TEST_AUTH": "true",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1009726530856-34nc725qvptbshmfbrtpjcis8j3pu1iq.apps.googleusercontent.com"
       }
+    },
+    "production-apk": {
+      "extends": "production",
+      "environment": "production",
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
     }
   }
 }
