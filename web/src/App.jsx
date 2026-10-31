@@ -107,6 +107,10 @@ function RootRedirect() {
 }
 
 export default function App() {
+  return <ErrorBoundary><ApplicationRoutes /></ErrorBoundary>;
+}
+
+function ApplicationRoutes() {
   return (
     <Routes>
       {/* Public landing — guests plan here, partner/admin subdomains redirect appropriately */}
@@ -126,7 +130,6 @@ export default function App() {
       <Route path="/register" element={<ExternalLogin />} />
       <Route path="/privacy" element={<PublicPolicyPage kind="privacy" />} />
       <Route path="/terms" element={<PublicPolicyPage kind="terms" />} />
-      {DEV_TOOLS_ENABLED && <>
       <Route
         path="/customer/*"
         element={
@@ -165,6 +168,7 @@ export default function App() {
       />
 
       {/* Developer POV Test Authentication Routes (/auth-test) */}
+      {DEV_TOOLS_ENABLED && <>
       <Route
         path="/auth-test"
         element={

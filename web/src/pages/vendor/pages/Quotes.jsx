@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Page } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
@@ -17,6 +17,8 @@ const PIPELINE = [
 
 export default function Quotes() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const requestedRecord = params.get('record');
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,6 +30,13 @@ export default function Quotes() {
   const [editingQuote, setEditingQuote] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [openingChat, setOpeningChat] = useState(false);
+
+  useEffect(() => {
+    if (!requestedRecord || loading) return;
+    const record = quotes.find(row => row._id === requestedRecord);
+    if (record) setViewingQuote(record);
+    else setError('This quotation is unavailable or is not authorized for your account.');
+  }, [requestedRecord, quotes, loading]);
 
   async function openQuoteChat(quote) {
     if (openingChat) return;

@@ -29,6 +29,14 @@ jobs:
         run: npm test
       - name: Frontend production build
         run: npm run build -w web
+      - name: Install isolated production browser verification tools
+        run: |
+          npm install --prefix tmp/vendor-os-tools --no-save --package-lock=false --ignore-scripts playwright@1.64.1
+          node tmp/vendor-os-tools/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Verify production portal routes and vendor dashboard in a browser
+        run: |
+          VITE_API_URL=http://127.0.0.1:4117 npm run build -w web -- --outDir ../tmp/qa/vendor-business-dashboard/site
+          node server/scripts/verify-vendor-business-dashboard.js
       - name: Build production container images
         run: |
           docker build --tag starvnt-backend:ci --file deploy/aws/Dockerfile.backend .

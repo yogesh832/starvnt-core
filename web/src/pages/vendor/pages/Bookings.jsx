@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Page, Card } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
@@ -41,6 +41,8 @@ function executionChecklistFor(status, checklist = []) {
 
 export default function Bookings() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const requestedRecord = params.get('record');
   const [openingConversation, setOpeningConversation] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +65,13 @@ export default function Bookings() {
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
+
+  useEffect(() => {
+    if (!requestedRecord || loading) return;
+    const record = bookings.find(row => row.dbId === requestedRecord);
+    if (record) setOpen(record.id);
+    else setFeedback('This booking is unavailable or is not authorized for your account.');
+  }, [requestedRecord, bookings, loading]);
 
   useEffect(() => {
     async function loadBookings() {

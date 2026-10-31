@@ -1,3 +1,5 @@
+import VendorBusinessDashboard from '../VendorBusinessDashboard.jsx';
+import { notificationAction } from '../vendorNotificationUi.js';
 import ProfileStatus from '../../../components/ProfileStatus.jsx';
 import { VENDOR_SETUP_STEPS } from '../../../../../server/src/common/vendorSetupSteps.js';
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -246,100 +248,6 @@ export function MiniCalendar({ bookings = [], blockouts = [] }) {
 }
 
 /**
- * Authentic Funnel Performance Widget
- * Accurately derives conversion rates from real opportunities, proposals, and bookings.
- */
-export function Performance({ enquiries = [], quotes = [], bookings = [] }) {
-  const leadCount = enquiries.length;
-  const quoteCount = quotes.length;
-  const bookingCount = bookings.length;
-
-  const quoteRate = leadCount > 0 ? `${Math.min(100, Math.round((quoteCount / leadCount) * 100))}%` : '—';
-  const bookingRate = quoteCount > 0 ? `${Math.min(100, Math.round((bookingCount / quoteCount) * 100))}%` : '—';
-  const overallConversion = leadCount > 0 ? `${Math.min(100, Math.round((bookingCount / leadCount) * 100))}%` : '—';
-
-  return (
-    <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 grid place-items-center">
-            <Icon name="trend" size={15} />
-          </div>
-          <h3 className="font-extrabold text-sm text-navy">Conversion Pipeline</h3>
-        </div>
-        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-          Live Data
-        </span>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 text-center pb-3 border-b border-gray-100">
-        <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
-          <div className="text-[10px] text-muted font-semibold truncate">Inbound Leads</div>
-          <div className="font-extrabold text-base text-navy mt-0.5">{leadCount}</div>
-          <div className="text-[9px] text-muted font-medium mt-0.5 truncate">Matched</div>
-        </div>
-        <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
-          <div className="text-[10px] text-muted font-semibold truncate">Lead → Quote</div>
-          <div className="font-extrabold text-base text-navy mt-0.5">{quoteRate}</div>
-          <div className="text-[9px] text-emerald-600 font-bold mt-0.5 truncate">{quoteCount} sent</div>
-        </div>
-        <div className="p-2 rounded-2xl bg-lavender/50 min-w-0">
-          <div className="text-[10px] text-muted font-semibold truncate">Quote → Booked</div>
-          <div className="font-extrabold text-base text-navy mt-0.5">{bookingRate}</div>
-          <div className="text-[9px] text-emerald-600 font-bold mt-0.5 truncate">{bookingCount} locked</div>
-        </div>
-      </div>
-
-      {leadCount === 0 ? (
-        <div className="pt-4 text-center">
-          <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-lavender text-muted mb-2">
-            <Icon name="trend" size={18} />
-          </div>
-          <p className="text-xs font-bold text-navy">Pipeline Awaiting Activity</p>
-          <p className="text-[11px] text-muted mt-1 leading-relaxed">
-            Real conversion percentages will compute as incoming customer requests progress to proposals and confirmed bookings.
-          </p>
-        </div>
-      ) : (
-        <div className="mt-4 space-y-2.5">
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px]">
-              <span className="font-semibold text-muted">Proposal Response Rate</span>
-              <span className="font-extrabold text-navy">{quoteRate}</span>
-            </div>
-            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-primary h-full rounded-full transition-all duration-500"
-                style={{ width: quoteRate === '—' ? '0%' : quoteRate }}
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px]">
-              <span className="font-semibold text-muted">Booking Close Rate</span>
-              <span className="font-extrabold text-navy">{bookingRate}</span>
-            </div>
-            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                style={{ width: bookingRate === '—' ? '0%' : bookingRate }}
-              />
-            </div>
-          </div>
-          <div className="pt-1 flex items-center justify-between text-[10px] text-muted">
-            <span>Overall Win Rate: <strong className="text-navy">{overallConversion}</strong></span>
-            <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
-              <Icon name="shieldCheck" size={12} />
-              <span>Payment verified</span>
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
  * Enquiry Detail Dialog
  */
 function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
@@ -538,6 +446,7 @@ function NotificationsCard({
   unreadNotifCount = 0,
   onMarkRead,
   onMarkAllRead,
+  unavailable = false,
 }) {
   return (
     <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100">
@@ -564,7 +473,6 @@ function NotificationsCard({
         {notifications.slice(0, 4).map((n) => (
           <li
             key={n._id}
-            onClick={() => onMarkRead && onMarkRead(n._id)}
             className={`flex gap-3 items-start p-2.5 rounded-2xl cursor-pointer transition ${
               !n.isRead ? 'bg-primary-soft/50 border border-primary/20' : 'hover:bg-lavender/40 border border-transparent'
             }`}
@@ -593,12 +501,13 @@ function NotificationsCard({
                 {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />}
               </div>
               <div className="text-[11px] truncate text-ink/70 mt-0.5">{n.message}</div>
+              <Link className="inline-block min-h-11 py-3 text-primary underline" to={notificationAction(n).to} onClick={() => onMarkRead?.(n._id)}>{notificationAction(n).action}</Link>
             </div>
           </li>
         ))}
         {notifications.length === 0 && (
           <li className="text-muted text-center py-4 text-[11px]">
-            You're all caught up! No unread notifications.
+            {unavailable ? 'Notifications unavailable. Retry record lists to refresh.' : "You're all caught up! No unread notifications."}
           </li>
         )}
       </ul>
@@ -660,15 +569,13 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const [bookings, setBookings] = useState([]);
   const [blockouts, setBlockouts] = useState([]);
   const [services, setServices] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [reviewStats, setReviewStats] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [activation, setActivation] = useState(null);
   const [vendorProfile, setVendorProfile] = useState(null);
-  const [googleRating, setGoogleRating] = useState(null);
   const [gotItAcknowledged, setGotItAcknowledged] = useState(() => localStorage.getItem('vendorOnboardingDismissed') === 'true');
   const [loading, setLoading] = useState(true);
+  const [failedSources, setFailedSources] = useState([]);
 
   const loadLiveDashboard = useCallback(async () => {
     try {
@@ -682,7 +589,6 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         bkRes,
         blRes,
         svcRes,
-        revRes,
         notifRes
       ] = await Promise.all([
         externalApi.call('/vendor/activation-status').catch(() => ({ ok: false })),
@@ -692,9 +598,10 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         externalApi.call('/vendor/bookings').catch(() => ({ ok: false })),
         externalApi.call('/vendor/availability/blockouts').catch(() => ({ ok: false })),
         externalApi.call('/vendor/services').catch(() => ({ ok: false })),
-        externalApi.call('/vendor/reviews').catch(() => ({ ok: false })),
         externalApi.call('/vendor/notifications').catch(() => ({ ok: false })),
       ]);
+
+      setFailedSources([['activation', actRes], ['profile', profRes], ['enquiries', oppsRes], ['quotes', quotesRes], ['bookings', bkRes], ['availability', blRes], ['services', svcRes], ['notifications', notifRes]].filter(([, result]) => !result?.ok).map(([name]) => name));
 
       // 0. Activation & Profile
       if (actRes?.ok && actRes.status) {
@@ -702,10 +609,6 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       }
       if (profRes?.ok && profRes.vendor) {
         setVendorProfile(profRes.vendor);
-        if (profRes.googleRating) setGoogleRating(profRes.googleRating);
-      }
-      if (revRes?.ok && revRes.googleRating) {
-        setGoogleRating(revRes.googleRating);
       }
       if (blRes?.ok && Array.isArray(blRes.blockouts)) {
         setBlockouts(blRes.blockouts);
@@ -799,29 +702,16 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             ? (b.executionStatus === 'SERVICE_STARTED' ? 'In Progress' : 'Confirmed')
             : b.bookingStatus || 'Confirmed',
           paymentStatus: b.paymentStatus,
+          bookingStatus: b.bookingStatus,
+          executionStatus: b.executionStatus,
         }));
         setBookings(liveBks);
       } else {
         setBookings([]);
       }
 
-      // 4. Services (strictly authentic DB records)
-      if (svcRes?.ok && Array.isArray(svcRes.services)) {
-        setServices(svcRes.services);
-      } else {
-        setServices([]);
-      }
-
-      // 5. Authentic Reviews & Ratings from DB
-      if (revRes?.ok && Array.isArray(revRes.reviews)) {
-        setReviews(revRes.reviews);
-        setReviewStats(revRes.stats || null);
-      } else {
-        setReviews([]);
-        setReviewStats(null);
-      }
-
       // 6. Notifications
+      if (svcRes?.ok && Array.isArray(svcRes.services)) setServices(svcRes.services);
       if (notifRes?.ok && Array.isArray(notifRes.notifications)) {
         setNotifications(notifRes.notifications);
         setUnreadNotifCount(notifRes.unreadCount || 0);
@@ -838,9 +728,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
   useEffect(() => {
     loadLiveDashboard();
-    const timer = setInterval(loadLiveDashboard, 30000);
     window.addEventListener('focus', loadLiveDashboard);
-    return () => { clearInterval(timer); window.removeEventListener('focus', loadLiveDashboard); };
+    return () => { window.removeEventListener('focus', loadLiveDashboard); };
   }, [loadLiveDashboard]);
 
   async function handleSendQuote(q, enquiry) {
@@ -928,58 +817,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const isDocVerified = Boolean(checklist.verified);
   const completedStepsCount = VENDOR_SETUP_STEPS.filter(step => step.done(checklist)).length;
 
-  // Real KPI calculations
-  const advanceReceived = bookings.reduce((sum, b) => sum + (Number(b.advancePaid) || 0), 0);
-  const confirmedBookingValue = bookings.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
-  const activeBookingsCount = bookings.filter((b) => b.status !== 'CANCELLED').length;
-  const activeEnquiriesCount = enquiries.filter((e) => e.status === 'New' || e.status === 'NEW').length;
-  const hasStarvntReviews = (reviewStats?.totalReviews || 0) > 0;
-  const avgRatingDisplay = hasStarvntReviews && reviewStats.averageRating !== '0.0'
-    ? `${reviewStats.averageRating}`
-    : googleRating?.rating
-    ? `${googleRating.rating}`
-    : '—';
-
-  const ratingFoot = hasStarvntReviews
-    ? `${reviewStats?.totalReviews} verified client reviews`
-    : googleRating?.rating
-    ? `${googleRating.reviewCount || 0} reviews on Google Maps`
-    : '0 verified client reviews';
-
-  const dynamicStats = [
-    {
-      label: 'Advance Received',
-      value: `₹${advanceReceived.toLocaleString()}`,
-      foot: confirmedBookingValue > 0 ? `₹${confirmedBookingValue.toLocaleString()} confirmed booking value` : '₹0 received yet',
-      footClass: advanceReceived > 0 ? 'text-emerald-600' : 'text-muted',
-      icon: 'wallet',
-      iconBg: 'bg-emerald-50 text-emerald-600',
-    },
-    {
-      label: 'Active Bookings',
-      value: activeBookingsCount,
-      foot: bookings[0] ? `Next: ${bookings[0].eventDate || bookings[0].date}` : 'No upcoming bookings',
-      footClass: bookings.length > 0 ? 'text-sky-600' : 'text-muted',
-      icon: 'bookings',
-      iconBg: 'bg-sky-50 text-sky-600',
-    },
-    {
-      label: 'Inbound Enquiries',
-      value: enquiries.length,
-      foot: activeEnquiriesCount > 0 ? `${activeEnquiriesCount} new leads require reply` : 'Qualified matching leads',
-      footClass: activeEnquiriesCount > 0 ? 'text-primary' : 'text-muted',
-      icon: 'message',
-      iconBg: 'bg-primary-soft text-primary',
-    },
-    {
-      label: googleRating?.rating && !hasStarvntReviews ? 'Google Maps Rating' : 'Client Rating',
-      value: avgRatingDisplay,
-      foot: ratingFoot,
-      footClass: (hasStarvntReviews || googleRating?.rating) ? 'text-amber-500 font-bold' : 'text-muted',
-      icon: 'star',
-      iconBg: 'bg-amber-50 text-amber-500',
-    },
-  ];
+  const currentLocalDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const upcomingBookings = bookings.filter(row => row.bookingStatus === 'CONFIRMED' && row.executionStatus !== 'COMPLETION_VERIFIED' && row.eventDate >= currentLocalDay).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
 
   const quickActions = [
     { label: 'Add Service', icon: 'services', to: '/vendor/services', bg: 'bg-purple-50 text-purple-600' },
@@ -1039,7 +878,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     </span>
                     Live & Matchable
                   </span>
-                ) : completionPercentage === 100 ? (
+                ) : !activation ? <span className="text-xs font-bold text-muted">Operating status unavailable</span> : completionPercentage === 100 ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
                     <span className="w-2 h-2 rounded-full bg-amber-500" />
                     Profile setup 100% · {activation?.activationState?.replaceAll('_', ' ') || 'Status unavailable'}
@@ -1083,11 +922,14 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           </div>
         </div>
 
+        {failedSources.length > 0 && <div role="alert" className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">Could not refresh: {failedSources.join(', ')}. Related record lists may be unavailable or stale. <button className="underline font-bold" onClick={loadLiveDashboard} disabled={loading}>Retry record lists</button></div>}
+        <VendorBusinessDashboard />
+
         {/* Aura+ assistant */}
         {onAskAura && <AskAuraCard onAsk={onAskAura} />}
 
         {/* 6-STEP MANDATORY ONBOARDING READINESS */}
-        {(!isMatchingEligible || !gotItAcknowledged) && (
+        {activation && (!isMatchingEligible || !gotItAcknowledged) && (
           <div className={`rounded-3xl p-5 sm:p-6 border transition shadow-sm ${
             isMatchingEligible
               ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50'
@@ -1409,28 +1251,6 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           </div>
         )}
 
-        {/* 4 Dynamic KPI Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-2 2xl:grid-cols-4 gap-4">
-          {dynamicStats.map((s) => (
-            <div
-              key={s.label}
-              className="bg-white rounded-3xl p-4 sm:p-5 shadow-xs border border-gray-100 hover:shadow-sm hover:border-gray-200 transition min-w-0"
-            >
-              <div className="flex items-center justify-between">
-                <div className={`w-11 h-11 rounded-2xl grid place-items-center ${s.iconBg}`}>
-                  <Icon name={s.icon} size={20} />
-                </div>
-                <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Live</span>
-              </div>
-              <div className="mt-4 text-2xl sm:text-3xl font-black text-navy tracking-tight">
-                {s.value}
-              </div>
-              <div className="text-xs font-semibold text-muted mt-1">{s.label}</div>
-              <div className={`text-[11px] mt-2 font-bold ${s.footClass}`}>{s.foot}</div>
-            </div>
-          ))}
-        </div>
-
         {/* 2-Column Section: Recent Enquiries & Upcoming Bookings */}
         <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 min-w-0">
 
@@ -1517,7 +1337,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                         <div className="w-10 h-10 rounded-2xl bg-lavender text-muted grid place-items-center mx-auto mb-2">
                           <Icon name="message" size={18} />
                         </div>
-                        <div className="text-xs font-bold text-navy">No New Enquiries</div>
+                        <div className="text-xs font-bold text-navy">{failedSources.includes('enquiries') ? 'Enquiries unavailable' : 'No New Enquiries'}</div>
                         <p className="text-[11px] text-muted max-w-xs mx-auto">
                           Your profile is active and matchable. As clients submit event requirements matching your coverage area, leads will appear here.
                         </p>
@@ -1538,9 +1358,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                     <Icon name="bookings" size={15} />
                   </div>
                   <h2 className="font-extrabold text-base text-navy">Upcoming Bookings</h2>
-                  {bookings.length > 0 && (
+                  {upcomingBookings.length > 0 && (
                     <span className="text-[10px] font-extrabold bg-sky-50 text-sky-600 px-2 py-0.5 rounded-full shrink-0">
-                      {bookings.length}
+                      {upcomingBookings.length}
                     </span>
                   )}
                 </div>
@@ -1550,7 +1370,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
               </div>
 
               <div className="space-y-3 min-w-0">
-                {bookings.slice(0, 3).map((b) => (
+                {upcomingBookings.slice(0, 3).map((b) => (
                   <div
                     key={b.id}
                     className="flex gap-3.5 items-center border border-gray-100 rounded-2xl p-3.5 hover:shadow-xs hover:border-gray-200 transition bg-white min-w-0"
@@ -1574,12 +1394,12 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                   </div>
                 ))}
 
-                {bookings.length === 0 && (
+                {upcomingBookings.length === 0 && (
                   <div className="py-8 text-center px-4 space-y-1.5">
                     <div className="w-10 h-10 rounded-2xl bg-lavender text-muted grid place-items-center mx-auto mb-2">
                       <Icon name="bookings" size={18} />
                     </div>
-                    <div className="text-xs font-bold text-navy">No Bookings Scheduled Yet</div>
+                    <div className="text-xs font-bold text-navy">{failedSources.includes('bookings') ? 'Bookings unavailable' : 'No Bookings Scheduled Yet'}</div>
                     <p className="text-[11px] text-muted max-w-xs mx-auto">
                       Confirmed client events and milestone dates will appear here after quotes are approved and advance payments are provider-verified.
                     </p>
@@ -1650,7 +1470,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                   <tr>
                     <td colSpan="6" className="py-8 text-center text-xs text-muted">
                       <div className="space-y-1">
-                        <p className="font-semibold text-navy">No active quotes in pipeline</p>
+                        <p className="font-semibold text-navy">{failedSources.includes('quotes') ? 'Quotes unavailable' : 'No active quotes in pipeline'}</p>
                         <p className="text-[11px] text-muted">Prepare proposals directly from inbound client leads.</p>
                       </div>
                     </td>
@@ -1694,17 +1514,18 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
         {/* Live Interactive Mini Calendar */}
         <div className="min-w-0">
-          <MiniCalendar bookings={bookings} blockouts={blockouts} />
+          {failedSources.includes('bookings') || failedSources.includes('availability') ? <p role="status" className="rounded-2xl bg-white p-4 text-sm">Calendar data unavailable. Retry record lists to refresh.</p> : <MiniCalendar bookings={bookings} blockouts={blockouts} />}
         </div>
 
         {/* Scheduled Upcoming Events */}
         <div className="min-w-0">
-          <ScheduledEventsCard bookings={bookings} />
+          {!failedSources.includes('bookings') && <ScheduledEventsCard bookings={upcomingBookings} />}
         </div>
 
         {/* Notifications & System Alerts */}
         <div className="min-w-0">
           <NotificationsCard
+            unavailable={failedSources.includes('notifications')}
             notifications={notifications}
             unreadNotifCount={unreadNotifCount}
             onMarkRead={handleMarkNotificationRead}
@@ -1714,7 +1535,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
         {/* Conversion Funnel Performance */}
         <div className="md:col-span-2 xl:col-span-1 min-w-0">
-          <Performance enquiries={enquiries} quotes={quotes} bookings={bookings} />
+          <Link to="/vendor/analytics" className="block rounded-3xl border border-gray-100 bg-white p-5 text-sm font-bold text-primary">View cohort-based sales analytics →</Link>
         </div>
       </aside>
 
