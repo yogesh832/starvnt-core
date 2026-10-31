@@ -37,6 +37,7 @@ import vendorAuraRoutes from './vendorAura.routes.js';
 import financialRoutes from './financial.routes.js';
 import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
 import { getVendorFirstResponseMetrics } from '../services/vendorFirstResponseMetrics.service.js';
+import { getVendorDashboard } from '../services/vendorDashboard.service.js';
 import rateLimit from 'express-rate-limit';
 import { openBookingThread, openServiceThread, draftThreadMessage, draftVendorMessage } from '../services/vendorMessaging.service.js';
 
@@ -291,6 +292,15 @@ router.get('/financial-truth', async (req, res, next) => {
   }
 });
 
+router.get('/dashboard', async (req, res, next) => {
+  const periodDays = Number(req.query.periodDays ?? 30);
+  if (![7, 30, 60, 90].includes(periodDays)) return res.status(400).json({ ok: false, error: 'INVALID_PERIOD_DAYS' });
+  try {
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ ok: true, dashboard: await getVendorDashboard(req.vendorId, { periodDays }) });
+  } catch (err) { next(err); }
+});
+
 router.get('/metrics/first-response', async (req, res, next) => {
   const periodDays = Number(req.query.periodDays ?? 30);
   if (![30, 60, 90].includes(periodDays)) return res.status(400).json({ ok: false, error: 'INVALID_PERIOD_DAYS' });
@@ -312,7 +322,10 @@ router.post('/goals', async (req, res) => {
   const validated = validateVendorGoalInput(req.body || {});
   if (validated.error) return res.status(400).json({ ok: false, error: validated.error });
   try {
-    const goal = await createVendorBusinessGoal({ vendorId: req.vendorId, userId: req.externalUser._id, values: validated.value });
+    const goal = await withVendorSchedule(req.vendorId, async assertLease => {
+      await assertLease();
+      return createVendorBusinessGoal({ vendorId: req.vendorId, userId: req.externalUser._id, values: validated.value });
+    });
     res.status(201).json({ ok: true, goal });
   } catch (err) {
     res.status(err.statusCode || 400).json({ ok: false, error: err.code || 'GOAL_CREATE_FAILED', message: err.message });
@@ -327,7 +340,10 @@ router.patch('/goals/:goalId', async (req, res) => {
   const validated = hasConfiguration ? validateVendorGoalInput(body) : null;
   if (validated?.error) return res.status(400).json({ ok: false, error: validated.error });
   try {
-    const goal = await updateVendorBusinessGoal({ vendorId: req.vendorId, userId: req.externalUser._id, goalId: req.params.goalId, values: validated?.value, status: body.status });
+    const goal = await withVendorSchedule(req.vendorId, async assertLease => {
+      await assertLease();
+      return updateVendorBusinessGoal({ vendorId: req.vendorId, userId: req.externalUser._id, goalId: req.params.goalId, values: validated?.value, status: body.status });
+    });
     if (!goal) return res.status(404).json({ ok: false, error: 'GOAL_NOT_FOUND' });
     res.json({ ok: true, goal });
   } catch (err) {
@@ -1025,6 +1041,7 @@ router.get('/reviews', async (req, res, next) => {
     const reviews = await VendorReview.find({
       vendor: req.vendorId,
       status: 'PUBLISHED',
+      isVerified: true,
     }).sort({ createdAt: -1 });
 
     const totalReviews = reviews.length;
