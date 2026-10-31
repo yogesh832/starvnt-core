@@ -90,6 +90,58 @@ const key = () => crypto.randomUUID();
 const block = (date, extra = {}) => ({ date, allDay: true, reason: 'Personal / Vacation', idempotencyKey: key(), ...extra });
 const auth = token => ({ Authorization: `Bearer ${token}` });
 
+test('business dashboard validates periods, derives ownership from the session and redacts private records', async () => {
+  await request(app).get('/api/vendor/dashboard').expect(401);
+  await request(app).get('/api/vendor/dashboard').set(auth(customerToken)).expect(403);
+  await request(app).get('/api/vendor/dashboard?periodDays=31').set(auth(vendorToken)).expect(400);
+  await request(app).get('/api/vendor/dashboard?periodDays=7&periodDays=30').set(auth(vendorToken)).expect(400);
+  const foreignOwner = await ExternalUser.create({ email: `dashboard-${key()}@unified.test`, fullName: 'Private vendor', accountType: 'VENDOR' });
+  const foreignVendor = await VendorOrganization.create({ owner: foreignOwner._id, businessName: 'Private dashboard' });
+  const privateBooking = await CoreBooking.create({ vendorId: foreignVendor._id, customerId: customer._id, serviceName: 'Private service', eventDate: '2099-01-01', totalAmount: 987654321, bookingStatus: 'CONFIRMED', createdAt: new Date(Date.now() - 86400000) });
+  const own = await request(app).get('/api/vendor/dashboard?periodDays=30').set(auth(vendorToken)).expect(200);
+  const tampered = await request(app).get(`/api/vendor/dashboard?periodDays=30&vendorId=${foreignVendor._id}`).set(auth(vendorToken)).expect(200);
+  assert.equal(own.headers['cache-control'], 'private, no-store');
+  assert.deepEqual(own.body.dashboard.snapshot, tampered.body.dashboard.snapshot);
+  const json = JSON.stringify(tampered.body);
+  for (const secret of [String(privateBooking._id), foreignOwner.email, 'Private service', 'Private dashboard']) assert.ok(!json.includes(secret));
+  assert.equal(own.body.dashboard.timezone, 'Asia/Kolkata');
+  assert.equal(own.body.dashboard.sourceStates.bookings, 'AVAILABLE');
+  assert.equal(own.body.dashboard.snapshot.upcomingBookings, 0);
+  assert.equal(own.body.dashboard.financial.bookingValue, 0);
+});
+
+test('dashboard review dependency failure does not become zero or break unrelated sections', async t => {
+  const originalFind = VendorReview.find.bind(VendorReview);
+  const mock = t.mock.method(VendorReview, 'find', (...args) => {
+    const query = originalFind(...args);
+    query.exec = async () => { throw new Error('Controlled test source outage'); };
+    return query;
+  });
+  try {
+    const response = await request(app).get('/api/vendor/dashboard').set(auth(vendorToken)).expect(200);
+    assert.equal(response.body.dashboard.sourceStates.reviews, 'UNAVAILABLE');
+    assert.equal(response.body.dashboard.quality.reviewCount, null);
+    assert.equal(response.body.dashboard.quality.rating, null);
+    assert.equal(response.body.dashboard.financial.available, true);
+    assert.equal(response.body.dashboard.weekly.current.available, false);
+    assert.ok(!JSON.stringify(response.body).includes('Controlled test source outage'));
+  } finally { mock.mock.restore(); }
+});
+
+test('concurrent goal creation cannot exceed three active goals', async () => {
+  const owner = await ExternalUser.create({ email: `goal-race-${key()}@unified.test`, fullName: 'Goal Race Vendor', accountType: 'VENDOR' });
+  const organization = await VendorOrganization.create({ owner: owner._id, businessName: 'Goal cap test' });
+  owner.vendorOrganization = organization._id; await owner.save();
+  const session = await ExternalSession.create({ user: owner._id, refreshTokenHash: key(), expiresAt: new Date(Date.now() + 3600000) });
+  const token = signExternalAccessToken(owner, session._id);
+  const payload = { name: 'Concurrent count target', metric: 'CONFIRMED_BOOKINGS', targetValue: 2, startDate: '2026-10-01', endDate: '2026-10-31' };
+  for (let i = 0; i < 2; i++) await request(app).post('/api/vendor/goals').set(auth(token)).send(payload).expect(201);
+  const results = await Promise.all([0, 1, 2].map(() => request(app).post('/api/vendor/goals').set(auth(token)).send(payload)));
+  assert.equal(results.filter(row => row.status === 201).length, 1);
+  assert.ok(results.filter(row => row.status !== 201).every(row => row.status === 409));
+  assert.equal(await VendorBusinessGoal.countDocuments({ vendor: organization._id, status: 'ACTIVE', deletedAt: null }), 3);
+});
+
 test('vendor mark-all-read clears unread notifications and conversations together', async () => {
   const notification = await Notification.create({ vendor: vendor._id, title: 'Unread test notice', message: 'Test only', type: 'MESSAGE', isRead: false });
   const conversation = await VendorMessageThread.create({ vendor: vendor._id, clientName: 'Read-state test', unreadVendorCount: 3, status: 'ACTIVE' });

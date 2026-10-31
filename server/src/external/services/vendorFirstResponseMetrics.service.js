@@ -16,7 +16,7 @@ const dateOf = (value) => {
   return date && Number.isFinite(date.getTime()) ? date : null;
 };
 
-function firstVendorResponse({ opportunities, quotes, threads, now }) {
+export function firstVendorResponse({ opportunities, quotes, threads, now, attributionWindowDays = null }) {
   const opportunityById = new Map(opportunities.map((item) => [idOf(item._id || item.id), item]));
   const firstAtByOpportunity = new Map();
   const quoteOpportunity = new Map();
@@ -26,6 +26,7 @@ function firstVendorResponse({ opportunities, quotes, threads, now }) {
     const createdAt = dateOf(opportunity?.createdAt);
     const responseAt = dateOf(at);
     if (!createdAt || !responseAt || responseAt < createdAt || responseAt > now) return;
+    if (attributionWindowDays != null && responseAt >= new Date(createdAt.getTime() + attributionWindowDays * DAY_MS)) return;
     const previous = firstAtByOpportunity.get(opportunityId);
     if (!previous || responseAt < previous) firstAtByOpportunity.set(opportunityId, responseAt);
   };
@@ -33,7 +34,7 @@ function firstVendorResponse({ opportunities, quotes, threads, now }) {
   for (const opportunity of opportunities) {
     const opportunityId = idOf(opportunity._id || opportunity.id);
     const createdAt = dateOf(opportunity.createdAt);
-    const elapsedMs = Number(opportunity.slaResponseTimeMs);
+    const elapsedMs = opportunity.slaResponseTimeMs == null ? NaN : Number(opportunity.slaResponseTimeMs);
     if (createdAt && Number.isFinite(elapsedMs) && elapsedMs >= 0) recordResponse(opportunityId, new Date(createdAt.getTime() + elapsedMs));
   }
 
@@ -71,7 +72,7 @@ export function summarizeVendorFirstResponses({ opportunities = [], quotes = [],
     const createdAt = dateOf(item.createdAt);
     return createdAt && createdAt >= periodStart && createdAt < periodEnd;
   });
-  const samples = firstVendorResponse({ opportunities: cohort, quotes, threads, now: nowDate });
+  const samples = firstVendorResponse({ opportunities: cohort, quotes, threads, now: nowDate, attributionWindowDays: 30 });
   const averageFirstResponseMs = complete && samples.length
     ? Math.round(samples.reduce((sum, value) => sum + value, 0) / samples.length)
     : null;
