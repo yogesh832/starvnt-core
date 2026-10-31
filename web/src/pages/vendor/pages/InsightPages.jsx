@@ -1,3 +1,4 @@
+import VendorBusinessDashboard from '../VendorBusinessDashboard.jsx';
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Page, Card} from './shared.jsx';
@@ -5,203 +6,41 @@ import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 import VendorMessageField from '../VendorMessageField.jsx';
-import { buildVendorAnalyticsMetrics } from '../analyticsMetrics.js';
 
-const paidAdvance = (booking) => Number(booking?.paymentSummary?.paidAmount || 0);
-const balanceDue = (booking) => Number(
-  booking?.paymentSummary?.balanceAmount ?? Math.max(0, Number(booking?.totalAmount || 0) - paidAdvance(booking))
-);
-const vendorPayable = (booking) => Number(
-  booking?.settlementDetails?.vendorPayable ||
-  booking?.settlementMath?.vendorPayable ||
-  booking?.vendorPayable ||
-  booking?.totalAmount ||
-  0
-);
+const verifiedPaid = booking => booking.paymentStatus === 'PAYMENT_VERIFIED' && Number.isFinite(booking.paymentSummary?.paidAmount) ? booking.paymentSummary.paidAmount : booking.paymentStatus === 'PENDING' ? 0 : null;
+const storedPayable = booking => booking.taxSummary?.invoiceNumber && Number.isFinite(booking.taxSummary.vendorPayable) ? booking.taxSummary.vendorPayable : null;
+const showMoney = value => value == null ? 'Unavailable' : `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
-/* ── Payments ─────────────────────────────────────────────────────────────── */
 export function PaymentsPage() {
-  const [bookings, setBookings] = useState([]);
-  const [financialTruth, setFinancialTruth] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadPayments = useCallback(async () => {
+  const [bookings, setBookings] = useState(null);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setError(''); setBookings(null);
     try {
-      setLoading(true);
-      const [res, truthRes] = await Promise.all([
-        externalApi.call('/vendor/bookings'),
-        externalApi.call('/vendor/financial-truth').catch(() => null),
-      ]);
-      if (res.ok && res.bookings) {
-        setBookings(res.bookings);
-      }
-      if (truthRes?.ok && truthRes.financialTruth) {
-        setFinancialTruth(truthRes.financialTruth);
-      }
-    } catch (err) {
-      console.warn('[PaymentsPage] Failed to fetch payments data:', err.message);
-    } finally {
-      setLoading(false);
-    }
+      const result = await externalApi.call('/vendor/bookings');
+      if (!result.ok || !Array.isArray(result.bookings)) throw new Error('Payment records unavailable.');
+      setBookings(result.bookings);
+    } catch (err) { setError(err.message); }
   }, []);
-
-  useEffect(() => {
-    loadPayments();
-  }, [loadPayments]);
-
-  const verifiedAdvanceAmount = bookings
-    .filter((b) => b.paymentStatus === 'PAYMENT_VERIFIED' && b.bookingStatus === 'CONFIRMED')
-    .reduce((sum, b) => sum + paidAdvance(b), 0);
-
-  const releasedAmount = bookings
-    .filter((b) => b.settlementStatus === 'SETTLED')
-    .reduce((sum, b) => sum + vendorPayable(b), 0);
-
-  const nextPayout = bookings
-    .filter((b) => b.executionStatus === 'SERVICE_STARTED' || b.executionStatus === 'COMPLETION_SUBMITTED' || b.executionStatus === 'COMPLETION_VERIFIED')
-    .reduce((sum, b) => sum + balanceDue(b), 0);
-
-  const truthMetrics = financialTruth?.metrics || {};
-  const aging = financialTruth?.agingBreakdown || {};
-  const overdueBookings = financialTruth?.overdueBookings || [];
-  const agingRows = [
-    ['Due today', aging.dueToday],
-    ['1-7 days', aging.dueIn1To7Days],
-    ['8-30 overdue', aging.overdue8To30Days],
-    ['31-60 overdue', aging.overdue31To60Days],
-    ['60+ overdue', aging.overdue60PlusDays],
-  ];
-
-  const stats = [
-    {
-      label: 'Verified Advances',
-      value: `₹${verifiedAdvanceAmount.toLocaleString()}`,
-      foot: 'Advance paid by customers',
-      iconBg: 'bg-orange-50 text-orange-500',
-      icon: 'wallet',
-    },
-    {
-      label: 'Released & Settled',
-      value: `₹${releasedAmount.toLocaleString()}`,
-      foot: `${bookings.filter((b) => b.settlementStatus === 'SETTLED').length} verified releases (Vendor Payable)`,
-      iconBg: 'bg-emerald-50 text-emerald-600',
-      icon: 'trend',
-    },
-    {
-      label: 'Pending Settlement Validation',
-      value: `₹${(truthMetrics.expectedSettlements ?? nextPayout).toLocaleString()}`,
-      foot: 'Remaining balance after advance',
-      iconBg: 'bg-primary-soft text-primary',
-      icon: 'payments',
-    },
-  ];
-
-  return (
-    <Page title="Payments" sub="Read-only payment and settlement records from Core.">
-      <div className="grid sm:grid-cols-3 gap-3.5">
-        {stats.map((s) => (
-          <Card key={s.label} className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${s.iconBg}`}>
-              <Icon name={s.icon} size={18} />
-            </div>
-            <div>
-              <div className="text-lg font-extrabold text-navy">{s.value}</div>
-              <div className="text-[11px] text-muted">{s.label}</div>
-              <div className="text-[10px] text-muted/80">{s.foot}</div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid lg:grid-cols-[1.1fr_1fr] gap-3.5">
-        <Card title="Receivables aging">
-          <div className="grid sm:grid-cols-5 gap-2">
-            {agingRows.map(([label, row]) => (
-              <div key={label} className="rounded-lg border border-gray-100 bg-white p-3">
-                <div className="text-[10px] font-bold uppercase text-muted">{label}</div>
-                <div className="mt-1 text-lg font-extrabold text-navy">₹{Number(row?.amount || 0).toLocaleString()}</div>
-                <div className="text-[10px] text-muted">{Number(row?.count || 0)} booking{Number(row?.count || 0) === 1 ? '' : 's'}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 text-[11px] text-muted">
-            Expected receivables: <strong className="text-navy">₹{Number(truthMetrics.expectedReceivables || 0).toLocaleString()}</strong>
-            {' '}· Due this week: <strong className="text-navy">₹{Number(truthMetrics.dueThisWeek || 0).toLocaleString()}</strong>
-          </div>
-        </Card>
-
-        <Card title="Overdue follow-ups">
-          {overdueBookings.length === 0 ? (
-            <p className="text-xs text-muted">No overdue receivables found in Core Booking truth.</p>
-          ) : (
-            <div className="space-y-2">
-              {overdueBookings.slice(0, 4).map((b) => (
-                <div key={b.bookingId} className="flex items-center justify-between gap-3 rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-2">
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-navy truncate">{b.bookingReference || b.serviceName}</div>
-                    <div className="text-[10px] text-muted truncate">{b.customerName || 'Customer'} · {b.daysOverdue}d overdue</div>
-                  </div>
-                  <div className="text-xs font-extrabold text-rose-700 shrink-0">₹{Number(b.amount || 0).toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <Card className="!p-0 overflow-x-auto" title="Payment and settlement history">
-        <table className="w-full text-[13px] min-w-[620px]">
-          <thead>
-            <tr className="text-left text-[10px] uppercase tracking-wider text-muted border-b border-gray-100">
-              {['Booking Reference', 'Customer', 'Service', 'Quote Total', 'Vendor Payable', 'Advance Paid', 'Balance', 'Payment Truth', 'Settlement Status', 'Event Date'].map((h) => (
-                <th key={h} className="px-5 py-3 font-semibold">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {bookings.map((b) => (
-              <tr key={b._id || b.bookingReference} className="border-b border-gray-50 last:border-0 hover:bg-lavender/30">
-                <td className="px-5 py-3 font-semibold text-primary">{b.bookingReference}</td>
-                <td className="px-5 py-3 font-medium text-navy">{b.customerName || 'Customer'}</td>
-                <td className="px-5 py-3 text-muted">{b.serviceName}</td>
-                <td className="px-5 py-3 font-bold text-navy">₹{(b.totalAmount || 0).toLocaleString()}</td>
-                <td className="px-5 py-3 font-bold text-emerald-700">₹{vendorPayable(b).toLocaleString()}</td>
-                <td className="px-5 py-3 font-bold text-emerald-700">₹{paidAdvance(b).toLocaleString()}</td>
-                <td className="px-5 py-3 font-semibold text-muted">₹{balanceDue(b).toLocaleString()}</td>
-                <td className="px-5 py-3"><StatusChip status={b.paymentStatus || 'Verified'} /></td>
-                <td className="px-5 py-3"><StatusChip status={b.settlementStatus || 'Pending'} /></td>
-                <td className="px-5 py-3 text-muted">{b.eventDate}</td>
-              </tr>
-            ))}
-            {loading && bookings.length === 0 && (
-              Array.from({ length: 4 }).map((_, i) => (
-                <tr key={i} className="border-b border-gray-50">
-                  <td className="px-5 py-4"><div className="h-3.5 w-24 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-3.5 w-28 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-3.5 w-32 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-3.5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-5 w-16 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                  <td className="px-5 py-4"><div className="h-3.5 w-20 bg-slate-200/70 animate-pulse rounded-full" /></td>
-                </tr>
-              ))
-            )}
-            {bookings.length === 0 && !loading && (
-              <tr>
-                <td colSpan="10" className="py-8 text-center text-xs text-muted">
-                  No payment transactions recorded yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </Card>
-
-    </Page>
-  );
+  useEffect(() => { load(); }, [load]);
+  return <Page title="Payments" sub="Read-only payment and settlement records from Core.">
+    <VendorBusinessDashboard financialOnly />
+    <Card title="Booking-level payment records">
+      {error && <p role="alert">{error} <button className="underline text-primary" onClick={load}>Retry</button></p>}
+      {!bookings && !error && <p role="status">Loading booking records…</p>}
+      {bookings?.length === 0 && <p>No payment records yet.</p>}
+      <div className="space-y-3">{bookings?.map(booking => <article key={booking._id} className="border border-gray-200 rounded-2xl p-4">
+        <Link className="font-bold text-primary underline" to={`/vendor/bookings?record=${encodeURIComponent(booking._id)}`}>{booking.bookingReference || 'Open booking'}</Link>
+        <p className="text-xs text-muted mt-1">{booking.bookingStatus} · {booking.paymentStatus || 'Payment status unavailable'} · {booking.settlementStatus || 'Settlement status unavailable'}</p>
+        <dl className="grid sm:grid-cols-3 gap-3 mt-3 text-sm">
+          <div><dt className="text-muted">Contract gross</dt><dd>{showMoney(booking.totalAmount)}</dd></div>
+          <div><dt className="text-muted">Invoiced vendor payable</dt><dd>{showMoney(storedPayable(booking))}</dd></div>
+          <div><dt className="text-muted">Verified payment snapshot</dt><dd>{showMoney(verifiedPaid(booking))}</dd></div>
+        </dl>
+      </article>)}</div>
+      <p className="text-xs text-muted mt-3">Amounts are current Core snapshots. Gross value is not earnings or profit. Refunds and adjustments require ledger reconciliation; no payment deadline is inferred from the event or creation date.</p>
+    </Card>
+  </Page>;
 }
 
 /* ── Reviews (Strictly DB / API Driven) ─────────────────────────────────── */
@@ -219,11 +58,13 @@ export function ReviewsPage() {
   const [replyingId, setReplyingId] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [submittingReply, setSubmittingReply] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   const loadReviews = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoading(true); setReviewError('');
       const res = await externalApi.call('/vendor/reviews');
+      if (!res.ok) throw new Error('Review records unavailable.');
       if (res.ok) {
         setReviews(res.reviews || []);
         if (res.stats) {
@@ -232,7 +73,7 @@ export function ReviewsPage() {
         setGoogleRating(res.googleRating || null);
       }
     } catch (err) {
-      console.warn('[ReviewsPage] Failed to fetch reviews:', err.message);
+      setReviewError(err.message);
     } finally {
       setLoading(false);
     }
@@ -267,13 +108,16 @@ export function ReviewsPage() {
       ? `${stats.averageRating} / 5 STARVNT rating (${stats.totalReviews} client reviews)${googleRating?.rating ? ` · ${googleRating.rating} / 5 on Google Maps (${googleRating.reviewCount} reviews)` : ''}.`
       : 'Verified client reviews and synced Google Maps ratings will appear here.';
 
+  if (reviewError) return <Page title="Reviews & Ratings"><p role="alert">{reviewError} <button className="underline text-primary" onClick={loadReviews}>Retry</button></p></Page>;
+  if (loading) return <Page title="Reviews & Ratings"><p role="status">Loading verified reviews…</p></Page>;
+
   return (
     <Page title="Reviews & Ratings" sub={subTitle}>
       {/* Metric Cards */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-2">
         <Card className="text-center">
           <div className="text-2xl font-extrabold text-navy">
-            {stats.totalReviews > 0 ? stats.averageRating : googleRating?.rating ? googleRating.rating : 'New'}
+            {stats.totalReviews > 0 ? stats.averageRating : 'No verified reviews yet.'}
           </div>
           <div className="text-xs text-muted mt-1">STARVNT Rating</div>
         </Card>
@@ -629,103 +473,5 @@ export function ReviewsPage() {
 
 /* ── Analytics (Live Metric Grounding) ───────────────────────────────────── */
 export function AnalyticsPage() {
-  const [counts, setCounts] = useState({
-    enquiriesCount: 0,
-    quotedEnquiriesCount: 0,
-    quotesCount: 0,
-    bookingsCount: 0,
-    linkedBookingsCount: 0,
-    verifiedAdvanceReceived: 0,
-    confirmedBookingValue: 0,
-  });
-
-  useEffect(() => {
-    async function loadCounts() {
-      try {
-        const [enquiriesRes, quotesRes, bookingsRes] = await Promise.all([
-          externalApi.call('/vendor/opportunities'),
-          externalApi.call('/vendor/quotes'),
-          externalApi.call('/vendor/bookings'),
-        ]);
-        const enquiries = Array.isArray(enquiriesRes?.opportunities) ? enquiriesRes.opportunities : [];
-        const quotes = Array.isArray(quotesRes?.quotes) ? quotesRes.quotes : [];
-        const bookings = Array.isArray(bookingsRes?.bookings) ? bookingsRes.bookings : [];
-        const linkedMetrics = buildVendorAnalyticsMetrics({ enquiries, quotes, bookings });
-        setCounts(linkedMetrics);
-      } catch (err) {
-        console.warn('[AnalyticsPage] Failed to load counts:', err.message);
-      }
-    }
-    loadCounts();
-  }, []);
-
-  const { enquiriesCount, quotedEnquiriesCount, quotesCount, bookingsCount, linkedBookingsCount, verifiedAdvanceReceived, confirmedBookingValue } = counts;
-  const enqToQuoteRate = enquiriesCount > 0 ? `${Math.round((quotedEnquiriesCount / enquiriesCount) * 100)}%` : '—';
-  const quoteToBookingRate = quotesCount > 0 ? `${Math.round((linkedBookingsCount / quotesCount) * 100)}%` : '—';
-
-  const rows = [
-    ['Total Enquiries Received', String(enquiriesCount), enquiriesCount > 0 ? 'Active' : 'Awaiting Leads'],
-    ['Enquiry → Quote Conversion', enqToQuoteRate, enquiriesCount > 0 ? `${quotedEnquiriesCount} enquiries with quotes` : 'No Data Yet'],
-    ['Total Quotes Generated', String(quotesCount), quotesCount > 0 ? 'In Progress' : '0 Quotes'],
-    ['Quote → Booking Conversion', quoteToBookingRate, quotesCount > 0 ? `${linkedBookingsCount} linked confirmed quotes` : 'No Data Yet'],
-    ['Confirmed Bookings', String(bookingsCount), bookingsCount > 0 ? 'Verified' : '0 Bookings'],
-    ['Advance Received', `₹${verifiedAdvanceReceived.toLocaleString()}`, verifiedAdvanceReceived > 0 ? 'Payment Verified' : '₹0'],
-    ['Confirmed Booking Value', `₹${confirmedBookingValue.toLocaleString()}`, confirmedBookingValue > 0 ? 'Core-confirmed value' : '₹0'],
-  ];
-
-  return (
-    <Page title="Analytics" sub="Conversion funnels, turnaround times and verified platform performance.">
-      <div className="grid lg:grid-cols-2 gap-5">
-        <Card title="Operational Funnel Overview">
-          <div className="p-4 space-y-4">
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-muted">Inbound Enquiries</span>
-                <span className="text-navy font-bold">{enquiriesCount}</span>
-              </div>
-              <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-primary" style={{ width: enquiriesCount > 0 ? '100%' : '0%' }} />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-muted">Enquiries Quoted</span>
-                <span className="text-navy font-bold">{quotedEnquiriesCount} ({enqToQuoteRate})</span>
-              </div>
-              <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-purple-500" style={{ width: enqToQuoteRate === '—' ? '0%' : enqToQuoteRate }} />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs font-semibold">
-                <span className="text-muted">Confirmed Bookings</span>
-                <span className="text-navy font-bold">{bookingsCount} ({quoteToBookingRate})</span>
-              </div>
-              <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500" style={{ width: quoteToBookingRate === '—' ? '0%' : `${Math.min(100, Number.parseInt(quoteToBookingRate, 10))}%` }} />
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="Conversion Metrics">
-          <ul className="divide-y divide-gray-50 text-sm">
-            {rows.map(([label, val, change]) => (
-              <li key={label} className="py-2.5 flex items-center justify-between">
-                <span className="text-muted text-xs">{label}</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-navy text-sm">{val}</span>
-                  <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                    {change}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-    </Page>
-  );
+  return <Page title="Analytics" sub="Server-calculated cohorts, documented attribution and complete weekly periods."><VendorBusinessDashboard analyticsOnly /></Page>;
 }

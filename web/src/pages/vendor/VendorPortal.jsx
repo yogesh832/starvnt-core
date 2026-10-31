@@ -311,7 +311,7 @@ export default function VendorPortal() {
       {navOpen && <div className="fixed inset-0 bg-navy/40 z-30 lg:hidden" onClick={() => setNavOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static top-0 left-0 h-screen z-40 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-all duration-300 ease-in-out ${isSidebarMini ? 'lg:w-20 w-64' : 'w-64'} ${navOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'}`}>
+      <aside className={`fixed lg:static top-0 left-0 h-screen z-40 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-all duration-300 ease-in-out ${isSidebarMini ? 'lg:w-20 w-64' : 'w-64'} ${navOpen ? 'visible translate-x-0 shadow-2xl' : 'invisible lg:visible -translate-x-full lg:translate-x-0'}`}>
         <div className={`px-4 py-4 flex items-center ${isSidebarMini ? 'lg:justify-center' : 'justify-between'} border-b border-gray-100 lg:border-none relative h-[68px]`}>
           <div className={`${isSidebarMini ? 'lg:hidden' : 'block'}`}>
             <LogoWord sub="Vendor OS" />

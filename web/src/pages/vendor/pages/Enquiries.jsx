@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Page, Card } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
@@ -8,6 +8,8 @@ import VendorMessageField from '../VendorMessageField.jsx';
 
 export default function Enquiries() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const requestedRecord = params.get('record');
   const [openingChat, setOpeningChat] = useState(false);
   async function openEnquiryChat(opportunity) {
     if (openingChat) return;
@@ -38,6 +40,13 @@ export default function Enquiries() {
   const [feedback, setFeedback] = useState(null);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [declining, setDeclining] = useState(null);
+
+  useEffect(() => {
+    if (!requestedRecord || loading) return;
+    const record = opportunities.find(row => row.dbId === requestedRecord);
+    if (record) setExpanded(record.id);
+    else setFeedback('This enquiry is unavailable or is not authorized for your account.');
+  }, [requestedRecord, opportunities, loading]);
 
   useEffect(() => {
     async function loadLiveOpportunities() {

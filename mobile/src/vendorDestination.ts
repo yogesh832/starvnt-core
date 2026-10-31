@@ -4,6 +4,10 @@ export function vendorDestination(
   if (!path.startsWith("/vendor/") || path.startsWith("//")) return null;
   const url = new URL(path, "https://app.starvnt.com");
   const page = url.pathname.replace(/\/$/, "").slice("/vendor/".length);
+  const record = url.searchParams.get('record');
+  if (record !== null && !/^[a-f\d]{24}$/i.test(record)) return null;
+  if (record && page === 'quotes') return { screen: 'VendorQuote', params: { quoteId: record } };
+  if (record && page === 'bookings') return { screen: 'VendorBooking', params: { booking: { _id: record } } };
   if (
     page === "services" &&
     ["gear", "coverage"].includes(url.searchParams.get("action") || "")
@@ -28,7 +32,7 @@ export function vendorDestination(
       "documents",
     ].includes(page)
   )
-    return { screen: "VendorModule", params: { module: page } };
+    return { screen: "VendorModule", params: { module: page, ...(record ? { recordId: record } : {}) } };
   if (["calendar", "availability"].includes(page))
     return { screen: "VendorCalendar" };
   if (["profile", "settings"].includes(page)) return { screen: "Profile" };
