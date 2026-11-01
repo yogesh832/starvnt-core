@@ -33,7 +33,7 @@ const { CoreBooking } = await import('../src/admin/models/CoreBooking.js');
 const { FinanceLedgerEntry } = await import('../src/admin/models/FinanceLedgerEntry.js');
 const { VendorReview } = await import('../src/external/models/VendorReview.js');
 const bcrypt = await import('bcryptjs');
-const report = { environment: 'Ephemeral local MongoDB, real Express API and Vite app, headless Chrome; synthetic fixtures only', checks: [], reconciliation: [], screenshots: [] };
+const report = { environment: 'Ephemeral local MongoDB, real Express API, production Vite build and headless browser; synthetic fixtures only', checks: [], reconciliation: [], screenshots: [] };
 let mongo, api, vite, browser;
 const now = new Date();
 const ago = days => new Date(now.getTime() - days * 86400000);
@@ -45,7 +45,7 @@ try {
   await Promise.all([...Object.values(externalConn.models), ...Object.values(adminConn.models)].map(model => model.init()));
   const password = crypto.randomUUID();
   const owner = await ExternalUser.create({ email: 'vendor-dashboard@example.test', fullName: 'QA Vendor', accountType: 'VENDOR', passwordHash: await bcrypt.default.hash(password, 4) });
-  const customer = await ExternalUser.create({ email: 'customer-dashboard@example.test', fullName: 'Synthetic Customer', accountType: 'CUSTOMER' });
+  const customer = await ExternalUser.create({ email: 'customer-dashboard@example.test', fullName: 'Synthetic Customer', accountType: 'CUSTOMER', passwordHash: await bcrypt.default.hash(password, 4) });
   const vendor = await VendorOrganization.create({ owner: owner._id, businessName: 'QA Business Dashboard', category: 'Photography', location: 'Pune', isProfileCompleted: true, status: 'ACTIVE', activationState: 'ACTIVE', activationReview: { status: 'APPROVED' }, workingHours: { Mon: { isOpen: true, hours: '9 AM - 6 PM' } } });
   owner.vendorOrganization = vendor._id; await owner.save();
   const service = await VendorService.create({ vendor: vendor._id, name: 'QA Photography', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 20000 } });
@@ -96,7 +96,8 @@ try {
   const staticServer = staticApp.listen(5197, '127.0.0.1');
   await new Promise((done, reject) => { staticServer.once('listening', done); staticServer.once('error', reject); });
   vite = { close: () => new Promise(done => staticServer.close(done)) };
-  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true, args: ['--disable-gpu', '--renderer-process-limit=2'] });
+  const executablePath = process.env.CHROME_PATH || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined);
+  browser = await chromium.launch({ ...(executablePath ? { executablePath } : {}), headless: true, args: ['--disable-gpu', '--renderer-process-limit=2'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.addInitScript(token => localStorage.setItem('starvnt_external_access_token', token), accessToken);
   const page = await context.newPage(); page.setDefaultTimeout(10000);
@@ -106,7 +107,8 @@ try {
   page.on('pageerror', error => pageErrors.push(error.message));
   report.consoleErrors = [];
   page.on('console', message => { if (message.type() === 'error') report.consoleErrors.push(message.text()); });
-  await page.goto('http://127.0.0.1:5197/vendor/dashboard');
+  if (!process.env.PORTAL_ROUTES_ONLY) {
+  await page.goto('http://127.0.0.1:5197/vendor/dashboard', { waitUntil: 'domcontentloaded' });
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   await page.getByRole('heading', { name: 'Your business goals', exact: true }).waitFor();
   check('Desktop document has no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -145,14 +147,14 @@ try {
   await page.waitForURL(`**/vendor/enquiries?record=${actionable._id}`);
   await page.getByRole('button', { name: /Respond & Quote|Revise \/ Update Offer/i }).first().waitFor();
   report.checks.push({ name: 'Action deep-link opens authorized enquiry detail', passed: true });
-  await page.goto(`http://127.0.0.1:5197/vendor/quotes?record=${draft._id}`);
+  await page.goto(`http://127.0.0.1:5197/vendor/quotes?record=${draft._id}`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: /close/i }).first().waitFor();
   report.checks.push({ name: 'Quote action opens existing quote detail', passed: true });
-  await page.goto(`http://127.0.0.1:5197/vendor/bookings?record=${contract._id}`);
+  await page.goto(`http://127.0.0.1:5197/vendor/bookings?record=${contract._id}`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: new RegExp(contract.bookingReference) }).waitFor();
   await page.getByRole('button', { name: 'Start Service (Check-in)', exact: true }).waitFor();
   report.checks.push({ name: 'Booking action opens existing booking module', passed: true });
-  await page.goto('http://127.0.0.1:5197/vendor/dashboard');
+  await page.goto('http://127.0.0.1:5197/vendor/dashboard', { waitUntil: 'domcontentloaded' });
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForFunction(() => getComputedStyle(document.querySelector('aside')).visibility === 'hidden');
@@ -176,12 +178,48 @@ try {
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   report.checks.push({ name: 'Network failure is explicit and Retry restores real API data', passed: true });
+  await page.goto('http://127.0.0.1:5197/customer', { waitUntil: 'domcontentloaded' });
+  await page.waitForURL('**/vendor/dashboard');
+  await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
+  report.checks.push({ name: 'Vendor session on /customer resolves to its authorized vendor dashboard, not an empty redirect loop', passed: true });
+
+  }
+  const guest = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+  const guestPage = await guest.newPage(); guestPage.setDefaultTimeout(10000);
+  const guestErrors = []; guestPage.on('pageerror', error => guestErrors.push(error.message));
+  for (const path of ['/customer', '/vendor', '/admin']) {
+    await guestPage.goto(`http://127.0.0.1:5197${path}`, { waitUntil: 'domcontentloaded' });
+    await guestPage.waitForURL(path === '/admin' ? '**/admin/login' : '**/login?next=*');
+    check(`Production ${path} has a visible protected sign-in destination`, (await guestPage.locator('body').innerText()).trim().length > 100, true);
+  }
+  await guestPage.goto('http://127.0.0.1:5197/auth-test', { waitUntil: 'domcontentloaded' });
+  await guestPage.waitForURL('**/login');
+  check('Production development shortcut stays disabled', (await guestPage.locator('body').innerText()).includes('Single Click'), false);
+  check('Production guest routes have no JavaScript exceptions', guestErrors, []);
+  await guest.close();
+
+  const customerLogin = await fetch('http://127.0.0.1:4117/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: customer.email, password, accountType: 'CUSTOMER' }) });
+  check('Customer fixture uses the real password sign-in API', customerLogin.status, 200);
+  const customerSession = await customerLogin.json();
+  const customerContext = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+  await customerContext.addInitScript(token => localStorage.setItem('starvnt_external_access_token', token), customerSession.accessToken);
+  const customerPage = await customerContext.newPage(); customerPage.setDefaultTimeout(10000);
+  const customerErrors = []; report.customerErrors = customerErrors; report.customerConsole = [];
+  customerPage.on('pageerror', error => customerErrors.push(error.message));
+  customerPage.on('console', message => { if (message.type() === 'error') report.customerConsole.push(message.text()); });
+  await customerPage.goto('http://127.0.0.1:5197/customer', { waitUntil: 'domcontentloaded' });
+  await customerPage.getByRole('button', { name: 'My Events', exact: true }).first().waitFor();
+  check('Production customer session mounts the customer workspace', (await customerPage.locator('body').innerText()).trim().length > 100, true);
+  check('Customer workspace has no JavaScript exceptions', customerErrors, []);
+  check('Customer workspace does not show a render-error fallback', await customerPage.getByRole('heading', { name: 'We ran into an unexpected hiccup', exact: true }).count(), 0);
+  await customerPage.screenshot({ path: resolve(output, 'customer-production.png') }); report.screenshots.push('customer-production.png');
+  await customerContext.close();
   check('No browser JavaScript errors', pageErrors, []);
   check('No unexpected console errors', report.consoleErrors.filter(message => !message.includes('net::ERR_FAILED')), []);
   report.status = 'PASS';
 } catch (error) {
   report.status = 'FAIL'; report.failure = error.message; process.exitCode = 1;
-  const failedPage = browser?.contexts()[0]?.pages()[0];
+  const failedPage = browser?.contexts().at(-1)?.pages().at(-1);
   if (failedPage) { await failedPage.screenshot({ path: resolve(output, 'failure.png'), fullPage: true }).catch(() => {}); report.pageText = (await failedPage.locator('body').innerText().catch(() => '')).slice(-5000); report.html = (await failedPage.content()).slice(-6000); report.url = failedPage.url(); }
 } finally {
   writeFileSync(resolve(output, 'report.json'), JSON.stringify(report, null, 2));

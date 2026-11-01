@@ -8,6 +8,7 @@ import './customerDesign.css';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import AuraChat from './AuraChat.jsx';
 import HomePage from './HomePage.jsx';
+import ProposalPage from './ProposalPage.jsx';
 import EventsPage from './EventsPage.jsx';
 import EventPage from './EventPage.jsx';
 import EventPlanPage from './EventPlanPage.jsx';
@@ -38,6 +39,7 @@ const SIDEBAR = [
   { key: 'events', label: 'My Events', icon: 'events', to: '/customer/events' },
   { key: 'messages', label: 'Messages', icon: 'message', to: '/customer/updates?tab=messages', badge: true },
   { key: 'quotes', label: 'Plans & Quotes', icon: 'quotes', to: '/customer/go/quotes' },
+  { key: 'proposal', label: 'My Event Proposal', icon: 'documents', to: '/customer/go/proposal' },
   { key: 'bookings', label: 'Bookings', icon: 'bookings', to: '/customer/go/bookings' },
   { key: 'payments', label: 'Payments', icon: 'payments', to: '/customer/go/payments' },
   { key: 'vendors', label: 'My Vendors', icon: 'vendors', to: '/customer/go/vendors' },
@@ -49,7 +51,7 @@ const SIDEBAR = [
 
 const SIDEBAR_GROUPS = [
   { label: 'Plan', keys: ['home', 'new', 'aura', 'events'] },
-  { label: 'Current Event', keys: ['messages', 'quotes', 'bookings', 'payments', 'vendors', 'timeline'] },
+  { label: 'Current Event', keys: ['messages', 'proposal', 'quotes', 'bookings', 'payments', 'vendors', 'timeline'] },
   { label: 'Library', keys: ['documents', 'favorites', 'settings'] },
 ];
 const SIDEBAR_BY_KEY = Object.fromEntries(SIDEBAR.map((item) => [item.key, item]));
@@ -72,7 +74,7 @@ function activeKey(pathname) {
   if (p.startsWith('go/')) return p.slice(3).split('/')[0];
   const m = /^events\/[^/]+\/([^/?]+)/.exec(p);
   if (m) {
-    const section = { quotes: 'quotes', bookings: 'bookings', payments: 'payments', vendors: 'vendors', history: 'timeline' }[m[1]];
+    const section = { proposal: 'proposal', quotes: 'quotes', bookings: 'bookings', payments: 'payments', vendors: 'vendors', history: 'timeline' }[m[1]];
     if (section) return section;
   }
   if (p.startsWith('events')) return 'events';
@@ -338,6 +340,7 @@ function Shell() {
               <Route path="events" element={<EventsPage />} />
               <Route path="events/new" element={<ManualPlanPage />} />
               <Route path="events/:id" element={<EventPage />} />
+              <Route path="events/:id/proposal" element={<ProposalPage />} />
               <Route path="events/:id/requirements" element={<EventPlanPage />} />
               <Route path="events/:id/history" element={<EventHistoryPage />} />
               <Route path="events/:id/services" element={<ServicesPage />} />
