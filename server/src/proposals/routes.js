@@ -8,13 +8,16 @@ import { requireExternalAuth, requireAccountType } from '../external/middleware/
 import { asyncHandler as h, jsonErrorHandler } from '../customer/utils/http.js';
 import { CustomerEvent } from '../customer/models/index.js';
 import * as s from './service.js';
+import { requestConcept } from './ai.js';
+import { ProposalConceptJob } from './models.js';
 
 const adminActor = req => ({ id: req.admin._id, role: req.admin.role });
 export const proposalCustomerRoutes = Router();
 proposalCustomerRoutes.use('/events/:eventId/proposal', requireCustomer, (req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); });
 proposalCustomerRoutes.get('/events/:eventId/proposal', h(async (req, res) => res.json(await s.customerWorkspace(req.externalUser._id, req.params.eventId))));
+proposalCustomerRoutes.post('/events/:eventId/proposal/preferences', h(async (req, res) => { await s.saveDesignPreference(req.externalUser._id, req.params.eventId, req.body); res.json({ ok: true }); }));
 proposalCustomerRoutes.post('/events/:eventId/proposal/decision', h(async (req, res) => { await s.customerDecision(req.externalUser._id, req.params.eventId, req.body); res.json({ ok: true }); }));
-proposalCustomerRoutes.post('/events/:eventId/proposal/ask', h(async (req, res) => res.json(await s.explain(req.externalUser._id, req.params.eventId, req.body.question))));
+proposalCustomerRoutes.post('/events/:eventId/proposal/ask', rateLimit({ windowMs: 60_000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false }), h(async (req, res) => res.json(await s.explain(req.externalUser._id, req.params.eventId, req.body.question))));
 proposalCustomerRoutes.get('/events/:eventId/proposal/versions/:versionId/pdf', h(async (req, res) => {
   const bytes = await s.download(req.externalUser._id, req.params.eventId, req.params.versionId);
   res.set({ 'Content-Type': 'application/pdf', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment; filename="starvnt-event-proposal.pdf"' }).send(bytes);
@@ -38,6 +41,16 @@ proposalAdminRoutes.get('/', requirePermission('proposals.read'), h(async (req, 
   res.json({ events });
 }));
 proposalAdminRoutes.get('/:eventId', requirePermission('proposals.read'), h(async (req, res) => res.json(await s.adminWorkspace(req.params.eventId))));
+proposalAdminRoutes.get('/:eventId/concepts', requirePermission('proposals.read'), h(async (req, res) => {
+  const { source } = await s.adminWorkspace(req.params.eventId);
+  const jobs = await ProposalConceptJob.find({ event: source.event.id }).sort({ createdAt: -1 }).limit(20).select('-prompt -requestHash').lean();
+  res.json({ jobs: jobs.map(j => ({ ...j, stale: j.sourceHash !== source.hash })) });
+}));
+proposalAdminRoutes.post('/:eventId/concepts', requirePermission('proposals.update'), rateLimit({ windowMs: 60_000, limit: 3, standardHeaders: 'draft-7', legacyHeaders: false }), h(async (req, res) => {
+  const { source, dossier } = await s.adminWorkspace(req.params.eventId);
+  const job = await requestConcept(source, dossier, adminActor(req), req.body || {});
+  res.status(202).json({ job: { _id: job._id, status: job.status, asset: job.asset } });
+}));
 proposalAdminRoutes.put('/:eventId/draft', requirePermission('proposals.update'), h(async (req, res) => { await s.saveDraft(req.params.eventId, adminActor(req), req.body); res.json({ ok: true }); }));
 proposalAdminRoutes.post('/:eventId/agreements', requirePermission('proposals.update'), h(async (req, res) => { await s.sendAgreement(req.params.eventId, adminActor(req), req.body); res.json({ ok: true }); }));
 proposalAdminRoutes.post('/:eventId/commercial-approval', requirePermission('proposals.approve'), h(async (req, res) => { await s.approveCommercial(req.params.eventId, adminActor(req), req.body); res.json({ ok: true }); }));

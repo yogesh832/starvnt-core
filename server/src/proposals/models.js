@@ -10,6 +10,7 @@ const dossier = new Schema({
   draft: { type: Schema.Types.Mixed, default: {} },
   agreements: { type: [Schema.Types.Mixed], default: [] },
   commercial: { type: Schema.Types.Mixed, default: null },
+  designPreference: { type: Schema.Types.Mixed, default: null },
   versions: { type: [Schema.Types.Mixed], default: [] },
   changes: { type: [Schema.Types.Mixed], default: [] },
   audit: { type: [Schema.Types.Mixed], default: [] },
@@ -31,3 +32,21 @@ const access = new Schema({
   action: { type: String, default: 'DOCUMENT_DOWNLOADED' },
 }, { timestamps: { createdAt: true, updatedAt: false }, collection: 'core_proposal_document_access' });
 export const ProposalDocumentAccess = externalConn.model('ProposalDocumentAccess', access);
+
+const conceptJob = new Schema({
+  event: { type: Schema.Types.ObjectId, required: true, index: true },
+  requestedBy: { type: String, required: true },
+  idempotencyKey: { type: String, required: true }, requestHash: String,
+  sourceHash: String, draftHash: String, prompt: String, category: String, theme: String,
+  status: { type: String, enum: ['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED'], default: 'PENDING', index: true },
+  startedAt: Date, completedAt: Date, error: String, asset: Schema.Types.Mixed, model: String,
+}, { timestamps: true, collection: 'core_proposal_concepts' });
+conceptJob.index({ event: 1, idempotencyKey: 1 }, { unique: true });
+export const ProposalConceptJob = externalConn.model('ProposalConceptJob', conceptJob);
+const message = new Schema({
+  event: { type: Schema.Types.ObjectId, required: true },
+  customer: { type: Schema.Types.ObjectId, required: true }, versionId: { type: String, required: true },
+  role: { type: String, enum: ['user', 'model'], required: true }, content: String,
+}, { timestamps: { createdAt: true, updatedAt: false }, collection: 'core_proposal_messages' });
+message.index({ event: 1, customer: 1, versionId: 1, createdAt: -1 });
+export const ProposalMessage = externalConn.model('ProposalMessage', message);
