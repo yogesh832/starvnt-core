@@ -6,7 +6,6 @@ import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext.jsx';
 import { LogoWord } from './components/ui.jsx';
 import ExternalLogin from './pages/external/Login.jsx';
 import Landing from './pages/customer/Landing.jsx';
-import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import CustomerPortal from './pages/customer/CustomerPortal.jsx';
 import VendorPortal from './pages/vendor/VendorPortal.jsx';
 import AdminLogin from './pages/admin/AdminLogin.jsx';
@@ -80,13 +79,32 @@ function FullScreenLoader() {
 
 /** External surface guard: requires ACTIVE external session of accountType. */
 function RequireExternal({ type, children }) {
-  const { user, ready } = useExternalAuth();
+  const { user, ready, switchSurface } = useExternalAuth();
   const loc = useLocation();
+  const [switching, setSwitching] = useState(false);
+  const [switchFailed, setSwitchFailed] = useState(false);
 
-  if (!ready) return <FullScreenLoader />;
+  useEffect(() => {
+    if (ready && user && type && user.accountType !== type && !switching && !switchFailed) {
+      setSwitching(true);
+      switchSurface(type)
+        .catch((err) => {
+          console.error(`Failed to switch surface to ${type}:`, err);
+          setSwitchFailed(true);
+        })
+        .finally(() => {
+          setSwitching(false);
+        });
+    }
+  }, [ready, user, type, switching, switchFailed, switchSurface]);
+
+  if (!ready || switching) return <FullScreenLoader />;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} replace />;
   if (type && user.accountType !== type) {
-    return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
+    if (switchFailed) {
+      return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
+    }
+    return <FullScreenLoader />;
   }
   return children;
 }
@@ -117,14 +135,14 @@ function ApplicationRoutes() {
       <Route 
         path="/" 
         element={
-          window.location.hostname.startsWith('admin.')
+          window.location.hostname.startsWith('partner.') || window.location.hostname.startsWith('vendor.')
+            ? <Navigate to="/vendor" replace />
+            : window.location.hostname.startsWith('admin.')
               ? <Navigate to="/admin" replace />
               : <Landing />
         } 
       />
       {/* External domain — one auth UI, two portals */}
-      <Route path="/privacy" element={<PrivacyPolicy />} />
-      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />
       <Route path="/register" element={<ExternalLogin />} />
