@@ -33,6 +33,7 @@ export function vendorDestination(
     ].includes(page)
   )
     return { screen: "VendorModule", params: { module: page, ...(record ? { recordId: record } : {}) } };
+  if (page === 'proposal-agreements') return { screen: 'VendorAgreements' };
   if (["calendar", "availability"].includes(page))
     return { screen: "VendorCalendar" };
   if (["profile", "settings"].includes(page)) return { screen: "Profile" };

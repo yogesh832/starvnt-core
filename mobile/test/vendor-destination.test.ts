@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { vendorDestination } from "../src/vendorDestination.ts";
+test('agreement notifications open the native vendor agreement workspace', () => {
+  assert.deepEqual(vendorDestination('/vendor/proposal-agreements'), { screen: 'VendorAgreements' });
+});
 
 test('dashboard record links open the exact existing native quote, booking or enquiry surface', () => {
   const record = '0123456789abcdef01234567';

@@ -99,6 +99,7 @@ export function VendorWork({ navigation }: any) {
         icon="calendar-outline"
         onPress={() => navigation.navigate("VendorCalendar")}
       />
+      <MenuRow title="Vendor agreements" icon="document-text-outline" onPress={() => navigation.navigate('VendorAgreements')} />
       {vendorModules.map(([module, title, , , icon]) => (
         <MenuRow
           key={module}

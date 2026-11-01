@@ -8,6 +8,9 @@ const base = {
   ownerId: "customer",
   surface: "CUSTOMER",
 };
+test('proposal notification opens the exact native event proposal', () => {
+  assert.deepEqual(pushDestination({ ...base, actionUrl: '/customer/events/event1/proposal' }, customer, 'external', () => false), { screen: 'Proposal', params: { eventId: 'event1' } });
+});
 test("notification taps restore event conversation scope on cold start", () => {
   assert.deepEqual(
     pushDestination(

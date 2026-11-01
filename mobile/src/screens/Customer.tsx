@@ -115,7 +115,7 @@ export function CustomerHome({ navigation }: any) {
         />
       </View>
       {events.map((e) => (
-        <EventCard key={id(e)} event={e} navigation={navigation} />
+        <View key={id(e)} style={{ gap: 10 }}><EventCard event={e} navigation={navigation} /><Card onPress={() => navigation.navigate('Proposal', { eventId: id(e) })}><Pill>PROPOSAL STUDIO · POWERED BY AURA+</Pill><Txt bold size={23}>My Event Proposal</Txt><Txt muted>Your vision, the planned experience, and every detail to review.</Txt><Button title="Explore your proposal" secondary onPress={() => navigation.navigate('Proposal', { eventId: id(e) })} /></Card></View>
       ))}
       {!events.length && (
         <Empty
@@ -191,6 +191,7 @@ export function EventsScreen({ navigation }: any) {
   );
 }
 const sections = [
+  ["My Event Proposal", "proposal", "document-text-outline"],
   ["Plan & services", "requirements", "grid-outline"],
   ["Discover vendors", "services", "search-outline"],
   ["Plans & quotes", "quotes", "document-text-outline"],
@@ -297,7 +298,7 @@ export function EventScreen({ route, navigation }: any) {
           icon={icon}
           onPress={() =>
             navigation.navigate(
-              section === "messages" ? "Circle" : "EventSection",
+              section === "messages" ? "Circle" : section === 'proposal' ? 'Proposal' : "EventSection",
               { eventId, section, title, kind: "circle" },
             )
           }
