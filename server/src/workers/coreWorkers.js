@@ -7,6 +7,7 @@ import { expireStaleOpportunities } from '../external/services/opportunitySla.se
 import { incrementMetric } from '../metrics.js';
 import { configureWorker, markWorkerError, markWorkerStarted, markWorkerSuccess } from './workerHealth.js';
 import { startPushWorker } from '../notifications/push.worker.js';
+import { runConceptBatch } from '../proposals/ai.js';
 
 async function releaseStaleOutboxLocks() {
   const staleBefore = new Date(Date.now() - Math.max(60000, config.outboxWorkerIntervalMs * 4));
@@ -26,6 +27,16 @@ async function releaseStaleOutboxLocks() {
 }
 
 export function startCoreWorkers() {
+  let conceptBusy = false;
+  const concepts = async () => {
+    if (conceptBusy) return;
+    conceptBusy = true;
+    const started = Date.now(); markWorkerStarted('proposal-concepts');
+    try { await runConceptBatch(); markWorkerSuccess('proposal-concepts', Date.now() - started); } catch { markWorkerError('proposal-concepts', new Error('Concept queue unavailable'), Date.now() - started); console.warn('[proposal-concepts] worker unavailable; pending jobs retained'); } finally { conceptBusy = false; }
+  };
+  configureWorker('proposal-concepts', { enabled: true });
+  setInterval(concepts, 5000).unref();
+  setTimeout(concepts, 3000).unref();
   startPushWorker();
   let reminderBusy = false;
   let lastDeadlineRun = 0;

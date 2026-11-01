@@ -11,6 +11,10 @@ import { badRequest, conflict, notFound } from '../customer/utils/http.js';
 import { ProposalDossier, ProposalDocument, ProposalDocumentAccess } from './models.js';
 import { cleanDraft, customerVersion, generationGate, hash, scopeHash, text } from './policy.js';
 import { renderProposal } from './pdf.js';
+import { aiCapabilities, proposalAnswer } from './ai.js';
+import { PortfolioItem } from '../external/models/PortfolioItem.js';
+import { ProposalConceptJob } from './models.js';
+import { PROPOSAL_THEMES } from '../../../shared/proposalContent.js';
 
 const id = value => String(value?._id || value || '');
 const validId = value => { if (!mongoose.isValidObjectId(value)) throw notFound(); return value; };
@@ -64,7 +68,7 @@ export async function customerWorkspace(customerId, eventId) {
   return {
     event: source.event, requirements: source.requirements, revision: row?.revision || 0,
     readiness: { ready: gate.ready, blockers: [...new Set(gate.blockers.map(b => /commercial/i.test(b) ? 'STARVNT commercial review is pending.' : b.includes('Reconcile') || b.includes('allocation') ? 'STARVNT is reviewing your customer pricing and payment terms.' : b.includes('authorized visual') ? 'Your proposal visuals are being selected.' : b.includes('Every applicable') ? 'Vendor scope confirmations are pending.' : b))], approvedAgreements: gate.approvedAgreements, requiredServices: gate.requiredServices },
-    preview: { label: 'PRELIMINARY — NOT A FINAL APPROVED PROPOSAL', theme: row?.draft?.theme || 'Your event vision', introduction: row?.draft?.introduction || '', assets: (row?.draft?.assets || []).map(({ url, caption, source, category }) => ({ url, caption, source, category })) },
+    preview: { label: 'PRELIMINARY — NOT A FINAL APPROVED PROPOSAL', theme: row?.draft?.theme || 'Your event vision', introduction: row?.draft?.introduction || '', preference: row?.designPreference || null, assets: (row?.draft?.assets || []).map(({ url, caption, source, category }) => ({ url, caption, source, category })) },
     versions,
     changes: (row?.changes || []).map(c => ({ id: c.id, versionId: c.versionId, message: c.message, categories: c.categories, status: c.status, createdAt: c.createdAt })),
   };
@@ -74,12 +78,27 @@ export async function adminWorkspace(eventId) {
   const source = await getSource(eventId);
   const row = await dossierFor(source);
   const access = await ProposalDocumentAccess.find({ dossier: row._id }).sort({ createdAt: -1 }).limit(100).lean();
-  return { source, dossier: row.toObject(), access, readiness: generationGate(source, row) };
+  const portfolio = await PortfolioItem.find({ vendor: { $in: source.quotes.map(q => q.vendor) }, mediaType: 'IMAGE', visibility: 'PUBLIC', status: { $in: ['VERIFIED', 'BOOKING_PROVEN'] } }).select('url title category vendor projectName').limit(48).lean();
+  return { source, dossier: row.toObject(), access, portfolio, ai: aiCapabilities(), readiness: generationGate(source, row) };
 }
 
 export async function saveDraft(eventId, actor, input = {}) {
   const draft = cleanDraft(input.draft);
-  return mutate(eventId, actor, input.revision, async () => ({ draft, commercial: null, _action: 'DRAFT_REVISED' }));
+  return mutate(eventId, actor, input.revision, async (source, row) => {
+    for (const a of draft.assets.filter(a => a.source === 'portfolio')) if (!await PortfolioItem.exists({ url: a.url, vendor: { $in: source.quotes.map(q => q.vendor) }, mediaType: 'IMAGE', visibility: 'PUBLIC', status: { $in: ['VERIFIED', 'BOOKING_PROVEN'] } })) throw badRequest('PORTFOLIO_NOT_APPROVED', 'Use a verified public portfolio image from an event vendor.');
+    const generated = await ProposalConceptJob.find({ status: 'SUCCEEDED', 'asset.url': { $in: draft.assets.map(a => a.url) } }).select('asset').lean();
+    if (draft.assets.some(a => generated.some(j => j.asset.url === a.url) && a.source !== 'ai')) throw badRequest('AI_SOURCE_LABEL_REQUIRED', 'Generated concepts must retain the AI-Generated Concept source label.');
+    return { draft, commercial: null, ...(row.designPreference?.id === draft.customerDirectionRef ? { designPreference: { ...row.designPreference, status: 'REVIEWED', reviewedBy: String(actor.id), reviewedAt: new Date().toISOString() } } : {}), _action: 'DRAFT_REVISED' };
+  });
+}
+
+export async function saveDesignPreference(customerId, eventId, input = {}) {
+  await getSource(eventId, customerId);
+  if (!PROPOSAL_THEMES.includes(input.theme)) throw badRequest('INVALID_THEME', 'Choose a supported visual direction.');
+  return mutate(eventId, { id: customerId, role: 'CUSTOMER' }, input.revision, async (_, row) => {
+    if (row.versions.length) throw conflict('USE_CHANGE_REQUEST', 'Request changes against the current proposal version.');
+    return { designPreference: { id: crypto.randomUUID(), theme: input.theme, paletteNotes: text(input.paletteNotes, 700), notes: text(input.notes, 1000), status: 'REQUESTED', requestedAt: new Date().toISOString() }, commercial: null, _action: 'CUSTOMER_VISUAL_DIRECTION_REQUESTED' };
+  });
 }
 
 export async function sendAgreement(eventId, actor, input = {}) {
@@ -91,7 +110,7 @@ export async function sendAgreement(eventId, actor, input = {}) {
     if (!allocation) throw badRequest('SAVE_SCOPE_FIRST', 'Save the customer service scope before sending its vendor agreement.');
     if (!text(input.terms, 6000)) throw badRequest('AGREEMENT_TERMS_REQUIRED', 'Record the service scope, deliverables, payment and cancellation terms.');
     const agreements = row.agreements.map(a => a.quoteId === quote._id && a.status !== 'SUPERSEDED' ? { ...a, previousStatus: a.status, status: 'SUPERSEDED' } : a);
-    agreements.push({ id: crypto.randomUUID(), quoteId: quote._id, vendorId: quote.vendor, category: quote.category, serviceName: quote.serviceName, vendorCost: quote.pricingBreakdown.totalAmount, customerScope: { scope: allocation.scope, quantity: allocation.quantity, deliverables: allocation.deliverables }, scopeHash: scopeHash(allocation), terms: text(input.terms, 6000), expiresAt: future(input.expiresAt), sourceHash: source.hash, status: 'SENT', sentAt: new Date().toISOString(), sentBy: id(actor.id) });
+    agreements.push({ id: crypto.randomUUID(), quoteId: quote._id, vendorId: quote.vendor, category: quote.category, serviceName: quote.serviceName, vendorCost: quote.pricingBreakdown.totalAmount, customerScope: { scope: allocation.scope, quantity: allocation.quantity, deliverables: allocation.deliverables, sections: (row.draft.sections || []).filter(s => !s.category || s.category === quote.category), checklist: (row.draft.checklist || []).filter(c => c.category === quote.category || (!c.category && ['VENDOR', 'VENUE'].includes(c.owner))).map(({ title, category, details, owner, status, mandatory }) => ({ title, category, details, owner, status, mandatory })), assets: row.draft.assets.map(({ url, caption, source, category }) => ({ url, caption, source, category })) }, scopeHash: scopeHash(allocation, row.draft), terms: text(input.terms, 6000), expiresAt: future(input.expiresAt), sourceHash: source.hash, status: 'SENT', sentAt: new Date().toISOString(), sentBy: id(actor.id) });
     return { agreements, commercial: null, _action: 'AGREEMENT_SENT' };
   });
   const agreement = saved.agreements.at(-1);
@@ -109,7 +128,7 @@ export async function decideAgreement(vendorId, eventId, actor, input = {}) {
   return mutate(eventId, actor, input.revision, async (source, row) => {
     const a = row.agreements.find(a => a.id === input.agreementId && a.vendorId === id(vendorId));
     if (!a) throw notFound();
-    if (a.status !== 'SENT' || a.sourceHash !== source.hash || a.scopeHash !== scopeHash(row.draft.allocations?.find(d => d.category === a.category)) || new Date(a.expiresAt) <= new Date()) throw conflict('AGREEMENT_NOT_CURRENT', 'This agreement changed or expired. Ask STARVNT for a revised agreement.');
+    if (a.status !== 'SENT' || a.sourceHash !== source.hash || a.scopeHash !== scopeHash(row.draft.allocations?.find(d => d.category === a.category), row.draft) || new Date(a.expiresAt) <= new Date()) throw conflict('AGREEMENT_NOT_CURRENT', 'This agreement changed or expired. Ask STARVNT for a revised agreement.');
     const agreements = row.agreements.map(a => a.id === input.agreementId ? { ...a, status: input.decision, decidedBy: id(actor.id), decidedAt: new Date().toISOString(), decisionNote: text(input.note, 1000) } : a);
     return { agreements, commercial: null, _action: `VENDOR_AGREEMENT_${input.decision}` };
   });
@@ -138,7 +157,7 @@ export async function generate(eventId, actor, input = {}) {
     const gate = generationGate(source, row);
     if (!gate.ready) throw conflict('PROPOSAL_NOT_READY', 'Final generation is blocked.', { blockers: gate.blockers });
     const d = row.draft;
-    const snapshot = { event: source.event, requirements: source.requirements, theme: d.theme, introduction: d.introduction, allocations: d.allocations, total: d.total, paymentTerms: d.paymentTerms, exclusions: d.exclusions, roadmap: d.roadmap, assets: d.assets.map(({ url, caption, source, category }) => ({ url, caption, source, category })) };
+    const snapshot = { event: source.event, requirements: source.requirements, theme: d.theme, introduction: d.introduction, allocations: d.allocations, total: d.total, paymentTerms: d.paymentTerms, exclusions: d.exclusions, roadmap: d.roadmap, sections: d.sections || [], checklist: (d.checklist || []).map(({ title, category, details, owner, status, mandatory }) => ({ title, category, details, owner, status, mandatory })), milestones: d.milestones || [], venueResponsibility: d.venueResponsibility || '', paletteNotes: d.paletteNotes || '', assets: d.assets.map(({ url, caption, source, category }) => ({ url, caption, source, category })) };
     if (Buffer.byteLength(JSON.stringify(snapshot), 'utf8') > 100000) throw badRequest('PROPOSAL_TOO_LARGE', 'Please shorten the proposal descriptions before generation.');
     generated = { id: crypto.randomUUID(), number: row.versions.length + 1, status: 'SENT_TO_CUSTOMER', sourceHash: source.hash, draftHash: hash(d), agreementReferences: row.agreements.filter(a => a.status === 'APPROVED' && a.sourceHash === source.hash).map(a => a.id), commercialReference: row.commercial.approvedAt, snapshot, createdAt: new Date().toISOString(), deliveredAt: new Date().toISOString(), expiresAt: row.commercial.expiresAt, idempotencyKey: key };
     const approvedAgreements = row.agreements.filter(a => generated.agreementReferences.includes(a.id));
@@ -149,7 +168,7 @@ export async function generate(eventId, actor, input = {}) {
     const latest = await getSource(eventId);
     if (latest.hash !== source.hash || !generationGate(latest, row).ready) throw conflict('SOURCE_CHANGED', 'The source changed during generation. Refresh and obtain renewed approvals.');
     generated.sha256 = crypto.createHash('sha256').update(bytes).digest('hex');
-    generated.approvalEvidence = { commercial: row.commercial, agreements: row.agreements.filter(a => generated.agreementReferences.includes(a.id)) };
+    generated.approvalEvidence = { commercial: row.commercial, agreements: row.agreements.filter(a => generated.agreementReferences.includes(a.id)), assetProvenance: d.assets };
     await ProposalDocument.create({ dossier: row._id, versionId: generated.id, sha256: generated.sha256, bytes });
     return { versions: [...row.versions, generated], changes: row.changes.map(c => c.status === 'OPEN' ? { ...c, status: 'REVISED_PROPOSAL_ISSUED', resolvedByVersion: generated.id } : c), _action: 'FINAL_GENERATED_AND_DELIVERED' };
   });
@@ -206,5 +225,7 @@ export async function explain(customerId, eventId, question) {
   else if (/budget|price|total|cost/.test(q)) answer = `Approved customer package: INR ${s.total.toLocaleString('en-IN')}.\n${s.allocations.map(a => `${a.category}: INR ${a.amount.toLocaleString('en-IN')}`).join('\n')}`;
   else if (/change|add|replace|remove|modify/.test(q)) answer = 'Use Request changes to record your request against this proposal version. STARVNT will validate the scope, vendor agreements and pricing before issuing a new version.';
   else { const match = s.allocations.filter(a => q.includes(a.category.toLowerCase())); if (match.length) answer = match.map(a => `${a.category}: ${a.scope}. ${a.deliverables || ''}`).join('\n'); }
-  return { answer, versionId: v.id, version: v.number, source: 'APPROVED_PROPOSAL_SNAPSHOT', notice: 'Proposal approval does not confirm a booking or verify payment.' };
+  const generated = await proposalAnswer(customerId, eventId, v, question, answer);
+  currentVersion(await getSource(eventId, customerId), await ProposalDossier.findOne({ event: eventId }).lean(), v.id);
+  return { ...generated, approvedFacts: { total: s.total, paymentTerms: s.paymentTerms, exclusions: s.exclusions }, versionId: v.id, version: v.number, source: 'APPROVED_PROPOSAL_SNAPSHOT', notice: 'Proposal approval does not confirm a booking or verify payment.' };
 }

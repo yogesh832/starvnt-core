@@ -28,6 +28,11 @@ import { ProposalDossier, ProposalDocument } from '../src/proposals/models.js';
 import { generationGate, cleanDraft, scopeHash, hash } from '../src/proposals/policy.js';
 import * as service from '../src/proposals/service.js';
 import { renderProposal } from '../src/proposals/pdf.js';
+import { richSnapshot } from '../test-support/proposal-rich.js';
+import { contentBlockers } from '../src/proposals/content.js';
+import { registerProposalImageAdapters, requestConcept, runConceptBatch } from '../src/proposals/ai.js';
+import { ProposalConceptJob } from '../src/proposals/models.js';
+import { registerLlmAdapter } from '../src/customer/aura/llmAdapter.js';
 
 const expiresAt = () => new Date(Date.now() + 7 * 86400000).toISOString();
 const date = () => new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
@@ -37,7 +42,7 @@ const asset = { url: 'https://res.cloudinary.com/qa/image/upload/reference.png',
 let mongo, app, customer, outsider, vendor, owner, admin, customerToken, outsiderToken, vendorToken, adminToken, restrictedToken;
 const fetchOriginal = globalThis.fetch;
 before(async () => {
-  globalThis.fetch = async (url, options) => String(url) === asset.url ? new Response(image, { headers: { 'Content-Type': 'image/png' } }) : fetchOriginal(url, options);
+  globalThis.fetch = async (url, options) => String(url).startsWith('https://res.cloudinary.com/qa/image/upload/') ? new Response(image, { headers: { 'Content-Type': 'image/png' } }) : fetchOriginal(url, options);
   mongo = await MongoMemoryServer.create({ instance: { args: ['--wiredTigerCacheSizeGB', '0.25'] } });
   await Promise.all([externalConn.openUri(mongo.getUri('proposal_external')), adminConn.openUri(mongo.getUri('proposal_admin'))]);
   await Promise.all([...Object.values(externalConn.models), ...Object.values(adminConn.models)].map(m => m.init()));
@@ -223,6 +228,93 @@ test('rejected agreements can be revised and approved while preserving the rejec
   assert.equal((await service.adminWorkspace(f.eventId)).readiness.ready, true);
 });
 
+test('structured content blocks unresolved choices, missing confirmations, capacity ambiguity and unbalanced milestones', () => {
+  const snapshot = richSnapshot(asset, date());
+  const draft = cleanDraft({ ...snapshot, checklist: snapshot.checklist.map(c => ({ ...c, evidence: 'Synthetic evidence reference' })) });
+  assert.deepEqual(contentBlockers(draft, snapshot.event), []);
+  const options = structuredClone(draft); options.sections[0].items[1].status = 'OPTION';
+  assert.ok(contentBlockers(options, snapshot.event).some(b => b.includes('Choose exactly one')));
+  const pending = structuredClone(draft); pending.checklist[0].status = 'PENDING';
+  assert.ok(contentBlockers(pending, snapshot.event).some(b => b.includes('Confirm and record evidence')));
+  const seats = structuredClone(draft); seats.sections[4].coverageNote = '';
+  assert.ok(contentBlockers(seats, snapshot.event).some(b => b.includes('capacity coverage')));
+  const payment = structuredClone(draft); payment.milestones[0].amount += 1;
+  assert.ok(contentBlockers(payment, snapshot.event).some(b => b.includes('milestone amounts')));
+  assert.throws(() => cleanDraft({ ...draft, sections: [{ ...draft.sections[0], items: [{ ...draft.sections[0].items[0], assetIndex: 99 }] }] }), /image reference/);
+});
+
+test('structured service changes require vendor reapproval; internal costs and evidence never enter customer snapshots or AI context', async () => {
+  const f = await fixture();
+  f.draft = cleanDraft({ ...f.draft, sections: [{ kind: 'equipment', title: 'Photography equipment', category: 'photography', items: [{ name: 'Camera team', quantity: 2, status: 'INCLUDED', details: 'Two camera operators', assetIndex: 0 }] }], milestones: [{ title: 'Advance', amount: 4500, due: 'Separate booking workflow' }, { title: 'Balance', amount: 10500, due: 'Before coverage' }], checklist: [{ title: 'Gallery delivery', category: 'photography', owner: 'VENDOR', status: 'CONFIRMED', mandatory: true, evidence: 'CONFIDENTIAL_EVIDENCE_REFERENCE', details: 'Delivery timeline reviewed' }], costReview: { logistics: 500, operations: 500, contingency: 0 } });
+  let w = await service.adminWorkspace(f.eventId);
+  await service.saveDraft(f.eventId, f.actor, { revision: w.dossier.revision, draft: f.draft });
+  w = await ready(f);
+  const changed = structuredClone(w.dossier); changed.draft.sections[0].items[0].quantity = 3; changed.commercial.draftHash = hash(changed.draft);
+  assert.equal(generationGate(w.source, changed).ready, false);
+  const v = await service.generate(f.eventId, f.actor, { revision: w.dossier.revision, idempotencyKey: 'structured-final' });
+  const view = await service.customerWorkspace(customer._id, f.eventId);
+  const serialized = JSON.stringify(view);
+  assert.equal(serialized.includes('CONFIDENTIAL_EVIDENCE_REFERENCE'), false);
+  assert.equal(serialized.includes('costReview'), false);
+  let prompt = '';
+  registerLlmAdapter({ chat: async input => { prompt = input.systemPrompt; return { text: 'The approved coverage includes two camera operators. Submit a change request for revised coverage.' }; } });
+  try {
+    const before = (await service.adminWorkspace(f.eventId)).dossier.revision;
+    const answer = await service.explain(customer._id, f.eventId, 'Can I change photography coverage?');
+    assert.equal(answer.mode, 'GEMINI'); assert.equal(answer.versionId, v.id); assert.equal(answer.changeDraft.categories[0], 'photography');
+    assert.equal(prompt.includes('CONFIDENTIAL_EVIDENCE_REFERENCE'), false); assert.equal(prompt.includes('costReview'), false); assert.equal(prompt.includes('CONFIDENTIAL_INTERNAL_MARGIN_REVIEW'), false);
+    assert.equal((await service.adminWorkspace(f.eventId)).dossier.revision, before, 'The generative assistant has no authority to mutate approvals or pricing');
+    registerLlmAdapter({ chat: async () => ({ text: 'The total is INR 999999 and payment is verified.' }) });
+    const guarded = await service.explain(customer._id, f.eventId, 'What is the package price?');
+    assert.equal(guarded.mode, 'APPROVED_SNAPSHOT_FALLBACK');
+    assert.equal(guarded.answer.includes('999999'), false);
+  } finally { registerLlmAdapter(null); }
+});
+
+test('customer visual direction is an unapproved request and requires staff review', async () => {
+  const f = await fixture(); let w = await service.adminWorkspace(f.eventId);
+  await service.saveDesignPreference(customer._id, f.eventId, { revision: w.dossier.revision, theme: 'Royal Reception', paletteNotes: 'Ivory and burgundy', notes: 'A warm reception atmosphere' });
+  w = await service.adminWorkspace(f.eventId);
+  assert.equal(w.dossier.designPreference.status, 'REQUESTED');
+  assert.ok(w.readiness.blockers.some(b => b.includes('customer visual direction')));
+  await service.saveDraft(f.eventId, f.actor, { revision: w.dossier.revision, draft: { ...f.draft, theme: 'Royal Reception', customerDirectionRef: w.dossier.designPreference.id } });
+  assert.equal((await service.adminWorkspace(f.eventId)).dossier.designPreference.status, 'REVIEWED');
+  await assert.rejects(service.saveDesignPreference(outsider._id, f.eventId, { revision: 0, theme: 'Royal Reception' }), e => e.status === 404);
+});
+
+test('durable AI concept requests are idempotent, permission-controlled, explicitly labelled and safe to retry after failure', async () => {
+  const f = await fixture(); const w = await service.adminWorkspace(f.eventId);
+  let calls = 0;
+  registerProposalImageAdapters({ generate: async () => { calls++; return image; }, upload: async () => 'https://res.cloudinary.com/qa/image/upload/generated-concept.jpg' });
+  try {
+    const input = { revision: w.dossier.revision, direction: 'Ivory reception concept', category: 'photography', idempotencyKey: 'concept-once' };
+    await request(app).post(`/api/admin/proposals/${f.eventId}/concepts`).set(auth(restrictedToken)).send(input).expect(403);
+    const first = await request(app).post(`/api/admin/proposals/${f.eventId}/concepts`).set(auth(adminToken)).send(input).expect(202);
+    const again = await request(app).post(`/api/admin/proposals/${f.eventId}/concepts`).set(auth(adminToken)).send(input).expect(202);
+    assert.equal(first.body.job._id, again.body.job._id);
+    const completed = await runConceptBatch(); assert.equal(completed.status, 'SUCCEEDED'); assert.equal(calls, 1); assert.equal(completed.asset.source, 'ai');
+    const rows = await request(app).get(`/api/admin/proposals/${f.eventId}/concepts`).set(auth(adminToken)).expect(200);
+    assert.equal(rows.body.jobs[0].prompt, undefined);
+    await assert.rejects(service.saveDraft(f.eventId, f.actor, { revision: w.dossier.revision, draft: { ...f.draft, assets: [{ ...completed.asset, source: 'reference' }] } }), e => e.code === 'AI_SOURCE_LABEL_REQUIRED');
+    const saved = await service.saveDraft(f.eventId, f.actor, { revision: w.dossier.revision, draft: { ...f.draft, assets: [completed.asset] } });
+    registerProposalImageAdapters({ generate: async () => { throw Object.assign(new Error('Do not expose provider secrets'), { status: 429 }); } });
+    await requestConcept((await service.adminWorkspace(f.eventId)).source, saved, f.actor, { ...input, revision: saved.revision, idempotencyKey: 'quota-failure' });
+    const failed = await runConceptBatch(); assert.equal(failed.status, 'FAILED'); assert.ok(failed.error.includes('quota')); assert.equal(failed.error.includes('secrets'), false);
+    assert.equal(await runConceptBatch(), null, 'Failed generations are not silently retried or charged again');
+  } finally { registerProposalImageAdapters(null); }
+});
+
+test('rich wedding and corporate PDF layouts remain searchable, dynamic, and free from blank pages', async () => {
+  mkdirSync('tmp/qa/proposal-completion', { recursive: true });
+  for (const eventType of ['wedding', 'corporate']) {
+    const snapshot = richSnapshot(asset, date(), eventType);
+    const bytes = await renderProposal(snapshot, { id: `SYNTHETIC-QA-${eventType}`, number: 1, createdAt: new Date().toISOString(), expiresAt: expiresAt(), qa: true }, async () => image);
+    const pages = (bytes.toString('latin1').match(/\/Type \/Page\b/g) || []).length;
+    assert.ok(pages >= 12 && pages < 30);
+    writeFileSync(`tmp/qa/proposal-completion/${eventType}-rich.pdf`, bytes);
+  }
+});
+
 test('production browser journey: staff agreement, vendor decision, final PDF, customer changes and exact-version approval', { skip: process.env.PROPOSAL_BROWSER_QA !== '1', timeout: 180000 }, async () => {
   const { chromium } = await import('../../tmp/vendor-os-tools/node_modules/playwright/index.mjs');
   const express = (await import('express')).default;
@@ -240,14 +332,48 @@ test('production browser journey: staff agreement, vendor decision, final PDF, c
   async function pageFor(token, admin = false) {
     const context = await browser.newContext({ viewport: { width: 1365, height: 900 } });
     await context.addInitScript(({ token, admin }) => { localStorage.setItem(admin ? 'starvnt_admin_access_token' : 'starvnt_external_access_token', token); }, { token, admin });
-    await context.route(asset.url, route => route.fulfill({ body: image, contentType: 'image/png' }));
+    await context.route('https://res.cloudinary.com/qa/image/upload/**', route => route.fulfill({ body: image, contentType: 'image/png' }));
     const page = await context.newPage(); page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => d.accept()); return page;
   }
   async function action(page, path, fn) { const response = page.waitForResponse(r => r.url().includes(path) && ['POST', 'PUT'].includes(r.request().method())); await fn(); assert.equal((await response).status(), 200, path); await page.waitForTimeout(400); }
   async function openAdmin(page) { await page.goto('http://127.0.0.1:5197/admin/proposals'); await page.getByRole('button', { name: new RegExp(f.event.title) }).first().click(); await page.getByRole('heading', { name: f.event.title, exact: true }).waitFor(); }
   try {
+    registerProposalImageAdapters({ generate: async () => image, upload: async () => 'https://res.cloudinary.com/qa/image/upload/browser-generated.jpg' });
+    const planner = await pageFor(customerToken);
+    await planner.goto(`http://127.0.0.1:5197/customer/events/${f.eventId}/proposal`);
+    await planner.getByLabel('Customer visual theme', { exact: true }).selectOption('Royal Reception');
+    await planner.getByLabel('Colour preferences', { exact: true }).fill('Ivory and burgundy');
+    await action(planner, '/preferences', () => planner.getByRole('button', { name: 'Share my visual direction', exact: true }).click());
+    check('Customer submits an unapproved visual direction');
     const staff = await pageFor(adminToken, true);
     await openAdmin(staff);
+    await staff.getByRole('button', { name: 'Apply customer direction to draft', exact: true }).click();
+    await action(staff, '/draft', () => staff.getByRole('button', { name: 'Save draft', exact: true }).click());
+    await staff.getByLabel('Visual direction', { exact: true }).fill('Ivory and burgundy illustrative photography concept');
+    const queued = staff.waitForResponse(r => r.url().endsWith('/concepts') && r.request().method() === 'POST');
+    await staff.getByRole('button', { name: 'Generate illustrative concept', exact: true }).click();
+    assert.equal((await queued).status(), 202); await runConceptBatch();
+    await staff.getByRole('button', { name: 'Add concept to draft', exact: true }).click();
+    await staff.getByRole('button', { name: 'Add structured section', exact: true }).click();
+    await staff.getByLabel('Section 1 title', { exact: true }).fill('Approved photography equipment');
+    await staff.getByLabel('Section 1 layout', { exact: true }).selectOption('equipment');
+    await staff.getByRole('button', { name: 'Add item', exact: true }).click();
+    await staff.getByLabel('Item 1.1 name', { exact: true }).fill('Camera operators');
+    await staff.getByLabel('Item 1.1 quantity', { exact: true }).fill('2');
+    await staff.getByLabel('Item 1.1 unit or duration', { exact: true }).fill('people');
+    await staff.getByLabel('Item 1.1 approved details', { exact: true }).fill('Two operators as agreed in the photography scope.');
+    await staff.getByLabel('Item 1.1 reference image', { exact: true }).selectOption('1');
+    await staff.getByRole('button', { name: 'Add confirmation', exact: true }).click();
+    for (const [label, value] of [['Confirmation 1 title', 'Gallery delivery'], ['Confirmation 1 evidence reference (internal)', 'PRIVATE_CONFIRMATION_REFERENCE']]) await staff.getByLabel(label, { exact: true }).fill(value);
+    for (const [label, value] of [['Confirmation 1 owner', 'VENDOR'], ['Confirmation 1 status', 'CONFIRMED'], ['Confirmation 1 service category', 'photography']]) await staff.getByLabel(label, { exact: true }).selectOption(value);
+    for (const [i, amount] of [[1, 4500], [2, 10500]]) {
+      await staff.getByRole('button', { name: 'Add payment milestone', exact: true }).click();
+      await staff.getByLabel(`Payment stage ${i} title`, { exact: true }).fill(i === 1 ? 'Advance' : 'Balance');
+      await staff.getByLabel(`Payment stage ${i} amount`, { exact: true }).fill(String(amount));
+      await staff.getByLabel(`Payment stage ${i} due condition`, { exact: true }).fill(i === 1 ? 'Separate booking workflow' : 'Before the event');
+    }
+    await action(staff, '/draft', () => staff.getByRole('button', { name: 'Save draft', exact: true }).click());
+    check('Staff saves structured scope, milestones, evidence and an AI-labelled concept');
     await staff.getByLabel('Vendor quotation', { exact: true }).selectOption(String(f.quote._id));
     await staff.getByLabel('Agreement terms: scope, deliverables, payment and cancellation', { exact: true }).fill('QA approved scope and gallery delivery. Vendor payment INR 10000. Cancellation requires STARVNT review.');
     await action(staff, '/agreements', () => staff.getByRole('button', { name: 'Send agreement to vendor', exact: true }).click());
@@ -266,7 +392,7 @@ test('production browser journey: staff agreement, vendor decision, final PDF, c
     await customerPage.getByRole('heading', { name: 'My Event Proposal', exact: true }).waitFor();
     await customerPage.getByText('Total approved package', { exact: true }).waitFor();
     const content = await customerPage.locator('.proposal-studio').innerText();
-    assert.equal(content.includes('10000'), false); assert.equal(content.includes('10,000'), false);
+    assert.equal(content.includes('PRIVATE_CONFIRMATION_REFERENCE'), false); assert.ok(content.includes('Approved photography equipment')); assert.equal(content.includes('10000'), false); assert.equal(content.includes('10,000'), false);
     await customerPage.screenshot({ path: 'tmp/qa/proposal-studio/customer-desktop.png', fullPage: true });
     check('Customer sees the approved experience without supplier cost or internal margin');
     await customerPage.getByLabel('Ask about inclusions, exclusions, pricing or payment terms').fill('What is my payment schedule?');
@@ -303,6 +429,6 @@ test('production browser journey: staff agreement, vendor decision, final PDF, c
   } finally {
     const pages = []; for (const context of browser.contexts()) for (const page of context.pages()) { pages.push({ url: page.url(), body: (await page.locator('body').innerText()).slice(0, 5000) }); await page.screenshot({ path: `tmp/qa/proposal-studio/page-${pages.length}.png`, fullPage: true }); }
     writeFileSync('tmp/qa/proposal-studio/browser-report.json', JSON.stringify({ checks: evidence, pageErrors: errors, pages }, null, 2));
-    await browser.close(); await Promise.all([new Promise(r => server.close(r)), new Promise(r => frontend.close(r))]);
+    registerProposalImageAdapters(null); await browser.close(); await Promise.all([new Promise(r => server.close(r)), new Promise(r => frontend.close(r))]);
   }
 });
