@@ -12,6 +12,7 @@ import Bookings from './pages/Bookings.jsx';
 import CalendarPage from './pages/CalendarPage.jsx';
 import PortfolioPage from './pages/PortfolioPage.jsx';
 import { AnalyticsPage, PaymentsPage, ReviewsPage } from './pages/InsightPages.jsx';
+import ProposalAgreements from './pages/ProposalAgreements.jsx';
 import {
   ServicesPage,
   AvailabilityPage,
@@ -329,6 +330,7 @@ export default function VendorPortal() {
     { to: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
     { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
+    { to: 'proposal-agreements', label: 'Agreements', icon: 'documents' },
     { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
     { to: 'portfolio', label: 'Portfolio', icon: 'gallery' },
     { to: 'services', label: 'Services', icon: 'services' },
@@ -602,6 +604,7 @@ export default function VendorPortal() {
             <Route path="dashboard" element={<DashboardHome business={businessName} onAskAura={askAura} />} />
             <Route path="enquiries" element={<Enquiries />} />
             <Route path="quotes" element={<Quotes />} />
+            <Route path="proposal-agreements" element={<ProposalAgreements />} />
             <Route path="bookings" element={<Bookings />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="notifications" element={<Navigate to="/vendor/updates" replace />} />

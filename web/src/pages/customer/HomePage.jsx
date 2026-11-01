@@ -1,4 +1,5 @@
 import ProductFeedback from '../../components/ProductFeedback.jsx';
+import { ProposalCard } from './ProposalPage.jsx';
 import { externalApi } from '../../lib/api.js';
 import NotificationPreferences from '../../components/NotificationPreferences.jsx';
 import FinancialOverview from '../../components/FinancialOverview.jsx';
@@ -443,6 +444,7 @@ function Workspace({ firstName, event }) {
   return (
     <div className="max-w-[1400px] mx-auto space-y-5">
       <CustomerHero firstName={firstName} eventId={ev.id} />
+      <ProposalCard eventId={ev.id} />
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl p-4 border text-sm"><span><b>{experience?.lifecycle || 'Planning'}</b>{experience?.daysUntilEvent != null ? ` · ${experience.daysUntilEvent === 0 ? 'Event day' : experience.daysUntilEvent > 0 ? `${experience.daysUntilEvent} days to go` : `${Math.abs(experience.daysUntilEvent)} days since the event date`}` : ' · Date not set'}</span><span>{experience?.decisionsPending ?? 0} requirement{experience?.decisionsPending === 1 ? '' : 's'} awaiting a decision</span><button className="text-primary underline" onClick={reload}>Refresh</button></div>
       {!!experience?.proposedRequirements?.length && <Section title="Confirm Aura suggestions"><p className="text-sm mb-3">These suggestions have not been confirmed by you and do not count as completed requirements.</p>{experience.proposedRequirements.map(r => <div key={r.category} className="border rounded-xl p-3 mb-2 text-sm"><p>{r.category} · {r.status.replaceAll('_', ' ')} {r.value || ''}</p><button className="underline text-primary" onClick={async () => { try { await externalApi.call(`/customer/events/${ev.id}/requirements/${r.category}/confirm`, { method: 'POST' }); setProposalError(''); reload(); } catch (err) { setProposalError(err.message); } }}>Confirm this requirement</button></div>)}{proposalError && <p role="alert">{proposalError}</p>}</Section>}
       {!!experience?.risks?.length && <Section title="Changes to review">{experience.risks.map((risk, i) => <Link key={i} to={risk.actionUrl} className="block p-3 rounded-xl bg-amber-50 mb-2 text-sm"><b>{risk.title}</b><p>{risk.detail}</p></Link>)}</Section>}
