@@ -45,7 +45,7 @@ try {
   const site = resolve(process.env.PORTAL_QA_SITE || resolve(output, 'site'));
   web.use(express.static(site)); web.get('*', (_req, res) => res.sendFile(resolve(site, 'index.html')));
   frontend = web.listen(5198, '127.0.0.1');
-  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined), headless: true });
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined), headless: process.env.PORTAL_QA_HEADED !== '1' });
   const context = await browser.newContext();
   const page = await context.newPage(); page.setDefaultTimeout(12000); page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:5198/login?as=${label(wrong)}&next=/${label(wrong)}`);
@@ -60,6 +60,7 @@ try {
   check('Error includes the correct dashboard login link', await link.getAttribute('href'), `https://${label(wrong)}.starvnt.com/login`);
   check('Wrong login does not persist a browser token', await page.evaluate(() => localStorage.getItem('starvnt_external_access_token')), null);
   check('Wrong login does not create a session', await ExternalSession.countDocuments(), 0);
+  await page.getByRole('alert').screenshot({ path: resolve(output, 'wrong-portal-error.png') });
   await page.screenshot({ path: resolve(output, 'wrong-portal-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 }); await link.scrollIntoViewIfNeeded();
   check('Error and link remain available on a mobile viewport', await link.isVisible(), true);
@@ -82,6 +83,7 @@ try {
       else await tab.getByRole('button', { name: 'My Events', exact: true }).first().waitFor();
       check('Matching saved identity still mounts its own dashboard', await tab.getByRole('heading', { name: 'We ran into an unexpected hiccup', exact: true }).count(), 0);
     }
+    await tab.screenshot({ path: resolve(output, type === wrong ? 'saved-wrong-portal.png' : 'matching-dashboard.png'), fullPage: true });
     await saved.close();
   }
   check('Browser journeys have no JavaScript exceptions', errors, []);
