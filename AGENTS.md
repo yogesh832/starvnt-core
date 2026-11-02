@@ -10,4 +10,4 @@ Preserve uncommitted changes in every worktree. Keep customer-only authenticatio
 
 See `docs/branch-workflow.md` for branch roles, initial baselines, worktree locations and archive recovery information. Staging targets in that document are intended roles, not proof that hosting has been configured.
 
-Proposal Studio is unreleased and belongs only on `customer-dev`, including its backend, PDF generation, AI worker, shared content, web/mobile screens and vendor agreement APIs. Do not promote it to `customer`, `main` or `vendor-dev` without an explicit release request. Keep ordinary quotes, booking negotiations and payments separate from this module.
+Proposal Studio is unreleased and archived in `customer-dev` history at commit `47caacfdea229d2d0220b00a99165899ded77360`. The current `customer-dev` baseline matches stable `customer` production and excludes this module. Do not restore or promote its backend, PDF generation, AI worker, shared content, web/mobile screens or vendor agreement APIs without an explicit request. Keep ordinary quotes, booking negotiations and payments separate from this module.
