@@ -3,6 +3,7 @@ import { Platform, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import type { Data } from "./api/client";
 import { Button, Choice, Field, MultiChoice, Txt, date } from "./ui";
+import { LocationPicker } from "./LocationPicker";
 import { emptyLocation, emptyServiceLocation } from "./eventFormModel";
 
 export function EventDateField({
@@ -84,6 +85,23 @@ export function LocationFields({
   ];
   return (
     <View style={{ gap: 14 }}>
+      <LocationPicker
+        initialQuery={[value.area, value.city].filter(Boolean).join(", ")}
+        buttonTitle={value.city ? "Change verified location" : "Choose location"}
+        onSelect={(place) =>
+          onChange({
+            ...emptyLocation,
+            ...value,
+            city: place.city || value.city || "",
+            area: place.locality || value.area || "",
+            address: place.address || value.address || "",
+            state: place.state || value.state || "",
+            country: place.country || value.country || "India",
+            pincode: place.pincode || value.pincode || "",
+            coordinates: { lat: Number(place.lat), lng: Number(place.lng) },
+          })
+        }
+      />
       {fields
         .filter(([key]) => expanded || ["city", "venueName"].includes(key))
         .map(([key, label]) => (

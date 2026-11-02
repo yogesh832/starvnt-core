@@ -72,6 +72,11 @@ export function EditForm({ event, onCancel, onSaved }) {
     // Only send an exact budget when the customer typed one; an untouched range stays.
     if (String(form.budget) !== String(event.budget ?? '')) body.budget = form.budget === '' ? null : Number(form.budget);
     const loc = locationPayload(location, original);
+    if (Object.keys(loc).length && (!location.city || !Number.isFinite(Number(location.coordinates?.lat)) || !Number.isFinite(Number(location.coordinates?.lng)) || (Number(location.coordinates?.lat) === 0 && Number(location.coordinates?.lng) === 0))) {
+      setError('Search for and select the event location so its city and map coordinates can be verified.');
+      setBusy(false);
+      return;
+    }
     if (Object.keys(loc).length) body.location = loc;
     try {
       const detail = await customerApi.patchEvent(event.id, body);

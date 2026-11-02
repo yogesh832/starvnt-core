@@ -5,6 +5,7 @@ import express, { Router } from 'express';
 import { requireCustomer } from '../middleware/requireCustomer.js';
 import { requireInternal } from '../middleware/requireInternal.js';
 import { asyncHandler as h, jsonErrorHandler } from '../utils/http.js';
+import rateLimit from 'express-rate-limit';
 import * as c from '../controllers/customer.controller.js';
 import * as a from '../controllers/aura.controller.js';
 import * as i from '../controllers/internal.controller.js';
@@ -13,6 +14,8 @@ import * as i from '../controllers/internal.controller.js';
 export const customerRouter = Router();
 customerRouter.use(requireCustomer);
 customerRouter.use(notificationPreferencesRoutes('CUSTOMER'));
+const locationSearchLimiter = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: 'draft-7', legacyHeaders: false });
+customerRouter.get('/locations/search', locationSearchLimiter, h(c.searchLocations));
 customerRouter.post('/feedback', h(async (req, res) => {
   const { kind, reference, score } = req.body || {};
   if (!['EVENT', 'NOTIFICATION'].includes(kind) || !Number.isInteger(score) || score < 1 || score > 5) return res.status(400).json({ error: 'INVALID_FEEDBACK' });

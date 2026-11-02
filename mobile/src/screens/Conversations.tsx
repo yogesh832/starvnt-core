@@ -44,6 +44,11 @@ import {
   useResource,
 } from "../ui";
 
+async function searchCustomerPlaces(query: string) {
+  const result = await external.call(`/customer/locations/search?q=${encodeURIComponent(query)}`);
+  return result.places || [];
+}
+
 export function UpdatesScreen({ navigation }: any) {
   const { user } = useSession();
   const { revision, refresh: refreshBadges } = usePush();
@@ -374,6 +379,7 @@ function ConversationScreen({ route, navigation }: any) {
     return () => { sync.stop(); app.remove(); if (live.current === sync) live.current = null; };
   }, [kind, readPath]));
   const messages = kind === "aura" ? local : stored;
+  const catalogAnchorId = vendorSearch?.anchorMessageId || [...messages].reverse().find(message => message.role !== 'user' && /catalogue API lists \d+ services from \d+ vendors/i.test(String(message.content || '')))?.id || null;
   async function send(override?: string, confirmation?: boolean, choiceBody: Data = {}) {
     if (sending.current) throw new Error('Aura is still replying. Please wait a moment.');
     sending.current = true;
@@ -428,6 +434,7 @@ function ConversationScreen({ route, navigation }: any) {
         ...v,
         { role: "user", content: message },
         {
+          id: data.vendorSearch?.anchorMessageId,
           role: "assistant",
           content:
             data.reply ||
@@ -462,6 +469,28 @@ function ConversationScreen({ route, navigation }: any) {
     if (voiceController.current) { void voiceController.current(message || (attachment ? attachedMessage(text, attachment.url) : text), body); }
     else void a.run(() => send(message, undefined, body));
   }
+  async function saveEventLocation(place: Data) {
+    if (!activeEvent) throw new Error('Save your event card before choosing its location.');
+    const sync = live.current;
+    sync?.beginWrite();
+    try {
+      await external.call(`/customer/events/${encodeURIComponent(activeEvent)}`, 'PATCH', {
+        city: place.city,
+        location: {
+          city: place.city,
+          locality: place.locality || '',
+          state: place.state || '',
+          country: place.country || 'India',
+          pincode: place.pincode || '',
+          address: place.address || place.name || '',
+          coordinates: { lat: Number(place.lat), lng: Number(place.lng) },
+        },
+      });
+      applyAuraSnapshot(await external.call(readPath));
+    } finally {
+      sync?.endWrite();
+    }
+  }
   if (kind === 'aura') return <AuraChatView
     navigation={navigation} user={user} vendor={vendor}
     eventTitle={!vendor ? planEvent?.title : undefined} hasQuestion={!!nextQuestion && !!messages.length}
@@ -470,7 +499,13 @@ function ConversationScreen({ route, navigation }: any) {
     onOpenEvent={() => { if (activeEvent) navigation.navigate('Event', { eventId: activeEvent }); }}
     attachment={attachment} onRemoveAttachment={() => setAttachment(null)}
     onAttach={() => { void a.run(async () => { const media = await pickUpload(false, ['image/*', 'video/*']); if (media) setAttachment(media); }); }}
-    messages={[...messages, ...(outgoing ? [{ role: 'user', content: outgoing }] : [])].map(m => ({ ...m, actions: (m.actions || []).map((action: Data) => ({ ...action, target: typeof action.to === 'string' ? vendorDestination(action.to) : null })) }))}
+    messages={[...messages, ...(outgoing ? [{ role: 'user', content: outgoing }] : [])].map(m => ({
+      ...m,
+      ...(m.role !== 'user' && vendorSuggestions.length && /catalogue API returned no matching active services/i.test(String(m.content || ''))
+        ? { content: `I found ${vendorSuggestions.length} matching services in the current catalogue. The cards below show those results.` }
+        : {}),
+      actions: (m.actions || []).map((action: Data) => ({ ...action, target: typeof action.to === 'string' ? vendorDestination(action.to) : null })),
+    }))}
     text={text} onChangeText={setText} busy={a.busy || voiceBusy} loading={liveLoading}
     error={a.error || liveError} onRetry={() => { void live.current?.refresh(); }}
     onSend={sendFromUi}
@@ -482,10 +517,12 @@ function ConversationScreen({ route, navigation }: any) {
     }}
     onOpenLink={url => { void a.run(async () => { await Linking.openURL(url); }); }}
     onNew={() => navigation.setParams({ sessionId: undefined, newChatKey: String(Date.now()) })}
+    renderAfterMessage={(message, index) => !vendor && catalogAnchorId && String(message.id || message._id || '') === String(catalogAnchorId)
+      ? <View key={`catalog-results-${message.id || index}`} style={{ marginLeft: 42 }}><AuraVendors rows={vendorSuggestions} search={vendorSearch} eventId={activeEvent} navigation={navigation} /></View>
+      : null}
   >
-    {!vendor && <AuraVendors key={`${activeEvent || 'new'}-${vendorSearch?.query || 'catalog'}`} rows={vendorSuggestions} search={vendorSearch} eventId={activeEvent} navigation={navigation} />}
     {!vendor && switchChoices.length > 0 && <AuraPanel><AuthText bold size={13}>Your events</AuthText>{switchChoices.map(event => <AuraRow key={id(event)} title={[event.title, event.city, event.date || 'Date to be decided'].filter(Boolean).join(' · ')} disabled={a.busy || voiceBusy} onPress={() => sendFromUi(`Switch to ${event.title}`, { switchEventId: id(event) })} />)}</AuraPanel>}
-    {!vendor && messages.length > 0 && nextQuestion && <AuraQuestion key={`${sessionId}-${nextQuestion.topic || nextQuestion.question}`} question={nextQuestion} showQuestion={!String([...messages].reverse().find(m => m.role !== 'user')?.content || '').includes(nextQuestion.question || '')} busy={a.busy || voiceBusy} onPrefill={setText} onSend={sendFromUi} />}
+    {!vendor && messages.length > 0 && nextQuestion && <AuraQuestion key={`${sessionId}-${nextQuestion.topic || nextQuestion.question}`} question={nextQuestion} showQuestion={!String([...messages].reverse().find(m => m.role !== 'user')?.content || '').includes(nextQuestion.question || '')} busy={a.busy || voiceBusy} onPrefill={setText} onSend={sendFromUi} onSearchLocations={searchCustomerPlaces} onSelectLocation={place => { void a.run(() => saveEventLocation(place)); }} />}
     {!vendor && <AuraPlan key={activeEvent || 'new'} event={planEvent} understanding={understanding} navigation={navigation} busy={a.busy || voiceBusy}
       onAsk={sendFromUi}
       onConfirm={() => { void a.run(async () => {

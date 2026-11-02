@@ -80,6 +80,12 @@ export default function ManualPlanPage() {
     e.preventDefault();
     setBusy(true);
     setError('');
+    const coordinates = location.coordinates;
+    if (!location.city || !Number.isFinite(Number(coordinates?.lat)) || !Number.isFinite(Number(coordinates?.lng)) || (Number(coordinates.lat) === 0 && Number(coordinates.lng) === 0)) {
+      setError('Search for and select the event location so its city and map coordinates can be verified.');
+      setBusy(false);
+      return;
+    }
     const body = {
       eventType,
       eventDate: form.eventDate,

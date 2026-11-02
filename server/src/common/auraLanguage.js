@@ -44,7 +44,7 @@ export function localizeAuraQuestion(question, language, event = null) {
   const eventQuestions = {
     'event.type': ['किस तरह का इवेंट प्लान करना है?', 'Kis tarah ka event plan karna hai?'],
     'event.date': ['आपका इवेंट किस तारीख को है?', 'Aapka event kis tareekh ko hai?'],
-    'event.city': ['इवेंट किस शहर में होगा?', 'Event kis shehar mein hoga?'],
+    'event.city': ['आपका इवेंट कहाँ होगा? नीचे लोकेशन खोजकर सही शहर या इलाका चुनें।', 'Aapka event kahan hoga? Neeche location search karke sahi shehar ya area chunein.'],
     'event.guest_count': ['लगभग कितने मेहमान आएँगे?', 'Lagbhag kitne mehmaan aayenge?'],
     'event.area': [`${event?.location?.venueName || 'वेन्यू'} ${event?.city || 'शहर'} के किस इलाके में है?`, `${event?.location?.venueName || 'Venue'} ${event?.city || 'shehar'} ke kis ilaake mein hai?`],
     'event.budget': ['आपका लगभग कितना बजट है?', 'Aapka lagbhag kitna budget hai?'],

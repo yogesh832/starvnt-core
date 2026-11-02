@@ -25,6 +25,12 @@ const FALLBACK_REPLY =
   "I'm having trouble reaching the planning assistant right now. Please check your event card or try again in a moment.";
 const WEAK_REPLY_RE = /^(pata nahi|i don't know|not sure|main abhi|sorry,? i('| a)m having trouble|sorry,? i can('|no)t|please check the (card|plan))/i;
 
+function hasVerifiedEventLocation(event) {
+  const coordinates = event?.location?.coordinates;
+  const lat = Number(coordinates?.lat), lng = Number(coordinates?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat !== 0 || lng !== 0);
+}
+
 async function ownedSession(customerId, sessionId) {
   if (!SESSION_ID_RE.test(sessionId || '')) throw badRequest('INVALID_SESSION', 'Invalid session id');
   const session = await auraRepo.findSession(sessionId);
@@ -53,8 +59,20 @@ async function stateFor(customerId, eventId) {
 async function refreshCatalog(memory, event) {
   const scope = catalogScopeFor(memory, event);
   if (!scope) return { vendorSuggestions: [], vendorSearch: null };
+  if (!hasVerifiedEventLocation(scope)) {
+    return { vendorSuggestions: [], vendorSearch: { source: 'customer_catalog_api', query: memory.query, city: scope.city || null, date: scope.eventDate || null, resultCount: null, status: 'location_required', anchorMessageId: memory.anchorMessageId || null } };
+  }
   const vendorSuggestions = selectVendorRows(await core.vendorCatalog(scope), memory.query);
-  return { vendorSuggestions, vendorSearch: { source: 'customer_catalog_api', query: memory.query, city: scope.city || null, date: scope.eventDate || null, guestCount: scope.guestCount || null, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(scope, event), checkedAt: new Date().toISOString() } };
+  return { vendorSuggestions, vendorSearch: { source: 'customer_catalog_api', query: memory.query, city: scope.city || null, date: scope.eventDate || null, guestCount: scope.guestCount || null, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(scope, event), checkedAt: new Date().toISOString(), anchorMessageId: memory.anchorMessageId || null } };
+}
+
+function latestCatalogReplyId(messages) {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index].role !== 'user' || !isVendorRequest(messages[index].content || '')) continue;
+    const reply = messages.slice(index + 1).find(message => message.role === 'model');
+    if (reply?._id) return String(reply._id);
+  }
+  return null;
 }
 
 export async function getSession(customer, sessionId, { eventId } = {}) {
@@ -75,9 +93,10 @@ export async function getSession(customer, sessionId, { eventId } = {}) {
     if (session) await auraRepo.setCatalogSearch(sessionId, memory);
   }
   const { vendorSuggestions, vendorSearch } = choices.length ? { vendorSuggestions: [], vendorSearch: null } : await refreshCatalog(memory, state.activeEvent);
+  if (vendorSearch && !vendorSearch.anchorMessageId) vendorSearch.anchorMessageId = latestCatalogReplyId(messages);
   return {
     sessionId,
-    messages: messages.map((m) => ({ role: m.role, content: m.content, createdAt: m.createdAt })),
+    messages: messages.map((m) => ({ id: String(m._id), role: m.role, content: m.content, createdAt: m.createdAt })),
     ...state,
     nextQuestion: choices.length || isCatalogLookupOnly(lastQuery) || activityAnswer(lastQuery, activity, language) ? null : localizeAuraQuestion(state.nextQuestion, language, state.activeEvent),
     eventChoices: choices,
@@ -205,11 +224,18 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
   // 3. Chips first
   const chipWrites = [];
   const readOnlyCatalog = isCatalogLookupOnly(text);
+  const skipRequested = skipTopic !== undefined && skipTopic !== null || /^skip for now$/i.test(text);
+  let skipAccepted = false;
   if (!readOnlyCatalog && skipTopic !== undefined && skipTopic !== null) {
     if (typeof skipTopic !== 'string' || !SKIP_TOPIC_RE.test(skipTopic)) throw badRequest('INVALID_SKIP_TOPIC', 'Invalid topic');
     if (!event) throw badRequest('NO_ACTIVE_EVENT', 'Tell me about your event first');
-    await core.setNote(event._id, `skip:${skipTopic}`, true, 'KNOWN', 'customer');
-    chipWrites.push(`skip:${skipTopic}`);
+    // A stale chip must never skip a different question (especially the
+    // required location step). Only honor an action offered by current state.
+    skipAccepted = (before.nextQuestion?.options || []).some(option => option.skipTopic === skipTopic);
+    if (skipAccepted) {
+      await core.setNote(event._id, `skip:${skipTopic}`, true, 'KNOWN', 'customer');
+      chipWrites.push(`skip:${skipTopic}`);
+    }
   }
   if (!readOnlyCatalog && budgetRange !== undefined && budgetRange !== null) {
     const range = findBudgetRange(String(budgetRange));
@@ -241,7 +267,7 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
     ...(vendorRequest && parseGuests(text) ? { guestCount: parseGuests(text) } : {}),
     ...(vendorRequest && parseDate(text) ? { eventDate: parseDate(text).date } : {}),
   };
-  const { prompt: context } = await buildContext({ customer, event, catalogScope: searchScope });
+  const { prompt: context, catalogRows } = await buildContext({ customer, event, catalogScope: searchScope });
   const history = await auraRepo.recentMessages(sessionId, 12);
   const language = conversationLanguage(text, history);
   tracker.markContextEnd();
@@ -254,11 +280,21 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
 
   const searchMessage = /find one|ढूँढ|dhoondh/i.test(text) && askedTopic?.startsWith('requirement.') ? `${text} ${askedTopic.split('.')[1]}` : text;
   if (isCatalogLookupOnly(text)) {
-    const vendorSuggestions = selectVendorRows(context.vendors, searchMessage);
+    if (!hasVerifiedEventLocation(event)) {
+      const state = await stateFor(customerId, event?._id || null);
+      state.nextQuestion = localizeAuraQuestion(state.nextQuestion, language, state.activeEvent);
+      const reply = 'Please search and select the exact event location below first. I need the map location to check nearby venues accurately.';
+      await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: reply }]);
+      return { reply, ...state, vendorSuggestions: [], vendorSearch: { source: 'customer_catalog_api', query: searchMessage, resultCount: null, status: 'location_required' }, written: [], skipped: [], createdEventId: null };
+    }
+    const vendorSuggestions = selectVendorRows(catalogRows, searchMessage);
     const reply = vendorTruthReply(vendorSuggestions, searchScope, language, searchMessage);
-    await auraRepo.setCatalogSearch(sessionId, rememberCatalog(searchMessage, searchScope, event));
-    await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: reply }]);
-    return { reply, ...(await stateFor(customerId, event?._id)), nextQuestion: null, vendorSuggestions, vendorSearch: { ...context.vendorSearch, query: searchMessage, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(searchScope, event), checkedAt: new Date().toISOString() }, written: [], skipped: [], createdEventId: null };
+    const memory = rememberCatalog(searchMessage, searchScope, event);
+    await auraRepo.setCatalogSearch(sessionId, memory);
+    const savedMessages = await auraRepo.addMessages(sessionId, [{ role: 'user', content: text }, { role: 'model', content: reply }]);
+    memory.anchorMessageId = String(savedMessages?.[1]?._id || '');
+    await auraRepo.setCatalogSearch(sessionId, memory);
+    return { reply, ...(await stateFor(customerId, event?._id)), nextQuestion: null, vendorSuggestions, vendorSearch: { ...context.vendorSearch, query: searchMessage, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(searchScope, event), checkedAt: new Date().toISOString(), anchorMessageId: memory.anchorMessageId }, written: [], skipped: [], createdEventId: null };
   }
 
   const route = classifyAuraRequest(text, { intent: event?.eventType ? 'EVENT_PLAN' : 'GENERAL' });
@@ -269,9 +305,15 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
   let llmUnavailable = false;
   let rawExtracted = {};
   const literal = backfillFacts(text, {}, { askedTopic });
-  const literalOnly = !/[?？]|\b(why|how|should|explain|suggest|recommend|kya|kyon|kyu|kaise|batao|batayein)\b/i.test(text) && Object.values(literal).some(value => value != null && value !== '' && (!Array.isArray(value) || value.length));
+  const literalOnly = skipRequested || (!/[?？]|\b(why|how|should|explain|suggest|recommend|kya|kyon|kyu|kaise|batao|batayein)\b/i.test(text) && Object.values(literal).some(value => value != null && value !== '' && (!Array.isArray(value) || value.length)));
   tracker.markGeminiStart();
-  if (!literalOnly) try {
+  if (skipRequested) {
+    reply = skipAccepted
+      ? 'Okay, we can leave that detail for now.'
+      : askedTopic === 'event.city'
+        ? 'I still need the exact event location to match nearby vendors. Please search and select it below.'
+        : 'That option is no longer current. Please use the choices shown with the latest question.';
+  } else if (!literalOnly) try {
     const out = await getLlmAdapter().chat({
       systemPrompt: `${buildSystemPrompt(context)}\n\n${auraLanguageInstruction(language)}`,
       history,
@@ -369,20 +411,29 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
   const after = await stateFor(customerId, event?._id || null);
   let vendorSuggestions = [];
   if (vendorRequest) {
-    const freshScope = { ...searchScope, ...(event || {}), ...(after.activeEvent || {}), _id: event?._id, ...(cityHint ? { city: cityHint, location: cityHint.toLowerCase() !== after.activeEvent?.city?.toLowerCase() ? null : after.activeEvent?.location } : {}) };
-    vendorSuggestions = selectVendorRows(await core.vendorCatalog(freshScope), searchMessage);
-    reply = vendorTruthReply(vendorSuggestions, freshScope, language, searchMessage);
-    after.vendorSearch = { source: 'customer_catalog_api', query: searchMessage, city: freshScope.city || null, date: freshScope.eventDate || null, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(freshScope, after.activeEvent), checkedAt: new Date().toISOString() };
-    await auraRepo.setCatalogSearch(sessionId, rememberCatalog(searchMessage, freshScope, after.activeEvent));
+    if (!hasVerifiedEventLocation(after.activeEvent)) {
+      reply = 'Please search and select the exact event location below first. I need the map location to check nearby venues accurately.';
+      after.vendorSearch = { source: 'customer_catalog_api', query: searchMessage, city: after.activeEvent?.city || null, resultCount: null, status: 'location_required' };
+    } else {
+      const freshScope = { ...searchScope, ...(event || {}), ...(after.activeEvent || {}), _id: event?._id, ...(cityHint ? { city: cityHint, location: cityHint.toLowerCase() !== after.activeEvent?.city?.toLowerCase() ? null : after.activeEvent?.location } : {}) };
+      vendorSuggestions = selectVendorRows(await core.vendorCatalog(freshScope), searchMessage);
+      reply = vendorTruthReply(vendorSuggestions, freshScope, language, searchMessage);
+      after.vendorSearch = { source: 'customer_catalog_api', query: searchMessage, city: freshScope.city || null, date: freshScope.eventDate || null, resultCount: vendorSuggestions.length, scopeMatchesEvent: scopeMatchesEvent(freshScope, after.activeEvent), checkedAt: new Date().toISOString() };
+      after.catalogMemory = rememberCatalog(searchMessage, freshScope, after.activeEvent);
+    }
   } else if (session.catalogSearch) {
     const refreshed = await refreshCatalog(session.catalogSearch, after.activeEvent);
     vendorSuggestions = refreshed.vendorSuggestions;
     after.vendorSearch = refreshed.vendorSearch;
     const scope = catalogScopeFor(session.catalogSearch, after.activeEvent);
-    if (scope) await auraRepo.setCatalogSearch(sessionId, rememberCatalog(session.catalogSearch.query, scope, after.activeEvent));
+    if (scope) {
+      const refreshedMemory = rememberCatalog(session.catalogSearch.query, scope, after.activeEvent);
+      refreshedMemory.anchorMessageId = session.catalogSearch.anchorMessageId || after.vendorSearch?.anchorMessageId || null;
+      await auraRepo.setCatalogSearch(sessionId, refreshedMemory);
+    }
   }
   after.nextQuestion = localizeAuraQuestion(after.nextQuestion, language, after.activeEvent);
-  if (llmUnavailable && !vendorRequest) {
+  if (llmUnavailable && !vendorRequest && !skipRequested) {
     reply = language === 'hi'
       ? 'अभी प्लानिंग असिस्टेंट से संपर्क करने में परेशानी हो रही है। कृपया अपना इवेंट कार्ड जाँच लें या थोड़ी देर में फिर कोशिश करें।'
       : language === 'hinglish'
@@ -397,10 +448,16 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
     nextQuestion: after.nextQuestion,
     assumedDate: writes.written.includes('eventDate') && !yearStated ? after.understanding?.facts.date.value : null,
   });
-  await auraRepo.addMessages(sessionId, [
+  const savedMessages = await auraRepo.addMessages(sessionId, [
     { role: 'user', content: text },
     { role: 'model', content: reply },
   ]);
+  if (after.catalogMemory) {
+    after.catalogMemory.anchorMessageId = String(savedMessages?.[1]?._id || '');
+    after.vendorSearch.anchorMessageId = after.catalogMemory.anchorMessageId;
+    await auraRepo.setCatalogSearch(sessionId, after.catalogMemory);
+    delete after.catalogMemory;
+  }
 
   const metrics = tracker.getMetrics();
   console.log('\n' + '═'.repeat(70));

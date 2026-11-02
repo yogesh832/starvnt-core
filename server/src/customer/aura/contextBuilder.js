@@ -38,7 +38,10 @@ export async function buildContext({ customer, event, catalogScope = event }) {
         failed: count(paymentRows, 'failed'),
       }
     : null;
-  const vendors = await core.vendorCatalog(catalogScope);
+  const catalogRows = await core.vendorCatalog(catalogScope);
+  // Keep media URLs out of Aura's model prompt; the customer result cards use
+  // the same catalogue rows for profile and portfolio imagery.
+  const vendors = catalogRows.map(({ profilePicUrl, portfolioSamples, ...vendor }) => vendor);
 
   const pastEvents = allEvents
     .filter((e) => !event || String(e._id) !== String(event._id))
@@ -55,6 +58,7 @@ export async function buildContext({ customer, event, catalogScope = event }) {
 
   return {
     raw: { requirements, contextRows },
+    catalogRows,
     prompt: {
       today: todayISO(),
       activity: await core.readActivity(customer._id, event?._id),

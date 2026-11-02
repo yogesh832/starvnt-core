@@ -7,6 +7,7 @@ import * as threadMessages from '../services/threadMessages.service.js';
 import * as library from '../services/library.service.js';
 import { customerFinancialTruth } from '../../common/financialTruth.service.js';
 import { deleteDraftEvent } from '../services/deleteEvent.service.js';
+import { searchCustomerLocations } from '../services/locationSearch.service.js';
 
 const me = (req) => req.externalUser._id;
 export const readThreadMessages = async (req, res) => res.json(await threadMessages.readCustomerThread(me(req), req.params.threadId));
@@ -16,6 +17,7 @@ export const getProfile = async (req, res) => res.json({ profile: await profile.
 export const patchProfile = async (req, res) => res.json({ profile: await profile.updateProfile(me(req), req.body) });
 
 export const planOptions = async (req, res) => res.json(events.planOptions(req.query.eventType));
+export const searchLocations = async (req, res) => res.json({ places: await searchCustomerLocations(req.query.q) });
 
 export const listEvents = async (req, res) => res.json({ events: await events.listEvents(me(req)) });
 export const deleteEvent = async (req, res) => res.json(await deleteDraftEvent(me(req), req.params.id));

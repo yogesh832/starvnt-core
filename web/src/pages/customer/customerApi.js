@@ -4,6 +4,7 @@ import { externalApi } from '../../lib/api.js';
 export const customerApi = {
   profile: () => externalApi.call('/customer/profile'),
   planOptions: (eventType) => externalApi.call(`/customer/plan-options${eventType ? `?eventType=${encodeURIComponent(eventType)}` : ''}`),
+  searchLocations: (query) => externalApi.call(`/customer/locations/search?q=${encodeURIComponent(query)}`),
   events: () => externalApi.call('/customer/events'),
   deleteEvent: (id) => externalApi.call(`/customer/events/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   event: (id) => externalApi.call(`/customer/events/${id}`),
