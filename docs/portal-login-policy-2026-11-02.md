@@ -21,15 +21,15 @@ Configure trusted dashboard origins using these optional variables. Defaults are
 
 ```dotenv
 # Backend
-CUSTOMER_PORTAL_URL=https://customer.starvnt.com
+CUSTOMER_PORTAL_URL=https://starvnt-core.vercel.app
 VENDOR_PORTAL_URL=https://vendor.starvnt.com
 
 # Vite web (build-time public configuration)
-VITE_CUSTOMER_PORTAL_URL=https://customer.starvnt.com
+VITE_CUSTOMER_PORTAL_URL=https://starvnt-core.vercel.app
 VITE_VENDOR_PORTAL_URL=https://vendor.starvnt.com
 
 # Native app (build-time public configuration)
-EXPO_PUBLIC_CUSTOMER_PORTAL_URL=https://customer.starvnt.com
+EXPO_PUBLIC_CUSTOMER_PORTAL_URL=https://starvnt-core.vercel.app
 EXPO_PUBLIC_VENDOR_PORTAL_URL=https://vendor.starvnt.com
 ```
 

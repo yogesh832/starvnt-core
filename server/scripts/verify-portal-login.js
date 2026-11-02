@@ -57,7 +57,7 @@ try {
   check('Wrong-portal email sign-in is rejected by the real backend', (await response).status(), 403);
   await page.getByRole('alert').getByText(new RegExp(`registered as a ${label(wrong)}`)).waitFor();
   const link = page.getByRole('link', { name: `Go to ${label(wrong)} dashboard login`, exact: false });
-  check('Error includes the correct dashboard login link', await link.getAttribute('href'), `https://${label(wrong)}.starvnt.com/login`);
+  check('Error includes the correct dashboard login link', await link.getAttribute('href'), wrong === 'CUSTOMER' ? 'https://starvnt-core.vercel.app/login' : 'https://vendor.starvnt.com/login');
   check('Wrong login does not persist a browser token', await page.evaluate(() => localStorage.getItem('starvnt_external_access_token')), null);
   check('Wrong login does not create a session', await ExternalSession.countDocuments(), 0);
   await page.getByRole('alert').screenshot({ path: resolve(output, 'wrong-portal-error.png') });

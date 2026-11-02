@@ -13,10 +13,11 @@ if (process.env.STARVNT_ENV_FILE) {
 }
 
 function parseOrigins(value) {
-  return (value || "http://localhost:5173")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
+  const origins = (value || 'http://localhost:5173').split(',').map(origin => origin.trim()).filter(Boolean);
+  for (const portal of [process.env.CUSTOMER_PORTAL_URL || 'https://starvnt-core.vercel.app', process.env.VENDOR_PORTAL_URL || 'https://vendor.starvnt.com']) {
+    try { const url = new URL(portal); if (['https:', 'http:'].includes(url.protocol)) origins.push(url.origin); } catch { /* Ignore invalid configured origins. */ }
+  }
+  return [...new Set(origins)];
 }
 
 export function devToolsAllowed(env = process.env) {
@@ -40,7 +41,7 @@ const cookieSecure =
  * so a token from one domain can never be replayed against the other.
  */
 export const config = {
-  customerPortalUrl: process.env.CUSTOMER_PORTAL_URL || 'https://customer.starvnt.com',
+  customerPortalUrl: process.env.CUSTOMER_PORTAL_URL || 'https://starvnt-core.vercel.app',
   vendorPortalUrl: process.env.VENDOR_PORTAL_URL || 'https://vendor.starvnt.com',
   pushEnabled: String(process.env.PUSH_ENABLED || '').toLowerCase() === 'true',
   pushProjectId: process.env.EXPO_EAS_PROJECT_ID || process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '',

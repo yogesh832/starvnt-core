@@ -23,7 +23,7 @@ export function portalMismatch(accountType) {
   try {
     url = new URL(configured);
     if (url.protocol !== 'https:' && !(['localhost', '127.0.0.1'].includes(url.hostname) && url.protocol === 'http:')) throw new Error();
-  } catch { url = new URL(`https://${label}.starvnt.com`); }
+  } catch { url = new URL(accountType === 'CUSTOMER' ? 'https://starvnt-core.vercel.app' : 'https://vendor.starvnt.com'); }
   url.pathname = '/login'; url.search = ''; url.hash = '';
   return {
     error: 'ACCOUNT_TYPE_MISMATCH', accountType,
