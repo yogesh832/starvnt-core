@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { useSession } from "./auth/Session";
 import {
   bindPush,
@@ -24,11 +24,12 @@ import { external, internal } from "./api/runtime";
 type PushState = {
   status: string;
   error: string;
-  busy: boolean;
+  busyAction: "enable" | "disable" | null;
   enable: () => Promise<void>;
   disable: () => Promise<void>;
   pending: Data | null;
   consumed: () => void;
+  refresh: () => void;
   revision: number;
 };
 const Context = createContext<PushState>(null!);
@@ -61,7 +62,7 @@ export function PushProvider({ children }: React.PropsWithChildren) {
   const session = useSession();
   const [status, setStatus] = useState("Checking notifications…");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"enable" | "disable" | null>(null);
   const [pending, setPending] = useState<Data | null>(launchResponse);
   useEffect(() => {
     if (!session.logoutRevision) return;
@@ -70,6 +71,7 @@ export function PushProvider({ children }: React.PropsWithChildren) {
     if (n) void n.clearLastNotificationResponseAsync().catch(() => {});
   }, [session.logoutRevision]);
   const [revision, setRevision] = useState(0);
+  const syncFlight = useRef<Promise<void> | null>(null);
   const current = useRef(session);
   current.current = session;
   showForeground = (data) => {
@@ -82,6 +84,7 @@ export function PushProvider({ children }: React.PropsWithChildren) {
     );
   };
   const mounted = useRef(true);
+  const registrationAttempt = useRef(0);
   const ownerKey = `${session.user?.id || session.user?._id || ""}:${session.user?.accountType || ""}:${session.admin?.id || session.admin?._id || ""}`;
   const sync = useCallback(async (requestPermission = false) => {
     if (!pushAvailable || !n) {
@@ -90,59 +93,118 @@ export function PushProvider({ children }: React.PropsWithChildren) {
       );
       return;
     }
-    await pushSerial(async () => {
+    const active = syncFlight.current;
+    if (active) {
+      await active.catch(() => {});
+      if (!requestPermission) return;
+    }
+    const operation = pushSerial(async () => {
       if (!mounted.current) return;
-      setBusy(true);
+      const attempt = ++registrationAttempt.current;
+      const isCurrent = () => mounted.current && registrationAttempt.current === attempt;
+      let stage = "starting push registration";
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       setError("");
       try {
-        if (!(await pushEnabled())) {
-          setStatus("Notifications are paused on this device.");
-          return;
-        }
-        if (!pushProjectId) {
-          setStatus("Expo project setup is required to enable push.");
-          return;
-        }
-        if (!current.current.user && !current.current.admin) {
-          setStatus("Sign in to receive notifications.");
-          return;
-        }
-        await n.setNotificationChannelAsync("starvnt-updates", {
-          name: "STARVNT updates",
-          importance: 4,
-          vibrationPattern: [0, 250, 250, 250],
-          sound: "default",
-        });
-        let permission = await n.getPermissionsAsync();
-        if (
-          !permission.granted &&
-          permission.ios?.status !== 3 &&
-          requestPermission &&
-          permission.canAskAgain
-        )
-          permission = await n.requestPermissionsAsync();
-        if (!permission.granted && permission.ios?.status !== 3) {
-          setStatus("Notifications are disabled in your device settings.");
-          return;
-        }
-        const token = (
-          await n.getExpoPushTokenAsync({ projectId: pushProjectId })
-        ).data;
-        const accounts = current.current;
-        const results = await Promise.allSettled([
-          ...(accounts.user ? [bindPush("external", token)] : []),
-          ...(accounts.admin ? [bindPush("admin", token)] : []),
+        const registration = (async () => {
+          stage = "checking this device's notification permission";
+          setStatus("Checking notification permission…");
+          if (!(await pushEnabled())) {
+            if (isCurrent()) setStatus("Notifications are paused on this device.");
+            return;
+          }
+          if (!isCurrent()) return;
+          if (!pushProjectId) {
+            if (isCurrent()) setStatus("Expo project setup is required to enable push.");
+            return;
+          }
+          if (!current.current.user && !current.current.admin) {
+            if (isCurrent()) setStatus("Sign in to receive notifications.");
+            return;
+          }
+          stage = "preparing Android notification channel";
+          setStatus("Preparing Android notification channel…");
+          await n.setNotificationChannelAsync("starvnt-updates", {
+            name: "STARVNT updates",
+            importance: 4,
+            vibrationPattern: [0, 250, 250, 250],
+            sound: "default",
+          });
+          if (!isCurrent()) return;
+          stage = "checking device permission";
+          setStatus("Checking notification permission…");
+          let permission = await n.getPermissionsAsync();
+          if (!isCurrent()) return;
+          if (
+            !permission.granted &&
+            permission.ios?.status !== 3 &&
+            requestPermission &&
+            permission.canAskAgain
+          ) {
+            stage = "requesting device permission";
+            setStatus("Waiting for notification permission…");
+            permission = await n.requestPermissionsAsync();
+            if (!isCurrent()) return;
+          }
+          if (!permission.granted && permission.ios?.status !== 3) {
+            if (isCurrent()) setStatus("Notifications are disabled in your device settings.");
+            return;
+          }
+          stage = "getting a Firebase push token";
+          setStatus("Getting a push token from Firebase…");
+          const token = (
+            await n.getExpoPushTokenAsync({ projectId: pushProjectId })
+          ).data;
+          if (!isCurrent()) return;
+          const accounts = current.current;
+          stage = "registering this device with STARVNT";
+          setStatus("Registering this device with STARVNT…");
+          const results = await Promise.allSettled([
+            ...(accounts.user ? [bindPush("external", token)] : []),
+            ...(accounts.admin ? [bindPush("admin", token)] : []),
+          ]);
+          const failure = results.find((result) => result.status === "rejected");
+          if (failure?.status === "rejected") throw failure.reason;
+          if (isCurrent()) setStatus("Push notifications are enabled.");
+        })();
+        await Promise.race([
+          registration,
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(() => {
+              if (isCurrent()) {
+                registrationAttempt.current++;
+                setStatus("Push registration timed out.");
+                setError(`It timed out while ${stage}. Check your connection and retry.`);
+              }
+              reject(new Error("Push registration timed out."));
+            }, 25000);
+          }),
         ]);
-        const failure = results.find((result) => result.status === "rejected");
-        if (failure?.status === "rejected") throw failure.reason;
-        setStatus("Push notifications are enabled.");
       } catch (e) {
-        setStatus("Push registration needs attention.");
-        setError((e as Error).message);
+        const message = (e as Error).message || "Push registration failed.";
+        if (!isCurrent()) return;
+        const firebaseNotConfigured =
+          Platform.OS === "android" &&
+          /firebase messaging|firebaseapp|google-services|google services/i.test(message);
+        if (firebaseNotConfigured) {
+          setStatus("Android push setup is incomplete for this app build.");
+          setError(
+            "This APK cannot reach Firebase Cloud Messaging. It must be rebuilt with Firebase google-services.json for com.starvnt.mobile. Ask the app administrator to add it to EAS as the GOOGLE_SERVICES_JSON file, then install the new APK.",
+          );
+        } else {
+          setStatus("Push registration needs attention.");
+          setError(message);
+        }
       } finally {
-        if (mounted.current) setBusy(false);
+        if (timeout) clearTimeout(timeout);
       }
     });
+    syncFlight.current = operation;
+    try {
+      await operation;
+    } finally {
+      if (syncFlight.current === operation) syncFlight.current = null;
+    }
   }, []);
   useEffect(() => {
     mounted.current = true;
@@ -185,14 +247,17 @@ export function PushProvider({ children }: React.PropsWithChildren) {
     };
   }, [sync]);
   useEffect(() => {
-    if (session.ready) void sync(true);
+    if (session.ready) void sync();
   }, [ownerKey, session.ready, sync]);
+  const refreshBadges = useCallback(() => {
+    setRevision((value) => value + 1);
+  }, []);
   return (
     <Context.Provider
       value={{
         status,
         error,
-        busy,
+        busyAction,
         pending,
         revision,
         consumed() {
@@ -200,13 +265,22 @@ export function PushProvider({ children }: React.PropsWithChildren) {
           setPending(null);
           if (n) void n.clearLastNotificationResponseAsync().catch(() => {});
         },
+        refresh: refreshBadges,
         async enable() {
-          if (pushAvailable) await setPushEnabled(true);
-          await sync(true);
+          setBusyAction("enable");
+          try {
+            if (pushAvailable) await setPushEnabled(true);
+            await sync(true);
+          } catch (e) {
+            setStatus("Push registration needs attention.");
+            setError((e as Error).message || "Push registration failed.");
+          } finally {
+            if (mounted.current) setBusyAction(null);
+          }
         },
         async disable() {
           if (!pushAvailable) return;
-          setBusy(true);
+          setBusyAction("disable");
           setError("");
           try {
             await pushSerial(async () => {
@@ -219,7 +293,7 @@ export function PushProvider({ children }: React.PropsWithChildren) {
           } catch (e) {
             setError((e as Error).message);
           } finally {
-            setBusy(false);
+            setBusyAction(null);
           }
         },
       }}

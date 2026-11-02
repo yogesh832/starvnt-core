@@ -1,5 +1,37 @@
 import type { ExpoConfig } from "expo/config";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import brand from "./src/brand.generated.json";
+
+const googleServicesFile = process.env.GOOGLE_SERVICES_JSON?.trim() || "./google-services.json";
+const googleServicesPath = resolve(googleServicesFile);
+const googleServicesFileExists = existsSync(googleServicesPath);
+let googleServicesMatchesAndroidPackage = false;
+if (googleServicesFileExists) {
+  try {
+    const firebaseConfig = JSON.parse(readFileSync(googleServicesPath, "utf8"));
+    googleServicesMatchesAndroidPackage = (firebaseConfig.client || []).some(
+      (client: { client_info?: { android_client_info?: { package_name?: string } } }) =>
+        client.client_info?.android_client_info?.package_name === "com.starvnt.mobile",
+    );
+  } catch {
+    googleServicesMatchesAndroidPackage = false;
+  }
+}
+
+const isAndroidEasBuild =
+  process.env.EAS_BUILD === "true" &&
+  process.env.EAS_BUILD_PLATFORM?.toLowerCase() === "android";
+if (googleServicesFileExists && !googleServicesMatchesAndroidPackage) {
+  throw new Error(
+    "GOOGLE_SERVICES_JSON must point to Firebase google-services.json configured for Android package com.starvnt.mobile.",
+  );
+}
+if (isAndroidEasBuild && !googleServicesMatchesAndroidPackage) {
+  throw new Error(
+    "Android push is not configured for this build. Add the Firebase google-services.json for com.starvnt.mobile as the EAS file environment variable GOOGLE_SERVICES_JSON, then rebuild.",
+  );
+}
 
 const config: ExpoConfig = {
   name: "STARVNT",
@@ -13,8 +45,8 @@ version: "1.0.1",
   ios: { supportsTablet: true, bundleIdentifier: "com.starvnt.mobile" },
   android: {
     versionCode: 2,
-    ...(process.env.GOOGLE_SERVICES_JSON
-      ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+    ...(googleServicesMatchesAndroidPackage
+      ? { googleServicesFile }
       : {}),
     package: "com.starvnt.mobile",
     adaptiveIcon: {

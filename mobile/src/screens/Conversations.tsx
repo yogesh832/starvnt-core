@@ -46,7 +46,7 @@ import {
 
 export function UpdatesScreen({ navigation }: any) {
   const { user } = useSession();
-  const { revision } = usePush();
+  const { revision, refresh: refreshBadges } = usePush();
   const vendor = user?.accountType === "VENDOR";
   const r = useResource(
     external,
@@ -56,6 +56,15 @@ export function UpdatesScreen({ navigation }: any) {
     external,
     vendor ? "/vendor/messages/threads" : "/customer/updates",
   );
+  const unreadMessages = (threads.data.threads || []).reduce(
+    (total: number, thread: Data) => total + (Number(vendor ? thread.unreadVendorCount : thread.unreadCount) || 0),
+    0,
+  );
+  const unreadNotifications = (r.data.notifications || []).filter(
+    (notification: Data) => vendor
+      ? notification.isRead !== true
+      : notification.read !== true && !notification.readAt,
+  ).length;
   const a = useAction();
   useEffect(() => {
     if (revision) {
@@ -71,7 +80,7 @@ export function UpdatesScreen({ navigation }: any) {
     >
       <ErrorNotice message={a.error || threads.error} />
       <Button
-        title="Mark all notifications as read"
+        title="Mark all messages and notifications as read"
         secondary
         busy={a.busy}
         onPress={() => {
@@ -83,12 +92,15 @@ export function UpdatesScreen({ navigation }: any) {
               vendor ? "PUT" : "POST",
             );
             r.refresh();
+            threads.refresh();
+            refreshBadges();
           });
         }}
       />
-      <Txt bold size={21}>
-        Conversations
-      </Txt>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Txt bold size={21}>Messages</Txt>
+        <UnreadBadge count={unreadMessages} label="unread messages" />
+      </View>
       {(threads.data.threads || []).map((t: Data) => (
         <MenuRow
           key={id(t)}
@@ -108,9 +120,10 @@ export function UpdatesScreen({ navigation }: any) {
       {!threads.loading && !threads.data.threads?.length && (
         <Txt muted>No conversations yet.</Txt>
       )}
-      <Txt bold size={21}>
-        Notifications
-      </Txt>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Txt bold size={21}>Notifications</Txt>
+        <UnreadBadge count={unreadNotifications} label="unread notifications" />
+      </View>
       {(r.data.notifications || []).map((n: Data) => (
         <Card key={id(n)}>
           <Pill>{n.read || n.isRead ? "READ" : "NEW"}</Pill>
@@ -156,6 +169,7 @@ export function UpdatesScreen({ navigation }: any) {
                     vendor ? "PUT" : "POST",
                   );
                   r.refresh();
+                  refreshBadges();
                 });
               }}
             />
@@ -181,6 +195,21 @@ export function UpdatesScreen({ navigation }: any) {
     </Page>
   );
 }
+
+function UnreadBadge({ count, label }: { count: number; label: string }) {
+  if (count <= 0) return null;
+  return (
+    <View
+      accessibilityLabel={`${count} ${label}`}
+      style={{ minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, backgroundColor: "#E5484D", alignItems: "center", justifyContent: "center" }}
+    >
+      <Txt size={11} bold style={{ color: "#fff", lineHeight: 15 }}>
+        {count > 99 ? "99+" : count}
+      </Txt>
+    </View>
+  );
+}
+
 export function ChatScreen(props: any) {
   const kind = props.route.params?.kind || "aura";
   return kind === "aura" ? (
@@ -270,6 +299,7 @@ function ConversationScreen({ route, navigation }: any) {
     requirementId,
   } = route.params || {};
   const { user } = useSession();
+  const { refresh: refreshBadges } = usePush();
   const vendor = user?.accountType === "VENDOR";
   const c = usePalette();
   const a = useAction();
@@ -315,6 +345,9 @@ function ConversationScreen({ route, navigation }: any) {
           ? `/vendor/aura/sessions/${encodeURIComponent(sessionId)}`
           : `/aura/sessions/${encodeURIComponent(sessionId)}${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ""}`;
   const r = useResource(external, readPath, kind === "aura" ? 0 : 20000, kind !== 'aura');
+  useEffect(() => {
+    if (kind === "thread" && !r.loading && r.data.messages) refreshBadges();
+  }, [kind, r.loading, r.data.messages, refreshBadges]);
   const stored: Data[] =
     kind === "aura"
       ? r.data.messages || r.data.session?.messages || []

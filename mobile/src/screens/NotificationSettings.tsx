@@ -23,7 +23,8 @@ export function NotificationSettings() {
       </Card>
       <Button
         title="Enable / retry push notifications"
-        busy={push.busy}
+        busy={push.busyAction === "enable"}
+        disabled={push.busyAction === "disable"}
         onPress={() => {
           void push.enable();
         }}
@@ -31,7 +32,8 @@ export function NotificationSettings() {
       <Button
         title="Pause notifications on this device"
         secondary
-        busy={push.busy}
+        busy={push.busyAction === "disable"}
+        disabled={push.busyAction === "enable"}
         onPress={() => {
           void push.disable();
         }}
