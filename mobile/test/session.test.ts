@@ -218,20 +218,16 @@ test('customer build forces email, OTP, Google and registration payloads to CUST
   }) as typeof fetch });
   for (const path of ['login', 'register', 'google', 'otp/verify', 'otp/widget-verify', 'password/set']) await manager.signIn('external', path, { accountType: 'VENDOR' });
   assert.equal(bodies.length, 6); assert.ok(bodies.every(b => b.accountType === 'CUSTOMER'));
-  await assert.rejects(manager.switchSurface('VENDOR'), /Vendor OS/); assert.equal(bodies.length, 6);
+  await assert.rejects(manager.switchSurface('VENDOR'), /matching portal/); assert.equal(bodies.length, 6);
 });
 
-test('customer build converts an old vendor refresh session before exposing an identity', async () => {
-  const paths: string[] = [], visible: string[] = [];
-  const { manager } = setup({ externalSurface: 'CUSTOMER', external: 'saved-vendor', fetcher: (async (url: any) => {
-    paths.push(String(url)); return json({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'person', accountType: String(url).endsWith('switch-surface') ? 'CUSTOMER' : 'VENDOR' } });
+test('customer build rejects an old vendor refresh session without switching its surface', async () => {
+  const paths: string[] = [];
+  const { manager, outside } = setup({ externalSurface: 'CUSTOMER', external: 'saved-vendor', fetcher: (async (url: any) => {
+    paths.push(String(url)); return json({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'person', accountType: 'VENDOR' } });
   }) as typeof fetch });
-  manager.subscribe(() => { const type = manager.getState().user?.accountType; if (type) visible.push(type); });
-  await manager.restore(); assert.equal(manager.getState().user?.accountType, 'CUSTOMER');
-  assert.ok(paths[1].endsWith('/auth/switch-surface')); assert.ok(visible.length > 0); assert.ok(visible.every(type => type === 'CUSTOMER'));
-});
-
-test('a failed saved vendor conversion never exposes Vendor OS in a customer build', async () => {
-  const { manager } = setup({ externalSurface: 'CUSTOMER', external: 'saved-vendor', fetcher: (async () => json({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'person', accountType: 'VENDOR' } })) as typeof fetch });
-  await manager.restore(); assert.equal(manager.getState().user, null); assert.match(manager.getState().error, /customer workspace/);
+  await manager.restore();
+  assert.equal(manager.getState().user, null); assert.equal(await outside.get(), null);
+  assert.equal(manager.getState().portalMismatch?.accountType, 'VENDOR');
+  assert.ok(paths.every(path => !path.endsWith('switch-surface')));
 });

@@ -10,7 +10,7 @@ export class ApiError extends Error {
   constructor(status: number, data: Data) {
     const supportEmail = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || "support@starvnt.com";
     const userMessage =
-      (typeof data.error === "string" && /^(EMAIL_OTP_|SMTP_EMAIL_|RESEND_EMAIL_)/.test(data.error) && typeof data.message === "string" ? data.message : null) ||
+      (typeof data.error === "string" && /^(ACCOUNT_TYPE_MISMATCH|EMAIL_OTP_|SMTP_EMAIL_|RESEND_EMAIL_)/.test(data.error) && typeof data.message === "string" ? data.message : null) ||
       messages[data.error] ||
       (status >= 500
         ? `There is a temporary issue on the STARVNT server. Please try again later or reach out to support at ${supportEmail}.`
@@ -40,6 +40,7 @@ export function createClient(
   base: string,
   vault: Vault,
   fetcher: typeof fetch = fetch,
+  surface?: "CUSTOMER" | "VENDOR",
 ) {
   let accessToken: string | null = null;
   let temporaryRefreshToken: string | null = null;
@@ -77,6 +78,7 @@ export function createClient(
         signal: controller.signal,
         headers: {
           "X-Starvnt-Client": "native",
+          ...(surface ? { "X-Starvnt-Surface": surface } : {}),
           Accept: "application/json",
           ...(!multipart && body !== undefined
             ? { "Content-Type": "application/json" }
@@ -111,6 +113,12 @@ export function createClient(
     if (!data.accessToken || !data.refreshToken)
       throw new Error("The server needs the native session update.");
     if (expected !== generation) return;
+    if (surface && data.user && data.user.accountType !== surface) {
+      revoke(data.refreshToken);
+      await clear();
+      const label = data.user.accountType === 'VENDOR' ? 'vendor' : 'customer';
+      throw new ApiError(403, { error: 'ACCOUNT_TYPE_MISMATCH', accountType: data.user.accountType, message: `Your account is registered as a ${label}. Please sign in through the ${label} dashboard.` });
+    }
     await persist(async () => {
       if (expected !== generation) return;
       if (persistent) await vault.set(data.refreshToken);
@@ -182,6 +190,7 @@ export function createClient(
           [400, 401, 403].includes(error.status)
         ) {
           await invalidate(expected);
+          if (error.data.error === 'ACCOUNT_TYPE_MISMATCH') throw error;
           return null;
         }
         throw error;

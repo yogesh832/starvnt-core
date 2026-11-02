@@ -1,3 +1,4 @@
+import { rejectPortalMismatch, portalMismatch, requestedSurface } from '../services/portalPolicy.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { Router } from "express";
 import { nativeAuthTransport } from "../../common/nativeAuthTransport.js";
@@ -33,6 +34,13 @@ import {
 
 const router = Router();
 router.use(nativeAuthTransport(config.refreshCookieName));
+router.use((req, res, next) => {
+  if (req.body?.accountType && !['CUSTOMER', 'VENDOR'].includes(req.body.accountType)) return res.status(400).json({ error: 'INVALID_ACCOUNT_TYPE' });
+  if (req.get('x-starvnt-surface') && !['CUSTOMER', 'VENDOR'].includes(req.get('x-starvnt-surface'))) return res.status(400).json({ error: 'INVALID_SURFACE' });
+  const surface = requestedSurface(req);
+  if (surface && req.body && req.method === 'POST') req.body.accountType = surface;
+  next();
+});
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -88,6 +96,7 @@ router.post("/dev-auth", async (req, res, next) => {
       });
     }
 
+    if (rejectPortalMismatch(req, res, user)) return;
     grantRole(user, targetType);
     user.accountType = targetType;
     await user.save();
@@ -293,6 +302,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
     const exists = await ExternalUser.findOne({
       email: String(email).toLowerCase(),
     });
+    if (exists && rejectPortalMismatch(req, res, exists)) return;
     if (exists) return res.status(409).json({ error: "EMAIL_IN_USE" });
 
     const normalizedPhone = phone ? normalizePhone(phone) : undefined;
@@ -387,6 +397,7 @@ router.post("/login", authLimiter, async (req, res, next) => {
       return res.status(401).json({ error: "ACCOUNT_DISABLED" });
     }
 
+    if (rejectPortalMismatch(req, res, user)) return;
     const signInAs = resolveExistingAccountType(user);
     await prepareAccountType(user, signInAs, {
       businessName,
@@ -434,6 +445,8 @@ router.post("/google", authLimiter, async (req, res, next) => {
 
     let signInAs;
     if (user) {
+      if (user.status !== "ACTIVE") return res.status(401).json({ error: "ACCOUNT_DISABLED" });
+      if (rejectPortalMismatch(req, res, user)) return;
       if (!user.googleId) user.googleId = googleUser.googleId;
       if (!user.avatarUrl && googleUser.avatarUrl)
         user.avatarUrl = googleUser.avatarUrl;
@@ -550,6 +563,8 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
       email: normalizedEmail,
     }).select("+passwordHash");
 
+    if (existingUser && rejectPortalMismatch(req, res, existingUser)) return;
+
     if (intent === "login") {
       if (!existingUser) {
         return res.status(404).json({ error: "EMAIL_ACCOUNT_NOT_FOUND" });
@@ -639,6 +654,7 @@ router.post("/password/set", authLimiter, async (req, res, next) => {
       return res.status(401).json({ error: "ACCOUNT_DISABLED" });
     }
 
+    if (rejectPortalMismatch(req, res, user)) return;
     user.passwordHash = await hashPassword(password);
     user.authProvider = user.googleId ? "GOOGLE" : user.phone ? "PHONE" : "EMAIL";
     const signInAs = resolveExistingAccountType(user);
@@ -669,6 +685,8 @@ router.post("/otp/email/verify", authLimiter, async (req, res, next) => {
         .json({ error: verification.reason || "INVALID_OTP" });
     }
 
+    const user = await ExternalUser.findOne({ email: normalizeEmail(verification.email) });
+    if (user && rejectPortalMismatch(req, res, user)) return;
     return res.json({ ok: true, verified: true, email: verification.email });
   } catch (err) {
     next(err);
@@ -683,6 +701,8 @@ router.post("/otp/send", authLimiter, async (req, res, next) => {
       return res.status(400).json({ error: "PHONE_NUMBER_REQUIRED" });
     }
 
+    const existingUser = await ExternalUser.findOne({ phone: normalizePhone(phone) });
+    if (existingUser && rejectPortalMismatch(req, res, existingUser)) return;
     const result = await sendMobileOtp(phone);
     return res.json({
       ok: true,
@@ -741,6 +761,8 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
 
     let signInAs;
     if (user) {
+      if (user.status !== "ACTIVE") return res.status(401).json({ error: "ACCOUNT_DISABLED" });
+      if (rejectPortalMismatch(req, res, user)) return;
       signInAs = resolveExistingAccountType(user);
       await prepareAccountType(user, signInAs, {
         businessName,
@@ -837,24 +859,8 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
       return res.status(400).json({ error: normalizedCategory.error });
     }
 
-    let normalizedPhone = "";
-
-    // 1. If accessToken is a JWT or test token, verify it
-    if (accessToken && typeof accessToken === "string") {
-      try {
-        const verification = await verifyWidgetAccessToken(accessToken);
-        if (verification?.phone) {
-          normalizedPhone = verification.phone;
-        }
-      } catch (err) {
-        console.warn("[Widget Verify] Token verification notice:", err.message);
-      }
-    }
-
-    // 2. Fallback to phone number verified in MSG91 widget session
-    if (!normalizedPhone && phone) {
-      normalizedPhone = normalizePhone(phone);
-    }
+    const verification = await verifyWidgetAccessToken(accessToken);
+    const normalizedPhone = verification?.valid && verification.phone;
 
     if (!normalizedPhone) {
       return res.status(400).json({ error: "INVALID_WIDGET_TOKEN" });
@@ -864,6 +870,8 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
 
     let signInAs;
     if (user) {
+      if (user.status !== "ACTIVE") return res.status(401).json({ error: "ACCOUNT_DISABLED" });
+      if (rejectPortalMismatch(req, res, user)) return;
       signInAs = resolveExistingAccountType(user);
       await prepareAccountType(user, signInAs, {
         businessName,
@@ -967,7 +975,9 @@ router.post("/refresh", async (req, res, next) => {
         .json({ ok: false, error: "ACCOUNT_DISABLED_OR_MISSING" });
     }
 
-    // Rotate using the DB-owned surface, healing legacy wrong-tab sessions.
+    if (rejectPortalMismatch(req, res, user)) return;
+
+    // Rotate only after checking the requested portal against the DB identity.
     session.revokedAt = new Date();
     await session.save();
     const fresh = await createSession(user, req, resolveExistingAccountType(user));
@@ -995,7 +1005,7 @@ router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
     const user = req.externalUser;
     const accountType = resolveExistingAccountType(user);
     if (targetSurface !== accountType) {
-      return res.status(403).json({ error: "ACCOUNT_TYPE_MISMATCH", accountType });
+      return res.status(403).json(portalMismatch(accountType));
     }
 
     const { session, refreshToken } = await createSession(user, req, targetSurface);

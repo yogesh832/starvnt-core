@@ -1,20 +1,21 @@
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { externalApi } from "../lib/api.js";
 
-import { acceptCustomerSession, customerPayload } from "../lib/customerSurface.js";
+import { acceptPortalSession, portalPayload, PORTAL_SURFACE } from "../lib/portalAccess.js";
 
 const ExternalAuthContext = createContext(null);
 
-/** Customer OS uses the shared external identity with the customer surface. */
+/** Product-specific portal policy over the shared external identity. */
 export function ExternalAuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
+  const [sessionError, setSessionError] = useState(null);
 
   const sessionRevision = useRef(0);
   async function storeSession(data, expected = sessionRevision.current) {
     const current = () => expected === sessionRevision.current;
-    const nextUser = await acceptCustomerSession(data, externalApi, current);
-    if (current()) setUser(nextUser);
+    const nextUser = await acceptPortalSession(data, externalApi, current);
+    if (current()) { setUser(nextUser); setSessionError(null); }
     return nextUser;
   }
 
@@ -32,7 +33,8 @@ export function ExternalAuthProvider({ children }) {
 
         const data = await externalApi.refresh();
         if (data?.user) await storeSession(data, expected);
-      } catch {
+      } catch (error) {
+        if (error.data?.error === 'ACCOUNT_TYPE_MISMATCH') setSessionError(error.data);
         if (expected === sessionRevision.current) { externalApi.setToken(null); setUser(null); }
       } finally {
         setReady(true);
@@ -42,12 +44,12 @@ export function ExternalAuthProvider({ children }) {
     restoreSession();
   }, []);
 
-  // Customer builds always request the customer surface, including social/OTP flows.
+  // Each product always requests its own surface, including social/OTP flows.
   async function login(email, password, accountType) {
     const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/login", {
       method: "POST",
-      body: customerPayload({ email, password }),
+      body: portalPayload({ email, password }),
     });
     return storeSession(data, expected);
   }
@@ -56,7 +58,7 @@ export function ExternalAuthProvider({ children }) {
     const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/register", {
       method: "POST",
-      body: customerPayload(payload),
+      body: portalPayload(payload),
     });
     return storeSession(data, expected);
   }
@@ -65,7 +67,7 @@ export function ExternalAuthProvider({ children }) {
     const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/google", {
       method: "POST",
-      body: customerPayload({ credential, ...extra }),
+      body: portalPayload({ credential, ...extra }),
     });
     return storeSession(data, expected);
   }
@@ -73,21 +75,21 @@ export function ExternalAuthProvider({ children }) {
   async function sendOtp(phone) {
     return externalApi.call("/auth/otp/send", {
       method: "POST",
-      body: customerPayload({ phone }),
+      body: portalPayload({ phone }),
     });
   }
 
   async function sendEmailOtp(email, extra = {}) {
     return externalApi.call("/auth/otp/email/send", {
       method: "POST",
-      body: customerPayload({ email, ...extra }),
+      body: portalPayload({ email, ...extra }),
     });
   }
 
   async function verifyEmailOtp(email, otp) {
     return externalApi.call("/auth/otp/email/verify", {
       method: "POST",
-      body: { email, otp },
+      body: portalPayload({ email, otp }),
     });
   }
 
@@ -95,7 +97,7 @@ export function ExternalAuthProvider({ children }) {
     const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/password/set", {
       method: "POST",
-      body: customerPayload({ email, otp, password }),
+      body: portalPayload({ email, otp, password }),
     });
     return storeSession(data, expected);
   }
@@ -104,7 +106,7 @@ export function ExternalAuthProvider({ children }) {
     const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/otp/verify", {
       method: "POST",
-      body: customerPayload({ phone, otp, ...extra }),
+      body: portalPayload({ phone, otp, ...extra }),
     });
     return storeSession(data, expected);
   }
@@ -113,7 +115,7 @@ export function ExternalAuthProvider({ children }) {
     const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/otp/email/verify", {
       method: "POST",
-      body: customerPayload({ email, otp, ...extra }),
+      body: portalPayload({ email, otp, ...extra }),
     });
     return storeSession(data, expected);
   }
@@ -122,13 +124,13 @@ export function ExternalAuthProvider({ children }) {
     const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/otp/widget-verify", {
       method: "POST",
-      body: customerPayload({ accessToken, ...extra }),
+      body: portalPayload({ accessToken, ...extra }),
     });
     return storeSession(data, expected);
   }
 
   async function switchSurface(targetType) {
-    if (targetType !== "CUSTOMER") throw new Error("Vendor OS is available in the vendor app.");
+    if (targetType !== PORTAL_SURFACE) throw new Error("Please use the matching account portal.");
     const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/switch-surface", {
       method: "POST",
@@ -150,6 +152,7 @@ export function ExternalAuthProvider({ children }) {
       value={{
         user,
         ready,
+        sessionError,
         login,
         register,
         loginWithGoogle,

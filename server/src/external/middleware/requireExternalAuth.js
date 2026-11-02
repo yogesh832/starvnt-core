@@ -1,6 +1,7 @@
 import { verifyExternalAccessToken } from '../utils/tokens.js';
 import { ExternalUser, activeAccountType } from '../models/ExternalUser.js';
 import { ExternalSession } from '../models/ExternalSession.js';
+import { rejectPortalMismatch } from '../services/portalPolicy.js';
 
 /**
  * Authentication gate for the EXTERNAL identity domain.
@@ -34,6 +35,7 @@ export async function requireExternalAuth(req, res, next) {
     }
 
     // A historical wrong-tab session must not grant another account surface.
+    if (rejectPortalMismatch(req, res, user, false)) return;
     user.$locals.activeAccountType = user.accountType;
     req.externalUser = user;
     req.externalSession = session;
