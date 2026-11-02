@@ -1,6 +1,6 @@
 STARVNT portal login policy — 2 November 2026
 
-This change is development work on `vendor-dev` and `customer-dev`. It is not a production release. `main` and `customer` remain unchanged.
+Developed and verified on `vendor-dev` and `customer-dev`; production promotion was explicitly approved on 2 November 2026. Backend and Vendor web release through `main` to AWS. Customer web releases from `customer` to the existing Vercel project at https://starvnt-core.vercel.app. The future custom customer domain can be configured with the portal URL variables below.
 
 | Stored primary account type | Customer OS | Vendor OS |
 | --- | --- | --- |
@@ -41,4 +41,4 @@ Run the usual backend, web and mobile tests plus TypeScript checks. For the opti
 
 Keep backend authentication changes in a separate release commit from the product web/mobile changes. When a production release is requested, promote the reviewed shared backend changes to `main` first and verify compatibility, then promote each product client to its matching production branch. The existing `main` workflow deploys both the backend and Vendor web; Customer OS web and native app distribution remain separate release steps. Existing installed mobile apps need a new build to receive the updated client-side portal policy and links.
 
-Proposal Studio remains excluded. No data migration, account conversion, live payment transaction, production environment change or production deployment is part of this development task.
+Proposal Studio remains excluded. This release performs no data migration, account conversion or live payment transaction. Existing production secrets remain unchanged. Verify both AWS deployment jobs, the deployed main revision, the Customer Vercel deployment status and Customer-origin CORS before marking the release complete.
