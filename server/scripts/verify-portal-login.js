@@ -65,6 +65,11 @@ try {
   await page.setViewportSize({ width: 390, height: 844 }); await link.scrollIntoViewIfNeeded();
   check('Error and link remain available on a mobile viewport', await link.isVisible(), true);
   await page.screenshot({ path: resolve(output, 'wrong-portal-mobile.png'), fullPage: true });
+  await page.route('**/api/auth/otp/email/send', route => route.fulfill({ status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': 'http://127.0.0.1:5198', 'Access-Control-Allow-Credentials': 'true' }, body: JSON.stringify({ ok: true, message: 'Synthetic local OTP delivery.' }) }));
+  await page.locator('input[type=email]').fill(users[surface].email);
+  await page.getByRole('button', { name: 'Send OTP to Email', exact: true }).click();
+  await page.getByRole('button', { name: 'Verify Email', exact: true }).waitFor();
+  check('Correcting the email clears the old portal mismatch before verification', await page.getByRole('link', { name: `Go to ${label(wrong)} dashboard login`, exact: false }).count(), 0);
   await context.close();
   for (const type of [wrong, surface]) {
     const login = await fetch('http://127.0.0.1:4118/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: users[type].email, password, accountType: type }) });

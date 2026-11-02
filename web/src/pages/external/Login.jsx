@@ -37,6 +37,7 @@ export default function ExternalLogin() {
     loginWithWidgetOtp,
     user,
     sessionError,
+    clearSessionError,
   } = useExternalAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -80,6 +81,12 @@ export default function ExternalLogin() {
   const mismatch = portalMismatch || sessionError;
   const [busy, setBusy] = useState(false);
   const googleBtnRef = useRef(null);
+  function clearLoginError() {
+    setError('');
+    setPortalMismatch(null);
+    clearSessionError();
+  }
+
 
   function redirectAfterAuth() {
     navigate(customerNextPath(nextPath), { replace: true });
@@ -140,7 +147,7 @@ export default function ExternalLogin() {
   // ── Handler 1: Email & Password ───────────────────────────────────────────
   async function handleEmailSubmit(e) {
     e.preventDefault();
-    setError("");
+    clearLoginError();
     setBusy(true);
     try {
       if (!emailOtpSent) {
@@ -241,12 +248,12 @@ export default function ExternalLogin() {
       return;
     }
 
-    setError("");
+    clearLoginError();
     setBusy(true);
     try {
       await verifyEmailOtp(form.email, form.otp);
       setEmailOtpVerified(true);
-      setError("");
+      clearLoginError();
     } catch (err) {
       setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       const map = {
@@ -265,7 +272,7 @@ export default function ExternalLogin() {
   // ── Handler 2: Google Authentication ──────────────────────────────────────
   async function handleGoogleCredentialResponse(response) {
     if (!response?.credential) return;
-    setError("");
+    clearLoginError();
     setBusy(true);
     try {
       const u = await loginWithGoogle(response.credential, {
@@ -310,7 +317,7 @@ export default function ExternalLogin() {
 
   // ── Handler 3: MSG91 OTP Widget ───────────────────────────────────────────
   function openMsg91Widget(phoneParam) {
-    setError("");
+    clearLoginError();
     const targetPhone = phoneParam || form.phone;
     const cleanDigits = targetPhone
       ? String(targetPhone).replace(/\D/g, "")
@@ -409,7 +416,7 @@ export default function ExternalLogin() {
       setError("Please enter the verification code.");
       return;
     }
-    setError("");
+    clearLoginError();
     setBusy(true);
     try {
       const u = await loginWithOtp(form.phone, form.otp, {
@@ -623,7 +630,7 @@ export default function ExternalLogin() {
                   type="button"
                   onClick={() => {
                     setAuthMethod("EMAIL");
-                    setError("");
+                    clearLoginError();
                   }}
                   className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     authMethod === "EMAIL"
@@ -650,7 +657,7 @@ export default function ExternalLogin() {
                   type="button"
                   onClick={() => {
                     setAuthMethod("PHONE");
-                    setError("");
+                    clearLoginError();
                   }}
                   className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     authMethod === "PHONE"
@@ -677,7 +684,7 @@ export default function ExternalLogin() {
                   type="button"
                   onClick={() => {
                     setAuthMethod("GOOGLE");
-                    setError("");
+                    clearLoginError();
                   }}
                   className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     authMethod === "GOOGLE"
@@ -829,7 +836,7 @@ export default function ExternalLogin() {
                             setEmailOtpVerified(false);
                             setPasswordSetupRequired(false);
                             setForm({ ...form, otp: "" });
-                            setError("");
+                            clearLoginError();
                           }}
                           className="text-[11px] font-bold text-primary hover:underline"
                         >
@@ -1021,7 +1028,7 @@ export default function ExternalLogin() {
                           onClick={() => {
                             setOtpSent(false);
                             setForm({ ...form, otp: "" });
-                            setError("");
+                            clearLoginError();
                           }}
                           className="text-[11px] font-bold text-primary hover:underline"
                         >
@@ -1173,7 +1180,7 @@ export default function ExternalLogin() {
                     type="button"
                     onClick={() => {
                       setMode(mode === "login" ? "register" : "login");
-                      setError("");
+                      clearLoginError();
                       setOtpSent(false);
                       setEmailOtpSent(false);
                       setEmailOtpVerified(false);
