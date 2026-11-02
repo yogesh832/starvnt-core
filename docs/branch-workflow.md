@@ -1,17 +1,23 @@
-# STARVNT branch responsibilities
+# STARVNT branch workflow
 
-Established 2026-11-02 (Asia/Calcutta).
+Updated 2026-11-02 (Asia/Calcutta).
 
-| Branch | Role | External sign-in/navigation |
+| Branch | Purpose | Deployment target |
 | --- | --- | --- |
-| `codex/development` | Shared development baseline created from customer commit `4ccb4d9` | Customer and Vendor OS |
-| `customer` | Customer OS product branch | Customer only |
-| `main` | Existing production/Vendor OS branch | Existing production behavior; unchanged by this separation |
+| `main` | Vendor OS production | Vendor domain |
+| `vendor-dev` | Vendor OS development | Vendor staging |
+| `customer` | Customer OS production | Customer domain |
+| `customer-dev` | Customer OS development | Customer staging |
 
-Customer OS continues to use shared backend/vendor catalogue, quotation, agreement, booking and payment services. Removing Vendor OS entry points does not delete vendor records or remove backend vendor permissions. Internal staff authentication remains separate.
+Use only these four branches. Develop Vendor OS in `vendor-dev`, and Customer OS in `customer-dev`. Promote tested changes to the corresponding production branch when a release is requested. Do not create a mixed development branch or new `codex/*` feature branches.
 
-Customer web entry ignores vendor role query parameters, accepts only customer return destinations, and normalizes saved vendor sessions through the existing switch-surface API before rendering a customer identity. Mobile uses the same customer-only policy, removes vendor workspace switching and vendor-only navigation destinations, and ignores vendor push destinations. Existing phones need a new app build to receive source changes.
+`vendor-dev` starts from published `main` commit `8f6352204c6895e4c6b0dbe45274e450915e6fad`; `customer-dev` starts from published `customer` commit `ee2a0b8efc9b4c3464321afe138883cf791f81de`. Keep each product's authentication and navigation separate. Shared Core/backend changes must be reviewed and promoted to both product lines where needed; avoid wholesale cross-product merges that overwrite their entry points.
 
-Develop shared features in `codex/development`, then review and cherry-pick the relevant commits into the appropriate product branch. Do not wholesale merge Customer OS routing/auth restrictions into main or overwrite the mixed development surface. Shared backend changes can be promoted independently. Existing main deployment rules remain unchanged; creation of the development branch does not deploy it.
+The table records deployment responsibilities. Branch creation does not provision staging servers, configure domains/secrets, or change existing production deployment workflows. Wire each development branch only to its corresponding staging environment when those environments are configured.
 
-The mixed development branch is an exact source baseline, not an automatic synchronization of later commits from either product branch.
+Preferred development worktrees:
+- Vendor OS: `D:/starvnt-core-worktrees/vendor-dev`
+- Customer OS: `D:/starvnt-core-worktrees/customer-dev`
+
+Legacy branch history is archived locally at `D:/starvnt-branch-archive/2026-11-02/before-four-branch-layout.bundle`. Historical worktree files and uncommitted changes are preserved; retired worktrees may remain detached for recovery/reference.
+
