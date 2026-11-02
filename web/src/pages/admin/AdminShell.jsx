@@ -1,5 +1,4 @@
 import ProductMetrics from './ProductMetrics.jsx';
-import ProposalStudio from './ProposalStudio.jsx';
 import Availability from './Availability.jsx';
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -29,7 +28,6 @@ const MODULES = [
   { path: 'availability', label: 'Availability & External Commitments', icon: 'calendar', anyOf: ['vendors.read'] },
   { path: 'vendors', label: 'Vendors', icon: 'vendors', anyOf: ['vendors.read'] },
   { path: 'events', label: 'Events', icon: 'events', anyOf: ['events.read'] },
-  { path: 'proposals', label: 'Proposal Studio', icon: 'documents', anyOf: ['proposals.read'] },
   { path: 'bookings', label: 'Bookings', icon: 'bookings', anyOf: ['bookings.read'] },
   { path: 'finance', label: 'Finance', icon: 'payments', anyOf: ['payments.read', 'settlements.read', 'financePolicies.read', 'financeCoupons.read', 'settings.read'] },
   { path: 'operations', label: 'Operations', icon: 'operations', anyOf: ['execution.read', 'automation.read'] },
@@ -344,7 +342,6 @@ export default function AdminShell() {
               <Route path="availability" element={<Availability />} />
               <Route path="vendors" element={<ModuleTable kind="vendors" />} />
               <Route path="events" element={<ModuleTable kind="events" />} />
-              <Route path="proposals" element={<ProposalStudio />} />
               <Route path="bookings" element={<ModuleTable kind="bookings" />} />
               <Route path="finance" element={<Finance />} />
               <Route path="payments" element={<Navigate to="/admin/finance" replace />} />

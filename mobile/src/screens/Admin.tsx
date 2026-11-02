@@ -1,5 +1,4 @@
 import { AdminAvailability } from './AdminAvailability';
-import { AdminProposalStudio } from './AdminProposal';
 import { AdminFinance } from './AdminFinance';
 import { ProductMetrics } from './ProductMetrics';
 import React, { useEffect, useMemo, useState } from "react";
@@ -108,7 +107,6 @@ export function AdminModule({ route, navigation }: any) {
       </Page>
     );
   if (module.key === "availability") return <AdminAvailability />;
-  if (module.key === 'proposals') return <AdminProposalStudio />;
   if (module.key === "financeGovernance") return <AdminFinance />;
   if (module.key === "productMetrics") return <ProductMetrics />;
   return (

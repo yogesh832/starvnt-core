@@ -39,13 +39,10 @@ export default function MapLocationPicker({
   initialZoom = 14,
   compactControls = false,
   guidance = 'Drag or click pointer to pin exact studio entrance',
-  circleRadiusKm = null,
-  searchPlaces = null,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
-  const circleRef = useRef(null);
   const tileLayerRef = useRef(null);
 
   const [mapType, setMapType] = useState('roadmap'); // 'roadmap' | 'satellite'
@@ -95,7 +92,6 @@ export default function MapLocationPicker({
                 addr.county ||
                 '';
               const state = addr.state || '';
-              const country = addr.country || '';
               const postalCode = addr.postcode || '';
               const formattedAddress = data.display_name || [road, locality, city].filter(Boolean).join(', ');
 
@@ -105,7 +101,6 @@ export default function MapLocationPicker({
                 locality,
                 city,
                 state,
-                country,
                 postalCode,
                 displayName: data.display_name,
               };
@@ -188,41 +183,19 @@ export default function MapLocationPicker({
     };
   }, []); // Mount once
 
-  // Sync external coordinates and radius circle changes
+  // Sync external coordinates changes
   useEffect(() => {
     if (!mapInstanceRef.current || !markerRef.current) return;
     const lat = Number(value?.lat);
     const lng = Number(value?.lng);
-    const radius = Number(circleRadiusKm);
-
     if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
       const currentPos = markerRef.current.getLatLng();
       if (Math.abs(currentPos.lat - lat) > 0.0001 || Math.abs(currentPos.lng - lng) > 0.0001) {
         markerRef.current.setLatLng([lat, lng]);
         mapInstanceRef.current.setView([lat, lng], mapInstanceRef.current.getZoom());
       }
-
-      if (radius && radius > 0) {
-        const meters = radius * 1000;
-        if (circleRef.current) {
-          circleRef.current.setLatLng([lat, lng]);
-          circleRef.current.setRadius(meters);
-        } else {
-          circleRef.current = L.circle([lat, lng], {
-            radius: meters,
-            color: '#5a4bd1',
-            fillColor: '#5a4bd1',
-            fillOpacity: 0.14,
-            weight: 2,
-            dashArray: '6, 6',
-          }).addTo(mapInstanceRef.current);
-        }
-      } else if (circleRef.current) {
-        circleRef.current.remove();
-        circleRef.current = null;
-      }
     }
-  }, [value?.lat, value?.lng, circleRadiusKm]);
+  }, [value?.lat, value?.lng]);
 
   // Handle Map Type Toggle (Roadmap vs Satellite)
   function handleToggleMapType(newType) {
@@ -256,17 +229,13 @@ export default function MapLocationPicker({
     setSearching(true);
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        let data;
-        if (searchPlaces) {
-          const result = await searchPlaces(val);
-          data = Array.isArray(result) ? result : [];
-        } else {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=${encodeURIComponent(val)}`
-          );
-          if (!res.ok) return;
-          data = await res.json();
-        }
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=${encodeURIComponent(
+            val
+          )}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
         setSuggestions(data || []);
         setShowSuggestions(true);
       } catch (err) {
@@ -280,27 +249,25 @@ export default function MapLocationPicker({
   // Select a place from search suggestions
   function handleSelectSuggestion(item) {
     setShowSuggestions(false);
-    setSearchQuery(item.address || item.display_name || item.name || '');
+    setSearchQuery(item.display_name);
 
     const lat = Number(item.lat);
-    const lng = Number(item.lng ?? item.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const lng = Number(item.lon);
 
     if (mapInstanceRef.current && markerRef.current) {
       mapInstanceRef.current.setView([lat, lng], 16, { animate: true });
       markerRef.current.setLatLng([lat, lng]);
     }
 
-    const addr = typeof item.address === 'object' ? item.address : {};
+    const addr = item.address || {};
     const road = addr.road || addr.pedestrian || addr.street || '';
-    const locality = item.locality || addr.suburb || addr.neighbourhood || addr.residential || addr.locality || '';
-    const city = item.city || addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-    const state = item.state || addr.state || '';
-    const country = item.country || addr.country || '';
-    const postalCode = item.pincode || item.postalCode || addr.postcode || '';
-    const formattedAddress = item.address && typeof item.address === 'string'
-      ? item.address
-      : item.display_name || [road, locality, city].filter(Boolean).join(', ');
+    const locality =
+      addr.suburb || addr.neighbourhood || addr.residential || addr.locality || '';
+    const city =
+      addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+    const state = addr.state || '';
+    const postalCode = addr.postcode || '';
+    const formattedAddress = item.display_name || [road, locality, city].filter(Boolean).join(', ');
 
     if (onChange) {
       onChange({
@@ -310,7 +277,6 @@ export default function MapLocationPicker({
         locality,
         city,
         state,
-        country,
         postalCode,
         displayName: item.display_name,
       });
@@ -403,9 +369,9 @@ export default function MapLocationPicker({
                     </svg>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-navy truncate">
-                        {item.name || String(item.display_name || item.address || '').split(',')[0]}
+                        {item.name || item.display_name.split(',')[0]}
                       </div>
-                      <div className="text-[10px] text-muted truncate">{item.address || item.display_name || ''}</div>
+                      <div className="text-[10px] text-muted truncate">{item.display_name}</div>
                     </div>
                   </button>
                 ))}

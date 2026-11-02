@@ -5,7 +5,6 @@ import { acknowledgePush } from "./pushRuntime";
 import { NotificationSettings } from "./screens/NotificationSettings";
 import { CircleScreen } from "./screens/CustomerWorkspace";
 import { CustomerBookingScreen } from "./screens/CustomerBooking";
-import { ProposalScreen } from './screens/Proposal';
 import { StatusBar, Pressable, Text, View, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -292,7 +291,6 @@ function Navigation() {
               component={EventScreen}
               options={{ title: "Event workspace" }}
             />
-            <Stack.Screen name="Proposal" component={ProposalScreen} options={{ title: 'My Event Proposal' }} />
             <Stack.Screen
               name="EditEvent"
               component={EditEvent}

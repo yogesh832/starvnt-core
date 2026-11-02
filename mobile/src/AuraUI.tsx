@@ -54,12 +54,11 @@ function SidebarToggle({ color }: { color: string }) {
 function WaveIcon() {
   return <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', height: 18 }}>{[7, 13, 18, 11, 6].map((height, i) => <View key={i} style={{ width: 2.5, height, borderRadius: 2, backgroundColor: '#fff' }} />)}</View>;
 }
-export function AuraChatView({ messages, user, vendor, text, onChangeText, onSend, busy, loading, error, onRetry, onNew, onHistory, onOpenLink, onVoiceMessage, onVoiceController, navigation, attachment, onAttach, onRemoveAttachment, eventTitle, activeEventId, onSwitchEvent, onOpenEvent, hasQuestion, renderAfterMessage, children }: React.PropsWithChildren<{
+export function AuraChatView({ messages, user, vendor, text, onChangeText, onSend, busy, loading, error, onRetry, onNew, onHistory, onOpenLink, onVoiceMessage, onVoiceController, navigation, attachment, onAttach, onRemoveAttachment, eventTitle, activeEventId, onSwitchEvent, onOpenEvent, hasQuestion, children }: React.PropsWithChildren<{
   messages: Data[]; user: Data | null; vendor: boolean; text: string; onChangeText: (v: string) => void;
   onSend: (v?: string) => void; busy: boolean; loading: boolean; error: string;
   onRetry: () => void; onNew: () => void; onHistory: () => void; onOpenLink: (url: string) => void; onVoiceMessage: (text: string, body?: Data) => Promise<string>; onVoiceController?: (submit: AuraVoiceSubmit | null) => void; navigation: any;
   attachment?: Data | null; onAttach: () => void; onRemoveAttachment: () => void; eventTitle?: string; activeEventId?: string; onSwitchEvent?: (event: Data) => void; onOpenEvent: () => void; hasQuestion: boolean;
-  renderAfterMessage?: (message: Data, index: number) => React.ReactNode;
 }>) {
   const c = useAuraPalette();
   const scroll = useRef<ScrollView>(null), input = useRef<TextInput>(null), nearBottom = useRef(true);
@@ -92,9 +91,9 @@ export function AuraChatView({ messages, user, vendor, text, onChangeText, onSen
           {messages.map((m, i) => {
             const content = m.content || m.text || m.body;
             if (!content) return null;
-            return <React.Fragment key={m.id || m._id || i}><Bubble mine={m.role === 'user'} content={typeof content === 'string' ? content : 'Your conversation has been updated.'} onOpenLink={onOpenLink}>
+            return <Bubble key={m.id || m._id || i} mine={m.role === 'user'} content={typeof content === 'string' ? content : 'Your conversation has been updated.'} onOpenLink={onOpenLink}>
               {vendor && m.role !== 'user' && (m.actions || []).map((action: Data, index: number) => action.target && <AuraRow key={index} title={action.label || 'Open workspace'} onPress={() => navigation.navigate(action.target.screen, action.target.params)} />)}
-            </Bubble>{renderAfterMessage?.(m, i)}</React.Fragment>;
+            </Bubble>;
           })}
           {busy && <View accessibilityRole="progressbar" accessibilityLabel="Aura is responding" style={{ marginLeft: 42, flexDirection: 'row', gap: 8, alignItems: 'center' }}><ActivityIndicator color={c.primary} size="small" /><Text size={11} color={c.muted}>Aura is thinking…</Text></View>}
           {!!error && <View accessibilityRole="alert" style={{ marginLeft: 42, gap: 8 }}><Text size={12} color={c.danger}>{error}</Text><Pressable accessibilityRole="button" onPress={onRetry}><Text bold size={12} color={c.chip}>Try again</Text></Pressable></View>}

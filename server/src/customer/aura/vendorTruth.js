@@ -41,7 +41,7 @@ export function selectVendorRows(rows, message) {
   const vendorWords = new Set(named.flatMap(row => row.vendor.toLowerCase().split(/[^\p{L}\p{N}]+/u)));
   const specificPackage = packagePhrase.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 1 && !generic.has(word) && !vendorWords.has(word) && !['aur', 'wala', 'wali', 'hazaar', 'ka', 'ki', 'ke', 'ko', 'hai', 'me', 'mujhe'].includes(word)).length >= 2;
   if (specificPackage && !packageMatches.length) return [];
-  return (packageWithinNamed.length ? packageWithinNamed : named.length ? named : packageMatches.length ? packageMatches : categories.length ? rows.filter(row => categories.includes(row.category)) : rows).sort((a, b) => Number(a.isDemo) - Number(b.isDemo) || Number(['booked', 'blocked'].includes(a.availability)) - Number(['booked', 'blocked'].includes(b.availability)) || (b.recommendation?.auraScore ?? 0) - (a.recommendation?.auraScore ?? 0) || (b.rating ?? 0) - (a.rating ?? 0) || (a.price ?? Infinity) - (b.price ?? Infinity));
+  return (packageWithinNamed.length ? packageWithinNamed : named.length ? named : packageMatches.length ? packageMatches : categories.length ? rows.filter(row => categories.includes(row.category)) : rows).sort((a, b) => Number(a.isDemo) - Number(b.isDemo) || Number(['booked', 'blocked'].includes(a.availability)) - Number(['booked', 'blocked'].includes(b.availability)) || (a.price ?? Infinity) - (b.price ?? Infinity));
 }
 
 export function vendorPrice(row) {

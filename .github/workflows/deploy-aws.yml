@@ -30,15 +30,6 @@ jobs:
         run: npm run build
         working-directory: ./web
 
-      - name: Install production browser verification tools
-        run: |
-          npm install --prefix tmp/vendor-os-tools --no-save --package-lock=false --ignore-scripts playwright@1.64.1
-          node tmp/vendor-os-tools/node_modules/playwright/cli.js install --with-deps chromium
-      - name: Verify Proposal Studio approval and customer browser journey
-        run: |
-          VITE_API_URL=http://127.0.0.1:4117 npm run build -w web -- --outDir ../tmp/qa/proposal-studio/site
-          CLIENT_ORIGINS=http://127.0.0.1:5197 PROPOSAL_BROWSER_QA=1 node --test --test-name-pattern='production browser' server/test/proposal-studio.test.js
-
   deploy:
     name: Deploy to AWS Production
     needs: test

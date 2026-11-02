@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 // AuraActivity is vendor-only; removed from the customer chat.
@@ -498,11 +498,6 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
     async (text, extra = {}) => {
       const msg = (text ?? '').trim();
       if (!msg || !sessionId || sendingRef.current || !live.current) return;
-      const savedPoint = activeEventRef.current?.location?.coordinates;
-      if (nextQ?.topic === 'event.city' && !(Number.isFinite(Number(savedPoint?.lat)) && Number.isFinite(Number(savedPoint?.lng)) && (Number(savedPoint.lat) !== 0 || Number(savedPoint.lng) !== 0))) {
-        setError('Please search and select the event location below, then save it before continuing.');
-        return;
-      }
       sendingRef.current = true;
       const startedAt = Date.now();
       failedSend.current = null;
@@ -583,7 +578,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
                   const next = [...prev];
                   const last = next[next.length - 1];
                   if (last && last.role === 'model') {
-                    next[next.length - 1] = { ...last, id: event.vendorSearch?.anchorMessageId || last.id, content: event.reply };
+                    next[next.length - 1] = { ...last, content: event.reply };
                   }
                   return next;
                 });
@@ -633,7 +628,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
       } finally { if (live.current === sync) sendingRef.current = false; sync?.endWrite(); }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionId, sending, scopedEventId, applyState, onEventChanged, user?.id, nextQ]
+    [sessionId, sending, scopedEventId, applyState, onEventChanged, user?.id]
   );
   sendRef.current = send;
 
@@ -682,7 +677,6 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         ...(city ? { city } : {}),
         ...(locality ? { locality } : {}),
         ...(loc.state ? { state: loc.state } : {}),
-        ...(loc.country ? { country: loc.country } : {}),
         ...(loc.postalCode ? { pincode: loc.postalCode } : {}),
         ...(loc.address ? { address: loc.address } : {}),
         coordinates: { lat: loc.lat, lng: loc.lng },
@@ -752,14 +746,9 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
     return [];
   })();
   const latestAuraMessage = [...messages].reverse().find((m) => m.role === 'model')?.content || '';
-  const catalogAnchorMessage = vendorSearch?.anchorMessageId
-    ? messages.find((message) => String(message.id || message._id || '') === String(vendorSearch.anchorMessageId))
-    : [...messages].reverse().find((message) => message.role === 'model' && /catalogue API lists \d+ services from \d+ vendors/i.test(message.content || ''));
-  const catalogAnchorId = catalogAnchorMessage?.id || catalogAnchorMessage?._id || null;
   const showChipQuestion = nextQ?.question && !latestAuraMessage.includes(nextQ.question);
   const showDatePicker = nextQ?.topic === 'event.date';
-  const hasEventCoordinates = Number.isFinite(Number(activeEvent?.location?.coordinates?.lat)) && Number.isFinite(Number(activeEvent?.location?.coordinates?.lng)) && (Number(activeEvent?.location?.coordinates?.lat) !== 0 || Number(activeEvent?.location?.coordinates?.lng) !== 0);
-  const showLocationPicker = ['event.city', 'event.area'].includes(nextQ?.topic) || Boolean(activeEvent?.status === 'draft' && activeEvent.city && !hasEventCoordinates);
+  const showLocationPicker = ['event.city', 'event.area'].includes(nextQ?.topic);
   const showAnswerPanel = chips.length > 0 || showDatePicker || showLocationPicker;
   const displayError = error || liveError;
 
@@ -787,18 +776,14 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
         {loading && <AuraLoadingState />}
         {messages.map((m, i) => {
           if (m.role === 'model' && !m.content) return null;
-          const content = m.role === 'model' && vendorSuggestions.length && /catalogue API returned no matching active services/i.test(m.content)
-            ? `I found ${vendorSuggestions.length} matching services in the current catalogue. The cards below show those results.`
-            : m.content;
-          const isCatalogAnchor = catalogAnchorId && String(m.id || m._id || '') === String(catalogAnchorId);
-          return <Fragment key={m.id || m._id || i}><Bubble from={m.role} onZoomImage={setActiveZoomImage}>{content}</Bubble>
-            {isCatalogAnchor && !!vendorSuggestions.length && <div className="pl-10"><AuraVendorResults key={`${activeEvent?.id || 'new'}-${vendorSearch?.query || 'catalog'}`} rows={vendorSuggestions} search={vendorSearch} eventId={activeEvent?.id} /></div>}
-          </Fragment>;
+          return <Bubble key={i} from={m.role} onZoomImage={setActiveZoomImage}>{m.content}</Bubble>;
         })}
 
         {switchChoices.length > 0 && <div className="pl-10 space-y-2 aura-card-reveal"><div className="text-xs font-semibold text-navy dark:text-slate-100">Your events</div>{switchChoices.map(event => <button key={event.id} type="button" disabled={sending || loading} onClick={() => switchEvent(event)} className="block w-full max-w-xl text-left rounded-2xl border border-primary/25 p-3 text-primary dark:text-[#a5b4fc] hover:bg-primary/10 disabled:opacity-50"><span className="block text-xs font-semibold">{event.title}</span><span className="block text-[10px] mt-1">{[event.city, event.date || 'Date to be decided'].filter(Boolean).join(' · ')}</span></button>)}</div>}
 
         {/* AuraActivity removed – it is vendor-only and should not appear in the customer chat */}
+        {!!vendorSuggestions.length && <div className="pl-10"><AuraVendorResults key={`${activeEvent?.id || 'new'}-${vendorSearch?.query || 'catalog'}`} rows={vendorSuggestions} search={vendorSearch} eventId={activeEvent?.id} /></div>}
+
         {understanding?.showUnderstandingCard && activeEvent && (
           <div className="pl-10 aura-card-reveal">
             <UnderstandingCard key={activeEvent.id} understanding={understanding} event={activeEvent} onChanged={onCardChanged} onAsk={(t) => sendInteractive(t)} />
@@ -870,10 +855,8 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
                 </div>
                 <MapLocationPicker
                   height="260px"
-                  autoLocate={false}
                   value={activeEvent?.location?.coordinates || pickedLocation || undefined}
                   onChange={setPickedLocation}
-                  searchPlaces={(query) => customerApi.searchLocations(query).then((result) => result.places || [])}
                   guidance="Drag or click pointer to pin the exact event area"
                 />
                 {pickedLocation && (

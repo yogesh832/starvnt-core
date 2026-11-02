@@ -19,8 +19,7 @@
       },
       "android": {
         "buildType": "apk"
-      },
-      "environment": "preview"
+      }
     },
     "appetize-ios": {
       "extends": "production",
@@ -42,8 +41,7 @@
         "EXPO_PUBLIC_API_URL": "https://app.starvnt.com",
         "EXPO_PUBLIC_DISABLE_TEST_AUTH": "true",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1009726530856-34nc725qvptbshmfbrtpjcis8j3pu1iq.apps.googleusercontent.com"
-      },
-      "environment": "production"
+      }
     },
     "production-apk": {
       "extends": "production",
@@ -52,15 +50,6 @@
       "android": {
         "buildType": "apk"
       }
-    },
-    "proposal-preview": {
-      "extends": "production",
-      "environment": "production",
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "autoIncrement": true
     }
   }
 }

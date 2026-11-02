@@ -70,7 +70,6 @@ export function useCurrentEvent() {
 }
 
 const SECTION_PATH = {
-  proposal: 'proposal',
   quotes: 'quotes',
   bookings: 'bookings',
   payments: 'payments',

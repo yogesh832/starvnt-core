@@ -53,7 +53,6 @@ export async function recentMessages(sessionId, limit = 12) {
 }
 
 export async function addMessages(sessionId, messages) {
-  const inserted = await AuraMessage.insertMany(messages.map((m) => ({ session: sessionId, role: m.role, content: m.content })));
+  await AuraMessage.insertMany(messages.map((m) => ({ session: sessionId, role: m.role, content: m.content })));
   await AuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date() } }, { timestamps: false });
-  return inserted;
 }

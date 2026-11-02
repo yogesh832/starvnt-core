@@ -355,20 +355,8 @@ export function nextQuestion(event, requirements, contextRows) {
   if (!event.eventDate && !skipped.has('event.date')) {
     return { topic: 'event.date', question: `What date are you planning the ${typeWord}?`, options: [] };
   }
-  const coordinates = event.location?.coordinates;
-  const hasVerifiedEventLocation = Number.isFinite(Number(coordinates?.lat)) &&
-    Number.isFinite(Number(coordinates?.lng)) &&
-    Math.abs(Number(coordinates.lat)) <= 90 &&
-    Math.abs(Number(coordinates.lng)) <= 180 &&
-    (Number(coordinates.lat) !== 0 || Number(coordinates.lng) !== 0);
-  if (!hasVerifiedEventLocation) {
-    return {
-      topic: 'event.city',
-      question: event.city
-        ? `Please confirm the exact event location near ${event.city}. Search and select the town or area so we can match nearby vendors.`
-        : 'Where will your event take place? Search for and select the town or area below so we can match the correct location.',
-      options: [],
-    };
+  if (!event.city && !skipped.has('event.city')) {
+    return { topic: 'event.city', question: 'Which city will it be in?', options: [] };
   }
   if (!event.guestCount && !skipped.has('event.guest_count')) {
     return {
