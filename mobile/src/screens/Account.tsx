@@ -72,24 +72,12 @@ export function AccountScreen({ navigation }: any) {
               />
             </>
           )}
-          <Button
-            title={
-              vendor
-                ? "Switch to customer workspace"
-                : "Switch to vendor workspace"
-            }
-            secondary
-            busy={a.busy}
-            onPress={() => {
-              void a.run(() => s.switchSurface(vendor ? "CUSTOMER" : "VENDOR"));
-            }}
-          />
         </>
       )}
       <Button
         title={
           isAdmin
-            ? "Open customer / vendor workspace"
+            ? "Open customer workspace"
             : "Internal team workspace"
         }
         secondary

@@ -28,8 +28,8 @@ export function LandingScreen({ navigation }: any) {
   const [planning, setPlanning] = useState(false);
   const { prompt, setPrompt } = usePlanningIntent();
   const { setActiveDomain } = useSession();
-  function authenticate(mode = "login", accountType = "CUSTOMER") {
-    if (accountType === "VENDOR") setPrompt("");
+  function authenticate(mode = "login") {
+    const accountType = "CUSTOMER";
     setPlanning(false);
     setActiveDomain("external");
     navigation.navigate("Auth", { mode, accountType });
@@ -268,16 +268,6 @@ export function LandingScreen({ navigation }: any) {
               secondary
               onPress={() => navigation.navigate("TestAuth")}
             />)}
-            <Button
-              title="For Vendors"
-              secondary
-              onPress={() => authenticate("login", "VENDOR")}
-            />
-            <Button
-              title="Register as Vendor"
-              secondary
-              onPress={() => authenticate("register", "VENDOR")}
-            />
           </View>
           <Txt muted size={12}>
             STARVNT · Events. Simplified.

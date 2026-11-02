@@ -16,7 +16,7 @@ export default function PublicFooter({ showTrustStrip = true }) {
 
       {/* Main Footer Links */}
       <div className="bg-white/95 dark:bg-[#1a1d2e]/95 border-t border-gray-100/80 dark:border-gray-800/80 py-12 px-6 sm:px-12">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-5 gap-8 lg:gap-12">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 lg:gap-12">
           {/* Brand Column */}
           <div className="md:col-span-2 space-y-4">
             <Link to="/" className="inline-block hover:opacity-90 transition">
@@ -55,38 +55,6 @@ export default function PublicFooter({ showTrustStrip = true }) {
               <li>
                 <Link to="/" className="hover:text-primary transition">
                   Budget Estimator
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 2: For Vendors */}
-          <div className="space-y-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-navy">For Vendors</div>
-            <ul className="space-y-2 text-xs text-muted">
-              <li>
-                <Link to="/login?as=vendor" className="hover:text-primary transition">
-                  Vendor OS Portal
-                </Link>
-              </li>
-              <li>
-                <Link to="/signup?as=vendor" className="hover:text-primary transition">
-                  Register as Vendor
-                </Link>
-              </li>
-              <li>
-                <Link to="/login?as=vendor" className="hover:text-primary transition">
-                  Live Lead Matching
-                </Link>
-              </li>
-              <li>
-                <Link to="/login?as=vendor" className="hover:text-primary transition">
-                  Payment records
-                </Link>
-              </li>
-              <li>
-                <Link to="/login?as=vendor" className="hover:text-primary transition">
-                  Studio Showcases
                 </Link>
               </li>
             </ul>

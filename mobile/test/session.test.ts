@@ -13,7 +13,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 const json = (data: object, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
-function setup(options: { preference?: string; external?: string; admin?: string; fetcher?: typeof fetch; cleanupPush?: () => Promise<void> } = {}) {
+function setup(options: { externalSurface?: "CUSTOMER"; preference?: string; external?: string; admin?: string; fetcher?: typeof fetch; cleanupPush?: () => Promise<void> } = {}) {
   const outside = memory(options.external || null);
   const inside = memory(options.admin || null);
   const preference = memory(options.preference || null);
@@ -23,7 +23,7 @@ function setup(options: { preference?: string; external?: string; admin?: string
   }) as typeof fetch;
   const external = createClient('https://example.test/api', outside, fetcher);
   const internal = createClient('https://example.test/api/admin', inside, fetcher);
-  const deps = { external, internal, preference, cleanupPush: options.cleanupPush || (async () => {}) };
+  const deps = { externalSurface: options.externalSurface, external, internal, preference, cleanupPush: options.cleanupPush || (async () => {}) };
   return { manager: createSessionManager(deps), deps, outside, inside, preference };
 }
 
@@ -208,4 +208,30 @@ test('switching workspace during Quick Auth cannot persist the test session', as
   assert.ok(manager.getState().user);
   assert.equal(await outside.get(), null);
   assert.equal(await preference.get(), 'guest');
+});
+
+
+test('customer build forces email, OTP, Google and registration payloads to CUSTOMER', async () => {
+  const bodies: any[] = [];
+  const { manager } = setup({ externalSurface: 'CUSTOMER', fetcher: (async (_url: any, options: any) => {
+    bodies.push(JSON.parse(options.body)); return json({ accessToken: 'customer', refreshToken: 'refresh', user: { id: 'person', accountType: 'CUSTOMER' } });
+  }) as typeof fetch });
+  for (const path of ['login', 'register', 'google', 'otp/verify', 'otp/widget-verify', 'password/set']) await manager.signIn('external', path, { accountType: 'VENDOR' });
+  assert.equal(bodies.length, 6); assert.ok(bodies.every(b => b.accountType === 'CUSTOMER'));
+  await assert.rejects(manager.switchSurface('VENDOR'), /Vendor OS/); assert.equal(bodies.length, 6);
+});
+
+test('customer build converts an old vendor refresh session before exposing an identity', async () => {
+  const paths: string[] = [], visible: string[] = [];
+  const { manager } = setup({ externalSurface: 'CUSTOMER', external: 'saved-vendor', fetcher: (async (url: any) => {
+    paths.push(String(url)); return json({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'person', accountType: String(url).endsWith('switch-surface') ? 'CUSTOMER' : 'VENDOR' } });
+  }) as typeof fetch });
+  manager.subscribe(() => { const type = manager.getState().user?.accountType; if (type) visible.push(type); });
+  await manager.restore(); assert.equal(manager.getState().user?.accountType, 'CUSTOMER');
+  assert.ok(paths[1].endsWith('/auth/switch-surface')); assert.ok(visible.length > 0); assert.ok(visible.every(type => type === 'CUSTOMER'));
+});
+
+test('a failed saved vendor conversion never exposes Vendor OS in a customer build', async () => {
+  const { manager } = setup({ externalSurface: 'CUSTOMER', external: 'saved-vendor', fetcher: (async () => json({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'person', accountType: 'VENDOR' } })) as typeof fetch });
+  await manager.restore(); assert.equal(manager.getState().user, null); assert.match(manager.getState().error, /customer workspace/);
 });

@@ -322,7 +322,7 @@ test('production browser journey: staff agreement, vendor decision, final PDF, c
   const f = await fixture('birthday');
   const server = app.listen(4117, '127.0.0.1');
   const web = express();
-  const site = resolve('tmp/qa/proposal-studio/site');
+  const site = resolve(process.env.PROPOSAL_QA_SITE || 'tmp/qa/proposal-studio/site');
   web.use(express.static(site)); web.get('*', (req, res) => res.sendFile(resolve(site, 'index.html')));
   const frontend = web.listen(5197, '127.0.0.1');
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined), headless: true });
@@ -338,6 +338,36 @@ test('production browser journey: staff agreement, vendor decision, final PDF, c
   async function action(page, path, fn) { const response = page.waitForResponse(r => r.url().includes(path) && ['POST', 'PUT'].includes(r.request().method())); await fn(); assert.equal((await response).status(), 200, path); await page.waitForTimeout(400); }
   async function openAdmin(page) { await page.goto('http://127.0.0.1:5197/admin/proposals'); await page.getByRole('button', { name: new RegExp(f.event.title) }).first().click(); await page.getByRole('heading', { name: f.event.title, exact: true }).waitFor(); }
   try {
+    const guest = await pageFor('');
+    for (const path of ['/login?as=vendor&next=/vendor', '/signup?role=VENDOR', '/register?type=VENDOR', '/vendor/proposal-agreements', '/']) {
+      await guest.goto('http://127.0.0.1:5197' + path);
+      await guest.getByRole('navigation').first().waitFor();
+      assert.equal(await guest.getByRole('button', { name: 'Vendor', exact: true }).count(), 0);
+      assert.equal(await guest.locator('a[href*="as=vendor"], a[href^="/vendor"]').count(), 0);
+      assert.equal(await guest.getByText('Vendor Registration Details:', { exact: true }).count(), 0);
+    }
+    let otpPayload;
+    await guest.route('**/api/auth/otp/email/send', async route => { otpPayload = route.request().postDataJSON(); await route.fulfill({ json: { ok: true, message: 'Synthetic QA OTP requested' } }); });
+    await guest.goto('http://127.0.0.1:5197/login?as=vendor&next=/vendor');
+    await guest.locator('input[type="email"]').fill('synthetic-customer@example.test');
+    await guest.getByRole('button', { name: 'Send OTP to Email', exact: true }).click();
+    await guest.getByText('Synthetic QA OTP requested', { exact: true }).waitFor();
+    assert.equal(otpPayload.accountType, 'CUSTOMER');
+    await guest.close();
+    check('Customer-only entry rejects vendor role queries and links; OTP requests use CUSTOMER');
+    const restored = await pageFor('synthetic-saved-vendor');
+    await restored.route('**/api/auth/me', route => route.fulfill({ json: { user: { id: 'synthetic-old-vendor', accountType: 'VENDOR' } } }));
+    let restoredSurface;
+    await restored.route('**/api/auth/switch-surface', route => {
+      restoredSurface = route.request().postDataJSON().targetSurface;
+      return route.fulfill({ json: { accessToken: customerToken, user: { id: String(customer._id), fullName: customer.fullName, accountType: 'CUSTOMER' } } });
+    });
+    await restored.goto('http://127.0.0.1:5197/vendor/proposal-agreements');
+    await restored.waitForURL('**/customer');
+    assert.equal(restoredSurface, 'CUSTOMER');
+    await restored.close();
+    check('Saved vendor browser sessions become customer sessions and cannot open Vendor OS');
+
     registerProposalImageAdapters({ generate: async () => image, upload: async () => 'https://res.cloudinary.com/qa/image/upload/browser-generated.jpg' });
     const planner = await pageFor(customerToken);
     await planner.goto(`http://127.0.0.1:5197/customer/events/${f.eventId}/proposal`);
@@ -378,10 +408,11 @@ test('production browser journey: staff agreement, vendor decision, final PDF, c
     await staff.getByLabel('Agreement terms: scope, deliverables, payment and cancellation', { exact: true }).fill('QA approved scope and gallery delivery. Vendor payment INR 10000. Cancellation requires STARVNT review.');
     await action(staff, '/agreements', () => staff.getByRole('button', { name: 'Send agreement to vendor', exact: true }).click());
     check('Staff sends a real vendor agreement against the saved event scope');
-    const partner = await pageFor(vendorToken);
-    await partner.goto('http://127.0.0.1:5197/vendor/proposal-agreements');
-    await action(partner, '/decision', () => partner.getByRole('button', { name: 'Approve agreement', exact: true }).click());
-    check('Authenticated vendor approves their agreement');
+    // Vendor OS is hosted by main; this Customer OS build still uses its authenticated API.
+    const workspace = await service.adminWorkspace(f.eventId);
+    await request(app).post(`/api/vendor/proposal-agreements/${f.eventId}/decision`).set(auth(vendorToken))
+      .send({ revision: workspace.dossier.revision, agreementId: workspace.dossier.agreements.at(-1).id, decision: 'APPROVED' }).expect(200);
+    check('Authenticated Vendor OS API approves the agreement for the customer journey');
     await openAdmin(staff);
     await staff.getByLabel('Internal commercial review note', { exact: true }).fill('QA commercial validation approved.');
     await action(staff, '/commercial-approval', () => staff.getByRole('button', { name: 'Approve saved commercial plan', exact: true }).click());
@@ -425,7 +456,7 @@ test('production browser journey: staff agreement, vendor decision, final PDF, c
     assert.equal(await customerPage.getByRole('button', { name: /Approve version/ }).count(), 0);
     check('Unapproved event shows clear preliminary state with no final approval action');
     await customerPage.screenshot({ path: 'tmp/qa/proposal-studio/preliminary-mobile.png', fullPage: true });
-    assert.deepEqual(errors, []); check('Customer, vendor and staff production routes have no runtime exceptions');
+    assert.deepEqual(errors, []); check('Customer and staff routes have no runtime exceptions; vendor approval uses its API');
   } finally {
     const pages = []; for (const context of browser.contexts()) for (const page of context.pages()) { pages.push({ url: page.url(), body: (await page.locator('body').innerText()).slice(0, 5000) }); await page.screenshot({ path: `tmp/qa/proposal-studio/page-${pages.length}.png`, fullPage: true }); }
     writeFileSync('tmp/qa/proposal-studio/browser-report.json', JSON.stringify({ checks: evidence, pageErrors: errors, pages }, null, 2));

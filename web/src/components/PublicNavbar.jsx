@@ -30,9 +30,6 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
         <a href="/#how-it-works" className="hover:text-primary transition">
           How it works
         </a>
-        <Link to="/login?as=vendor" className="hover:text-primary transition">
-          For Vendors
-        </Link>
       </nav>
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -46,7 +43,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
               <Icon name={dark ? 'sun' : 'moon'} size={14} />
             </button>
             <button
-              onClick={() => navigate(user.accountType === 'VENDOR' ? '/vendor' : '/customer')}
+              onClick={() => navigate('/customer')}
               className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-3 sm:px-4 py-2 sm:py-2.5 transition shadow-sm shadow-primary/20 cursor-pointer whitespace-nowrap"
             >
               My Dashboard

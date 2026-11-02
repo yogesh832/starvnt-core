@@ -22,7 +22,7 @@ type SessionValue = {
 const Context = createContext<SessionValue>(null!);
 export function SessionProvider({ children }: React.PropsWithChildren) {
   const [manager] = useState(() => createSessionManager({
-    external, internal, preference: sessionPreference, cleanupPush: logoutPush,
+    external, internal, preference: sessionPreference, cleanupPush: logoutPush, externalSurface: "CUSTOMER",
   }));
   const state = useSyncExternalStore(manager.subscribe, manager.getState, manager.getState);
   useEffect(() => {

@@ -4,9 +4,8 @@ import { pushDestination } from "./pushDestination";
 import { acknowledgePush } from "./pushRuntime";
 import { NotificationSettings } from "./screens/NotificationSettings";
 import { CircleScreen } from "./screens/CustomerWorkspace";
-import { VendorQuote } from "./screens/VendorQuote";
 import { CustomerBookingScreen } from "./screens/CustomerBooking";
-import { ProposalScreen, VendorAgreementScreen } from './screens/Proposal';
+import { ProposalScreen } from './screens/Proposal';
 import { StatusBar, Pressable, Text, View, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -47,16 +46,6 @@ import { ChatScreen, UpdatesScreen } from "./screens/Conversations";
 import { DashboardBottomBar } from './DashboardBottomBar';
 import { dashboardTabs, type NavState } from './dashboardNavigation';
 import { VendorOffers, CheckoutScreen } from "./screens/Checkout";
-import {
-  VendorHome,
-  VendorWork,
-  VendorModule,
-  VendorForm,
-  VendorBooking,
-} from "./screens/Vendor";
-import { VendorCalendar } from "./screens/VendorCalendar";
-import { VendorFinancial } from "./screens/VendorFinancial";
-import { VendorSetup } from "./screens/VendorSetup";
 import {
   AdminHome,
   AdminModule,
@@ -106,19 +95,18 @@ function MainTabs() {
   const { user, activeDomain } = useSession();
   const { prompt } = usePlanningIntent();
   const c = usePalette();
-  const admin = activeDomain === "admin",
-    vendor = user?.accountType === "VENDOR";
-  const workspace = admin ? 'admin' : vendor ? 'vendor' : 'customer';
+  const admin = activeDomain === "admin";
+  const workspace = admin ? 'admin' : 'customer';
   const components: Record<string, any> = {
-    Overview: admin ? AdminHome : vendor ? VendorHome : CustomerHome,
-    CoreUpdates: AdminNotifications, Work: VendorWork, Events: EventsScreen,
+    Overview: admin ? AdminHome : CustomerHome,
+    CoreUpdates: AdminNotifications, Events: EventsScreen,
     AuraTab: ChatScreen, Updates: UpdatesScreen, Me: AccountScreen,
   };
   const tabs = dashboardTabs(workspace);
   return (
     <Tabs.Navigator
       tabBar={() => null}
-      initialRouteName={prompt && !admin && !vendor ? "AuraTab" : "Overview"}
+      initialRouteName={prompt && !admin ? "AuraTab" : "Overview"}
       screenOptions={{
         headerTitle: () => <LogoWord compact />,
         headerRight: () => <ThemeToggle />,
@@ -164,6 +152,7 @@ function Navigation() {
   useEffect(() => {
     const data = push.pending;
     if (!data || !s.ready || s.error || !navigationReady) return;
+    if (data.surface === "VENDOR") { push.consumed(); return; }
     const domain = data.domain;
     if (domain !== "admin" && domain !== "external") {
       push.consumed();
@@ -180,7 +169,7 @@ function Navigation() {
         if (pushNavigation.isReady())
           pushNavigation.navigate("Auth", {
             mode: "login",
-            accountType: data.surface === "VENDOR" ? "VENDOR" : "CUSTOMER",
+            accountType: "CUSTOMER",
           });
       }, 0);
       return () => clearTimeout(timer);
@@ -304,7 +293,6 @@ function Navigation() {
               options={{ title: "Event workspace" }}
             />
             <Stack.Screen name="Proposal" component={ProposalScreen} options={{ title: 'My Event Proposal' }} />
-            <Stack.Screen name="VendorAgreements" component={VendorAgreementScreen} options={{ title: 'Vendor agreements' }} />
             <Stack.Screen
               name="EditEvent"
               component={EditEvent}
@@ -361,41 +349,6 @@ function Navigation() {
               name="Checkout"
               component={CheckoutScreen}
               options={{ title: "Payment" }}
-            />
-            <Stack.Screen
-              name="VendorModule"
-              component={VendorModule}
-              options={{ title: "Vendor OS" }}
-            />
-            <Stack.Screen
-              name="VendorForm"
-              component={VendorForm}
-              options={{ title: "Your business" }}
-            />
-            <Stack.Screen
-              name="VendorQuote"
-              component={VendorQuote}
-              options={{ title: "Quote details" }}
-            />
-            <Stack.Screen
-              name="VendorBooking"
-              component={VendorBooking}
-              options={{ title: "Booking workspace" }}
-            />
-            <Stack.Screen
-              name="VendorCalendar"
-              component={VendorCalendar}
-              options={{ title: "Calendar" }}
-            />
-            <Stack.Screen
-              name="VendorFinancial"
-              component={VendorFinancial}
-              options={{ title: "Financial onboarding" }}
-            />
-            <Stack.Screen
-              name="VendorSetup"
-              component={VendorSetup}
-              options={{ title: "Business setup" }}
             />
             <Stack.Screen
               name="AdminModule"
@@ -458,7 +411,7 @@ function Navigation() {
         )}
       </Stack.Navigator>
       </View>
-      {!!identity && <DashboardBottomBar workspace={s.activeDomain === 'admin' ? 'admin' : s.user?.accountType === 'VENDOR' ? 'vendor' : 'customer'} state={navigationState} navigation={pushNavigation} />}
+      {!!identity && <DashboardBottomBar workspace={s.activeDomain === 'admin' ? 'admin' : 'customer'} state={navigationState} navigation={pushNavigation} />}
       </KeyboardAvoidingView>
     </NavigationContainer>
   );

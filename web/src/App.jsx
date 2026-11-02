@@ -7,7 +7,6 @@ import { LogoWord } from './components/ui.jsx';
 import ExternalLogin from './pages/external/Login.jsx';
 import Landing from './pages/customer/Landing.jsx';
 import CustomerPortal from './pages/customer/CustomerPortal.jsx';
-import VendorPortal from './pages/vendor/VendorPortal.jsx';
 import AdminLogin from './pages/admin/AdminLogin.jsx';
 import AdminShell from './pages/admin/AdminShell.jsx';
 import DevApiTest from './pages/DevApiTest.jsx';
@@ -102,7 +101,7 @@ function RequireExternal({ type, children }) {
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} replace />;
   if (type && user.accountType !== type) {
     if (switchFailed) {
-      return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
+      return <Navigate to="/customer" replace />;
     }
     return <FullScreenLoader />;
   }
@@ -121,7 +120,7 @@ function RootRedirect() {
   const { user, ready } = useExternalAuth();
   if (!ready) return <FullScreenLoader />;
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.accountType === 'VENDOR' ? '/vendor' : '/customer'} replace />;
+  return <Navigate to="/customer" replace />;
 }
 
 export default function App() {
@@ -135,14 +134,12 @@ function ApplicationRoutes() {
       <Route 
         path="/" 
         element={
-          window.location.hostname.startsWith('partner.') || window.location.hostname.startsWith('vendor.')
-            ? <Navigate to="/vendor" replace />
-            : window.location.hostname.startsWith('admin.')
-              ? <Navigate to="/admin" replace />
-              : <Landing />
+          window.location.hostname.startsWith('admin.')
+            ? <Navigate to="/admin" replace />
+            : <Landing />
         } 
       />
-      {/* External domain — one auth UI, two portals */}
+      {/* External domain — customer-only auth and portal */}
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />
       <Route path="/register" element={<ExternalLogin />} />
@@ -156,14 +153,7 @@ function ApplicationRoutes() {
           </RequireExternal>
         }
       />
-      <Route
-        path="/vendor/*"
-        element={
-          <RequireExternal type="VENDOR">
-            <VendorPortal />
-          </RequireExternal>
-        }
-      />
+      <Route path="/vendor/*" element={<Navigate to="/customer" replace />} />
 
       {/* Internal domain — fully separate admin experience */}
       <Route

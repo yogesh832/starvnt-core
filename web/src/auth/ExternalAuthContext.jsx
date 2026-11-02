@@ -1,29 +1,39 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { externalApi } from "../lib/api.js";
+
+import { acceptCustomerSession, customerPayload } from "../lib/customerSurface.js";
 
 const ExternalAuthContext = createContext(null);
 
-/** Single EXTERNAL identity — one login flow for both CUSTOMER and VENDOR. */
+/** Customer OS uses the shared external identity with the customer surface. */
 export function ExternalAuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
 
+  const sessionRevision = useRef(0);
+  async function storeSession(data, expected = sessionRevision.current) {
+    const current = () => expected === sessionRevision.current;
+    const nextUser = await acceptCustomerSession(data, externalApi, current);
+    if (current()) setUser(nextUser);
+    return nextUser;
+  }
+
   useEffect(() => {
     async function restoreSession() {
+      const expected = sessionRevision.current;
       try {
         if (externalApi.getToken()) {
           const data = await externalApi.call("/auth/me");
           if (data?.user) {
-            setUser(data.user);
+            await storeSession(data, expected);
             return;
           }
         }
 
         const data = await externalApi.refresh();
-        if (data?.user) setUser(data.user);
+        if (data?.user) await storeSession(data, expected);
       } catch {
-        externalApi.setToken(null);
-        setUser(null);
+        if (expected === sessionRevision.current) { externalApi.setToken(null); setUser(null); }
       } finally {
         setReady(true);
       }
@@ -32,48 +42,45 @@ export function ExternalAuthProvider({ children }) {
     restoreSession();
   }, []);
 
-  // accountType = the tab chosen (CUSTOMER | VENDOR); one email can use both.
+  // Customer builds always request the customer surface, including social/OTP flows.
   async function login(email, password, accountType) {
+    const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/login", {
       method: "POST",
-      body: { email, password, accountType },
+      body: customerPayload({ email, password }),
     });
-    externalApi.setToken(data.accessToken);
-    setUser(data.user);
-    return data.user;
+    return storeSession(data, expected);
   }
 
   async function register(payload) {
+    const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/register", {
       method: "POST",
-      body: payload,
+      body: customerPayload(payload),
     });
-    externalApi.setToken(data.accessToken);
-    setUser(data.user);
-    return data.user;
+    return storeSession(data, expected);
   }
 
   async function loginWithGoogle(credential, extra = {}) {
+    const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/google", {
       method: "POST",
-      body: { credential, ...extra },
+      body: customerPayload({ credential, ...extra }),
     });
-    externalApi.setToken(data.accessToken);
-    setUser(data.user);
-    return data.user;
+    return storeSession(data, expected);
   }
 
   async function sendOtp(phone) {
     return externalApi.call("/auth/otp/send", {
       method: "POST",
-      body: { phone },
+      body: customerPayload({ phone }),
     });
   }
 
   async function sendEmailOtp(email, extra = {}) {
     return externalApi.call("/auth/otp/email/send", {
       method: "POST",
-      body: { email, ...extra },
+      body: customerPayload({ email, ...extra }),
     });
   }
 
@@ -85,56 +92,53 @@ export function ExternalAuthProvider({ children }) {
   }
 
   async function setPassword(email, otp, password, accountType) {
+    const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/password/set", {
       method: "POST",
-      body: { email, otp, password, accountType },
+      body: customerPayload({ email, otp, password }),
     });
-    externalApi.setToken(data.accessToken);
-    setUser(data.user);
-    return data.user;
+    return storeSession(data, expected);
   }
 
   async function loginWithOtp(phone, otp, extra = {}) {
+    const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/otp/verify", {
       method: "POST",
-      body: { phone, otp, ...extra },
+      body: customerPayload({ phone, otp, ...extra }),
     });
-    externalApi.setToken(data.accessToken);
-    setUser(data.user);
-    return data.user;
+    return storeSession(data, expected);
   }
 
   async function loginWithEmailOtp(email, otp, extra = {}) {
+    const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/otp/email/verify", {
       method: "POST",
-      body: { email, otp, ...extra },
+      body: customerPayload({ email, otp, ...extra }),
     });
-    externalApi.setToken(data.accessToken);
-    setUser(data.user);
-    return data.user;
+    return storeSession(data, expected);
   }
 
   async function loginWithWidgetOtp(accessToken, extra = {}) {
+    const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/otp/widget-verify", {
       method: "POST",
-      body: { accessToken, ...extra },
+      body: customerPayload({ accessToken, ...extra }),
     });
-    externalApi.setToken(data.accessToken);
-    setUser(data.user);
-    return data.user;
+    return storeSession(data, expected);
   }
 
   async function switchSurface(targetType) {
+    if (targetType !== "CUSTOMER") throw new Error("Vendor OS is available in the vendor app.");
+    const expected = ++sessionRevision.current;
     const data = await externalApi.call("/auth/switch-surface", {
       method: "POST",
       body: { targetSurface: targetType },
     });
-    externalApi.setToken(data.accessToken);
-    setUser(data.user);
-    return data.user;
+    return storeSession(data, expected);
   }
 
   async function logout() {
+    ++sessionRevision.current;
     const request = externalApi.raw("/auth/logout", { method: "POST" }, false);
     externalApi.setToken(null);
     setUser(null);

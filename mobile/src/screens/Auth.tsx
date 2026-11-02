@@ -12,7 +12,7 @@ import { AuthButton, AuthCode, AuthField, AuthLink, AuthTabs, AuthText } from '.
 export function AuthScreen({ route, navigation }: any) {
     const { signIn, setActiveDomain, activeDomain } = useSession();
     const isAdmin = activeDomain === "admin";
-    const [accountType, setAccountType] = useState(route.params?.accountType || "CUSTOMER");
+    const accountType = "CUSTOMER";
     const [mode, setMode] = useState(route.params?.mode || "login");
     const [method, setMethod] = useState("email");
     const [phase, setPhase] = useState("identity");
@@ -40,7 +40,6 @@ export function AuthScreen({ route, navigation }: any) {
         return () => clearInterval(timer);
     }, [resendAt]);
     useFocusEffect(useCallback(() => {
-        setAccountType(route.params?.accountType || "CUSTOMER");
         setMode(activeDomain === 'admin' ? 'login' : route.params?.mode || "login");
         setPhase("identity");
         setNeedsPassword(false);
@@ -157,7 +156,7 @@ export function AuthScreen({ route, navigation }: any) {
             category: form.category,
         });
     }
-    const vendor = !isAdmin && accountType === 'VENDOR';
+    const vendor = false;
     const register = !isAdmin && mode === 'register';
     const verifying = !isAdmin && phase === 'verify';
     const working = action.busy;
@@ -178,10 +177,6 @@ export function AuthScreen({ route, navigation }: any) {
     }
     return <AuthLayout navigation={navigation} vendor={vendor} register={register} admin={isAdmin} verify={!isAdmin && phase !== 'identity'} phone={method === 'phone'} onBack={phase !== 'identity' ? reset : undefined}>
     {!isAdmin && phase === 'identity' && <>
-      <AuthTabs value={accountType} disabled={working} onChange={v => { setAccountType(v); reset(); }} options={[
-                { value: 'CUSTOMER', title: 'Customer', icon: 'person-outline' },
-                { value: 'VENDOR', title: 'Vendor', icon: 'storefront-outline' },
-            ]}/>
       {!register && <View style={{ gap: 3 }}><AuthText size={23} bold>Sign in to STARVNT</AuthText><AuthText color="#c5d3e9">Choose how you want to continue.</AuthText></View>}
       <AuthTabs value={method} disabled={working} onChange={v => { if (v === 'google')
             run(google);
@@ -232,7 +227,7 @@ export function AuthScreen({ route, navigation }: any) {
     </View>
     {phase === 'identity' && <View style={{ gap: 2 }}>
       {!isAdmin && <AuthLink title={register ? 'Switch to sign in' : 'Create an account'} disabled={working} onPress={changeMode}/>}
-      <AuthLink title={isAdmin ? 'Customer or vendor sign in' : 'Internal team sign in'} disabled={working} onPress={() => setActiveDomain(isAdmin ? 'external' : 'admin')}/>
+      <AuthLink title={isAdmin ? 'Customer sign in' : 'Internal team sign in'} disabled={working} onPress={() => setActiveDomain(isAdmin ? 'external' : 'admin')}/>
       {TEST_AUTH_ENABLED && <AuthLink title="Dev · Quick Test Auth" onPress={() => navigation.navigate('TestAuth')}/>}
     </View>}
 
