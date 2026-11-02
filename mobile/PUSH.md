@@ -1,6 +1,12 @@
 # Android and iOS push notifications
 
-Implementation is present, but live delivery is not enabled. The owner created `@yogesh832/starvnt` on EAS; app config now contains its project ID, `e3aa19c9-0964-4768-8507-985be8f040bd`. Firebase/Apple credentials and device delivery remain unverified. No real push messages, provider verification calls, account creation, or cloud builds were performed by the agent.
+The mobile app uses `expo-notifications` for Expo Push Notifications; a separate JavaScript Firebase app initialization is not needed. Android still requires the native Firebase app configuration at build time so Expo can initialize FCM.
+
+> **Account ownership follow-up:** Firebase project `starvnt-mobile` and EAS project `@yogesh832/starvnt` are currently under the owner's personal account and are for testing. Before production ownership/handoff, move this setup to the company account, including Firebase Android registration, `google-services.json`, EAS project association, FCM v1 credentials and builds. Surface this reminder when the owner asks to continue or switch to the company account; no scheduled reminder was requested.
+
+**Android client setup completed:** Firebase project `starvnt-mobile` has an Android app registered for `com.starvnt.mobile`. The matching `google-services.json` is present at `mobile/google-services.json` (ignored by Git), and EAS has it as a secret file variable named `GOOGLE_SERVICES_JSON` in both the `preview` and `production` environments. The next Android build must include this configuration; the existing installed APK will not gain it until rebuilt.
+
+The owner created `@yogesh832/starvnt` on EAS; app config contains project ID `e3aa19c9-0964-4768-8507-985be8f040bd`. Android app registration and client config are verified. A dedicated service account for project `starvnt-mobile` now has the Firebase Cloud Messaging API Admin role, and its FCM v1 key is assigned to `com.starvnt.mobile` in EAS. Android preview APK build `d1a731cf-a5e1-4f6f-97b6-ccd9b8c6466a` completed successfully; physical-device installation and push delivery remain unverified. Apple credentials are still unconfigured. No real push messages have been sent.
 
 ## Configure once
 
@@ -13,7 +19,7 @@ Implementation is present, but live delivery is not enabled. The owner created `
    ```
 
    This project's association is already present in `app.config.ts`; initialization does not need repeating. Its default UUID is `e3aa19c9-0964-4768-8507-985be8f040bd`. `EXPO_PUBLIC_EAS_PROJECT_ID` is an optional override; if set, it must refer to the intended EAS project.
-3. Android: create a Firebase Android app for the exact package identifier; download its `google-services.json` to `mobile/google-services.json` (ignored by Git). Set build-time `GOOGLE_SERVICES_JSON=./google-services.json`, or use an EAS **file** environment variable whose value is the uploaded file path. Upload the FCM v1 service-account credential through `npx eas-cli credentials` / the EAS dashboard. Keep service-account private keys out of the repository and frontend environment variables.
+3. Android: Firebase registration, `GOOGLE_SERVICES_JSON`, and the FCM v1 service-account credential are configured for `com.starvnt.mobile`; preview and production both have secret EAS file variables. The `preview` and `production` build profiles explicitly select those EAS environments. Keep service-account private keys out of the repository and frontend environment variables.
 4. iOS: use the Apple Developer account to configure signing and an APNs push key with EAS credentials for the exact bundle identifier. EAS builds and the notifications config plugin manage the entitlement. Do not put APNs keys in the app.
 5. Backend: configure the same public UUID as `EXPO_EAS_PROJECT_ID`, set `PUSH_ENABLED=true`, and restart/deploy the server. If Expo enhanced push security is enabled, put its bearer token in server-only `EXPO_PUSH_ACCESS_TOKEN`. `PUSH_WORKER_INTERVAL_MS` defaults to 15000. The backend and its Mongo databases must stay running even when no app is open; a sleeping web service cannot run the queue worker.
 6. Build and install the native app on physical devices:
