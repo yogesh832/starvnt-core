@@ -15,7 +15,6 @@ const CATALOG = {
   events: ['read', 'create', 'update', 'delete'],
   requirements: ['read', 'update', 'approve'],
   quotes: ['read', 'approve', 'update'],
-  proposals: ['read', 'update', 'approve', 'generate'],
   bookings: ['read', 'create', 'update', 'cancel'],
   payments: ['read', 'approve', 'refund'],
   settlements: ['read', 'create', 'approve', 'hold', 'release'],
