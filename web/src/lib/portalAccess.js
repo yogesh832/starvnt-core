@@ -5,12 +5,13 @@ const configured = () => ({
 });
 export function portalLoginUrl(type, settings = configured()) {
   const label = type === 'VENDOR' ? 'vendor' : 'customer';
+  const fallback = type === 'VENDOR' ? 'https://vendor.starvnt.com' : 'https://starvnt-core.vercel.app';
   try {
-    const url = new URL(settings[type] || `https://${label}.starvnt.com`);
+    const url = new URL(settings[type] || fallback);
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error();
     url.pathname = '/login'; url.search = ''; url.hash = '';
     return url.href;
-  } catch { return `https://${label}.starvnt.com/login`; }
+  } catch { return `${fallback}/login`; }
 }
 export function mismatchError(type) {
   const label = type === 'VENDOR' ? 'vendor' : 'customer';
