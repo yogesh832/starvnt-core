@@ -1,3 +1,4 @@
+import { VendorAgreementScreen } from './screens/VendorAgreements';
 import React, { useEffect, useState } from "react";
 import { PushProvider, usePush } from "./Push";
 import { pushDestination } from "./pushDestination";
@@ -359,6 +360,7 @@ function Navigation() {
               component={CheckoutScreen}
               options={{ title: "Payment" }}
             />
+            <Stack.Screen name="VendorAgreements" component={VendorAgreementScreen} options={{ title: "Vendor agreements" }} />
             <Stack.Screen
               name="VendorModule"
               component={VendorModule}

@@ -99,6 +99,7 @@ export function VendorWork({ navigation }: any) {
         icon="calendar-outline"
         onPress={() => navigation.navigate("VendorCalendar")}
       />
+      <MenuRow title="Vendor agreements" icon="document-text-outline" onPress={() => navigation.navigate('VendorAgreements')} />
       {vendorModules.map(([module, title, , , icon]) => (
         <MenuRow
           key={module}
@@ -117,7 +118,7 @@ export function VendorWork({ navigation }: any) {
 }
 export function VendorModule({ route, navigation }: any) {
   if (route.params.module === "portfolio") return <VendorPortfolio />;
-  if (route.params.module === "analytics") return <VendorAnalytics />;
+  if (route.params.module === "analytics") return <VendorAnalytics navigation={navigation} />;
   if (route.params.module === "payments")
     return <VendorPayments navigation={navigation} />;
   if (route.params.module === "reviews")
@@ -138,11 +139,12 @@ function VendorModuleBody({ route, navigation }: any) {
   const a = useAction();
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("All");
+  const recordId = route.params.recordId;
   const rows = vendorPipeline(
     r.data[config?.collection || module[3]] || [],
     stage,
     query,
-  );
+  ).filter((row: Data) => !recordId || id(row) === recordId);
   const add = ["services", "availability", "portfolio", "documents"].includes(
     key,
   );
@@ -208,6 +210,7 @@ function VendorModuleBody({ route, navigation }: any) {
           onChange={setStage}
         />
       )}
+      {recordId && !r.loading && !r.error && rows.length === 0 && <Empty title="Record unavailable" description="This record is unavailable or is not authorized for your account." />}
       {rows.map((row) => (
         <Card key={id(row)}>
           <Pill>{human(row.status || row.visibility || "Available")}</Pill>
