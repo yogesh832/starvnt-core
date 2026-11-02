@@ -153,6 +153,7 @@ export function ExternalAuthProvider({ children }) {
         user,
         ready,
         sessionError,
+        clearSessionError: () => setSessionError(null),
         login,
         register,
         loginWithGoogle,
