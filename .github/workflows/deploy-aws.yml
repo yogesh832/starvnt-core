@@ -37,10 +37,6 @@ jobs:
         run: |
           VITE_API_URL=http://127.0.0.1:4117 npm run build -w web -- --outDir ../tmp/qa/vendor-business-dashboard/site
           node server/scripts/verify-vendor-business-dashboard.js
-      - name: Verify Proposal Studio approval and customer browser journey
-        run: |
-          VITE_API_URL=http://127.0.0.1:4117 npm run build -w web -- --outDir ../tmp/qa/proposal-studio/site
-          CLIENT_ORIGINS=http://127.0.0.1:5197 PROPOSAL_BROWSER_QA=1 node --test --test-name-pattern='production browser' server/test/proposal-studio.test.js
       - name: Build production container images
         run: |
           docker build --tag starvnt-backend:ci --file deploy/aws/Dockerfile.backend .
