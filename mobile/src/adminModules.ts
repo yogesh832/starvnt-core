@@ -8,7 +8,6 @@ export type AdminModule = {
   paged?: boolean;
 };
 export const adminModules: AdminModule[] = [
-  { key: 'proposals', title: 'Proposal Studio', path: '/proposals', collection: 'events', permissions: ['proposals.read'] },
   { key: 'financeGovernance', title: 'Finance workspace', path: '/policy', collection: 'revisions', permissions: ['financePolicies.read', 'financePolicies.update', 'financePolicies.approve', 'revenue.read', 'payments.read', 'settlements.read'] },
   { key: 'productMetrics', title: 'Product outcomes', path: '/reports/product-metrics', collection: 'metrics', permissions: ['analytics.read', 'reports.read'] },
   { key: 'availability', title: 'Availability & External Commitments', path: '/availability', collection: 'records', permissions: ['vendors.read'] },

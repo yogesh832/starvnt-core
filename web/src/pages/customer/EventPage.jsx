@@ -388,7 +388,6 @@ export default function EventPage() {
               ['services', 'Event plan', `/customer/events/${event.id}/requirements`],
               ['vendors', 'Find options', `/customer/events/${event.id}/services`],
               ['quotes', 'Quotes', `/customer/events/${event.id}/quotes`],
-                ['documents', 'My Event Proposal', `/customer/events/${event.id}/proposal`],
               ['payments', 'Bookings & payments', `/customer/events/${event.id}/bookings`],
               ['wallet', 'Budget', `/customer/events/${event.id}/budget`],
               ['message', 'Event Circle', `/customer/events/${event.id}/circle`],

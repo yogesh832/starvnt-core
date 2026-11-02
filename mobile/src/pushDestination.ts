@@ -42,7 +42,6 @@ export function pushDestination(
   const eventId = match?.[1] || (validId(data.eventId) ? data.eventId : null);
   if (!eventId) return fallback;
   const section = match?.[2];
-  if (section === 'proposal') return { screen: 'Proposal', params: { eventId } };
   if (section === "circle") {
     const bookingId = new URL(path, "https://app.starvnt.com").searchParams.get(
       "booking",

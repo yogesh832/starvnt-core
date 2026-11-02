@@ -50,15 +50,6 @@
       "android": {
         "buildType": "apk"
       }
-    },
-    "proposal-preview": {
-      "extends": "production",
-      "environment": "production",
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "autoIncrement": true
     }
   }
 }

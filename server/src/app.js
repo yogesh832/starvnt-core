@@ -31,7 +31,6 @@ import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
 import { metricsMiddleware, renderPrometheusMetrics } from './metrics.js';
 import { pushRoutes } from './notifications/push.routes.js';
-import { proposalCustomerRoutes, proposalAdminRoutes, proposalVendorRoutes } from './proposals/routes.js';
 
 export function createApp() {
   const app = express();
@@ -106,10 +105,7 @@ export function createApp() {
     res.json({ ok: true, user: req.externalUser.toSafeJSON() });
   });
   // Customer App + Aura+ (events, plan, chat)
-  app.use('/api/customer', proposalCustomerRoutes);
   app.use('/api/customer', customerRouter);
-  app.use('/api/admin/proposals', proposalAdminRoutes);
-  app.use('/api/vendor/proposal-agreements', proposalVendorRoutes);
   app.use('/api/aura', auraRouter);
   app.use('/api/internal', internalRouter);
 
