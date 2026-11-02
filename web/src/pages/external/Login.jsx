@@ -1,3 +1,4 @@
+import { portalLoginUrl } from '../../lib/portalAccess.js';
 import { customerNextPath } from "../../lib/customerSurface.js";
 import VendorCategoryPicker from "../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useRef } from "react";
@@ -35,6 +36,7 @@ export default function ExternalLogin() {
     loginWithOtp,
     loginWithWidgetOtp,
     user,
+    sessionError,
   } = useExternalAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -74,6 +76,8 @@ export default function ExternalLogin() {
 
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
+  const [portalMismatch, setPortalMismatch] = useState(null);
+  const mismatch = portalMismatch || sessionError;
   const [busy, setBusy] = useState(false);
   const googleBtnRef = useRef(null);
 
@@ -194,6 +198,7 @@ export default function ExternalLogin() {
             });
       redirectAfterAuth(u);
     } catch (err) {
+      setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       const map = {
         INVALID_CREDENTIALS: "Incorrect email or password.",
         ACCOUNT_TYPE_MISMATCH:
@@ -243,6 +248,7 @@ export default function ExternalLogin() {
       setEmailOtpVerified(true);
       setError("");
     } catch (err) {
+      setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       const map = {
         INVALID_OTP: "Invalid OTP code. Please check and retry.",
         OTP_EXPIRED_OR_NOT_FOUND: "OTP expired. Please request a new one.",
@@ -283,6 +289,7 @@ export default function ExternalLogin() {
       });
       redirectAfterAuth(u);
     } catch (err) {
+      setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       setError(
         err.data?.error === "ACCOUNT_TYPE_MISMATCH"
           ? err.data?.message || "Please sign in to your customer account."
@@ -362,6 +369,7 @@ export default function ExternalLogin() {
             });
             redirectAfterAuth(u);
           } catch (err) {
+      setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
             setError(
               err.data?.error === "ACCOUNT_TYPE_MISMATCH"
                 ? err.data?.message || "Please sign in to your customer account."
@@ -379,6 +387,7 @@ export default function ExternalLogin() {
         },
       });
     } catch (err) {
+      setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       setBusy(false);
       setError(err.message || "Failed to open MSG91 OTP widget.");
     }
@@ -425,6 +434,7 @@ export default function ExternalLogin() {
       });
       redirectAfterAuth(u);
     } catch (err) {
+      setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       const map = {
         INVALID_OTP: "Invalid OTP code. Please check and retry.",
         OTP_EXPIRED_OR_NOT_FOUND: "OTP expired. Please request a new one.",
@@ -704,8 +714,8 @@ export default function ExternalLogin() {
 
               {/* Error Banner */}
               {authMethod === "EMAIL" && emailOtpSent && !emailOtpVerified && emailDeliveryNotice && <p role="status" className="mb-3 rounded-xl bg-primary/10 p-3 text-sm text-ink dark:text-slate-200">{emailDeliveryNotice}</p>}
-              {error && (
-                <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5 flex items-start gap-2 animate-fade">
+              {(error || mismatch) && (
+                <div role="alert" className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5 flex items-start gap-2 animate-fade">
                   <svg
                     className="w-4 h-4 text-rose-500 shrink-0 mt-0.5"
                     fill="none"
@@ -719,7 +729,7 @@ export default function ExternalLogin() {
                       d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  <span>{error}</span>
+                  <div><span>{mismatch?.message || error}</span>{mismatch && <a className="block mt-2 font-bold underline" href={portalLoginUrl(mismatch.accountType)}>Go to {mismatch.accountType === 'VENDOR' ? 'vendor' : 'customer'} dashboard login →</a>}</div>
                 </div>
               )}
 

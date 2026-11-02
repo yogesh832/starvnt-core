@@ -40,6 +40,8 @@ const cookieSecure =
  * so a token from one domain can never be replayed against the other.
  */
 export const config = {
+  customerPortalUrl: process.env.CUSTOMER_PORTAL_URL || 'https://customer.starvnt.com',
+  vendorPortalUrl: process.env.VENDOR_PORTAL_URL || 'https://vendor.starvnt.com',
   pushEnabled: String(process.env.PUSH_ENABLED || '').toLowerCase() === 'true',
   pushProjectId: process.env.EXPO_EAS_PROJECT_ID || process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '',
   expoPushAccessToken: process.env.EXPO_PUSH_ACCESS_TOKEN || '',

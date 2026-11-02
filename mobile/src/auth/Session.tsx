@@ -1,3 +1,4 @@
+import { PORTAL_SURFACE } from '../portalAccess';
 import React, { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { Data } from '../api/client';
 import { external, internal, sessionPreference } from '../api/runtime';
@@ -13,6 +14,7 @@ type SessionValue = {
   ready: boolean;
   error: string;
   logoutRevision: number;
+  portalMismatch: Data | null;
   restore: () => Promise<void>;
   signIn: (domain: Domain, path: string, payload: Data) => Promise<void>;
   switchSurface: (targetSurface: string) => Promise<void>;
@@ -22,7 +24,7 @@ type SessionValue = {
 const Context = createContext<SessionValue>(null!);
 export function SessionProvider({ children }: React.PropsWithChildren) {
   const [manager] = useState(() => createSessionManager({
-    external, internal, preference: sessionPreference, cleanupPush: logoutPush, externalSurface: "CUSTOMER",
+    external, internal, preference: sessionPreference, cleanupPush: logoutPush, externalSurface: PORTAL_SURFACE,
   }));
   const state = useSyncExternalStore(manager.subscribe, manager.getState, manager.getState);
   useEffect(() => {

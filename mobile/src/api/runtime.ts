@@ -1,3 +1,4 @@
+import { PORTAL_SURFACE } from '../portalAccess';
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
@@ -65,6 +66,6 @@ function vault(domain: string, legacyKey = `starvnt.${domain}.refresh`): Vault {
     clear: async () => { await prepare(); await SecureStore.deleteItemAsync(key); },
   };
 }
-export const external = createClient(`${API_URL}/api`, vault("external"));
+export const external = createClient(`${API_URL}/api`, vault("external"), fetch, PORTAL_SURFACE);
 export const internal = createClient(`${API_URL}/api/admin`, vault("admin"));
 export const sessionPreference = vault('session', 'starvnt.session.domain');

@@ -1,3 +1,4 @@
+import { portalMismatchError } from '../portalAccess.ts';
 import type { Client, Data, Vault } from '../api/client.ts';
 
 export type Domain = 'external' | 'admin';
@@ -8,6 +9,7 @@ type State = {
   ready: boolean;
   error: string;
   logoutRevision: number;
+  portalMismatch: Data | null;
 };
 
 /** Owns session transitions independently of React and native storage. */
@@ -16,9 +18,9 @@ export function createSessionManager(deps: {
   internal: Client;
   preference: Vault;
   cleanupPush: (domain: Domain) => Promise<void>;
-  externalSurface?: "CUSTOMER";
+  externalSurface?: "CUSTOMER" | "VENDOR";
 }) {
-  let state: State = { user: null, admin: null, activeDomain: 'external', ready: false, error: '', logoutRevision: 0 };
+  let state: State = { user: null, admin: null, activeDomain: 'external', ready: false, error: '', logoutRevision: 0, portalMismatch: null };
   let revision = 0;
   let preferenceWrite: Promise<void> = Promise.resolve();
   let signingOut: Promise<void> | null = null;
@@ -39,10 +41,10 @@ export function createSessionManager(deps: {
   }
   async function restrictExternal(result: Data | null, expected: number) {
     if (!deps.externalSurface || !result?.user || expected !== revision) return result;
-    if (result.user.accountType === 'VENDOR') {
-      result = await deps.external.authenticate('switch-surface', { targetSurface: deps.externalSurface });
+    if (result.user.accountType !== deps.externalSurface) {
+      await deps.external.logout();
+      throw portalMismatchError(result.user.accountType);
     }
-    if (result?.user?.accountType !== deps.externalSurface) throw new Error('Please sign in to your customer workspace.');
     return result;
   }
   return {
@@ -62,7 +64,7 @@ export function createSessionManager(deps: {
     async restore() {
       if (signingOut) return signingOut;
       const expected = ++revision;
-      update({ ready: false, error: '' });
+      update({ ready: false, error: '', portalMismatch: null });
       try {
         await preferenceWrite;
         const selected = await deps.preference.get();
@@ -85,7 +87,7 @@ export function createSessionManager(deps: {
           activeDomain: domain,
         });
       } catch (e) {
-        if (expected === revision) update({ error: (e as Error).message });
+        if (expected === revision) update({ user: null, error: (e as Error).message, portalMismatch: (e as any).data?.error === 'ACCOUNT_TYPE_MISMATCH' ? (e as any).data : null });
       } finally {
         if (expected === revision) update({ ready: true });
       }
@@ -112,7 +114,7 @@ export function createSessionManager(deps: {
       update({ ...(domain === 'admin' ? { admin: identity } : { user: identity }), activeDomain: domain, ready: true, error: '' });
     },
     async switchSurface(targetSurface: string) {
-      if (deps.externalSurface && targetSurface !== deps.externalSurface) throw new Error("Vendor OS is available in the vendor app.");
+      if (deps.externalSurface && targetSurface !== deps.externalSurface) throw new Error("Please sign in through the matching portal.");
       if (signingOut) return;
       const expected = ++revision;
       const result = await deps.external.authenticate('switch-surface', { targetSurface });

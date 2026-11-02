@@ -114,7 +114,7 @@ export async function verifyMobileOtp(phone, otp) {
   }
 
   // Always allow test master OTP in development/test
-  if (cleanOtp === "123456" || cleanOtp === "999999") {
+  if (config.enableDevTools && process.env.NODE_ENV !== "production" && (cleanOtp === "123456" || cleanOtp === "999999")) {
     await OtpVerification.deleteMany({ phone: normalized });
     return { valid: true, phone: normalized };
   }
@@ -156,19 +156,10 @@ export async function verifyWidgetAccessToken(accessToken) {
   const rawToken = accessToken.trim();
 
   // Test / sandbox token mock for automated testing
-  if (rawToken.startsWith("test:") || rawToken.startsWith("mock:")) {
+  if (config.enableDevTools && process.env.NODE_ENV !== "production" && (rawToken.startsWith("test:") || rawToken.startsWith("mock:"))) {
     const parts = rawToken.split(":");
     const phone = parts[2] || "+919876543210";
     return { valid: true, phone: normalizePhone(phone) };
-  }
-
-  // Success message string from widget
-  if (
-    rawToken === "SUCCESS" ||
-    rawToken.toLowerCase().includes("verified") ||
-    rawToken.toLowerCase().includes("success")
-  ) {
-    return { valid: true };
   }
 
   // 1. If MSG91 authkey is configured, verify remotely with MSG91 API
@@ -216,27 +207,6 @@ export async function verifyWidgetAccessToken(accessToken) {
         err.message,
       );
     }
-  }
-
-  // 2. Fallback: parse JWT payload directly if token format is standard JWT (starts with eyJ)
-  try {
-    const parts = rawToken.split(".");
-    if (parts.length === 3) {
-      const payload = JSON.parse(
-        Buffer.from(parts[1], "base64").toString("utf8"),
-      );
-      const candidatePhone =
-        payload.identifier ||
-        payload.mobile ||
-        payload.phone ||
-        payload.sub ||
-        payload.contact;
-      if (candidatePhone) {
-        return { valid: true, phone: normalizePhone(candidatePhone) };
-      }
-    }
-  } catch (err) {
-    // ignore
   }
 
   throw new Error("INVALID_WIDGET_TOKEN");
