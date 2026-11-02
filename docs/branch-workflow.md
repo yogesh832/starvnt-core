@@ -15,6 +15,12 @@ Use only these four branches. Develop Vendor OS in `vendor-dev`, and Customer OS
 
 The table records deployment responsibilities. Branch creation does not provision staging servers, configure domains/secrets, or change existing production deployment workflows. Wire each development branch only to its corresponding staging environment when those environments are configured.
 
+## Proposal Studio release boundary
+
+Proposal Studio is currently development work, retained only on `customer-dev`. This includes the PDFKit dependency, backend routes and models, concept worker, shared content schema, staff/customer web and mobile screens, and vendor agreement API. Production branches and `vendor-dev` must not load or expose the module until the user requests its release. Existing quotes, negotiations, bookings and payments remain independent.
+
+For proposal development, use this worktree and its matching local/staging backend. Install the branch's declared dependencies with `npm ci` after switching branches; a production backend does not provide proposal endpoints. Do not direct a proposal preview at the production API. Existing Gemini image quota/billing still requires verification before a proposal release.
+
 Preferred development worktrees:
 - Vendor OS: `D:/starvnt-core-worktrees/vendor-dev`
 - Customer OS: `D:/starvnt-core-worktrees/customer-dev`
