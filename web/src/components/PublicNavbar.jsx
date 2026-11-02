@@ -8,7 +8,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
   const { user } = useExternalAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
-  const vendorSite = /^(vendor|partner)\./.test(window.location.hostname);
+  const vendorSite = true;
 
   function handlePlan() {
     if (onPlanClick) {

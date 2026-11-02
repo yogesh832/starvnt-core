@@ -208,11 +208,10 @@ try {
   customerPage.on('pageerror', error => customerErrors.push(error.message));
   customerPage.on('console', message => { if (message.type() === 'error') report.customerConsole.push(message.text()); });
   await customerPage.goto('http://127.0.0.1:5197/customer', { waitUntil: 'domcontentloaded' });
-  await customerPage.getByRole('button', { name: 'My Events', exact: true }).first().waitFor();
-  check('Production customer session mounts the customer workspace', (await customerPage.locator('body').innerText()).trim().length > 100, true);
-  check('Customer workspace has no JavaScript exceptions', customerErrors, []);
-  check('Customer workspace does not show a render-error fallback', await customerPage.getByRole('heading', { name: 'We ran into an unexpected hiccup', exact: true }).count(), 0);
-  await customerPage.screenshot({ path: resolve(output, 'customer-production.png') }); report.screenshots.push('customer-production.png');
+  await customerPage.getByRole('link', { name: 'Go to customer dashboard login', exact: false }).waitFor();
+  check('Vendor OS rejects a saved customer identity with its correct portal link', await customerPage.evaluate(() => localStorage.getItem('starvnt_external_access_token')), null);
+  check('Wrong-portal customer session has no JavaScript exceptions', customerErrors, []);
+  await customerPage.screenshot({ path: resolve(output, 'customer-wrong-portal.png') }); report.screenshots.push('customer-wrong-portal.png');
   await customerContext.close();
   check('No browser JavaScript errors', pageErrors, []);
   check('No unexpected console errors', report.consoleErrors.filter(message => !message.includes('net::ERR_FAILED')), []);

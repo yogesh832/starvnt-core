@@ -1,3 +1,4 @@
+import { portalMismatchError } from '../portalAccess.ts';
 import type { Client, Data, Vault } from '../api/client.ts';
 
 export type Domain = 'external' | 'admin';
@@ -8,6 +9,7 @@ type State = {
   ready: boolean;
   error: string;
   logoutRevision: number;
+  portalMismatch: Data | null;
 };
 
 /** Owns session transitions independently of React and native storage. */
@@ -16,8 +18,9 @@ export function createSessionManager(deps: {
   internal: Client;
   preference: Vault;
   cleanupPush: (domain: Domain) => Promise<void>;
+  externalSurface?: "CUSTOMER" | "VENDOR";
 }) {
-  let state: State = { user: null, admin: null, activeDomain: 'external', ready: false, error: '', logoutRevision: 0 };
+  let state: State = { user: null, admin: null, activeDomain: 'external', ready: false, error: '', logoutRevision: 0, portalMismatch: null };
   let revision = 0;
   let preferenceWrite: Promise<void> = Promise.resolve();
   let signingOut: Promise<void> | null = null;
@@ -36,6 +39,14 @@ export function createSessionManager(deps: {
   function expire(domain: Domain) {
     update(domain === 'admin' ? { admin: null } : { user: null });
   }
+  async function restrictExternal(result: Data | null, expected: number) {
+    if (!deps.externalSurface || !result?.user || expected !== revision) return result;
+    if (result.user.accountType !== deps.externalSurface) {
+      await deps.external.logout();
+      throw portalMismatchError(result.user.accountType);
+    }
+    return result;
+  }
   return {
     connect() {
       deps.external.onExpired(() => expire('external'));
@@ -53,7 +64,7 @@ export function createSessionManager(deps: {
     async restore() {
       if (signingOut) return signingOut;
       const expected = ++revision;
-      update({ ready: false, error: '' });
+      update({ ready: false, error: '', portalMismatch: null });
       try {
         await preferenceWrite;
         const selected = await deps.preference.get();
@@ -67,7 +78,8 @@ export function createSessionManager(deps: {
         }
         // Restore only the explicitly selected workspace. An unused admin
         // credential must neither sign in silently nor delay customer startup.
-        const result = await clients[domain].refresh();
+        let result = await clients[domain].refresh();
+        if (domain === "external") result = await restrictExternal(result, expected);
         if (expected !== revision) return;
         update({
           user: domain === 'external' ? result?.user || null : null,
@@ -75,7 +87,7 @@ export function createSessionManager(deps: {
           activeDomain: domain,
         });
       } catch (e) {
-        if (expected === revision) update({ error: (e as Error).message });
+        if (expected === revision) update({ user: null, error: (e as Error).message, portalMismatch: (e as any).data?.error === 'ACCOUNT_TYPE_MISMATCH' ? (e as any).data : null });
       } finally {
         if (expected === revision) update({ ready: true });
       }
@@ -91,9 +103,10 @@ export function createSessionManager(deps: {
     async signIn(domain: Domain, path: string, payload: Data) {
       if (signingOut) await signingOut;
       const expected = ++revision;
-      const result = await clients[domain].authenticate(path, payload);
+      let result: Data | null = await clients[domain].authenticate(path, domain === "external" && deps.externalSurface ? { ...payload, accountType: deps.externalSurface } : payload);
+      if (domain === "external") result = await restrictExternal(result, expected);
       if (expected !== revision) return;
-      const identity = domain === 'admin' ? result.admin : result.user;
+      const identity = domain === 'admin' ? result?.admin : result?.user;
       if (!identity) throw new Error('The server did not return your account. Please try again.');
       persistent[domain] = path !== 'dev-auth';
       await remember(persistent[domain] ? domain : 'guest');
@@ -101,11 +114,12 @@ export function createSessionManager(deps: {
       update({ ...(domain === 'admin' ? { admin: identity } : { user: identity }), activeDomain: domain, ready: true, error: '' });
     },
     async switchSurface(targetSurface: string) {
+      if (deps.externalSurface && targetSurface !== deps.externalSurface) throw new Error("Please sign in through the matching portal.");
       if (signingOut) return;
       const expected = ++revision;
       const result = await deps.external.authenticate('switch-surface', { targetSurface });
       if (expected !== revision) return;
-      if (!result.user) throw new Error('The server did not return your workspace. Please try again.');
+      if (!result.user || (deps.externalSurface && result.user.accountType !== deps.externalSurface)) throw new Error('The server did not return your customer workspace. Please try again.');
       await remember(persistent.external ? 'external' : 'guest');
       if (expected === revision) update({ user: result.user, activeDomain: 'external', ready: true, error: '' });
     },
