@@ -49,7 +49,7 @@ try {
   const context = await browser.newContext();
   const page = await context.newPage(); page.setDefaultTimeout(12000); page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:5198/login?as=${label(wrong)}&next=/${label(wrong)}`);
-  await page.getByRole('heading', { name: `${surface === 'VENDOR' ? 'Vendor' : 'Customer'} Sign in`, exact: true }).waitFor();
+  await page.getByRole('heading', { name: surface === 'VENDOR' ? 'Vendor Sign in' : 'Sign in to STARVNT', exact: true }).waitFor();
   check('Role query cannot change the product login surface', await page.getByRole('button', { name: surface === 'VENDOR' ? 'Customer' : 'Vendor', exact: true }).count(), 0);
   await page.locator('input[type=email]').fill(users[wrong].email);
   const response = page.waitForResponse(r => r.url().endsWith('/auth/otp/email/send'));
