@@ -1,7 +1,8 @@
+import { PORTAL_SURFACE, portalLoginUrl } from '../portalAccess';
 import { VendorCategoryPicker } from "../VendorCategoryPicker";
 import React, { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from '@react-navigation/native';
-import { Modal, Platform, Pressable, TurboModuleRegistry, View } from "react-native";
+import { Linking, Modal, Platform, Pressable, TurboModuleRegistry, View } from "react-native";
 import Constants from 'expo-constants';
 import { useSession } from "../auth/Session";
 import { AuthLayout } from "../AuthLayout";
@@ -12,7 +13,7 @@ import { AuthButton, AuthCode, AuthField, AuthLink, AuthTabs, AuthText } from '.
 export function AuthScreen({ route, navigation }: any) {
     const { signIn, setActiveDomain, activeDomain } = useSession();
     const isAdmin = activeDomain === "admin";
-    const [accountType, setAccountType] = useState(route.params?.accountType || "CUSTOMER");
+    const accountType = PORTAL_SURFACE;
     const [mode, setMode] = useState(route.params?.mode || "login");
     const [method, setMethod] = useState("email");
     const [phase, setPhase] = useState("identity");
@@ -30,6 +31,7 @@ export function AuthScreen({ route, navigation }: any) {
         mfaToken: "",
     });
     const action = useAction();
+    const [portalMismatch, setPortalMismatch] = useState<any>(null);
     const [resendAt, setResendAt] = useState(0);
     const [emailDeliveryNotice, setEmailDeliveryNotice] = useState("");
     const [seconds, setSeconds] = useState(0);
@@ -40,7 +42,6 @@ export function AuthScreen({ route, navigation }: any) {
         return () => clearInterval(timer);
     }, [resendAt]);
     useFocusEffect(useCallback(() => {
-        setAccountType(route.params?.accountType || "CUSTOMER");
         setMode(activeDomain === 'admin' ? 'login' : route.params?.mode || "login");
         setPhase("identity");
         setNeedsPassword(false);
@@ -78,6 +79,7 @@ export function AuthScreen({ route, navigation }: any) {
                     throw new Error("Enter a valid email address.");
                 const result = await external.call("/auth/otp/email/send", "POST", {
                     email: payload.email,
+                    accountType,
                     mode: mode === "register" ? "register" : "login",
                     ...(mode === "register"
                         ? {
@@ -105,6 +107,7 @@ export function AuthScreen({ route, navigation }: any) {
             }
             await external.call("/auth/otp/email/verify", "POST", {
                 email: payload.email,
+                accountType,
                 otp: payload.otp,
             });
             setPhase("password");
@@ -161,16 +164,16 @@ export function AuthScreen({ route, navigation }: any) {
     const register = !isAdmin && mode === 'register';
     const verifying = !isAdmin && phase === 'verify';
     const working = action.busy;
-    const run = (fn: () => Promise<void>) => { void action.run(fn); };
+    const run = (fn: () => Promise<void>) => { setPortalMismatch(null); void action.run(async () => { try { await fn(); } catch (error) { const data = (error as any).data; if (data?.error === 'ACCOUNT_TYPE_MISMATCH') setPortalMismatch(data); throw error; } }); };
     const changeMode = () => { setMode(register ? 'login' : 'register'); reset(); };
     async function resend() {
         if (Date.now() < resendAt)
             return;
         if (method === 'phone')
-            await external.call('/auth/otp/send', 'POST', { phone: form.phone.replace(/[\s()-]/g, '') });
+            await external.call('/auth/otp/send', 'POST', { phone: form.phone.replace(/[\s()-]/g, ''), accountType });
         else
             await external.call('/auth/otp/email/send', 'POST', {
-                email: form.email.trim().toLowerCase(), mode: register ? 'register' : 'login',
+                email: form.email.trim().toLowerCase(), accountType, mode: register ? 'register' : 'login',
                 ...(register ? { fullName: form.fullName, businessName: form.businessName, category: form.category, city: form.city, accountType } : {}),
             });
         setForm(v => ({ ...v, otp: '' }));
@@ -178,11 +181,6 @@ export function AuthScreen({ route, navigation }: any) {
     }
     return <AuthLayout navigation={navigation} vendor={vendor} register={register} admin={isAdmin} verify={!isAdmin && phase !== 'identity'} phone={method === 'phone'} onBack={phase !== 'identity' ? reset : undefined}>
     {!isAdmin && phase === 'identity' && <>
-      <AuthTabs value={accountType} disabled={working} onChange={v => { setAccountType(v); reset(); }} options={[
-                { value: 'CUSTOMER', title: 'Customer', icon: 'person-outline' },
-                { value: 'VENDOR', title: 'Vendor', icon: 'storefront-outline' },
-            ]}/>
-      {!register && <View style={{ gap: 3 }}><AuthText size={23} bold>Sign in to STARVNT</AuthText><AuthText color="#c5d3e9">Choose how you want to continue.</AuthText></View>}
       <AuthTabs value={method} disabled={working} onChange={v => { if (v === 'google')
             run(google);
         else {
@@ -225,7 +223,7 @@ export function AuthScreen({ route, navigation }: any) {
         {(needsPassword || register) && <AuthText size={12} color="#a9bddb">Use at least 8 characters with uppercase, lowercase, a number and a symbol.</AuthText>}
       </>}
       {isAdmin && <AuthField label="Authenticator code (if enabled)" {...field('mfaToken')} keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} editable={!working}/>}
-      {!!action.error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 12, backgroundColor: '#401d32' }}><AuthText color="#ffb7ca">{action.error}</AuthText></View>}
+      {!!action.error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 12, backgroundColor: '#401d32' }}><AuthText color="#ffb7ca">{action.error}</AuthText>{portalMismatch && <AuthLink title={`Go to ${portalMismatch.accountType === 'VENDOR' ? 'vendor' : 'customer'} dashboard login`} onPress={() => { void Linking.openURL(portalLoginUrl(portalMismatch.accountType)); }} />}</View>}
       <View style={{ marginTop: verifying ? 28 : 0 }}><AuthButton title={isAdmin || phase === 'password' ? 'Enter your workspace' : verifying ? 'Verify & Continue' : method === 'email' ? 'Send OTP to Email  →' : 'Send OTP to Mobile  →'} busy={working} onPress={() => run(submit)}/></View>
       {verifying && <AuthLink title={method === 'phone' ? 'Change mobile number' : 'Change email address'} disabled={working} onPress={reset}/>}
       {!isAdmin && phase === 'password' && <AuthLink title="Reset or set a password" disabled={working} onPress={() => { setMode('reset'); reset(); }}/>}

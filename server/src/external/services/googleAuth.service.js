@@ -10,7 +10,7 @@ export async function verifyGoogleIdToken(token) {
   }
 
   // 1. Support test/mock token in automated testing or sandbox
-  if (token.startsWith('test') || token.startsWith('mock')) {
+  if (config.enableDevTools && process.env.NODE_ENV !== 'production' && (token.startsWith('test:') || token.startsWith('mock:'))) {
     const parts = token.split(':');
     const email = parts[1] || 'google.test@example.com';
     const fullName = parts[2] || 'Google Test User';

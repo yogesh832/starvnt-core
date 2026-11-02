@@ -1,3 +1,4 @@
+import { portalLoginUrl } from './portalAccess';
 import React, { useEffect, useState } from "react";
 import { PushProvider, usePush } from "./Push";
 import { pushDestination } from "./pushDestination";
@@ -219,7 +220,9 @@ function Navigation() {
   if (s.error)
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-        <Page title="Let’s reconnect" error={s.error} refresh={s.restore} />
+        <Page title={s.portalMismatch ? 'Use your account dashboard' : 'Let’s reconnect'} error={s.portalMismatch ? undefined : s.error} subtitle={s.portalMismatch ? s.error : undefined} refresh={s.restore}>
+          {s.portalMismatch && <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL(portalLoginUrl(s.portalMismatch!.accountType)); }}><Text style={{ color: c.ink, textDecorationLine: 'underline', padding: 16 }}>Go to {s.portalMismatch.accountType === 'VENDOR' ? 'vendor' : 'customer'} dashboard login</Text></Pressable>}
+        </Page>
       </SafeAreaView>
     );
   const identity = s.activeDomain === "admin" ? s.admin : s.user;

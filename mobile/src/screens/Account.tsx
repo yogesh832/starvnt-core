@@ -1,3 +1,5 @@
+import { portalLoginUrl } from '../portalAccess';
+import { Linking } from 'react-native';
 import React, { useEffect, useState } from "react";
 import { Alert, Linking } from "react-native";
 import { external, internal } from "../api/runtime";
@@ -75,13 +77,13 @@ export function AccountScreen({ navigation }: any) {
           <Button
             title={
               vendor
-                ? "Switch to customer workspace"
-                : "Switch to vendor workspace"
+                ? "Open customer dashboard website"
+                : "Open vendor dashboard website"
             }
             secondary
             busy={a.busy}
             onPress={() => {
-              void a.run(() => s.switchSurface(vendor ? "CUSTOMER" : "VENDOR"));
+              void a.run(() => Linking.openURL(portalLoginUrl(vendor ? "CUSTOMER" : "VENDOR")));
             }}
           />
         </>

@@ -753,6 +753,39 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
     }
   }, [open, prompt, conversationRequest, dockMode]);
 
+  function updatePanelWidth(newWidth) {
+    const clamped = Math.max(DESKTOP_MIN_W, Math.min(newWidth, Math.max(DESKTOP_MIN_W, window.innerWidth - 60)));
+    setPanelWidth(clamped);
+    try {
+      sessionStorage.setItem('vendor_aura_width', String(clamped));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function cycleWidth() {
+    if (panelWidth < 450) updatePanelWidth(520);
+    else if (panelWidth < 580) updatePanelWidth(680);
+    else updatePanelWidth(380);
+  }
+
+  function updatePanelHeight(newHeight) {
+    const maxH = Math.max(DESKTOP_MIN_H, window.innerHeight - 24);
+    const clamped = Math.max(DESKTOP_MIN_H, Math.min(newHeight, maxH));
+    setPanelHeight(clamped);
+    try {
+      sessionStorage.setItem('vendor_aura_height', String(clamped));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function cycleHeight() {
+    if (panelHeight < 520) updatePanelHeight(620);
+    else if (panelHeight < 720) updatePanelHeight(Math.max(DESKTOP_MIN_H, window.innerHeight - 24));
+    else updatePanelHeight(430);
+  }
+
   function handleDragStart(e) {
     if (window.innerWidth < 1024 || e.button !== 0) return;
     if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
@@ -906,6 +939,50 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
     const rect = panel ? panel.getBoundingClientRect() : { left: window.innerWidth - panelWidth - 24, top: 16 };
     setDragPos(clampPanelPosition({ x: Math.max(16, rect.left - 40), y: Math.max(16, rect.top) }, panelWidth, panelHeight));
     updateDockMode('floating');
+  }
+
+  function snapTo(place) {
+    if (window.innerWidth < 1024) return;
+    const margin = 12;
+    const wide = Math.min(Math.max(panelWidth, 520), Math.min(DESKTOP_MAX_W, window.innerWidth - 24));
+    const tall = Math.min(Math.max(panelHeight, 500), window.innerHeight - 24);
+    let nextWidth = panelWidth;
+    let nextHeight = panelHeight;
+    let next = { x: margin, y: margin };
+
+    if (place === 'right') {
+      nextWidth = Math.min(Math.max(panelWidth, 420), window.innerWidth - 24);
+      nextHeight = window.innerHeight - 24;
+      next = { x: window.innerWidth - nextWidth - margin, y: margin };
+    } else if (place === 'left') {
+      nextWidth = Math.min(Math.max(panelWidth, 420), window.innerWidth - 24);
+      nextHeight = window.innerHeight - 24;
+      next = { x: margin, y: margin };
+    } else if (place === 'top') {
+      nextWidth = wide;
+      nextHeight = Math.min(Math.max(420, Math.round(window.innerHeight * 0.55)), window.innerHeight - 24);
+      next = { x: Math.round((window.innerWidth - nextWidth) / 2), y: margin };
+    } else if (place === 'bottom') {
+      nextWidth = wide;
+      nextHeight = Math.min(Math.max(420, Math.round(window.innerHeight * 0.55)), window.innerHeight - 24);
+      next = { x: Math.round((window.innerWidth - nextWidth) / 2), y: window.innerHeight - nextHeight - margin };
+    } else if (place === 'center') {
+      nextWidth = wide;
+      nextHeight = tall;
+      next = { x: Math.round((window.innerWidth - nextWidth) / 2), y: Math.round((window.innerHeight - nextHeight) / 2) };
+    }
+
+    setPanelWidth(nextWidth);
+    setPanelHeight(nextHeight);
+    setDragPos(clampPanelPosition(next, nextWidth, nextHeight));
+    updateDockMode('floating');
+    try {
+      sessionStorage.setItem('vendor_aura_width', String(nextWidth));
+      sessionStorage.setItem('vendor_aura_height', String(nextHeight));
+      sessionStorage.setItem('vendor_aura_pos', JSON.stringify(clampPanelPosition(next, nextWidth, nextHeight)));
+    } catch {
+      /* ignore */
+    }
   }
 
   useEffect(() => {

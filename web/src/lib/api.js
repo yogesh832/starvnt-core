@@ -77,15 +77,19 @@ export function makeApi(base, refreshPath, options = {}) {
     const startedGeneration = generation;
     refreshing =
       refreshing ||
-      fetch(refreshPath, { method: "POST", credentials: "include" })
+      fetch(refreshPath, { method: "POST", credentials: "include", headers: options.surface ? { "X-Starvnt-Surface": options.surface } : {} })
         .then(async (r) => {
-          if (!r.ok) return null;
+          if (!r.ok) {
+            const data = await r.json().catch(() => ({}));
+            if (data.error === 'ACCOUNT_TYPE_MISMATCH') { const error = new Error(data.message); error.data = data; throw error; }
+            return null;
+          }
           const data = await r.json();
           if (!data || !data.accessToken || generation !== startedGeneration) return null;
           setToken(data.accessToken);
           return data;
         })
-        .catch(() => null)
+        .catch(error => { if (error.data?.error === 'ACCOUNT_TYPE_MISMATCH') throw error; return null; })
         .finally(() => {
           refreshing = null;
         });
@@ -103,6 +107,7 @@ export function makeApi(base, refreshPath, options = {}) {
       signal,
       headers: {
         ...(isJsonBody ? { "Content-Type": "application/json" } : {}),
+        ...(options.surface ? { "X-Starvnt-Surface": options.surface } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
@@ -228,7 +233,7 @@ const API_BASE = import.meta.env.VITE_API_URL
 export const externalApi = makeApi(
   `${API_BASE}/api`,
   `${API_BASE}/api/auth/refresh`,
-  { storageKey: "starvnt_external_access_token", loginRedirectPath: "/login" },
+  { storageKey: "starvnt_external_access_token", loginRedirectPath: "/login", surface: 'VENDOR' },
 );
 export const adminApi = makeApi(
   `${API_BASE}/api/admin`,
