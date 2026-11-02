@@ -23,7 +23,7 @@ test('each product pins its login payload and ignores stale asynchronous session
 });
 test('dashboard links use configuration and reject script URLs without carrying credentials', () => {
   assert.equal(portalLoginUrl('VENDOR', { VENDOR: 'https://vendor.example.test/path?token=secret#fragment' }), 'https://vendor.example.test/login');
-  assert.equal(portalLoginUrl('CUSTOMER', { CUSTOMER: 'javascript:alert(1)' }), 'https://customer.starvnt.com/login');
+  assert.equal(portalLoginUrl('CUSTOMER', { CUSTOMER: 'javascript:alert(1)' }), 'https://starvnt-core.vercel.app/login');
 });
 test('refresh sends the product surface and propagates a wrong-portal error for the login UI', async () => {
   const original = globalThis.fetch;

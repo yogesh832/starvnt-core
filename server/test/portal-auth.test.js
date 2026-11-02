@@ -133,3 +133,13 @@ test('portal destinations use configured trusted URLs and ignore unsafe protocol
     assert.equal(portalMismatch('VENDOR').loginUrl, 'https://vendor.starvnt.com/login');
   } finally { config.vendorPortalUrl = original; }
 });
+
+// The Customer OS is temporarily hosted on Vercel; it must work even when an old
+// CLIENT_ORIGINS value does not yet list that approved portal.
+test('approved Vercel customer origin is allowed and cannot override its portal identity', async () => {
+  assert.ok(config.clientOrigins.includes('https://starvnt-core.vercel.app'));
+  const preflight = await request(app).options('/api/auth/login').set('Origin', 'https://starvnt-core.vercel.app').set('Access-Control-Request-Method', 'POST').set('Access-Control-Request-Headers', 'content-type,x-starvnt-surface').expect(204);
+  assert.equal(preflight.headers['access-control-allow-origin'], 'https://starvnt-core.vercel.app');
+  const blocked = await post('login').set('Origin', 'https://starvnt-core.vercel.app').send({ email: vendor.email, password, accountType: 'VENDOR' }).expect(403);
+  assert.equal(blocked.body.accountType, 'VENDOR');
+});
