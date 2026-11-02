@@ -20,4 +20,3 @@ Preferred development worktrees:
 - Customer OS: `D:/starvnt-core-worktrees/customer-dev`
 
 Legacy branch history is archived locally at `D:/starvnt-branch-archive/2026-11-02/before-four-branch-layout.bundle`. Historical worktree files and uncommitted changes are preserved; retired worktrees may remain detached for recovery/reference.
-

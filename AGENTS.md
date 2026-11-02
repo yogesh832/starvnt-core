@@ -9,4 +9,3 @@ Use the matching development branch for daily work. Do not create additional fea
 Preserve uncommitted changes in every worktree. Keep customer-only authentication/navigation on the customer product line and Vendor OS entry points on the vendor product line. Review shared backend changes for both products. Promote tested changes to the matching production branch when a release is requested; a development push must not be routed to production infrastructure.
 
 See `docs/branch-workflow.md` for branch roles, initial baselines, worktree locations and archive recovery information. Staging targets in that document are intended roles, not proof that hosting has been configured.
-
