@@ -1,5 +1,4 @@
 import { portalLoginUrl } from '../portalAccess';
-import { Linking } from 'react-native';
 import React, { useEffect, useState } from "react";
 import { Alert, Linking } from "react-native";
 import { external, internal } from "../api/runtime";
