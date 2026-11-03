@@ -1,3 +1,4 @@
+import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { evaluateVendorActivation } from '../../external/services/vendorActivation.service.js';
 import mongoose from 'mongoose';
 import { VendorService } from '../../external/models/VendorService.js';
@@ -82,13 +83,13 @@ function coverageQuery(regex) {
 function publicLocation(loc) {
   if (!loc) return null;
   return {
-    label: loc.label || '',
-    address: loc.address || '',
-    locality: loc.locality || '',
+    label: loc.publicVisibility === 'EXACT' ? loc.label || '' : 'Operating base',
+    address: loc.publicVisibility === 'EXACT' ? loc.address || '' : '',
+    locality: loc.publicVisibility === 'EXACT' ? loc.locality || '' : '',
     city: loc.city || '',
     state: loc.state || '',
-    postalCode: loc.postalCode || '',
-    coordinates: loc.coordinates || null,
+    postalCode: loc.publicVisibility === 'EXACT' ? loc.postalCode || '' : '',
+    coordinates: loc.publicVisibility === 'EXACT' ? loc.coordinates || null : null,
   };
 }
 
@@ -175,17 +176,18 @@ function extendedFallbackMeta(fit, cov) {
 export async function listBookableServices({ city, coordinates } = {}) {
   const regex = cityMatcher(city);
   const origin = coordsOf(coordinates) || regionalPlaceCoordinates(city);
-  const candidates = await VendorOrganization.find({ status: 'ACTIVE', 'activationReview.status': 'APPROVED', isRestricted: { $ne: true } }).select(ORG_FIELDS).lean();
+  const candidates = await VendorOrganization.find({ 'activationReview.status': 'APPROVED' }).select(ORG_FIELDS).lean();
   const evaluated = await Promise.all(candidates.map(async org => ({ org, readiness: await evaluateVendorActivation(org._id) })));
+  const readinessByVendor = new Map(evaluated.map(row => [String(row.org._id), row.readiness]));
   const orgs = evaluated.filter(row => row.readiness.matchingEligible).map(row => row.org);
   if (!orgs.length) return [];
   const byId = new Map(orgs.map((o) => [String(o._id), o]));
   const vendorIds = orgs.map((o) => o._id);
   const [services, locations, coverages, portfolioDocs] = await Promise.all([
     VendorService.find({ vendor: { $in: vendorIds }, status: 'ACTIVE' }).lean(),
-    OperatingLocation.find({ vendor: { $in: vendorIds } }).lean(),
+    OperatingLocation.find({ vendor: { $in: vendorIds }, operatingStatus: { $ne: 'INACTIVE' } }).lean(),
     ServiceCoverage.find({ vendor: { $in: vendorIds } }).lean(),
-    PortfolioItem.find({ vendor: { $in: vendorIds } }).lean(),
+    PortfolioItem.find({ vendor: { $in: vendorIds }, visibility: 'PUBLIC', status: { $in: ['PUBLISHED', 'VERIFIED', 'BOOKING_PROVEN'] } }).select('vendor mediaType url thumbnailUrl title projectName eventType style description').lean(),
   ]);
   const locationsByVendor = new Map();
   for (const loc of locations) {
@@ -209,7 +211,7 @@ export async function listBookableServices({ city, coordinates } = {}) {
   const mapped = services
     .map((s) => {
       const vendor = byId.get(String(s.vendor));
-      if (!vendor) return null;
+      if (!vendor || !serviceMatchingEligible(readinessByVendor.get(String(vendor._id)), s._id)) return null;
       const vendorId = String(vendor._id);
       const serviceCoverages = coveragesByService.get(String(s._id)) || [];
       const vendorLocations = locationsByVendor.get(vendorId) || [];
@@ -263,18 +265,18 @@ export async function findBookableService(serviceId, { city, coordinates } = {})
   if (!mongoose.isValidObjectId(serviceId)) return null;
   const service = await VendorService.findOne({ _id: serviceId, status: 'ACTIVE' }).lean();
   if (!service) return null;
-  const vendor = await VendorOrganization.findOne({ _id: service.vendor, isCommerciallyActive: true }).select(ORG_FIELDS).lean();
+  const vendor = await VendorOrganization.findOne({ _id: service.vendor }).select(ORG_FIELDS).lean();
   if (!vendor) return null;
-  if (!(await evaluateVendorActivation(vendor._id)).matchingEligible) return null;
+  if (!serviceMatchingEligible(await evaluateVendorActivation(vendor._id), service._id)) return null;
   const origin = coordsOf(coordinates) || regionalPlaceCoordinates(city);
   if (!city && !origin) {
-    const matchedLocation = await OperatingLocation.findOne({ vendor: vendor._id }).sort({ isPrimary: -1 }).lean();
+    const matchedLocation = await OperatingLocation.findOne({ vendor: vendor._id, operatingStatus: { $ne: 'INACTIVE' } }).sort({ isPrimary: -1 }).lean();
     const matchedCoverage = await ServiceCoverage.findOne({ vendor: vendor._id, vendorService: service._id }).lean();
     return { service, vendor, matchedLocation: publicLocation(matchedLocation), matchedCoverage, isExactMatch: true };
   }
   const regex = cityMatcher(city);
   const [matchedLocations, serviceCoverages] = await Promise.all([
-    OperatingLocation.find({ vendor: vendor._id }).lean(),
+    OperatingLocation.find({ vendor: vendor._id, operatingStatus: { $ne: 'INACTIVE' } }).lean(),
     ServiceCoverage.find({ vendor: vendor._id, vendorService: service._id }).lean(),
   ]);
   const locationCandidates = matchedLocations.length ? matchedLocations : [null];

@@ -1,3 +1,5 @@
+import Customer360 from './Customer360.jsx';
+import Discovery from './Discovery.jsx';
 import AuraMark from '../../components/AuraMark.jsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -34,6 +36,7 @@ import { takePendingPrompt } from './pendingPrompt.js';
 const SIDEBAR = [
   { key: 'home', label: 'Home', icon: 'dashboard', to: '/customer' },
   { key: 'new', label: 'New Event', icon: 'plus', to: '/customer/events/new' },
+  { key: 'discovery', label: 'Discover', icon: 'star', to: '/customer/discovery' },
   { key: 'aura', label: 'Aura+', icon: 'aura', to: '/customer/aura' },
   { key: 'events', label: 'My Events', icon: 'events', to: '/customer/events' },
   { key: 'messages', label: 'Messages', icon: 'message', to: '/customer/updates?tab=messages', badge: true },
@@ -48,7 +51,7 @@ const SIDEBAR = [
 ];
 
 const SIDEBAR_GROUPS = [
-  { label: 'Plan', keys: ['home', 'new', 'aura', 'events'] },
+  { label: 'Plan', keys: ['home', 'new', 'discovery', 'aura', 'events'] },
   { label: 'Current Event', keys: ['messages', 'quotes', 'bookings', 'payments', 'vendors', 'timeline'] },
   { label: 'Library', keys: ['documents', 'favorites', 'settings'] },
 ];
@@ -356,6 +359,8 @@ function Shell() {
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="me" element={<MePage user={user} logout={logout} />} />
+              <Route path="customer-360" element={<Customer360 />} />
+              <Route path="discovery" element={<Discovery />} />
               <Route path="*" element={<Navigate to="/customer" replace />} />
             </Routes>
           </main>

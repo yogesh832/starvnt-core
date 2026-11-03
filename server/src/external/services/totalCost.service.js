@@ -1,7 +1,7 @@
 import { VendorService } from '../models/VendorService.js';
 import { TravelPolicy } from '../models/TravelPolicy.js';
 import { OperatingLocation } from '../models/OperatingLocation.js';
-import { estimateDistanceKm } from '../utils/geo.js';
+import { estimateDistanceKm, distanceEvidence } from '../utils/geo.js';
 
 /**
  * Lowest Validated Total Cost Calculator (Spec §8, §9).
@@ -39,6 +39,7 @@ export async function calculateValidatedTotalCost({
 
   // 2. Fetch Travel Policy
   let policy = await TravelPolicy.findOne({ vendor: vendorId });
+  const policySource = policy ? 'VENDOR_POLICY' : 'DEFAULT_ESTIMATE';
   if (!policy) {
     policy = {
       freeRadiusKm: 15,
@@ -51,7 +52,7 @@ export async function calculateValidatedTotalCost({
   }
 
   // 3. Find closest operational origin to calculate verified distance
-  const locations = await OperatingLocation.find({ vendor: vendorId });
+  const locations = await OperatingLocation.find({ vendor: vendorId, operatingStatus: { $ne: 'INACTIVE' } });
   let minDistanceKm = 10; // default local estimate if no operating location
   let closestOrigin = null;
 
@@ -113,6 +114,8 @@ export async function calculateValidatedTotalCost({
     breakdown: {
       basePrice,
       distanceKm: minDistanceKm,
+      distanceEvidence: closestOrigin ? distanceEvidence(closestOrigin, serviceLocation) : { distanceKm: minDistanceKm, source: 'ASSUMED_DISTANCE', isEstimate: true, requiresConfirmation: true },
+      policySource,
       freeRadiusKm: policy.freeRadiusKm,
       billableKm: billableDistanceKm,
       travelCharge,
@@ -122,9 +125,10 @@ export async function calculateValidatedTotalCost({
       conditionalCharges: appliedConditionalCharges,
     },
     originPoint: closestOrigin
-      ? `${closestOrigin.label} (${closestOrigin.city})`
-      : 'Primary Operating Studio',
+      ? closestOrigin.publicVisibility === 'EXACT' ? `${closestOrigin.label} (${closestOrigin.city})` : `${closestOrigin.city} operating base`
+      : 'Operating origin not configured',
     destinationPoint: serviceLocation?.locality || serviceLocation?.city || 'Service Location',
     validatedTotalCost,
+    costStatus: 'ESTIMATE_REQUIRES_VENDOR_CONFIRMATION',
   };
 }

@@ -1,3 +1,4 @@
+import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import crypto from 'node:crypto';
 import { config } from '../../config.js';
 import { assertQuoteSubmission } from '../services/quoteStateMachine.service.js';
@@ -140,19 +141,20 @@ async function completePaidVendorQuoteLocked({ quote, actorName, paymentId }, as
   quote.advancePayment.providerPaymentId = paymentId || quote.advancePayment.providerPaymentId || '';
   quote.advancePayment.paidAt = quote.advancePayment.paidAt || new Date();
   if (quote.advancePayment?.couponCode && !quote.advancePayment?.couponUsageRecorded) {
-    await recordCouponUsageOnce(quote.advancePayment.couponCode);
+    await recordCouponUsageOnce(quote.advancePayment.couponCode, `quote:${quote._id}`);
     quote.advancePayment.couponUsageRecorded = true;
   }
   await quote.save();
 
   const existingBooking = await CoreBooking.findOne({ quoteId: String(quote._id) }).lean();
+  if (existingBooking) return { quote, booking: existingBooking };
   if (!existingBooking) {
     const vendorId = quote.vendor?._id || quote.vendor;
     const readiness = await evaluateVendorActivation(vendorId);
     const hold = await Reservation.findOne({ quote: quote._id, customer: quote.customer?._id || quote.customer }).select('_id').lean();
     const available = await checkTrueAvailability({ vendorId, vendorServiceId: quote.vendorService, date: quote.eventDate, allDay: true, serviceLocation: quote.serviceLocation, excludeReservationId: hold?._id });
-    if (!readiness.matchingEligible || !available.feasible) {
-      quote.bookingReview = { status: 'CONFLICT_REVIEW', reason: !readiness.matchingEligible ? 'Vendor activation requires review' : available.reason, updatedAt: new Date() };
+    if (!serviceMatchingEligible(readiness, quote.vendorService) || !available.feasible) {
+      quote.bookingReview = { status: 'CONFLICT_REVIEW', reason: !serviceMatchingEligible(readiness, quote.vendorService) ? 'Vendor activation requires review' : available.reason, updatedAt: new Date() };
       await quote.save();
       const error = new Error('Payment is verified, but this booking requires schedule or activation review. Contact support.');
       error.statusCode = 409; error.code = 'PAYMENT_VERIFIED_BOOKING_REVIEW'; throw error;
@@ -586,7 +588,7 @@ router.post('/customer/bookings/:id/verify-completion', requireExternalAuth, req
     const verified = await validateCompletionFromCore(
       booking._id,
       { approved: true, notes: req.body?.notes || 'Customer confirmed service completion' },
-      req.externalUser.fullName || req.externalUser.email || 'CUSTOMER'
+      `CUSTOMER:${req.externalUser._id}`
     );
 
     res.json({ ok: true, booking: bookingForCustomer(verified) });
@@ -775,7 +777,7 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
     const vendorId = quote.vendor?._id || quote.vendor;
     const readiness = await evaluateVendorActivation(vendorId);
     const available = await checkTrueAvailability({ vendorId, vendorServiceId: quote.vendorService, date: quote.eventDate, allDay: true, serviceLocation: quote.serviceLocation, excludeEventId: event._id });
-    if (!readiness.matchingEligible || !available.feasible) return res.status(409).json({ error: 'VENDOR_UNAVAILABLE', message: available.reason || 'Vendor activation is not approved.' });
+    if (!serviceMatchingEligible(readiness, quote.vendorService) || !available.feasible) return res.status(409).json({ error: 'VENDOR_UNAVAILABLE', message: available.reason || 'Vendor activation is not approved.' });
     if (event.eventDate && quote.eventDate !== event.eventDate) return res.status(409).json({ error: 'QUOTE_DATE_CHANGED', message: 'Your event date has changed. Request an updated quote.' });
     await assertLease();
     if (quote.status === 'SUBMITTED') {
@@ -1399,26 +1401,20 @@ router.get('/vendor/bookings', requireExternalAuth, requireAccountType('VENDOR')
   }
 });
 
-async function resolveCustomerEventAndBooking(coreBooking, { strict = false } = {}) {
+async function resolveCustomerEventAndBooking(coreBooking) {
   let eventId = coreBooking?.customerEvent || null;
   let custBooking = null;
   let customerId = coreBooking?.customerId || null;
 
-  if (coreBooking?.quoteId) {
+  if (coreBooking?.customerBookingId) custBooking = await Booking.findOne({ _id: coreBooking.customerBookingId, customer: coreBooking.customerId }).lean();
+  if (!custBooking && coreBooking?.quoteId) {
     custBooking = await Booking.findOne({
+      customer: coreBooking.customerId,
       $or: [
         { _id: coreBooking.quoteId },
         { reservation: coreBooking.quoteId },
-        ...(!strict ? [{ customer: coreBooking.customerId, category: coreBooking.category }] : []),
       ],
     }).lean().catch(() => null);
-  }
-
-  if (!strict && !custBooking && coreBooking?.customerId && coreBooking?.category) {
-    custBooking = await Booking.findOne({
-      customer: coreBooking.customerId,
-      category: coreBooking.category,
-    }).sort({ createdAt: -1 }).lean().catch(() => null);
   }
 
   if (custBooking) {
@@ -1441,14 +1437,6 @@ async function resolveCustomerEventAndBooking(coreBooking, { strict = false } = 
     const opp = await Opportunity.findById(coreBooking.opportunityId).lean().catch(() => null);
     if (opp?.customerEvent) eventId = opp.customerEvent;
     if (opp?.customer) customerId = customerId || opp.customer;
-  }
-
-  if (!strict && !eventId && customerId) {
-    const latestEvent = await CustomerEvent.findOne({ customer: customerId, status: { $ne: 'cancelled' } })
-      .sort({ createdAt: -1 })
-      .lean()
-      .catch(() => null);
-    if (latestEvent) eventId = latestEvent._id;
   }
 
   if (!customerId && eventId) {

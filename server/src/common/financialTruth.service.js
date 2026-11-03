@@ -161,20 +161,22 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
     // Legacy contracts need a quote link; a shared category does not identify an event.
     return Boolean(b.quoteId) && reservations.some(r => String(r.quote) === String(b.quoteId));
   });
+  const represented = b => representedQuotes.has(String(b.quoteId)) || confirmedCustomerBookings.some(c => String(c.coreBooking) === String(b._id) || String(c._id) === String(b.customerBookingId));
+  const receiptRepresented = b => paidQuotes.has(String(b.quoteId)) || (b.reservationId && verifiedReservationIds.has(String(b.reservationId)));
   const coreQuoteIds = new Set(matchedCoreBookings.map(b => String(b.quoteId)));
   const activeReservations = reservations.filter(r => activeReservation(r, now) && !coreQuoteIds.has(String(r.quote)));
 
   const customerBookingCommitted = confirmedCustomerBookings.reduce((sum, b) => sum + bookingAmount(b), 0);
   const activeReservationCommitted = activeReservations.reduce((sum, r) => sum + money(r.packageTotal || r.amount), 0);
   const coreOnlyCommitted = matchedCoreBookings.reduce((sum, b) => {
-    return representedQuotes.has(String(b.quoteId)) ? sum : sum + money(b.totalAmount);
+    return represented(b) ? sum : sum + money(b.totalAmount);
   }, 0);
   const committedAmount = money(customerBookingCommitted + activeReservationCommitted + coreOnlyCommitted);
 
   const paidFromPayments = payments.filter(paymentIsPaid).reduce((sum, p) => sum + money(p.amount), 0);
   const verifiedReservationIds = new Set(payments.filter(paymentIsPaid).map(p => String(p.reservation)));
   const paidQuotes = new Set(reservations.filter(r => verifiedReservationIds.has(String(r._id))).map(r => String(r.quote)));
-  const paidFromCore = matchedCoreBookings.filter(b => b.paymentStatus === 'PAYMENT_VERIFIED' && !paidQuotes.has(String(b.quoteId))).reduce((sum, b) => sum + corePaidAmount(b), 0);
+  const paidFromCore = matchedCoreBookings.filter(b => b.paymentStatus === 'PAYMENT_VERIFIED' && !receiptRepresented(b)).reduce((sum, b) => sum + corePaidAmount(b), 0);
   const paidAmount = money(paidFromPayments + paidFromCore);
 
   const obligations = [];
@@ -208,7 +210,7 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
     }
   }
   for (const b of matchedCoreBookings) {
-    if (representedQuotes.has(String(b.quoteId))) continue;
+    if (represented(b)) continue;
     const amount = coreBalanceAmount(b);
     if (amount > 0) {
       obligations.push({
@@ -308,7 +310,7 @@ export async function customerFinancialTruth(customerId, eventId, options = {}) 
     },
     counts: {
       reservations: activeReservations.length,
-      bookings: confirmedCustomerBookings.length + matchedCoreBookings.filter(b => !representedQuotes.has(String(b.quoteId))).length,
+      bookings: confirmedCustomerBookings.length + matchedCoreBookings.filter(b => !represented(b)).length,
       payments: payments.length,
       attentionItems: attentionItems.length,
     },

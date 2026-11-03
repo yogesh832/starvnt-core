@@ -1,4 +1,5 @@
 import { observeProduct } from '../common/productObservability.js';
+import { communicationAllowed } from '../foundation/consent.service.js';
 import { NotificationPreference } from './preferences.models.js';
 import { incrementMetric } from '../metrics.js';
 import { CustomerNotification } from '../customer/models/index.js';
@@ -58,8 +59,13 @@ export async function notifyCustomer({
   payload = {},
   channel = 'IN_APP',
   recipient = null,
+  purpose = null,
+  vendorId = null,
 } = {}) {
   if (!customerId || !title) return { notification: null, created: false, skipped: true };
+  purpose = purpose || (/marketing|campaign|referral|promotion|growth|loyalty/i.test(type) ? 'MARKETING' : /personaliz/i.test(type) ? 'PERSONALIZATION' : 'TRANSACTIONAL');
+  if (!await communicationAllowed(customerId, { purpose, channel: cleanChannel(channel), vendorId })) return { notification: null, created: false, skipped: true, reason: 'CONSENT_REQUIRED' };
+  payload = { ...payload, purpose };
   const policy = await NotificationPreference.findById(`CUSTOMER:${customerId}`).lean();
   if (policy?.disabledTypes?.map(t => t.toLowerCase()).includes(type.toLowerCase())) return { notification: null, created: false, skipped: true };
   if (!['IN_APP', 'PUSH'].includes(cleanChannel(channel))) throw new Error('Notification channel is not configured');

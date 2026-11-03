@@ -14,6 +14,19 @@ const { Schema } = mongoose;
  */
 const externalUserSchema = new Schema(
   {
+    identityVerification: {
+      email: { digest: String, method: String, verifiedAt: Date },
+      phone: { digest: String, method: String, verifiedAt: Date },
+      googleId: { digest: String, method: String, verifiedAt: Date },
+    },
+    privacy: { deletionRequestedAt: Date, anonymizedAt: Date, retentionReason: String, retainedUntil: Date },
+    sourceAttribution: {
+      entryPoint: { type: String, immutable: true },
+      authenticationMethod: { type: String, immutable: true },
+      capturedAt: { type: Date, immutable: true },
+      // Referral codes must be resolved by a future server attribution workflow.
+      referralSource: { type: String, default: null, immutable: true },
+    },
     fullName: { type: String, required: true, trim: true, maxlength: 120 },
     email: {
       type: String,
@@ -24,6 +37,8 @@ const externalUserSchema = new Schema(
       match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     },
     phone: { type: String, trim: true, maxlength: 24, index: true },
+    phoneIdentityKey: String,
+    googleIdentityKey: String,
     passwordHash: { type: String, required: false, select: false, default: null },
     googleId: { type: String, sparse: true, index: true, default: null },
     avatarUrl: { type: String, trim: true, default: '' },
@@ -62,6 +77,13 @@ const externalUserSchema = new Schema(
   { timestamps: true }
 );
 
+externalUserSchema.pre('validate', function () {
+  if ((this.isNew || this.isModified('phone')) && this.phone) this.phoneIdentityKey = this.phone;
+  if ((this.isNew || this.isModified('googleId')) && this.googleId) this.googleIdentityKey = this.googleId;
+});
+externalUserSchema.index({ phoneIdentityKey: 1 }, { unique: true, partialFilterExpression: { phoneIdentityKey: { $type: 'string' } } });
+externalUserSchema.index({ googleIdentityKey: 1 }, { unique: true, partialFilterExpression: { googleIdentityKey: { $type: 'string' } } });
+
 /** Roles this identity holds (legacy users: just their accountType). */
 export function userRoles(user) {
   return user?.roles?.length ? [...user.roles] : user?.accountType ? [user.accountType] : [];
@@ -91,6 +113,12 @@ externalUserSchema.methods.toSafeJSON = function toSafeJSON() {
     restrictionReason: this.restrictionReason,
     vendorOrganization: this.vendorOrganization,
     createdAt: this.createdAt,
+    verification: {
+      email: /DEVELOPMENT|TEST/.test(this.identityVerification?.email?.method || '') ? null : this.identityVerification?.email?.verifiedAt || null,
+      phone: /DEVELOPMENT|TEST/.test(this.identityVerification?.phone?.method || '') ? null : this.identityVerification?.phone?.verifiedAt || null,
+      name: 'SELF_REPORTED',
+    },
+    sourceAttribution: this.sourceAttribution,
   };
 };
 

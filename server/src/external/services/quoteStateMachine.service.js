@@ -1,3 +1,4 @@
+import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { Quote } from '../models/Quote.js';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
 import { evaluateVendorActivation } from './vendorActivation.service.js';
@@ -7,7 +8,7 @@ import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
 
 export async function assertQuoteSubmission({ vendor, vendorService, eventDate, serviceLocation, category, advancePolicy }) {
   const status = await evaluateVendorActivation(vendor?._id || vendor);
-  if (!status.matchingEligible) throw schedulingError('ACTIVATION_REQUIRED', 'Activation approval and complete verification are required to submit offers.', 403);
+  if (!serviceMatchingEligible(status, vendorService)) throw schedulingError('ACTIVATION_REQUIRED', 'Activation approval and complete verification are required to submit offers.', 403);
   const available = await checkTrueAvailability({ vendorId: vendor?._id || vendor, vendorServiceId: vendorService, date: eventDate, allDay: true, serviceLocation });
   if (!available.feasible) throw schedulingError('SCHEDULE_CONFLICT', available.reason || 'The vendor is unavailable.', 409, available.conflicts);
   const policy = advancePolicy || await getCommercialPolicyForCategory(category || vendor?.category);

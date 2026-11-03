@@ -61,12 +61,16 @@ export async function validateCouponForPayment(code, { orderAmount, baseAmount }
   return { coupon, discountAmount };
 }
 
-export async function recordCouponUsageOnce(code) {
+export async function recordCouponUsageOnce(code, redemptionKey) {
   const normalized = normalizeCouponCode(code);
   if (!normalized) return null;
-  return Coupon.findOneAndUpdate(
+  if (!redemptionKey) throw new Error('COUPON_REDEMPTION_KEY_REQUIRED');
+  const existing = await Coupon.findOne({ code: normalized, redemptionKeys: redemptionKey }).lean();
+  if (existing) return existing;
+  const recorded = await Coupon.findOneAndUpdate(
     {
       code: normalized,
+      redemptionKeys: { $ne: redemptionKey },
       isActive: true,
       $and: [
         {
@@ -83,7 +87,8 @@ export async function recordCouponUsageOnce(code) {
         { $expr: { $lt: ['$usageCount', '$usageLimit'] } },
       ],
     },
-    { $inc: { usageCount: 1 } },
+    { $inc: { usageCount: 1 }, $addToSet: { redemptionKeys: redemptionKey } },
     { new: true },
   ).lean();
+  return recorded || Coupon.findOne({ code: normalized, redemptionKeys: redemptionKey }).lean();
 }

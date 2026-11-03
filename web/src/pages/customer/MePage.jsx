@@ -25,7 +25,7 @@ export default function MePage({ user, logout }) {
     setBusy(true);
     setError('');
     try {
-      const r = await customerApi.patchProfile({ fullName: form.fullName, phone: form.phone });
+      const r = await customerApi.patchProfile({ fullName: form.fullName, phone: p?.phone || '' });
       profile.setData(r);
       setEditing(false);
     } catch (err) {
@@ -38,6 +38,7 @@ export default function MePage({ user, logout }) {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
+      <Link to="/customer/customer-360" className="inline-block text-primary underline text-sm">My Customer 360, referrals & event interests</Link>
       <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4">
         <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-lg font-extrabold shrink-0">
           {p?.fullName?.[0]?.toUpperCase() || '?'}
@@ -65,8 +66,8 @@ export default function MePage({ user, logout }) {
             <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-primary" />
           </label>
           <label>
-            <span className="text-[10px] text-muted">Phone</span>
-            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-primary" />
+            <span className="text-[10px] text-muted">Phone — update with OTP in <Link to="/customer/settings" className="underline">privacy settings</Link></span>
+            <input value={p?.phone || ''} readOnly className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-primary" />
           </label>
           {error && <div className="text-red-500">{error}</div>}
           <div className="flex justify-end gap-2">
@@ -102,6 +103,7 @@ export default function MePage({ user, logout }) {
       <div className="bg-white rounded-2xl shadow-sm p-2">
         {[
           ['bell', 'Messages & updates', '/customer/updates'],
+          ['shield', 'Privacy & permissions', '/customer/settings'],
           ['star', 'Talk to Aura+', '/customer/aura'],
         ].map(([icon, label, to]) => (
           <Link key={label} to={to} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-lavender text-xs font-semibold text-navy">

@@ -2,6 +2,16 @@ import { externalApi } from '../../lib/api.js';
 
 /** Customer App + Aura+ endpoints (server: /api/customer/*, /api/aura/*). */
 export const customerApi = {
+  privacyNotice: () => externalApi.call('/customer/privacy/notice'),
+  consents: () => externalApi.call('/customer/privacy/consents'),
+  saveConsent: body => externalApi.call('/customer/privacy/consents', { method: 'PUT', body }),
+  deletionRequest: () => externalApi.call('/customer/privacy/deletion'),
+  requestDeletion: () => externalApi.call('/customer/privacy/deletion', { method: 'POST' }),
+  sendMobileVerification: phone => externalApi.call('/auth/otp/send', { method: 'POST', body: { phone } }),
+  verifyMobile: body => externalApi.call('/customer/identity/mobile/verify', { method: 'POST', body }),
+  identityLinks: () => externalApi.call('/customer/identity/link-requests'),
+  requestIdentityLink: body => externalApi.call('/customer/identity/link-requests', { method: 'POST', body }),
+  revokeIdentityLink: id => externalApi.call(`/customer/identity/link-requests/${id}/revoke`, { method: 'POST' }),
   profile: () => externalApi.call('/customer/profile'),
   planOptions: (eventType) => externalApi.call(`/customer/plan-options${eventType ? `?eventType=${encodeURIComponent(eventType)}` : ''}`),
   events: () => externalApi.call('/customer/events'),

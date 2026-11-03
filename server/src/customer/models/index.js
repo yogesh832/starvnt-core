@@ -113,6 +113,7 @@ eventRequirementSchema.index({ event: 1, category: 1 }, { unique: true });
 // Append-only audit trail.
 const eventHistorySchema = new Schema(
   {
+    idempotencyKey: String,
     event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', required: true, index: true },
     actorType: { type: String, enum: ['customer', 'aura', 'system', 'ops', 'webhook'], required: true },
     actorId: { type: String, default: null },
@@ -121,6 +122,7 @@ const eventHistorySchema = new Schema(
   },
   { timestamps: { createdAt: true, updatedAt: false }, collection: 'customer_event_history' }
 );
+eventHistorySchema.index({ event: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } });
 
 export const CONTEXT_STATES = ['KNOWN', 'CONFIRMED', 'INFERRED', 'MISSING', 'AMBIGUOUS', 'RECOMMENDED'];
 
@@ -245,6 +247,11 @@ const webhookEventSchema = new Schema(
     providerEventId: { type: String, required: true },
     eventType: { type: String, required: true },
     payload: { type: Schema.Types.Mixed, default: {} },
+    processingStatus: { type: String, enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'], default: 'PENDING', index: true },
+    lockedUntil: Date,
+    lease: String,
+    completedAt: Date,
+    lastError: String,
   },
   { timestamps: { createdAt: true, updatedAt: false }, collection: 'customer_payment_webhook_events' }
 );
@@ -254,6 +261,12 @@ export const EXECUTION_STEPS = ['not_started', 'checked_in', 'started', 'complet
 
 const bookingSchema = new Schema(
   {
+    coreBooking: { type: Schema.Types.ObjectId, default: null, index: true },
+    vendor: { type: Schema.Types.ObjectId, default: null },
+    source: { type: String, enum: ['STARVNT'], default: 'STARVNT', immutable: true },
+    coreSync: { status: { type: String, enum: ['PENDING', 'SYNCED', 'NOT_REQUIRED'], default: 'NOT_REQUIRED', index: true }, snapshot: Schema.Types.Mixed, lastError: String, syncedAt: Date },
+    cancellation: { actor: String, at: Date, reason: String, refundStatus: String },
+    history: [{ actor: String, action: String, at: Date, reason: String }],
     event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', required: true, index: true },
     customer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
     requirement: { type: Schema.Types.ObjectId, ref: 'EventRequirement', required: true },

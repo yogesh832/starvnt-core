@@ -45,7 +45,14 @@ router.get('/', async (req, res, next) => {
     const personal = canPII(req.admin);
     const records = await Promise.all(rows.map(async row => {
       const result = ['CANCELLED', 'COMPLETED'].includes(row.status) ? { conflicts: [] } : await checkTrueAvailability({ vendorId: row.vendor, ...row, vendorServiceId: row.vendorService, requestedResources: row.resourceIds, excludeId: row._id, blockAll: row.recordType !== 'EXTERNAL_COMMITMENT' });
-      if (!personal && row.external) { const { eventType, location } = row.external; row.external = { eventType, location }; }
+      if (!personal) {
+        if (row.external) row.external = { eventType: row.external.eventType };
+        if (row.serviceLocation) row.serviceLocation = { city: row.serviceLocation.city };
+        if (row.externalBooking) row.externalBooking = { lifecycle: row.externalBooking.lifecycle, acquisitionChannel: row.externalBooking.acquisitionChannel };
+        delete row.history;
+        // Legacy slot contact fields must follow the same redaction as blockouts.
+        delete row.customerName; delete row.customerPhone; delete row.customerEmail; delete row.notes;
+      }
       delete row.requestHash;
       return { ...row, vendorName: names.get(String(row.vendor)), conflicts: result.conflicts };
     }));

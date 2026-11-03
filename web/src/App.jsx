@@ -9,6 +9,7 @@ import Landing from './pages/customer/Landing.jsx';
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import CustomerPortal from './pages/customer/CustomerPortal.jsx';
 import VendorPortal from './pages/vendor/VendorPortal.jsx';
+import ExperiencePage from './pages/ExperiencePage.jsx';
 import AdminLogin from './pages/admin/AdminLogin.jsx';
 import AdminShell from './pages/admin/AdminShell.jsx';
 import DevApiTest from './pages/DevApiTest.jsx';
@@ -128,6 +129,7 @@ function ApplicationRoutes() {
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />
       <Route path="/register" element={<ExternalLogin />} />
+      <Route path="/experience/:token" element={<ExperiencePage />} />
       <Route path="/privacy" element={<PublicPolicyPage kind="privacy" />} />
       <Route path="/terms" element={<PublicPolicyPage kind="terms" />} />
       <Route

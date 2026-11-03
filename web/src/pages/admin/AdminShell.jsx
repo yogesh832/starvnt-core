@@ -1,4 +1,7 @@
 import ProductMetrics from './ProductMetrics.jsx';
+import ExperienceControls from './ExperienceControls.jsx';
+import DiscoveryRewardsAdmin from './DiscoveryRewardsAdmin.jsx';
+import Foundation from './Foundation.jsx';
 import Availability from './Availability.jsx';
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -36,6 +39,9 @@ const MODULES = [
   { path: 'automation', label: 'Automation', icon: 'automation', anyOf: ['automation.read'] },
   { path: 'users', label: 'Users & Access', icon: 'access', superOnly: true },
   { path: 'audit', label: 'Audit Logs', icon: 'audit', anyOf: ['audit.read'] },
+  { path: 'foundation', label: 'Data & identity', icon: 'access', anyOf: ['privacy.read', 'identity.read', 'bookings.reconcile'] },
+  { path: 'experience', label: 'Customer experience', icon: 'customers', anyOf: ['reviews.read', 'issues.read', 'growth.read', 'growth.manage', 'customerContacts.read'] },
+  { path: 'discovery-rewards', label: 'Discovery & rewards', icon: 'star', anyOf: ['discovery.review', 'growth.read', 'growth.manage', 'analytics.read'] },
   { path: 'settings', label: 'Settings', icon: 'settings', anyOf: ['settings.read'] },
 ];
 
@@ -352,6 +358,9 @@ export default function AdminShell() {
               <Route path="coupons" element={<Navigate to="/admin/finance?view=coupons" replace />} />
               <Route path="users" element={<UsersAccess />} />
               <Route path="audit" element={<AuditLogs />} />
+              <Route path="foundation" element={<Foundation />} />
+              <Route path="experience" element={<ExperienceControls />} />
+              <Route path="discovery-rewards" element={<DiscoveryRewardsAdmin />} />
               <Route path="settings" element={<ModuleTable kind="settings" />} />
             </Routes>
           </div>

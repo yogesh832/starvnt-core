@@ -3,7 +3,7 @@ import { CustomerEvent, CustomerNotification } from '../models/index.js';
 import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
 import express, { Router } from 'express';
 import { requireCustomer } from '../middleware/requireCustomer.js';
-import { requireInternal } from '../middleware/requireInternal.js';
+import { requireInternal, requireInternalPermission as ip } from '../middleware/requireInternal.js';
 import { asyncHandler as h, jsonErrorHandler } from '../utils/http.js';
 import rateLimit from 'express-rate-limit';
 import * as c from '../controllers/customer.controller.js';
@@ -93,12 +93,12 @@ auraRouter.use(jsonErrorHandler);
 /** /api/internal/* — ops + admin simulation, x-internal-key only. */
 export const internalRouter = Router();
 internalRouter.use(requireInternal);
-internalRouter.post('/ops/payments/:id/verify', h(i.verifyPayment));
-internalRouter.post('/ops/events/:id/messages', h(i.message));
-internalRouter.post('/ops/bookings/:id/execution', h(i.execution));
-internalRouter.post('/ops/events/:id/complete', h(i.complete));
-internalRouter.post('/admin/simulate-vendor-cancellation', h(i.simulateVendorCancellation));
-internalRouter.post('/admin/reset', h(i.reset));
+internalRouter.post('/ops/payments/:id/verify', ip('payments.approve'), h(i.verifyPayment));
+internalRouter.post('/ops/events/:id/messages', ip('operations.manage'), h(i.message));
+internalRouter.post('/ops/bookings/:id/execution', ip('execution.update'), h(i.execution));
+internalRouter.post('/ops/events/:id/complete', ip('execution.manage'), h(i.complete));
+internalRouter.post('/admin/simulate-vendor-cancellation', ip('bookings.cancel'), h(i.simulateVendorCancellation));
+internalRouter.post('/admin/reset', ip('settings.update'), h(i.reset));
 internalRouter.use(jsonErrorHandler);
 
 /**

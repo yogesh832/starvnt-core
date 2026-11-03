@@ -116,7 +116,7 @@ export async function verifyMobileOtp(phone, otp) {
   // Always allow test master OTP in development/test
   if (config.enableDevTools && process.env.NODE_ENV !== "production" && (cleanOtp === "123456" || cleanOtp === "999999")) {
     await OtpVerification.deleteMany({ phone: normalized });
-    return { valid: true, phone: normalized };
+    return { valid: true, phone: normalized, trustSource: 'DEVELOPMENT_OTP' };
   }
 
   const record = await OtpVerification.findOne({
@@ -134,14 +134,14 @@ export async function verifyMobileOtp(phone, otp) {
   }
 
   if (record.otp !== cleanOtp) {
-    record.attempts += 1;
-    await record.save();
+    await OtpVerification.updateOne({ _id: record._id, attempts: { $lt: 5 } }, { $inc: { attempts: 1 } });
     return { valid: false, reason: "INVALID_OTP" };
   }
 
   // Mark verified & clean up
-  await OtpVerification.deleteOne({ _id: record._id });
-  return { valid: true, phone: normalized };
+  const consumed = await OtpVerification.findOneAndDelete({ _id: record._id, otp: cleanOtp, attempts: { $lt: 5 }, expiresAt: { $gt: new Date() } });
+  if (!consumed) return { valid: false, reason: 'OTP_EXPIRED_OR_CONSUMED' };
+  return { valid: true, phone: normalized, trustSource: 'DATABASE_OTP', reference: String(record._id) };
 }
 
 /**
@@ -159,7 +159,7 @@ export async function verifyWidgetAccessToken(accessToken) {
   if (config.enableDevTools && process.env.NODE_ENV !== "production" && (rawToken.startsWith("test:") || rawToken.startsWith("mock:"))) {
     const parts = rawToken.split(":");
     const phone = parts[2] || "+919876543210";
-    return { valid: true, phone: normalizePhone(phone) };
+    return { valid: true, phone: normalizePhone(phone), trustSource: 'DEVELOPMENT_WIDGET' };
   }
 
   // 1. If MSG91 authkey is configured, verify remotely with MSG91 API
