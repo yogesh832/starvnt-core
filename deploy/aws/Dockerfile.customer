@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY server/package.json ./server/package.json
+COPY web/package.json ./web/package.json
+RUN npm ci -w web
+COPY shared ./shared
+COPY server/src/common ./server/src/common
+COPY web ./web
+ARG DEPLOY_SHA
+ENV NODE_OPTIONS=--max-old-space-size=1024
+RUN --mount=type=secret,id=web_env \
+    node --input-type=module -e 'import {existsSync} from "node:fs"; import {execFileSync} from "node:child_process"; if(existsSync("/run/secrets/web_env")) process.loadEnvFile("/run/secrets/web_env"); process.env.VITE_API_URL="https://app.starvnt.com"; process.env.VITE_CUSTOMER_PORTAL_URL="https://starvnt.com"; process.env.VITE_VENDOR_PORTAL_URL="https://vendor.starvnt.com"; execFileSync("npm",["run","build","-w","web"],{stdio:"inherit",env:process.env});'
+RUN node -e 'require("fs").writeFileSync("/app/web/dist/deployment.json", JSON.stringify({commit:process.env.DEPLOY_SHA,builtAt:new Date().toISOString()}))'
+FROM alpine:3.21
+COPY --from=build /app/web/dist /site

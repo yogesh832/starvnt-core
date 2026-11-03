@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Installed as /opt/starvnt/bin/deploy-customer, root-owned and executable.
+set -Eeuo pipefail
+sha=${1:-}
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'A full Git SHA is required'; exit 2; }
+exec 9>/opt/starvnt/deploy.lock
+flock -w 900 9
+base=/opt/starvnt/customer
+release="$base/releases/$sha"
+mkdir -p "$base/releases"
+if [[ ! -f "$release/.complete" ]]; then
+  stage=$(mktemp -d "$base/releases/stage.XXXXXX")
+  container="starvnt-customer-extract-${sha:0:12}"
+  cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf "$stage"; }
+  trap cleanup EXIT
+  curl --fail --location --retry 3 --connect-timeout 15 --max-time 180 \
+    "https://codeload.github.com/yogesh832/starvnt-core/tar.gz/$sha" -o "$stage/source.tar.gz"
+  mkdir "$stage/source" "$stage/site"
+  tar -xzf "$stage/source.tar.gz" --strip-components=1 -C "$stage/source"
+  [[ -f "$stage/source/deploy/aws/Dockerfile.customer" ]]
+  settings=/opt/starvnt/deploy-settings.json
+  web_env=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["web_env"])' "$settings")
+  docker build --label "org.opencontainers.image.revision=$sha" \
+    --secret "id=web_env,src=$web_env" --build-arg "DEPLOY_SHA=$sha" \
+    -t "starvnt-customer:$sha" -f "$stage/source/deploy/aws/Dockerfile.customer" "$stage/source"
+  docker create --name "$container" "starvnt-customer:$sha" >/dev/null
+  docker cp "$container:/site/." "$stage/site/"
+  [[ -s "$stage/site/index.html" && -s "$stage/site/deployment.json" ]]
+  python3 -c 'import json,sys; assert json.load(open(sys.argv[1]))["commit"]==sys.argv[2]' "$stage/site/deployment.json" "$sha"
+  touch "$stage/site/.complete"
+  [[ ! -e "$release" ]] || mv "$release" "$release.incomplete.$(date +%s)"
+  mv "$stage/site" "$release"
+  cleanup
+  trap - EXIT
+fi
+next="$base/current.next.$$"
+ln -s "releases/$sha" "$next"
+mv -Tf "$next" "$base/current"
+[[ -s "$base/current/index.html" ]]
+echo "Customer release $sha is active."
