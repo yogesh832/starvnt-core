@@ -60,6 +60,8 @@ export function listHistory(eventId, limit = 200) {
   return EventHistory.find({ event: eventId }).sort({ createdAt: -1, _id: -1 }).limit(limit).lean();
 }
 
-export function appendHistory({ eventId, actorType, actorId = null, action, details = {} }) {
-  return EventHistory.create({ event: eventId, actorType, actorId: actorId ? String(actorId) : null, action, details });
+export function appendHistory({ eventId, actorType, actorId = null, action, details = {}, idempotencyKey }) {
+  const data = { event: eventId, actorType, actorId: actorId ? String(actorId) : null, action, details };
+  if (idempotencyKey) return EventHistory.findOneAndUpdate({ event: eventId, idempotencyKey }, { $setOnInsert: data }, { upsert: true, new: true });
+  return EventHistory.create(data);
 }

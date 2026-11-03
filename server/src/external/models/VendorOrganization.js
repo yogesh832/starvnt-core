@@ -13,8 +13,19 @@ const vendorOrganizationSchema = new Schema(
   {
     businessName: { type: String, required: true, trim: true, maxlength: 160 },
     brandName: { type: String, trim: true, default: '', maxlength: 160 },
+    foundingPartner: {
+      isFoundingPartner: { type: Boolean, default: false, index: true },
+      cohort: { type: String, maxlength: 40, default: '' },
+      offerStartedAt: { type: Date, default: null },
+      offerExpiresAt: { type: Date, default: null },
+      launchpadCompletedAt: { type: Date, default: null },
+    },
+    growthPreferences: { marketingOptIn: { type: Boolean, default: false }, history: [{ actor: String, at: Date, enabled: Boolean, key: String }] },
+    googleBusiness: { placeId: String, displayName: String, rating: Number, reviewCount: Number, mapsUrl: String, syncedAt: Date },
     category: { type: String, trim: true, default: '' }, // Photography, Catering, Venue, Decoration…
     owner: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },
+    // New registrations claim an owner key; legacy duplicates are audited before backfill.
+    ownerIdentityKey: { type: Schema.Types.ObjectId },
     status: {
       type: String,
       enum: [
@@ -119,4 +130,5 @@ const vendorOrganizationSchema = new Schema(
   { timestamps: true }
 );
 
+vendorOrganizationSchema.index({ ownerIdentityKey: 1 }, { unique: true, partialFilterExpression: { ownerIdentityKey: { $type: 'objectId' } } });
 export const VendorOrganization = externalConn.model('VendorOrganization', vendorOrganizationSchema);

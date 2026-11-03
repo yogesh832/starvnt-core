@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { externalApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, categoryIcon } from './customerUi.jsx';
@@ -49,9 +50,15 @@ function Step({ n, title, children }) {
  */
 export default function ManualPlanPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const category = params.get('inspiration');
+  const style = params.get('style');
+  const typeMap = { Wedding: 'wedding', Birthday: 'birthday', Corporate: 'corporate', Celebration: 'social', Other: 'other' };
+  const inspirationType = Object.hasOwn(typeMap, category) ? typeMap[category] : '';
+  const allowedStyle = ['Traditional', 'Modern', 'Candid', 'Minimal', 'Classic', 'Other'].includes(style) ? style : '';
   const { setCurrent, refresh } = useCurrentEvent();
-  const [eventType, setEventType] = useState('');
-  const [form, setForm] = useState({ title: '', customType: '', eventDate: '', guestCount: '', specialRequirements: '', notes: '' });
+  const [eventType, setEventType] = useState(inspirationType);
+  const [form, setForm] = useState({ title: '', customType: '', eventDate: '', guestCount: '', specialRequirements: '', notes: inspirationType && allowedStyle ? `Inspired by a ${allowedStyle.toLowerCase()} ${category.toLowerCase()} project.` : '' });
   const [location, setLocation] = useState(EMPTY_LOCATION);
   const [budgetMode, setBudgetMode] = useState('range');
   const [budgetRange, setBudgetRange] = useState('');
@@ -104,6 +111,8 @@ export default function ManualPlanPage() {
     };
     try {
       const r = await customerApi.createEvent(body);
+      const inspirationId = params.get('inspirationId');
+      if (inspirationType && allowedStyle && /^[A-Za-z0-9_-]{32}$/.test(inspirationId || '')) await externalApi.call('/customer/discovery/conversions', { method: 'POST', body: { token: inspirationId, eventId: r.event.id } }).catch(() => {});
       setCurrent(r.event.id);
       await refresh();
       navigate(`/customer/events/${r.event.id}`);

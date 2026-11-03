@@ -1,3 +1,4 @@
+import PrivacySettings from './PrivacySettings.jsx';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
@@ -216,14 +217,5 @@ export function FavoritesPage() {
 }
 
 export function SettingsPage() {
-  return (
-    <Placeholder title="Settings" subtitle="Your account.">
-      <div className="bg-white rounded-2xl shadow-sm p-2">
-        <Link to="/customer/me" className="flex items-center justify-between px-3 py-3 rounded-xl hover:bg-lavender text-sm font-semibold text-navy">
-          Profile (name, phone) <span className="text-muted">›</span>
-        </Link>
-      </div>
-      <Empty title="More settings coming">Notification and privacy preferences aren't available yet.</Empty>
-    </Placeholder>
-  );
+  return <PrivacySettings />;
 }

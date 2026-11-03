@@ -18,13 +18,16 @@ const operatingLocationSchema = new Schema(
     address: { type: String, trim: true, default: '' },
     locality: { type: String, trim: true, default: '' },
     city: { type: String, required: true, trim: true }, // e.g. 'Kolkata'
-    state: { type: String, trim: true, default: 'West Bengal' },
+    state: { type: String, trim: true, default: '' },
     postalCode: { type: String, trim: true, default: '' },
     coordinates: {
       lat: { type: Number, default: 0 },
       lng: { type: Number, default: 0 },
     },
     isPrimary: { type: Boolean, default: false },
+    operatingStatus: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
+    publicVisibility: { type: String, enum: ['CITY_ONLY', 'EXACT'], default: 'CITY_ONLY' },
+    history: [{ actor: String, at: Date, action: String, before: Schema.Types.Mixed, after: Schema.Types.Mixed }],
   },
   { timestamps: true }
 );

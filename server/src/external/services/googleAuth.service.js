@@ -32,16 +32,16 @@ export async function verifyGoogleIdToken(token) {
 
     if (response.ok) {
       const data = await response.json();
-      if (!data.email) {
+      if (!data.email || !data.sub || !['accounts.google.com', 'https://accounts.google.com'].includes(data.iss)) {
         throw new Error('NO_EMAIL_IN_GOOGLE_TOKEN');
       }
 
       // Verify audience if configured
-      if (config.googleClientId && data.aud && data.aud !== config.googleClientId) {
+      if (!config.googleClientId || data.aud !== config.googleClientId) {
         throw new Error('GOOGLE_AUDIENCE_MISMATCH');
       }
 
-      if (data.email_verified === 'false' || data.email_verified === false) {
+      if (data.email_verified !== 'true' && data.email_verified !== true) {
         throw new Error('GOOGLE_EMAIL_NOT_VERIFIED');
       }
 

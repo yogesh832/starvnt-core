@@ -55,7 +55,7 @@ export const createEvent = async (req, res) =>
   }));
 export const acceptQuote = async (req, res) => res.json(await commerce.acceptQuote(me(req), req.params.quoteId));
 export const bookings = async (req, res) => res.json(await commerce.bookingsView(me(req), req.params.id));
-export const cancelBooking = async (req, res) => res.json(await commerce.cancelBooking(me(req), req.params.id));
+export const cancelBooking = async (req, res) => res.json(await commerce.cancelBooking(me(req), req.params.id, req.body));
 export const verifyBookingCompletion = async (req, res) =>
   res.json(await commerce.verifyBookingCompletion(me(req), req.params.id, req.body));
 export const previewCoupon = async (req, res) =>

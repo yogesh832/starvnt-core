@@ -1,4 +1,7 @@
 import express from 'express';
+import { customerDiscovery, adminDiscoveryRewards } from './experience/discoveryRewards.routes.js';
+import { experiencePublicRoutes, experienceCustomerRoutes, experienceAdminRoutes } from './experience/routes.js';
+import { foundationCustomerRoutes, foundationAdminRoutes } from './foundation/routes.js';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -54,7 +57,7 @@ export function createApp() {
           type: 'http_request',
           requestId: req.requestId,
           method: req.method,
-          path: req.originalUrl,
+          path: req.originalUrl.replace(/(\/api\/experience\/)[^/?]+/, '$1[redacted]'),
           status: res.statusCode,
           durationMs: ms,
           ip: req.ip,
@@ -106,6 +109,10 @@ export function createApp() {
   });
   // Customer App + Aura+ (events, plan, chat)
   app.use('/api/customer', customerRouter);
+  app.use('/api/customer', foundationCustomerRoutes);
+  app.use('/api/customer', experienceCustomerRoutes);
+  app.use('/api/customer', customerDiscovery);
+  app.use('/api/experience', experiencePublicRoutes);
   app.use('/api/aura', auraRouter);
   app.use('/api/internal', internalRouter);
 
@@ -117,6 +124,9 @@ export function createApp() {
 
   // ── INTERNAL ADMIN domain: separate auth + RBAC ───────────────────────────
   app.use('/api/admin/auth', adminAuthRoutes);
+  app.use('/api/admin/foundation', foundationAdminRoutes);
+  app.use('/api/admin/experience', experienceAdminRoutes);
+  app.use('/api/admin/discovery-rewards', adminDiscoveryRewards);
   app.use('/api/admin/availability', adminAvailabilityRoutes);
   app.use('/api/admin/users', adminUsersRoutes);
   app.use('/api/admin/permissions', adminPermissionsRoutes);
@@ -143,7 +153,7 @@ export function createApp() {
   app.use((req, res) => res.status(404).json({ error: 'NOT_FOUND' }));
   app.use((err, req, res, next) => {
     console.error('[server]', err);
-    const status = err.statusCode || err.status || (err.name === 'CastError' ? 404 : 500);
+    const status = err.statusCode || err.status || (err.name === 'CastError' ? 404 : err.name === 'ValidationError' ? 400 : 500);
     res.status(status).json({ error: status >= 500 ? 'INTERNAL_ERROR' : err.code || 'INVALID_REQUEST', message: status >= 500 ? 'Something went wrong. Please retry.' : err.message });
   });
 

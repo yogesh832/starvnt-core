@@ -23,9 +23,13 @@ export async function updateProfile(customerId, input = {}) {
   if (input.phone !== undefined) {
     const p = String(input.phone || '').trim();
     if (p && !/^\+?[\d\s-]{7,20}$/.test(p)) errors.phone = 'Enter a valid phone number';
-    else fields.phone = p || undefined;
+    else fields.phone = p || '';
   }
   if (Object.keys(errors).length) throw badRequest('VALIDATION_FAILED', 'Please check your details', { fields: errors });
+  const prior = await customersRepo.findCustomer(customerId);
+  if (fields.phone !== undefined && fields.phone !== (prior?.phone || '')) {
+    throw badRequest('CONTACT_VERIFICATION_REQUIRED', 'Use mobile OTP verification to change your phone number.');
+  }
   const user = await customersRepo.updateCustomer(customerId, fields);
   if (!user) throw notFound('Profile not found');
   return user.toSafeJSON();

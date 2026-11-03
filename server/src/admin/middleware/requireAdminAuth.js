@@ -34,7 +34,7 @@ export async function requireAdminAuth(req, res, next) {
     if (!admin || admin.status !== 'ACTIVE') {
       return res.status(401).json({ error: 'ACCOUNT_DISABLED_OR_MISSING' });
     }
-    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+    if (!session || String(session.admin) !== String(admin._id) || session.revokedAt || session.expiresAt < new Date()) {
       return res.status(401).json({ error: 'SESSION_REVOKED' });
     }
 

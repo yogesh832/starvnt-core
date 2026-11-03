@@ -366,6 +366,17 @@ export default function Bookings() {
                         <span>Upload Completion Evidence (Next Step)</span>
                       </button>
                     ) : null}
+
+                    {b.executionStatus === 'COMPLETION_VERIFIED' && (
+                      <button
+                        type="button"
+                        onClick={() => navigate('/vendor/experience-qr')}
+                        className="rounded-xl border border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary text-xs font-bold px-4 py-2.5 flex items-center gap-1.5 transition cursor-pointer"
+                      >
+                        <Icon name="star" size={14} />
+                        <span>Experience QR & Feedback</span>
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2.5 text-xs">

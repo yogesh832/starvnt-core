@@ -30,7 +30,7 @@ export async function requireExternalAuth(req, res, next) {
     if (!user || user.status !== 'ACTIVE') {
       return res.status(401).json({ error: 'ACCOUNT_DISABLED_OR_MISSING' });
     }
-    if (!session || session.revokedAt || session.expiresAt < new Date()) {
+    if (!session || String(session.user) !== String(user._id) || session.revokedAt || session.expiresAt < new Date()) {
       return res.status(401).json({ error: 'SESSION_REVOKED' });
     }
 

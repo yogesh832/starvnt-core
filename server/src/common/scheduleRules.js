@@ -15,7 +15,7 @@ export function interval(row) {
 export function overlaps(a, b) { return a[0] < b[1] && b[0] < a[1]; }
 export function scopeApplies(row, request) {
   if (!row.scope || row.scope === 'BUSINESS') return true;
-  if (row.scope === 'SERVICE') return !request.vendorServiceId || String(row.vendorService) === String(request.vendorServiceId) || (row.kind === 'EXTERNAL_COMMITMENT' && (row.resourceIds || []).some(id => (request.requestedResources || []).map(String).includes(String(id))));
+  if (row.scope === 'SERVICE') return !request.vendorServiceId || String(row.vendorService) === String(request.vendorServiceId) || row.serviceIds?.map(String).includes(String(request.vendorServiceId)) || (row.kind === 'EXTERNAL_COMMITMENT' && (row.resourceIds || []).some(id => (request.requestedResources || []).map(String).includes(String(id))));
   if (row.scope === 'RESOURCE') return (!request.vendorServiceId && !request.requestedResources?.length) || (row.resourceIds || []).some(id => (request.requestedResources || []).map(String).includes(String(id)));
   return true;
 }

@@ -34,6 +34,7 @@ const job = new Schema(
     bindingId: { type: String, required: true },
     sourceId: { type: String, required: true },
     type: String,
+    purpose: { type: String, enum: ['TRANSACTIONAL', 'MARKETING', 'PERSONALIZATION'], default: 'TRANSACTIONAL' },
     priorityRank: { type: Number, default: 2 },
     attemptLog: [{ at: Date, status: String, error: String, ticketId: String }],
     title: String,

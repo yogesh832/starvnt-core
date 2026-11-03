@@ -12,6 +12,7 @@ const couponSchema = new mongoose.Schema(
     validUntil: { type: Date, default: null },
     usageLimit: { type: Number, default: null, min: 1 },
     usageCount: { type: Number, default: 0, min: 0 },
+    redemptionKeys: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
     description: { type: String, default: '' },
   },

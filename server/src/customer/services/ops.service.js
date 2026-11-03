@@ -1,4 +1,5 @@
 import * as eventsRepo from '../repositories/events.repo.js';
+import { cancelOwnedBooking } from './bookingTruth.service.js';
 import * as reqRepo from '../repositories/requirements.repo.js';
 import * as commerceRepo from '../repositories/commerce.repo.js';
 import * as circleRepo from '../repositories/circle.repo.js';
@@ -85,6 +86,7 @@ export async function updateExecution(bookingId, body) {
   const operator = operatorOf(body);
   const booking = await commerceRepo.getBooking(bookingId);
   if (!booking) throw notFound('Booking not found');
+  if (!booking.isDemo) throw conflict('CORE_WORKFLOW_REQUIRED', 'Use the authoritative Core execution workflow for platform bookings.');
   if (booking.status !== 'confirmed') throw conflict('BOOKING_NOT_CONFIRMED', 'Only confirmed bookings can be updated');
   const to = body.status;
   if (!['checked_in', 'started', 'completed'].includes(to)) throw badRequest('INVALID_STATUS', 'status must be checked_in, started or completed');
@@ -145,9 +147,14 @@ export async function completeEvent(eventId, body) {
 
 /** Admin simulation: the vendor cancels. The plan item reopens for a new choice. */
 export async function simulateVendorCancellation(body) {
+  if (process.env.NODE_ENV === 'production') throw notFound('Simulation is disabled in production');
   const operator = operatorOf(body);
   const booking = await commerceRepo.getBooking(body.bookingId);
   if (!booking) throw notFound('Booking not found');
+  if (!booking.isDemo) {
+    await cancelOwnedBooking(booking.customer, booking._id, { reason: 'Development vendor-cancellation simulation' }, operator);
+    return { booking: serializeBooking(await commerceRepo.getBooking(booking._id)) };
+  }
   if (booking.status === 'cancelled') return { booking: serializeBooking(booking), alreadyCancelled: true };
   if (booking.executionStatus === 'completed') throw conflict('ALREADY_COMPLETED', 'A completed service cannot be cancelled');
 

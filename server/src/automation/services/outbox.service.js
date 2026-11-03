@@ -25,7 +25,8 @@ export async function publishOutboxEvent({
     return { created: false, event: existing };
   }
 
-  const event = await OutboxEvent.create({
+  let event;
+  try { event = await OutboxEvent.create({
     eventType,
     aggregateType,
     aggregateId,
@@ -34,7 +35,10 @@ export async function publishOutboxEvent({
     maxAttempts,
     status: 'PENDING',
     nextRunAt: new Date(),
-  });
+  }); } catch (err) {
+    if (err.code !== 11000) throw err;
+    return { created: false, event: await OutboxEvent.findOne({ idempotencyKey }) };
+  }
 
   return { created: true, event };
 }

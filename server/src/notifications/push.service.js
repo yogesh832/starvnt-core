@@ -1,4 +1,5 @@
 import { NotificationPreference } from './preferences.models.js';
+import { communicationAllowed } from '../foundation/consent.service.js';
 import { notificationDelivery } from './policy.js';
 import crypto from "node:crypto";
 import { config } from "../config.js";
@@ -63,6 +64,7 @@ function sources(binding, owner) {
         filter: { customer: binding.audienceId },
         map: (n) => ({
           type: n.type,
+          purpose: n.payload?.purpose || (/marketing|campaign|referral|promotion|growth|loyalty/i.test(n.type) ? 'MARKETING' : 'TRANSACTIONAL'),
           priorityRank: ({ CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 })[n.priority] ?? 2,
           title: n.title,
           body: n.body,
@@ -293,6 +295,7 @@ export async function deliverOne(
   if (new Date(job.expiresAt) <= new Date())
     return finish({ status: "FAILED", lastError: "EXPIRED" });
   if (!job.ticketId && binding.surface !== 'ADMIN') {
+    if (binding.surface === 'CUSTOMER' && !await communicationAllowed(binding.ownerId, { purpose: job.purpose || (/marketing|campaign|referral|promotion|growth|loyalty/i.test(job.type || '') ? 'MARKETING' : 'TRANSACTIONAL'), channel: 'PUSH' })) return finish({ status: 'CANCELLED', lastError: 'CONSENT_WITHDRAWN' });
     const policy = await NotificationPreference.findById(`${binding.surface}:${binding.audienceId}`).lean();
     const delivery = notificationDelivery(policy || undefined, job.type || '');
     if (!delivery.allowed) return finish(delivery.disabled ? { status: 'CANCELLED', lastError: 'USER_PREFERENCE' } : { status: 'QUEUED', nextAttemptAt: delivery.nextAttemptAt, lastError: 'QUIET_HOURS', attempts: Math.max(0, (job.attempts || 1) - 1) });
