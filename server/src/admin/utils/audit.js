@@ -2,8 +2,8 @@ import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import { BusinessAuditLog } from '../models/BusinessAuditLog.js';
 
 /**
- * Write an audit-log entry. Audit failures are logged but never break the
- * request they describe. Duplicate idempotency keys are silently skipped.
+ * Audit failures propagate. A critical caller must not report success without
+ * durable evidence. New workflows embed their audit with the state mutation.
  */
 export async function recordAudit(entry) {
   try {
@@ -11,6 +11,7 @@ export async function recordAudit(entry) {
   } catch (err) {
     if (err?.code === 11000) return; // idempotencyKey already recorded
     console.error('[audit] failed to record', entry?.action, err.message);
+    throw err;
   }
 }
 
@@ -56,6 +57,7 @@ export async function recordBusinessAudit({
   } catch (err) {
     if (err?.code === 11000) return; // Duplicate idempotency key safely skipped
     console.error('[business-audit] failed to record transition', action, err.message);
+    throw err;
   }
 }
 

@@ -10,7 +10,7 @@ export async function reconcileConfirmedPayment(payload, { getPayment, findBooki
   // Inline verification may already have applied the payment. Never add the
   // advance again, including when several payments share a reservation.
   const existing = await findBooking(payment.reservation);
-  const booking = existing || await confirmBooking(payment);
+  const booking = existing && existing.coreSync?.status !== 'PENDING' ? existing : await confirmBooking(payment);
   if (!booking) throw new Error('PAYMENT_BOOKING_NOT_READY');
   return { handled: true, paymentId: String(payment._id), bookingId: String(booking._id), bookingStatus: booking.status };
 }

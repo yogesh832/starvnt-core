@@ -2,7 +2,7 @@ import { CoreBooking } from '../models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../../external/services/matching.service.js';
 import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
 import { VendorFinancialProfile } from '../../external/models/VendorFinancialProfile.js';
-import { Payment } from '../../customer/models/index.js';
+import { Payment, Reservation } from '../../customer/models/index.js';
 import { ensureInvoiceForBooking, recordSettlementRelease, settlementMath } from './financeLedger.service.js';
 import { recordBusinessAudit } from '../utils/audit.js';
 
@@ -55,6 +55,7 @@ export async function verifyPaymentFromCore(bookingId, paymentDetails = {}, core
 
   const paymentFilter = {
     status: 'verified',
+    customer: booking.customerId,
     $or: referenceClauses,
   };
   if (expectedAmount > 0) paymentFilter.amount = expectedAmount;
@@ -66,6 +67,12 @@ export async function verifyPaymentFromCore(bookingId, paymentDetails = {}, core
     err.statusCode = 409;
     err.code = 'PAYMENT_NOT_VERIFIED';
     throw err;
+  }
+  const reservation = await Reservation.findOne({ _id: payment.reservation, customer: booking.customerId }).lean();
+  const sameReservation = booking.reservationId && String(booking.reservationId) === String(payment.reservation);
+  const sameQuote = booking.quoteId && reservation && String(reservation.quote) === String(booking.quoteId);
+  if ((!sameReservation && !sameQuote) || (booking.customerEvent && String(booking.customerEvent) !== String(payment.event))) {
+    throw Object.assign(new Error('Verified receipt does not belong to this booking.'), { code: 'PAYMENT_CONTEXT_MISMATCH', statusCode: 409 });
   }
 
   const fromState = {
@@ -143,9 +150,13 @@ export async function startService(bookingId, vendorId) {
     const err = new Error('This booking has already moved beyond service start.');
     err.statusCode = 409; err.code = 'INVALID_EXECUTION_STATE'; throw err;
   }
-  booking.executionStatus = 'SERVICE_STARTED';
-  await booking.save();
-  return booking;
+  if (booking.executionStatus === 'SERVICE_STARTED') return booking;
+  const started = await CoreBooking.findOneAndUpdate({ _id: booking._id, vendorId, bookingStatus: 'CONFIRMED', paymentStatus: 'PAYMENT_VERIFIED', executionStatus: booking.executionStatus }, {
+    $set: { executionStatus: 'SERVICE_STARTED' },
+    $push: { history: { actor: String(vendorId), action: 'SERVICE_STARTED', at: new Date(), reason: 'Vendor reported service start' } },
+  }, { new: true, runValidators: true });
+  if (!started) throw Object.assign(new Error('Booking changed before service start.'), { code: 'BOOKING_CHANGED', statusCode: 409 });
+  return started;
 }
 
 /**
@@ -276,6 +287,35 @@ export async function validateCompletionFromCore(bookingId, { approved = true, n
       text: `✓ Completion Verified: STARVNT Core validated service completion for ${booking.serviceName || 'booking'}.${reviewDelayDays ? ` Payout review opens after ${reviewDelayDays} days.` : ' Vendor payout is now eligible for settlement.'}`,
       type: 'completion',
     }).catch(() => null);
+  }
+
+  if (booking.vendorId && booking.customerId) {
+    try {
+      const { issueExperience } = await import('../../experience/feedback.service.js');
+      const { notifyCustomer } = await import('../../notifications/notification.service.js');
+      const { config } = await import('../../config.js');
+      const idempotencyKey = `auto-complete-exp:${booking._id}`;
+      const issued = await issueExperience(booking.vendorId, coreActor, {
+        source: 'STARVNT',
+        booking: booking._id,
+        idempotencyKey,
+      }).catch(() => null);
+      if (issued?.token) {
+        const portalUrl = config.customerPortalUrl || 'https://customer.star20.com';
+        const expUrl = new URL(`/experience/${issued.token}`, portalUrl).href;
+        await notifyCustomer({
+          customerId: booking.customerId,
+          type: 'EXPERIENCE_QR',
+          title: 'How was your experience?',
+          message: `Your booking for ${booking.serviceName || 'event'} is complete! Share your feedback with a quick scan or click.`,
+          link: expUrl,
+          actionUrl: expUrl,
+          idempotencyKey: `auto-complete-notify:${booking._id}`,
+        }).catch(() => null);
+      }
+    } catch {
+      // Non-fatal auto-experience trigger
+    }
   }
 
   return booking;

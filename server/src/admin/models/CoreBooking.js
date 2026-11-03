@@ -16,6 +16,12 @@ const { Schema } = mongoose;
  */
 const coreBookingSchema = new Schema(
   {
+    customerBookingId: { type: Schema.Types.ObjectId },
+    projectionSyncPending: { type: Boolean, default: false, index: true },
+    reservationId: { type: Schema.Types.ObjectId },
+    source: { type: String, enum: ['STARVNT'], default: 'STARVNT', immutable: true },
+    cancellation: { actor: String, at: Date, reason: String, refundStatus: String },
+    history: [{ actor: String, action: String, at: Date, reason: String }],
     bookingReference: {
       type: String,
       unique: true,
@@ -226,4 +232,6 @@ const coreBookingSchema = new Schema(
   { timestamps: true }
 );
 
+coreBookingSchema.index({ customerBookingId: 1 }, { unique: true, partialFilterExpression: { customerBookingId: { $type: 'objectId' } } });
+coreBookingSchema.index({ reservationId: 1 }, { unique: true, partialFilterExpression: { reservationId: { $type: 'objectId' } } });
 export const CoreBooking = adminConn.model('CoreBooking', coreBookingSchema);

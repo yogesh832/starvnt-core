@@ -1,4 +1,5 @@
 import { authAcquisitionReceipt } from '../services/vendorAcquisition.service.js';
+import { findPhoneIdentity, recordVerifiedIdentity, identityConflict } from '../../foundation/identity.service.js';
 import { rejectPortalMismatch, portalMismatch, requestedSurface } from '../services/portalPolicy.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { Router } from "express";
@@ -88,6 +89,7 @@ router.post("/dev-auth", async (req, res, next) => {
     // never reseed the shared vendor catalog as a side effect of a login.
     if (!user) {
       user = await ExternalUser.create({
+        sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         email,
         phone: targetType === "VENDOR" ? "+919876543210" : "+919876543211",
         fullName: targetType === "VENDOR" ? "Dev Test Vendor" : "Dev Test Customer",
@@ -107,6 +109,7 @@ router.post("/dev-auth", async (req, res, next) => {
         const org = await VendorOrganization.create({
           businessName: `${user.fullName}'s Studio`,
           owner: user._id,
+        ownerIdentityKey: user._id,
           category: '',
           location: '',
           workingHours: null,
@@ -136,6 +139,7 @@ router.post("/dev-auth", async (req, res, next) => {
       redirectTo: targetType === "VENDOR" ? "/vendor" : "/customer"
     });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -149,6 +153,7 @@ router.post("/reseed", async (req, res, next) => {
     await seedRealVendors();
     res.json({ ok: true, message: "Real vendors re-seeded successfully!" });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -170,6 +175,11 @@ function normalizePrimaryCategory(category) {
  * Also marks the in-memory user so toSafeJSON() reports that surface.
  */
 async function createSession(user, req, accountType = user.accountType) {
+  if (req.verifiedIdentity) {
+    const { kind, value, method } = req.verifiedIdentity;
+    await recordVerifiedIdentity(user, kind, value, method);
+    if (method === "GOOGLE") await recordVerifiedIdentity(user, "GOOGLE", user.googleId, "GOOGLE");
+  }
   const refreshToken = generateRefreshToken();
   const expiresAt = new Date(
     Date.now() + config.refreshTtlDays * 24 * 60 * 60 * 1000,
@@ -254,6 +264,7 @@ async function ensureVendorOrganization(
         category: resolvedCategory,
         location: resolvedLocation,
         owner: user._id,
+        ownerIdentityKey: user._id,
         status: "PENDING",
         activationState: "REGISTERED",
         isCommerciallyActive: false,
@@ -309,9 +320,11 @@ router.post("/register", authLimiter, async (req, res, next) => {
     if (exists) return res.status(409).json({ error: "EMAIL_IN_USE" });
 
     const normalizedPhone = phone ? normalizePhone(phone) : undefined;
+    if (normalizedPhone && await findPhoneIdentity(normalizedPhone)) throw identityConflict();
 
     req.acquisitionCreated = true;
     const user = await ExternalUser.create({
+        sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
       fullName,
       email,
       phone: normalizedPhone,
@@ -338,6 +351,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
         category: resolvedCategory,
         location: resolvedLocation,
         owner: user._id,
+        ownerIdentityKey: user._id,
         status: "PENDING",
         activationState: "REGISTERED",
         isCommerciallyActive: false,
@@ -353,6 +367,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
       .status(201)
       .json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -418,6 +433,7 @@ router.post("/login", authLimiter, async (req, res, next) => {
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -443,9 +459,10 @@ router.post("/google", authLimiter, async (req, res, next) => {
     }
 
     const googleUser = await verifyGoogleIdToken(credential);
-    let user = await ExternalUser.findOne({
-      $or: [{ email: googleUser.email }, { googleId: googleUser.googleId }],
-    });
+    req.verifiedIdentity = { kind: "EMAIL", value: googleUser.email, method: googleUser.trustSource === "TEST_GOOGLE_TOKEN" ? "DEVELOPMENT_GOOGLE" : "GOOGLE" };
+    const matches = await ExternalUser.find({ $or: [{ email: googleUser.email }, { googleId: googleUser.googleId }] }).limit(2);
+    if (matches.length > 1 || (matches[0]?.googleId && matches[0].googleId !== googleUser.googleId)) throw identityConflict();
+    let user = matches[0];
 
     let signInAs;
     if (user) {
@@ -463,6 +480,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
       signInAs = targetAccountType;
       req.acquisitionCreated = true;
       user = await ExternalUser.create({
+        sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: googleUser.fullName,
         email: googleUser.email,
         googleId: googleUser.googleId,
@@ -496,6 +514,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
           category: resolvedCategory,
           location: resolvedLocation,
           owner: user._id,
+        ownerIdentityKey: user._id,
           status: "PENDING",
           activationState: "REGISTERED",
           isCommerciallyActive: false,
@@ -522,6 +541,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
     ) {
       return res.status(400).json({ error: err.message });
     }
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -626,6 +646,7 @@ router.post("/otp/email/send", authLimiter, async (req, res, next) => {
     ) {
       return res.status(502).json({ error: "EMAIL_OTP_SEND_FAILED", message: "The email provider did not accept the OTP request. Please try again shortly." });
     }
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -660,6 +681,7 @@ router.post("/password/set", authLimiter, async (req, res, next) => {
     }
 
     if (rejectPortalMismatch(req, res, user)) return;
+    req.verifiedIdentity = { kind: "EMAIL", value: normalizeEmail(verification.email), method: "EMAIL_OTP" };
     user.passwordHash = await hashPassword(password);
     user.authProvider = user.googleId ? "GOOGLE" : user.phone ? "PHONE" : "EMAIL";
     const signInAs = resolveExistingAccountType(user);
@@ -671,6 +693,7 @@ router.post("/password/set", authLimiter, async (req, res, next) => {
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -692,8 +715,10 @@ router.post("/otp/email/verify", authLimiter, async (req, res, next) => {
 
     const user = await ExternalUser.findOne({ email: normalizeEmail(verification.email) });
     if (user && rejectPortalMismatch(req, res, user)) return;
+    if (user && user.status === "ACTIVE") await recordVerifiedIdentity(user, "EMAIL", normalizeEmail(verification.email), "EMAIL_OTP");
     return res.json({ ok: true, verified: true, email: verification.email });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -728,6 +753,7 @@ router.post("/otp/send", authLimiter, async (req, res, next) => {
     ) {
       return res.status(502).json({ error: "MSG91_OTP_SEND_FAILED" });
     }
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -762,7 +788,8 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
     }
 
     const normalizedPhone = verification.phone;
-    let user = await ExternalUser.findOne({ phone: normalizedPhone });
+    req.verifiedIdentity = { kind: "PHONE", value: normalizedPhone, method: verification.trustSource === "DEVELOPMENT_OTP" ? "DEVELOPMENT_OTP" : "MOBILE_OTP" };
+    let user = await findPhoneIdentity(normalizedPhone);
 
     let signInAs;
     if (user) {
@@ -791,6 +818,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
 
       req.acquisitionCreated = true;
       user = await ExternalUser.create({
+        sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: defaultName,
         email: `${cleanDigits}@phone.starvnt.com`,
         phone: normalizedPhone,
@@ -821,6 +849,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
           category: resolvedCategory,
           location: resolvedLocation,
           owner: user._id,
+        ownerIdentityKey: user._id,
           status: "PENDING",
           activationState: "REGISTERED",
           isCommerciallyActive: false,
@@ -839,6 +868,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -872,7 +902,8 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
       return res.status(400).json({ error: "INVALID_WIDGET_TOKEN" });
     }
 
-    let user = await ExternalUser.findOne({ phone: normalizedPhone });
+    req.verifiedIdentity = { kind: "PHONE", value: normalizedPhone, method: verification.trustSource === "DEVELOPMENT_WIDGET" ? "DEVELOPMENT_WIDGET" : "MSG91_WIDGET" };
+    let user = await findPhoneIdentity(normalizedPhone);
 
     let signInAs;
     if (user) {
@@ -901,6 +932,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
 
       req.acquisitionCreated = true;
       user = await ExternalUser.create({
+        sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: defaultName,
         email: `${cleanDigits}@phone.starvnt.com`,
         phone: normalizedPhone,
@@ -931,6 +963,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
           category: resolvedCategory,
           location: resolvedLocation,
           owner: user._id,
+        ownerIdentityKey: user._id,
           status: "PENDING",
           activationState: "REGISTERED",
           isCommerciallyActive: false,
@@ -955,6 +988,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
     ) {
       return res.status(400).json({ error: err.message });
     }
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -998,6 +1032,7 @@ router.post("/refresh", async (req, res, next) => {
       user: user.toSafeJSON(),
     });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -1019,6 +1054,7 @@ router.post("/switch-surface", requireExternalAuth, async (req, res, next) => {
     res.cookie(config.refreshCookieName, refreshToken, refreshCookieOptions());
     return res.json({ ...issueTokens(user, session), user: user.toSafeJSON() });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });
@@ -1036,6 +1072,7 @@ router.post("/logout", async (req, res, next) => {
     clearRefreshCookie(res);
     return res.json({ ok: true });
   } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ error: "IDENTITY_REVIEW_REQUIRED" });
     next(err);
   }
 });

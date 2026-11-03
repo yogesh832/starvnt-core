@@ -1,3 +1,4 @@
+import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
 import { VendorCapability } from '../models/VendorCapability.js';
@@ -54,7 +55,7 @@ export async function matchVendorsForRequirement({
       readiness = await evaluateVendorActivation(vendor._id).catch(() => null);
       readinessByVendor.set(vendorKey, readiness);
     }
-    const isReady = Boolean(readiness?.matchingEligible);
+    const isReady = serviceMatchingEligible(readiness, svc._id);
 
     if (!isReady) {
       excludedCandidates.push({

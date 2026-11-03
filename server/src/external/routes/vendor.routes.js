@@ -1,4 +1,8 @@
 import { claimVendorAcquisition } from '../services/vendorAcquisition.service.js';
+import { experienceVendorRoutes } from '../../experience/routes.js';
+import { vendorDiscoveryRewards } from '../../experience/discoveryRewards.routes.js';
+import externalBookingRoutes from './externalBookings.routes.js';
+import readinessRoutes from './readiness.routes.js';
 import { observeProduct } from '../../common/productObservability.js';
 import { withVendorSchedule } from '../services/scheduleLock.js';
 import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
@@ -85,6 +89,7 @@ async function resolveVendorContext(req, res, next) {
   if (!vendor) {
     return res.status(404).json({ error: 'VENDOR_ORGANIZATION_NOT_FOUND' });
   }
+  if (String(vendor.owner) !== String(req.externalUser._id)) return res.status(403).json({ error: 'VENDOR_OWNERSHIP_REQUIRED' });
   req.vendor = vendor;
   req.vendorId = vendor._id;
   next();
@@ -104,6 +109,20 @@ router.post('/acquisition-events/claim', async (req, res, next) => {
 
 
 router.use(notificationPreferencesRoutes('VENDOR'));
+router.use('/external-bookings', externalBookingRoutes);
+router.use(readinessRoutes);
+router.use(experienceVendorRoutes);
+router.use(vendorDiscoveryRewards);
+
+router.get('/launchpad', async (req, res, next) => {
+  try {
+    const { getLaunchpadProgress } = await import('../../experience/launchpad.service.js');
+    const progress = await getLaunchpadProgress(req.vendorId);
+    res.json(progress);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ── Aura+ assistant & Financial Onboarding ──────────────────────────────────
 router.use('/aura', vendorAuraRoutes);
@@ -112,7 +131,7 @@ router.use('/financial', financialRoutes);
 // ── Profile & Activation ───────────────────────────────────────────────────
 router.get('/profile', async (req, res) => {
   let googleRating = null;
-  if (req.vendor.googlePlaceId) {
+  if (req.vendor.googlePlaceId && req.query.skipGoogle !== '1') {
     try {
       const key = process.env.GOOGLE_PLACES_API_KEY || '';
       if (key && !req.vendor.googlePlaceId.startsWith('place_') && !req.vendor.googlePlaceId.startsWith('osm_')) {
@@ -536,7 +555,7 @@ router.post('/capabilities', async (req, res, next) => {
 // ── Operating Locations ────────────────────────────────────────────────────
 router.get('/locations', async (req, res, next) => {
   try {
-    const locations = await OperatingLocation.find({ vendor: req.vendorId }).sort({ isPrimary: -1, createdAt: -1 });
+    const locations = await OperatingLocation.find({ vendor: req.vendorId, operatingStatus: { $ne: 'INACTIVE' } }).sort({ isPrimary: -1, createdAt: -1 });
     res.json({ ok: true, locations });
   } catch (err) {
     next(err);
@@ -545,7 +564,13 @@ router.get('/locations', async (req, res, next) => {
 
 router.post('/locations', async (req, res, next) => {
   try {
+    await withVendorSchedule(req.vendorId, async assertLease => {
     const { label, type, address, locality, city, state, postalCode, coordinates, isPrimary } = req.body || {};
+    const { publicVisibility, operatingStatus } = req.body || {};
+    if (coordinates && (!Number.isFinite(coordinates.lat) || !Number.isFinite(coordinates.lng) || Math.abs(coordinates.lat) > 90 || Math.abs(coordinates.lng) > 180)) return res.status(400).json({ error: 'INVALID_COORDINATES' });
+    if (publicVisibility !== undefined && !['CITY_ONLY', 'EXACT'].includes(publicVisibility)) return res.status(400).json({ error: 'INVALID_LOCATION_VISIBILITY' });
+    if (operatingStatus !== undefined && !['ACTIVE', 'INACTIVE'].includes(operatingStatus)) return res.status(400).json({ error: 'INVALID_OPERATING_STATUS' });
+
     const trimmedLabel = (label && String(label).trim()) || 'Main Studio';
     const trimmedCity = (city && String(city).trim()) || (req.vendor.location ? String(req.vendor.location).split(',')[0].trim() : '');
     if (!trimmedCity) {
@@ -558,6 +583,8 @@ router.post('/locations', async (req, res, next) => {
     const existingCount = await OperatingLocation.countDocuments({ vendor: req.vendorId });
     const shouldBePrimary = Boolean(isPrimary || existingCount === 0);
 
+    await new OperatingLocation({ vendor: req.vendorId, label: trimmedLabel, city: trimmedCity, type: type || 'STUDIO', coordinates: coordinates || { lat: 0, lng: 0 } }).validate();
+
     if (shouldBePrimary) {
       await OperatingLocation.updateMany({ vendor: req.vendorId }, { isPrimary: false });
     }
@@ -569,12 +596,13 @@ router.post('/locations', async (req, res, next) => {
       address: trimmedAddress,
       locality: trimmedLocality,
       city: trimmedCity,
-      state: state ? String(state).trim() : 'West Bengal',
+      state: state ? String(state).trim() : '',
       postalCode: postalCode ? String(postalCode).trim() : '',
       coordinates: coordinates && typeof coordinates.lat === 'number' && typeof coordinates.lng === 'number'
         ? { lat: Number(coordinates.lat), lng: Number(coordinates.lng) }
         : { lat: 0, lng: 0 },
-      isPrimary: shouldBePrimary,
+      isPrimary: shouldBePrimary, publicVisibility: publicVisibility || 'CITY_ONLY', operatingStatus: operatingStatus || 'ACTIVE',
+      history: [{ actor: String(req.externalUser._id), at: new Date(), action: 'CREATED', after: { city: trimmedCity, address: trimmedAddress, publicVisibility: publicVisibility || 'CITY_ONLY' } }],
     });
 
     if (shouldBePrimary || !req.vendor.location) {
@@ -587,6 +615,7 @@ router.post('/locations', async (req, res, next) => {
 
     const activation = await evaluateVendorActivation(req.vendorId);
     res.status(201).json({ ok: true, location, activation });
+    });
   } catch (err) {
     next(err);
   }
@@ -594,12 +623,21 @@ router.post('/locations', async (req, res, next) => {
 
 router.put('/locations/:id', async (req, res, next) => {
   try {
+    await withVendorSchedule(req.vendorId, async assertLease => {
     const loc = await OperatingLocation.findOne({ _id: req.params.id, vendor: req.vendorId });
     if (!loc) {
       return res.status(404).json({ error: 'LOCATION_NOT_FOUND' });
     }
 
     const { label, type, address, locality, city, state, postalCode, coordinates, isPrimary } = req.body || {};
+    const { publicVisibility, operatingStatus } = req.body || {};
+    if (coordinates && (!Number.isFinite(coordinates.lat) || !Number.isFinite(coordinates.lng) || Math.abs(coordinates.lat) > 90 || Math.abs(coordinates.lng) > 180)) return res.status(400).json({ error: 'INVALID_COORDINATES' });
+    if (publicVisibility !== undefined && !['CITY_ONLY', 'EXACT'].includes(publicVisibility)) return res.status(400).json({ error: 'INVALID_LOCATION_VISIBILITY' });
+    if (operatingStatus !== undefined && !['ACTIVE', 'INACTIVE'].includes(operatingStatus)) return res.status(400).json({ error: 'INVALID_OPERATING_STATUS' });
+
+    const previousLocation = { address: loc.address, city: loc.city, coordinates: loc.coordinates?.toObject?.() || loc.coordinates, publicVisibility: loc.publicVisibility, operatingStatus: loc.operatingStatus };
+    if (publicVisibility !== undefined) loc.publicVisibility = publicVisibility;
+    if (operatingStatus !== undefined) loc.operatingStatus = operatingStatus;
     if (label !== undefined && String(label).trim()) loc.label = String(label).trim();
     if (type !== undefined) loc.type = type;
     if (city !== undefined && String(city).trim()) loc.city = String(city).trim();
@@ -616,6 +654,7 @@ router.put('/locations/:id', async (req, res, next) => {
       loc.coordinates = { lat: Number(coordinates.lat), lng: Number(coordinates.lng) };
     }
 
+    await loc.validate();
     if (isPrimary !== undefined) {
       if (isPrimary) {
         await OperatingLocation.updateMany({ vendor: req.vendorId }, { isPrimary: false });
@@ -623,6 +662,7 @@ router.put('/locations/:id', async (req, res, next) => {
       loc.isPrimary = Boolean(isPrimary);
     }
 
+    loc.history.push({ actor: String(req.externalUser._id), at: new Date(), action: 'UPDATED', before: previousLocation, after: { address: loc.address, city: loc.city, coordinates: loc.coordinates, publicVisibility: loc.publicVisibility, operatingStatus: loc.operatingStatus } });
     await loc.save();
 
     if (loc.isPrimary || !req.vendor.location) {
@@ -632,6 +672,7 @@ router.put('/locations/:id', async (req, res, next) => {
 
     const activation = await evaluateVendorActivation(req.vendorId);
     res.json({ ok: true, location: loc, activation });
+    });
   } catch (err) {
     next(err);
   }
@@ -639,13 +680,15 @@ router.put('/locations/:id', async (req, res, next) => {
 
 router.patch('/locations/:id/primary', async (req, res, next) => {
   try {
-    const loc = await OperatingLocation.findOne({ _id: req.params.id, vendor: req.vendorId });
+    await withVendorSchedule(req.vendorId, async assertLease => {
+    const loc = await OperatingLocation.findOne({ _id: req.params.id, vendor: req.vendorId, operatingStatus: { $ne: 'INACTIVE' } });
     if (!loc) {
       return res.status(404).json({ error: 'LOCATION_NOT_FOUND' });
     }
 
     await OperatingLocation.updateMany({ vendor: req.vendorId }, { isPrimary: false });
     loc.isPrimary = true;
+    loc.history.push({ actor: String(req.externalUser._id), at: new Date(), action: 'PRIMARY_SELECTED' });
     if (!loc.address) {
       loc.address = [loc.locality, loc.city].filter(Boolean).join(', ') || loc.city || 'Studio Base';
     }
@@ -656,6 +699,7 @@ router.patch('/locations/:id/primary', async (req, res, next) => {
 
     const activation = await evaluateVendorActivation(req.vendorId);
     res.json({ ok: true, location: loc, activation });
+    });
   } catch (err) {
     next(err);
   }
@@ -663,13 +707,18 @@ router.patch('/locations/:id/primary', async (req, res, next) => {
 
 router.delete('/locations/:id', async (req, res, next) => {
   try {
-    const deleted = await OperatingLocation.findOneAndDelete({ _id: req.params.id, vendor: req.vendorId });
+    await withVendorSchedule(req.vendorId, async assertLease => {
+    const deleted = await OperatingLocation.findOne({ _id: req.params.id, vendor: req.vendorId, operatingStatus: { $ne: 'INACTIVE' } });
     if (!deleted) {
       return res.status(404).json({ error: 'LOCATION_NOT_FOUND' });
     }
 
-    if (deleted.isPrimary) {
-      const remaining = await OperatingLocation.findOne({ vendor: req.vendorId }).sort({ createdAt: 1 });
+    const wasPrimary = deleted.isPrimary;
+    deleted.operatingStatus = 'INACTIVE'; deleted.isPrimary = false;
+    deleted.history.push({ actor: String(req.externalUser._id), at: new Date(), action: 'ARCHIVED' });
+    await deleted.save();
+    if (wasPrimary) {
+      const remaining = await OperatingLocation.findOne({ vendor: req.vendorId, operatingStatus: { $ne: 'INACTIVE' } }).sort({ createdAt: 1 });
       if (remaining) {
         remaining.isPrimary = true;
         if (!remaining.address) {
@@ -683,6 +732,7 @@ router.delete('/locations/:id', async (req, res, next) => {
 
     const activation = await evaluateVendorActivation(req.vendorId);
     res.json({ ok: true, deleted: true, activation });
+    });
   } catch (err) {
     next(err);
   }
@@ -1055,7 +1105,7 @@ router.get('/reviews', async (req, res, next) => {
       vendor: req.vendorId,
       status: 'PUBLISHED',
       isVerified: true,
-    }).sort({ createdAt: -1 });
+    }).select('_id customerName bookingReference serviceName eventType eventDate rating reviewText wouldRecommend isVerified vendorReply status createdAt source').sort({ createdAt: -1 });
 
     const totalReviews = reviews.length;
     let sum = 0;

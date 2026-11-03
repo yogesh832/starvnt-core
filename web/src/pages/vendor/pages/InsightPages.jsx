@@ -225,7 +225,7 @@ export function ReviewsPage() {
                         {r.isVerified && (
                           <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
                             <Icon name="check" size={10} />
-                            <span>Verified Booking</span>
+                            <span>{r.source === 'VENDOR_PRIVATE' ? 'Recipient verified · vendor-reported booking' : 'Verified Booking'}</span>
                           </span>
                         )}
                       </div>

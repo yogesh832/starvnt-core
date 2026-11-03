@@ -69,9 +69,19 @@ import { AdminEntity } from "./screens/AdminEntity";
 import { AdminAccess, AdminFinance } from "./screens/AdminActions";
 import { AccountScreen, ProfileScreen, LibraryScreen } from "./screens/Account";
 import { LegalNoticeScreen } from "./screens/LegalNotice";
+import { ExperienceScreen } from "./screens/ExperiencePage";
 import { TestAuthScreen } from "./screens/TestAuth";
 import { TEST_AUTH_ENABLED } from "./testAuth";
 import { Button, ErrorNotice, Icon, Page, Txt, usePalette } from "./ui";
+
+const mobileLinking = {
+  prefixes: ["starvnt://", "https://customer.star20.com", "https://vendor.star20.com"],
+  config: {
+    screens: {
+      Experience: "experience/:token",
+    },
+  },
+};
 
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
@@ -247,6 +257,7 @@ function Navigation() {
     <NavigationContainer
       key={identity ? `${s.activeDomain}-${identity.id || identity._id}-${s.user?.accountType || ""}` : "guest"}
       ref={pushNavigation}
+      linking={mobileLinking}
       onReady={() => { setNavigationReady(true); setNavigationState(pushNavigation.getRootState()); }}
       onStateChange={state => setNavigationState(state)}
       theme={theme}
@@ -280,6 +291,7 @@ function Navigation() {
               options={{ headerShown: false, statusBarStyle: 'light' }}
             />
             <Stack.Screen name="LegalNotice" component={LegalNoticeScreen} options={{ title: 'Legal information' }} />
+            <Stack.Screen name="Experience" component={ExperienceScreen} options={{ title: 'Event Experience' }} />
             {TEST_AUTH_ENABLED && (
               <Stack.Screen
                 name="TestAuth"
@@ -446,6 +458,11 @@ function Navigation() {
               name="Library"
               component={LibraryScreen}
               options={{ title: "Your library" }}
+            />
+            <Stack.Screen
+              name="Experience"
+              component={ExperienceScreen}
+              options={{ title: "Event Experience" }}
             />
             {TEST_AUTH_ENABLED && (
               <Stack.Screen

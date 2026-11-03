@@ -187,7 +187,7 @@ test('complete profile needs separate activation approval; Admin decision reache
   const service = await VendorService.create({ vendor: complete._id, name: 'Photography', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 10000 } });
   await VendorCapability.create({ vendor: complete._id, vendorService: service._id, teamSize: 2, simultaneousEventLimit: 1 });
   await VendorFinancialProfile.create({ vendor: complete._id, pan: { verificationStatus: 'VERIFIED' }, bankAccount: { verificationStatus: 'VERIFIED' } });
-  await OperatingLocation.create({ vendor: complete._id, label: 'Studio', city: 'Pune' });
+  await OperatingLocation.create({ vendor: complete._id, label: 'Studio', city: 'Pune', coordinates: { lat: 18.52, lng: 73.85 } });
   await ServiceCoverage.create({ vendor: complete._id, vendorService: service._id, coverageType: 'CITY', city: 'Pune' });
   await PortfolioItem.create({ vendor: complete._id, mediaType: 'IMAGE', url: 'https://example.test/photo.jpg' });
   assert.equal((await evaluateVendorActivation(complete._id)).activationState, 'DRAFT');
@@ -215,7 +215,7 @@ test('customer catalogue finds approved active services across Kapkote and Bages
   const service = await VendorService.create({ vendor: regionalVendor._id, name: 'Regional Catering', category: 'Catering', status: 'ACTIVE', pricing: { basePrice: 12000 } });
   await VendorCapability.create({ vendor: regionalVendor._id, vendorService: service._id, teamSize: 4, simultaneousEventLimit: 1 });
   await VendorFinancialProfile.create({ vendor: regionalVendor._id, pan: { verificationStatus: 'VERIFIED' }, bankAccount: { verificationStatus: 'VERIFIED' } });
-  await OperatingLocation.create({ vendor: regionalVendor._id, label: 'Kapkot kitchen', city: 'Kapkot', state: 'Uttarakhand', isPrimary: true });
+  await OperatingLocation.create({ vendor: regionalVendor._id, label: 'Kapkot kitchen', city: 'Kapkot', state: 'Uttarakhand', isPrimary: true, coordinates: { lat: 29.9458, lng: 79.9042 } });
   await ServiceCoverage.create({ vendor: regionalVendor._id, vendorService: service._id, coverageType: 'DISTRICT', city: 'Bageshwar', state: 'Uttarakhand' });
   await ServiceCoverage.create({ vendor: regionalVendor._id, vendorService: service._id, coverageType: 'STATE', state: 'Uttarakhand' });
   await PortfolioItem.create({ vendor: regionalVendor._id, mediaType: 'IMAGE', url: 'https://example.test/regional-catering.jpg' });

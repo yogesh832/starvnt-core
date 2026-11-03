@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import ServiceResources from '../../../components/ServiceResources.jsx';
 import NotificationPreferences from '../../../components/NotificationPreferences.jsx';
 import CommitmentForm from '../../../components/CommitmentForm.jsx';
@@ -87,6 +88,7 @@ export default function CalendarPage() {
   // Map events by day number
   const eventsByDay = {};
   bookings.forEach((b) => {
+    if (b.bookingStatus !== 'CONFIRMED') return;
     const parsed = parseLocalDate(b.eventDate || b.date);
     if (parsed && parsed.year === year && parsed.month === month) {
       const dayNum = parsed.day;
@@ -109,7 +111,13 @@ export default function CalendarPage() {
       const day = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       if (day < bl.date || day > (bl.endDate || bl.date) || (!bl.allDay && day === bl.endDate && bl.endTime === '00:00')) return;
       eventsByDay[d] = eventsByDay[d] || [];
-      eventsByDay[d].push({ id: bl._id, date: bl.date, reason: bl.reason, title: `${bl.recordType === 'EXTERNAL_COMMITMENT' ? 'External commitment' : 'Blocked'}: ${bl.reason}`, time: bl.allDay ? 'All day' : `${bl.startTime} – ${bl.endTime}`, place: `${bl.scope || 'BUSINESS'} · ${bl.timezone || 'Asia/Kolkata'} · Reported`, type: 'BLOCKOUT' });
+      const external = bl.recordType === 'EXTERNAL_COMMITMENT';
+      const stage = bl.externalBooking?.lifecycle || 'CONFIRMED';
+      eventsByDay[d].push({ id: bl._id, legacy: bl.sourceModel === 'VendorBookingSlot', date: bl.date, reason: bl.reason,
+        title: external ? `External: ${bl.externalBooking?.eventName || bl.external?.eventType || bl.reason}` : `Blocked: ${bl.reason}`,
+        time: bl.allDay ? 'All day' : `${bl.startTime} – ${bl.endTime}`,
+        place: external ? `${stage.replaceAll('_', ' ')} · Vendor reported` : `${bl.scope || 'BUSINESS'} · ${bl.timezone || 'Asia/Kolkata'}`,
+        type: external ? 'EXTERNAL' : 'BLOCKOUT' });
     });
   });
 
@@ -128,6 +136,7 @@ export default function CalendarPage() {
         </button>
       }
     >
+      <div className="flex flex-wrap gap-4 mb-4 text-sm"><Link className="underline text-primary" to="/vendor/external-bookings">External booking workspace</Link><Link className="underline text-primary" to="/vendor/readiness">Business readiness</Link></div>
       {loadError && <p role="alert" className="text-red-700 mb-3">Could not refresh calendar: {loadError}</p>}
       <div className="grid lg:grid-cols-[1fr_340px] gap-5">
         <Card>
@@ -171,7 +180,7 @@ export default function CalendarPage() {
             {Array.from({ length: firstDay }).map((_, i) => <div key={`b${i}`} />)}
             {days.map((d) => {
               const dayEvents = eventsByDay[d];
-              const hasBooking = dayEvents?.some((e) => e.type === 'BOOKING');
+              const hasBooking = dayEvents?.some((e) => ['BOOKING', 'EXTERNAL'].includes(e.type));
               const hasBlockout = dayEvents?.some((e) => e.type === 'BLOCKOUT');
               const isSelected = selectedDay === d;
 
@@ -218,7 +227,7 @@ export default function CalendarPage() {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-gray-200" />
-              <span>Commercially Free</span>
+              <span>No saved commitments</span>
             </div>
           </div>
         </Card>
@@ -246,7 +255,8 @@ export default function CalendarPage() {
                         {e.title}
                       </span>
                     </div>
-                    {e.type === 'BLOCKOUT' && (
+                    {e.type === 'EXTERNAL' && !e.legacy && <Link className="text-primary underline text-xs" to={`/vendor/external-bookings?booking=${e.id}`}>Open booking</Link>}
+                    {(e.type === 'BLOCKOUT' || e.legacy) && (
                       <button
                         onClick={() => handleDeleteBlockout(e.id)}
                         className="text-[11px] text-red-700 font-extrabold hover:text-red-900 bg-red-100 hover:bg-red-200 px-2.5 py-1 rounded-lg transition shrink-0"
@@ -279,7 +289,7 @@ export default function CalendarPage() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-500 mt-0.5 shrink-0"><Icon name="shieldCheck" size={13} /></span>
-                <span>Travel feasibility includes estimated transit and a 45-minute setup buffer.</span>
+                <span>Configured buffers are checked. Distance-based transit calculations are estimates.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-red-500 mt-0.5 shrink-0"><Icon name="calendar" size={13} /></span>
@@ -291,12 +301,12 @@ export default function CalendarPage() {
       </div>
 
       {/* Blocked Dates Registry Card (All Blockouts from DB) */}
-      <Card className="mt-5" title={`Blocked Dates Registry (${blockouts.length} active in DB)`}>
+      <Card className="mt-5" title={`Operational blocks (${blockouts.filter(b => b.recordType !== 'EXTERNAL_COMMITMENT').length})`}>
         {blockouts.length === 0 ? (
           <p className="text-xs text-muted">No availability blocks or external commitments recorded. Booking eligibility still depends on capacity and verification.</p>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {blockouts.map((bl) => (
+            {blockouts.filter(bl => bl.recordType !== 'EXTERNAL_COMMITMENT').map((bl) => (
               <div key={bl._id} className="p-3.5 rounded-2xl bg-red-50 border-2 border-red-200 flex items-center justify-between gap-2 shadow-2xs">
                 <div>
                   <div className="flex items-center gap-1.5">

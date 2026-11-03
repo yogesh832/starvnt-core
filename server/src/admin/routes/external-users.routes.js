@@ -12,6 +12,11 @@ import { VendorOrganization } from '../../external/models/VendorOrganization.js'
 import { VendorDocument } from '../../external/models/VendorDocument.js';
 
 const router = Router();
+function customerForAdmin(req, customer) {
+  const value = { ...customer.toSafeJSON(), _id: customer._id };
+  if (req.admin.role !== 'SUPER_ADMIN' && !req.admin.permissions.includes('customerContacts.read')) { delete value.email; delete value.phone; }
+  return value;
+}
 
 function escapeRegex(text = '') {
   return String(text).replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
@@ -66,7 +71,9 @@ router.get('/customers', requirePermission('customers.read'), async (req, res, n
       
     const total = await ExternalUser.countDocuments(query);
 
-    res.json({ ok: true, count: customers.length, total, customers });
+    const visible = customers.map(customer => customerForAdmin(req, customer));
+    await recordAudit({ ...auditContext(req), action: 'CUSTOMER_DIRECTORY_READ', targetType: 'customers', targetId: visible.map(c => String(c.id)).join(','), reason: 'Customer directory access' });
+    res.json({ ok: true, count: visible.length, total, customers: visible });
   } catch (err) {
     next(err);
   }
@@ -91,13 +98,11 @@ router.patch('/customers/:id', requirePermission('customers.update'), async (req
     };
 
     if (fullName !== undefined) customer.fullName = String(fullName).trim();
-    if (phone !== undefined) customer.phone = String(phone).trim();
+    if (phone !== undefined && String(phone).trim() !== (customer.phone || '')) return res.status(400).json({ error: 'CONTACT_VERIFICATION_REQUIRED', message: 'Customer contact changes require the customer OTP workflow.' });
     if (email !== undefined) {
       const trimmedEmail = String(email).trim().toLowerCase();
       if (trimmedEmail !== customer.email) {
-        const exists = await ExternalUser.findOne({ email: trimmedEmail, _id: { $ne: customer._id } });
-        if (exists) return res.status(409).json({ error: 'EMAIL_ALREADY_EXISTS' });
-        customer.email = trimmedEmail;
+        return res.status(400).json({ error: 'CONTACT_VERIFICATION_REQUIRED', message: 'Contact support for a verified email ownership review.' });
       }
     }
     if (status !== undefined) customer.status = status;
@@ -118,7 +123,7 @@ router.patch('/customers/:id', requirePermission('customers.update'), async (req
       },
     });
 
-    res.json({ ok: true, customer: customer.toSafeJSON() });
+    res.json({ ok: true, customer: customerForAdmin(req, customer) });
   } catch (err) {
     next(err);
   }
@@ -151,7 +156,7 @@ router.post('/customers/:id/flag', requirePermission('customers.update'), async 
       toState: { isFlagged: customer.isFlagged, flagReason: customer.flagReason },
     });
 
-    res.json({ ok: true, customer: customer.toSafeJSON() });
+    res.json({ ok: true, customer: customerForAdmin(req, customer) });
   } catch (err) {
     next(err);
   }
@@ -197,7 +202,7 @@ router.post('/customers/:id/restrict', requirePermission('customers.disable'), a
       },
     });
 
-    res.json({ ok: true, customer: customer.toSafeJSON() });
+    res.json({ ok: true, customer: customerForAdmin(req, customer) });
   } catch (err) {
     next(err);
   }
@@ -239,7 +244,7 @@ router.delete('/customers/:id', requirePermission('customers.delete'), async (re
       reason: req.body?.reason || '',
     });
 
-    res.json({ ok: true, message: 'Customer deactivated and retained for audit.', customer: customer.toSafeJSON() });
+    res.json({ ok: true, message: 'Customer deactivated and retained for audit.', customer: customerForAdmin(req, customer) });
   } catch (err) {
     next(err);
   }
@@ -689,6 +694,19 @@ router.post('/organizations/:id/activation', async (req, res, next) => {
     await observeProduct('activation_review', 'FAILED');
     await recordAudit({ ...auditContext(req), action: 'VENDOR_ACTIVATION_DENIED', targetType: 'VendorOrganization', targetId: req.params.id, reason: err.message });
     res.status(err.statusCode || 400).json({ error: err.code || 'ACTIVATION_FAILED', message: err.message });
+  }
+});
+
+router.post('/organizations/:id/founding-partner', requirePermission('vendors.update'), async (req, res, next) => {
+  try {
+    const { enrollFoundingPartner } = await import('../../experience/launchpad.service.js');
+    const { cohort = 'Founding Partner 2026', durationDays = 30 } = req.body || {};
+    const updated = await enrollFoundingPartner(req.params.id, { cohort, durationDays: Number(durationDays) || 30 });
+    if (!updated) return res.status(404).json({ error: 'VENDOR_ORGANIZATION_NOT_FOUND' });
+    await recordAudit({ ...auditContext(req), action: 'VENDOR_FOUNDING_PARTNER_ENROLLED', targetType: 'VendorOrganization', targetId: req.params.id, reason: `Enrolled in cohort ${cohort}` });
+    res.json({ ok: true, foundingPartner: updated.foundingPartner });
+  } catch (err) {
+    next(err);
   }
 });
 

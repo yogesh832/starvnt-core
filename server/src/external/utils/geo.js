@@ -5,6 +5,7 @@
 
 // Earth radius in kilometers
 const EARTH_RADIUS_KM = 6371;
+const validPoint = p => Number.isFinite(p?.lat) && Number.isFinite(p?.lng) && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180 && (p.lat !== 0 || p.lng !== 0);
 
 /**
  * Calculates straight-line distance in kilometers between two { lat, lng } coordinates.
@@ -62,7 +63,7 @@ const LOCALITY_DISTANCE_MATRIX = {
  */
 export function estimateDistanceKm(origin, destination) {
   // If both have coordinates, calculate via Haversine
-  if (origin?.coordinates?.lat && destination?.coordinates?.lat) {
+  if (validPoint(origin?.coordinates) && validPoint(destination?.coordinates)) {
     const dist = calculateHaversineDistanceKm(origin.coordinates, destination.coordinates);
     if (dist > 0) return dist;
   }
@@ -95,4 +96,13 @@ export function estimateDistanceKm(origin, destination) {
 export function estimateTravelDurationMinutes(distanceKm) {
   const travelMinutes = (distanceKm / 30) * 60;
   return Math.round(travelMinutes + 15);
+}
+
+export function distanceEvidence(origin, destination) {
+  const from = (origin?.locality || origin?.city || '').toLowerCase().trim();
+  const to = (destination?.locality || destination?.city || '').toLowerCase().trim();
+  const source = validPoint(origin?.coordinates) && validPoint(destination?.coordinates) ? 'COORDINATE_ROAD_ESTIMATE'
+    : LOCALITY_DISTANCE_MATRIX[`${from}:${to}`] ? 'LOCALITY_TABLE_ESTIMATE' : 'ASSUMED_DISTANCE';
+  return { distanceKm: estimateDistanceKm(origin, destination), source, isEstimate: true, requiresConfirmation: true,
+    roadFactor: source === 'COORDINATE_ROAD_ESTIMATE' ? 1.3 : null };
 }

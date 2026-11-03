@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'node:crypto';
 import { Reservation, Payment, PaymentWebhookEvent, Booking, OptionAvailability, CustomerQuote } from '../models/index.js';
 
 const isId = (id) => mongoose.isValidObjectId(id);
@@ -106,12 +107,26 @@ export async function countRetryableFailedByEvent(eventIds) {
 /** Records a webhook event once; returns false for a duplicate delivery. */
 export async function recordWebhookEvent(provider, providerEventId, eventType, payload) {
   try {
-    await PaymentWebhookEvent.create({ provider, providerEventId, eventType, payload });
-    return true;
+    await PaymentWebhookEvent.create({ provider, providerEventId, eventType, payload, processingStatus: 'PENDING' });
   } catch (err) {
-    if (err?.code === 11000) return false;
-    throw err;
+    if (err?.code !== 11000) throw err;
   }
+  const existing = await PaymentWebhookEvent.findOne({ provider, providerEventId }).lean();
+  if (existing.eventType !== eventType || JSON.stringify(existing.payload) !== JSON.stringify(payload)) throw Object.assign(new Error('Webhook event ID reused with different content'), { statusCode: 409, code: 'WEBHOOK_CONFLICT' });
+  if (!existing.processingStatus || existing.processingStatus === 'COMPLETED') return false;
+  const lease = crypto.randomUUID();
+  const claimed = await PaymentWebhookEvent.findOneAndUpdate({ _id: existing._id, $or: [
+    { processingStatus: { $in: ['PENDING', 'FAILED'] } }, { processingStatus: 'PROCESSING', lockedUntil: { $lte: new Date() } },
+  ] }, { $set: { processingStatus: 'PROCESSING', lease, lockedUntil: new Date(Date.now() + 120000) } }, { new: true }).lean();
+  if (!claimed) throw Object.assign(new Error('Webhook is already processing. Retry delivery.'), { statusCode: 503, code: 'WEBHOOK_BUSY' });
+  return claimed;
+}
+
+export function finishWebhookEvent(event, error = null) {
+  return PaymentWebhookEvent.updateOne({ _id: event._id, lease: event.lease }, { $set: {
+    processingStatus: error ? 'FAILED' : 'COMPLETED', lastError: error ? error.message : null,
+    lockedUntil: null, completedAt: error ? null : new Date(),
+  } });
 }
 
 // ── Bookings ────────────────────────────────────────────────────────────────

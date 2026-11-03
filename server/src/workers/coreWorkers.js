@@ -1,4 +1,7 @@
 import { runReminderBatch, runEventDeadlineBatch } from '../notifications/reminders.worker.js';
+import { runDiscoveryNotificationBatch } from '../experience/discoveryNotifications.worker.js';
+import { reconcileBookingBatch } from '../customer/services/bookingTruth.service.js';
+import { expireExternalHolds } from '../external/services/commitments.service.js';
 import { config } from '../config.js';
 import { OutboxEvent } from '../admin/models/OutboxEvent.js';
 import { processOutboxBatch } from '../automation/services/outbox.service.js';
@@ -26,6 +29,25 @@ async function releaseStaleOutboxLocks() {
 }
 
 export function startCoreWorkers() {
+  let discoveryBusy = false;
+  const discovery = async () => { if (discoveryBusy) return; discoveryBusy = true; try { await runDiscoveryNotificationBatch(); } catch (err) { console.warn('[discovery-notifications]', err.message); } finally { discoveryBusy = false; } };
+  setInterval(discovery, 300000).unref();
+  let foundationBusy = false;
+  const foundation = async () => {
+    if (foundationBusy) return;
+    foundationBusy = true;
+    markWorkerStarted('booking-reconciliation');
+    try {
+      const results = await reconcileBookingBatch();
+      await expireExternalHolds();
+      if (results.some(r => !r.ok)) throw new Error('Booking reconciliation has pending failures');
+      markWorkerSuccess('booking-reconciliation', 0);
+    } catch (err) { markWorkerError('booking-reconciliation', err, 0); }
+    finally { foundationBusy = false; }
+  };
+  configureWorker('booking-reconciliation', { enabled: true });
+  setInterval(foundation, 30000).unref();
+  setTimeout(foundation, 5000).unref();
   startPushWorker();
   let reminderBusy = false;
   let lastDeadlineRun = 0;

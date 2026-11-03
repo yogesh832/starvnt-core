@@ -9,13 +9,19 @@
  * is still recorded explicitly on the AdminUser document and in audit logs.
  */
 const CATALOG = {
+  discovery: ['review'],
+  reviews: ['read', 'moderate', 'media'],
+  growth: ['read', 'manage'],
+  privacy: ['read', 'manage'],
+  identity: ['read', 'link'],
+  customerContacts: ['read', 'export'],
   'availability.personal': ['read'],
   customers: ['read', 'create', 'update', 'delete', 'disable'],
   vendors: ['read', 'create', 'update', 'delete', 'disable', 'approve'],
   events: ['read', 'create', 'update', 'delete'],
   requirements: ['read', 'update', 'approve'],
   quotes: ['read', 'approve', 'update'],
-  bookings: ['read', 'create', 'update', 'cancel'],
+  bookings: ['read', 'create', 'update', 'cancel', 'reconcile'],
   payments: ['read', 'approve', 'refund'],
   settlements: ['read', 'create', 'approve', 'hold', 'release'],
   execution: ['read', 'update', 'manage'],

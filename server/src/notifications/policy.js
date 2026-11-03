@@ -1,6 +1,7 @@
-export const DEFAULT_NOTIFICATION_POLICY = { timezone: 'Asia/Kolkata', quietHours: { enabled: false, start: '22:00', end: '08:00' }, channels: { PUSH: true }, disabledTypes: [] };
+export const DEFAULT_NOTIFICATION_POLICY = { timezone: 'Asia/Kolkata', quietHours: { enabled: false, start: '22:00', end: '08:00' }, channels: { IN_APP: true, PUSH: true, EMAIL: false, SMS: false, WHATSAPP: false }, disabledTypes: [] };
 export function validateNotificationPolicy(input) {
-  const policy = { ...DEFAULT_NOTIFICATION_POLICY, ...input, quietHours: { ...DEFAULT_NOTIFICATION_POLICY.quietHours, ...input.quietHours }, channels: { PUSH: input.channels?.PUSH !== false } };
+  const policy = { ...DEFAULT_NOTIFICATION_POLICY, ...input, quietHours: { ...DEFAULT_NOTIFICATION_POLICY.quietHours, ...input.quietHours }, channels: Object.fromEntries(Object.entries(DEFAULT_NOTIFICATION_POLICY.channels).map(([key, value]) => [key, input.channels?.[key] ?? value])) };
+  if (input.channels && (Object.keys(input.channels).some(k => !Object.hasOwn(DEFAULT_NOTIFICATION_POLICY.channels, k)) || Object.values(input.channels).some(v => typeof v !== 'boolean'))) throw new Error('Invalid channel preference.');
   try { new Intl.DateTimeFormat('en', { timeZone: policy.timezone }); } catch { throw new Error('Choose a valid timezone.'); }
   if (![policy.quietHours.start, policy.quietHours.end].every(t => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t || ''))) throw new Error('Quiet hours must use HH:mm.');
   if (!Array.isArray(policy.disabledTypes) || policy.disabledTypes.length > 30 || policy.disabledTypes.some(t => !/^[a-zA-Z_]{1,60}$/.test(t))) throw new Error('Invalid notification types.');
