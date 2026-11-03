@@ -46,6 +46,8 @@ app.starvnt.com {
 starvnt.com, www.starvnt.com, customer-preview.starvnt.com {
   @www host www.starvnt.com
   redir @www https://starvnt.com{uri} permanent
+  @preview host customer-preview.starvnt.com
+  header @preview X-Robots-Tag "noindex, nofollow"
   encode gzip
   header X-Content-Type-Options nosniff
   handle /assets/* {
