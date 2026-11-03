@@ -23,13 +23,11 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
         <LogoWord />
       </Link>
 
-      <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-ink/70 dark:text-gray-300">
-        <Link to="/" className="hover:text-primary transition">
-          Explore
-        </Link>
-        <a href="/#how-it-works" className="hover:text-primary transition">
-          How it works
-        </a>
+      <nav className="hidden lg:flex items-center gap-5 lg:gap-8 text-sm font-medium text-ink/70 dark:text-gray-300">
+        <a href="/#experiences" className="hover:text-primary transition">Experiences</a>
+        <a href="/#how-it-works" className="hover:text-primary transition">How it works</a>
+        <a href="/#aura" className="hover:text-primary transition">Aura+</a>
+        <a href="https://vendor.starvnt.com/signup?as=vendor" className="hover:text-primary transition">For partners</a>
       </nav>
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -37,7 +35,7 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
           <>
             <button
               onClick={toggleTheme}
-              className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 text-muted dark:text-gray-300 grid place-items-center hover:bg-lavender dark:hover:bg-white/20 transition cursor-pointer"
+              className="hidden sm:grid w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 text-muted dark:text-gray-300 place-items-center hover:bg-lavender dark:hover:bg-white/20 transition cursor-pointer"
               title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               <Icon name={dark ? 'sun' : 'moon'} size={14} />
@@ -61,14 +59,14 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
             ) : (
               <Link
                 to="/login?as=customer"
-                className="text-xs sm:text-sm font-bold text-ink/70 dark:text-gray-300 hover:text-primary px-2 transition"
+                className="hidden sm:block text-xs sm:text-sm font-bold text-ink/70 dark:text-gray-300 hover:text-primary px-2 transition"
               >
                 Sign in
               </Link>
             )}
             <button
               onClick={toggleTheme}
-              className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 text-muted dark:text-gray-300 grid place-items-center hover:bg-lavender dark:hover:bg-white/20 transition cursor-pointer"
+              className="hidden sm:grid w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 text-muted dark:text-gray-300 place-items-center hover:bg-lavender dark:hover:bg-white/20 transition cursor-pointer"
               title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               <Icon name={dark ? 'sun' : 'moon'} size={14} />
@@ -82,6 +80,16 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
           </>
         )}
       </div>
+      <details className="relative lg:hidden">
+        <summary className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-xl border border-primary/15 bg-white text-primary dark:bg-white/10" aria-label="Open navigation"><Icon name="menu" size={18} /></summary>
+        <nav className="absolute right-0 top-11 z-50 flex w-48 flex-col gap-1 rounded-2xl border border-primary/10 bg-white p-2 text-sm font-semibold text-navy shadow-xl dark:border-white/10 dark:bg-[#161926] dark:text-white" aria-label="Mobile navigation">
+          <a className="rounded-xl px-3 py-2 hover:bg-primary-soft" href="/#experiences">Experiences</a>
+          <a className="rounded-xl px-3 py-2 hover:bg-primary-soft" href="/#how-it-works">How it works</a>
+          <a className="rounded-xl px-3 py-2 hover:bg-primary-soft" href="/#aura">Aura+</a>
+          <a className="rounded-xl px-3 py-2 hover:bg-primary-soft" href="https://vendor.starvnt.com/signup?as=vendor">For partners</a>
+          <Link className="rounded-xl px-3 py-2 hover:bg-primary-soft" to="/login?as=customer">Customer sign in</Link>
+        </nav>
+      </details>
     </header>
   );
 }
