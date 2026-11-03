@@ -1,0 +1,20 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DeployCustomerOnProductionInstance",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": [
+        "arn:aws:ssm:ap-south-1:089366939966:document/StarvntDeployCustomer",
+        "arn:aws:ec2:ap-south-1:089366939966:instance/i-050ba337d9d81dd2c"
+      ]
+    },
+    {
+      "Sid": "ReadOwnCommandResult",
+      "Effect": "Allow",
+      "Action": "ssm:GetCommandInvocation",
+      "Resource": "*"
+    }
+  ]
+}
