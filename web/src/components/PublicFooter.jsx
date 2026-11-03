@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
 import { LogoWord } from './ui.jsx';
 
-export default function PublicFooter({ showTrustStrip = true }) {
+export default function PublicFooter({ showTrustStrip = true, marketing = false, onAuraClick }) {
   return (
-    <footer className="w-full mt-auto">
+    <footer className={`w-full mt-auto ${marketing ? 'marketing-footer' : ''}`}>
       {/* Product information; market and custody claims are omitted until verified. */}
       {showTrustStrip && (
         <div className="bg-white/85 dark:bg-[#1a1d2e]/85 backdrop-blur-xs border-t border-b border-gray-100 dark:border-gray-800 py-6 px-6 sm:px-12">
@@ -20,7 +20,7 @@ export default function PublicFooter({ showTrustStrip = true }) {
           {/* Brand Column */}
           <div className="md:col-span-2 space-y-4">
             <Link to="/" className="inline-block hover:opacity-90 transition">
-              <LogoWord />
+              <LogoWord light={marketing} />
             </Link>
             <p className="text-xs sm:text-sm text-muted max-w-sm leading-relaxed">
               Tools for planning events, discovering vendor services, and managing booking details.
@@ -39,7 +39,7 @@ export default function PublicFooter({ showTrustStrip = true }) {
                 <a href="/#how-it-works" className="hover:text-primary transition">How it works</a>
               </li>
               <li>
-                <a href="/#aura" className="hover:text-primary transition">Aura+ assistance</a>
+                {onAuraClick ? <button type="button" onClick={onAuraClick} className="hover:text-primary transition">Aura+ assistance</button> : <a href="/#aura" className="hover:text-primary transition">Aura+ assistance</a>}
               </li>
               <li>
                 <a href="/#plan-event" className="hover:text-primary transition">Plan your event</a>
