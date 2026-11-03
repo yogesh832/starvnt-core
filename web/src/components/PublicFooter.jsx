@@ -28,34 +28,24 @@ export default function PublicFooter({ showTrustStrip = true }) {
             <p className="pt-1 text-xs text-muted">Payment status is shown after provider confirmation.</p>
           </div>
 
-          {/* Column 1: Plan Events */}
+          {/* Public customer and partner journeys */}
           <div className="space-y-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-navy">Plan Events</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-navy dark:text-white">Explore STARVNT</div>
             <ul className="space-y-2 text-xs text-muted">
               <li>
-                <Link to="/" className="hover:text-primary transition">
-                  Weddings & Receptions
-                </Link>
+                <a href="/#experiences" className="hover:text-primary transition">Event experiences</a>
               </li>
               <li>
-                <Link to="/" className="hover:text-primary transition">
-                  Birthdays & Parties
-                </Link>
+                <a href="/#how-it-works" className="hover:text-primary transition">How it works</a>
               </li>
               <li>
-                <Link to="/" className="hover:text-primary transition">
-                  Corporate Galas
-                </Link>
+                <a href="/#aura" className="hover:text-primary transition">Aura+ assistance</a>
               </li>
               <li>
-                <Link to="/" className="hover:text-primary transition">
-                  Aura+ AI Planner
-                </Link>
+                <a href="/#plan-event" className="hover:text-primary transition">Plan your event</a>
               </li>
               <li>
-                <Link to="/" className="hover:text-primary transition">
-                  Budget Estimator
-                </Link>
+                <a href="https://vendor.starvnt.com/signup?as=vendor" className="hover:text-primary transition">Become a partner</a>
               </li>
             </ul>
           </div>
