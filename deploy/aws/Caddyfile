@@ -41,3 +41,22 @@ app.starvnt.com {
     }
   }
 }
+
+# The customer release is built independently from the customer branch.
+starvnt.com, www.starvnt.com, customer-preview.starvnt.com {
+  @www host www.starvnt.com
+  redir @www https://starvnt.com{uri} permanent
+  encode gzip
+  header X-Content-Type-Options nosniff
+  handle /assets/* {
+    root * /srv/customer/current
+    header Cache-Control "public, max-age=31536000, immutable"
+    file_server
+  }
+  handle {
+    root * /srv/customer/current
+    try_files {path} /index.html
+    header Cache-Control "no-cache"
+    file_server
+  }
+}
