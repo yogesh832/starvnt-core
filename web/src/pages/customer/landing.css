@@ -1,0 +1,136 @@
+/* Marketing surfaces use the PDF's deep-blue atmosphere while keeping the app's shared marks. */
+.marketing-landing {
+  color: #eaf5ff;
+  background: #07152d;
+  color-scheme: dark;
+}
+
+.marketing-landing main > section {
+  position: relative;
+}
+
+.marketing-landing #experiences,
+.marketing-landing main > section:nth-child(4) {
+  background: radial-gradient(circle at 90% 5%, rgba(14, 165, 233, .13), transparent 36%), #0c1d38;
+}
+
+.marketing-landing #how-it-works,
+.marketing-landing #plan-event {
+  background: radial-gradient(circle at 5% 85%, rgba(37, 99, 235, .17), transparent 44%), #102541 !important;
+  border-color: rgba(186, 230, 253, .1) !important;
+}
+
+.marketing-landing #partners {
+  background: radial-gradient(circle at 88% 12%, rgba(14, 165, 233, .23), transparent 36%), linear-gradient(125deg, #0d2b52, #07162f) !important;
+}
+
+.marketing-landing main h2,
+.marketing-landing main h3,
+.marketing-landing main .text-navy {
+  color: #f5fbff !important;
+}
+
+.marketing-landing main .text-muted {
+  color: #adc1d9 !important;
+}
+
+.marketing-landing main .text-primary {
+  color: #69cfff !important;
+}
+
+.marketing-landing #experiences article {
+  border: 1px solid rgba(186, 230, 253, .16);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .14), 0 22px 50px rgba(0, 10, 35, .28);
+}
+
+.marketing-landing #experiences article .bg-gradient-to-t {
+  background-image: linear-gradient(to top, rgba(5, 19, 43, .96), rgba(7, 34, 70, .32), transparent);
+}
+
+.marketing-landing #how-it-works [class*="border-primary"] {
+  border-color: rgba(56, 189, 248, .55);
+}
+
+.marketing-landing main .bg-white {
+  background: rgba(31, 59, 95, .64) !important;
+  border-color: rgba(186, 230, 253, .15) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .1), 0 16px 45px rgba(0, 9, 32, .15);
+  backdrop-filter: blur(18px);
+}
+
+.marketing-landing main .bg-primary-soft {
+  background: rgba(56, 189, 248, .14) !important;
+  color: #80ddff !important;
+}
+
+.marketing-landing main .bg-primary {
+  background: linear-gradient(110deg, #2563eb, #0ea5e9) !important;
+  box-shadow: 0 10px 28px rgba(14, 165, 233, .2);
+}
+
+.marketing-landing #plan-event input,
+.marketing-landing #plan-event select {
+  color: #f5fbff;
+  background: #0e2547 !important;
+  border-color: rgba(186, 230, 253, .23) !important;
+  color-scheme: dark;
+}
+
+.marketing-landing #plan-event input::placeholder {
+  color: #98aec9;
+}
+
+.marketing-landing #plan-event input:focus-visible,
+.marketing-landing #plan-event select:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.marketing-landing .marketing-footer > div:last-child {
+  background: #08182f !important;
+  border-color: rgba(186, 230, 253, .12) !important;
+}
+
+.marketing-landing .marketing-footer .text-navy {
+  color: #eff8ff !important;
+}
+
+.marketing-landing .marketing-footer .text-muted {
+  color: #aec2d8 !important;
+}
+
+.marketing-landing .marketing-footer .text-primary,
+.marketing-landing .marketing-footer a:hover,
+.marketing-landing .marketing-footer button:hover {
+  color: #7dd3fc !important;
+}
+
+.marketing-landing .marketing-footer .border-gray-100 {
+  border-color: rgba(186, 230, 253, .12) !important;
+}
+
+html.dark .marketing-landing {
+  background: #040d1e;
+}
+
+html.dark .marketing-landing header {
+  background: rgba(4, 15, 33, .92);
+}
+
+html.dark .marketing-landing #experiences,
+html.dark .marketing-landing main > section:nth-child(4) {
+  background: radial-gradient(circle at 90% 5%, rgba(14, 165, 233, .11), transparent 36%), #07172c;
+}
+
+html.dark .marketing-landing #how-it-works,
+html.dark .marketing-landing #plan-event {
+  background: radial-gradient(circle at 5% 85%, rgba(37, 99, 235, .13), transparent 44%), #0a1c33 !important;
+}
+
+@media (max-width: 639px) {
+  .marketing-landing #plan-event { padding-bottom: 7rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-landing #experiences article img { transition: none; }
+}
