@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { LogoWord } from './ui.jsx';
+import { useTheme } from '../lib/ThemeContext.jsx';
 
 export default function PublicFooter({ showTrustStrip = true, marketing = false, onAuraClick }) {
+  const { dark } = useTheme();
   return (
     <footer className={`w-full mt-auto ${marketing ? 'marketing-footer' : ''}`}>
       {/* Product information; market and custody claims are omitted until verified. */}
@@ -20,7 +22,7 @@ export default function PublicFooter({ showTrustStrip = true, marketing = false,
           {/* Brand Column */}
           <div className="md:col-span-2 space-y-4">
             <Link to="/" className="inline-block hover:opacity-90 transition">
-              <LogoWord light={marketing} />
+              <LogoWord light={marketing && dark} />
             </Link>
             <p className="text-xs sm:text-sm text-muted max-w-sm leading-relaxed">
               Tools for planning events, discovering vendor services, and managing booking details.
