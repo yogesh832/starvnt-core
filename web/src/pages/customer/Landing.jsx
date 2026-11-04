@@ -10,9 +10,9 @@ import './landing.css';
 import { savePendingPrompt } from './pendingPrompt.js';
 
 const EXPERIENCES = [
-  { name: 'Weddings', eyebrow: 'A celebration of your story', description: 'From intimate rituals to multi-day celebrations, shape an occasion that feels entirely yours.', icon: 'heart', tone: 'from-[#092347] to-[#1d6aa0]' },
-  { name: 'Celebrations', eyebrow: 'Gather beautifully', description: 'Birthdays, anniversaries and meaningful moments with the people who matter.', icon: 'party', tone: 'from-[#102c54] to-[#266fa5]' },
-  { name: 'Corporate events', eyebrow: 'Make an impression', description: 'Bring teams and audiences together with a considered, professional experience.', icon: 'events', tone: 'from-[#081d3a] to-[#285b88]' },
+  { name: 'Weddings', eventType: 'Wedding', eyebrow: 'A celebration of your story', description: 'From intimate rituals to multi-day celebrations, shape an occasion that feels entirely yours.', icon: 'heart', image: '/images/customer-wedding-hero.jpg', position: 'center' },
+  { name: 'Celebrations', eventType: 'Celebration', eyebrow: 'Gather beautifully', description: 'Birthdays, anniversaries and meaningful moments with the people who matter.', icon: 'party', image: '/images/customer-celebrations.webp', position: 'center 35%' },
+  { name: 'Corporate events', eventType: 'Corporate event', eyebrow: 'Make an impression', description: 'Bring teams and audiences together with a considered, professional experience.', icon: 'events', image: '/images/customer-corporate.webp', position: 'center 35%' },
 ];
 
 const JOURNEY = [
@@ -33,15 +33,15 @@ function LoginPopup({ text, onClose }) {
   const navigate = useNavigate();
   return <div className="fixed inset-0 z-50 grid place-items-center p-4" role="presentation">
     <button type="button" className="absolute inset-0 bg-navy/65 backdrop-blur-sm" onClick={onClose} aria-label="Close sign-in prompt" />
-    <div role="dialog" aria-modal="true" aria-labelledby="landing-login-title" className="relative w-full max-w-md rounded-3xl border border-sky-200/20 bg-[#102342]/95 p-6 text-center text-white shadow-[0_22px_80px_rgba(0,12,40,.48)] backdrop-blur-xl sm:p-8">
-      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-sky-200/20 bg-sky-300/10"><AuraMark size={34} /></div>
-      <h2 id="landing-login-title" className="mt-5 text-xl font-extrabold text-white">Your event starts here</h2>
-      <p className="mt-3 text-sm leading-relaxed text-slate-300">
-        {text ? <>Create a customer account or sign in to continue planning <span className="font-semibold text-white">{text.length > 100 ? text.slice(0, 100) + '…' : text}</span>.</> : 'Create a customer account or sign in to start planning your event.'}
+    <div role="dialog" aria-modal="true" aria-labelledby="landing-login-title" className="relative w-full max-w-md rounded-3xl border border-primary/15 bg-white/95 p-6 text-center text-navy shadow-[0_22px_80px_rgba(20,26,60,.26)] backdrop-blur-xl dark:border-sky-200/20 dark:bg-[#102342]/95 dark:text-white sm:p-8">
+      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-primary/15 bg-primary-soft dark:border-sky-200/20 dark:bg-sky-300/10"><AuraMark size={34} /></div>
+      <h2 id="landing-login-title" className="mt-5 text-xl font-extrabold text-navy dark:text-white">Your event starts here</h2>
+      <p className="mt-3 text-sm leading-relaxed text-muted dark:text-slate-300">
+        {text ? <>Create a customer account or sign in to continue planning <span className="font-semibold text-navy dark:text-white">{text.length > 100 ? text.slice(0, 100) + '…' : text}</span>.</> : 'Create a customer account or sign in to start planning your event.'}
       </p>
       <button type="button" onClick={() => navigate('/signup?as=customer&next=/customer', { state: { intent: text || undefined, register: true } })} className="mt-6 w-full rounded-xl bg-gradient-to-r from-blue-600 to-sky-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition hover:brightness-110">Create a customer account</button>
-      <button type="button" onClick={() => navigate('/login?as=customer&next=/customer', { state: { intent: text || undefined } })} className="mt-2 w-full rounded-xl border border-sky-200/25 bg-white/5 px-5 py-3 text-sm font-bold text-sky-100 transition hover:bg-white/10">Sign in</button>
-      <button type="button" onClick={onClose} className="mt-4 text-xs font-semibold text-slate-300 hover:text-white">Continue exploring</button>
+      <button type="button" onClick={() => navigate('/login?as=customer&next=/customer', { state: { intent: text || undefined } })} className="mt-2 w-full rounded-xl border border-primary/20 bg-primary-soft/50 px-5 py-3 text-sm font-bold text-primary transition hover:bg-primary-soft dark:border-sky-200/25 dark:bg-white/5 dark:text-sky-100 dark:hover:bg-white/10">Sign in</button>
+      <button type="button" onClick={onClose} className="mt-4 text-xs font-semibold text-muted hover:text-navy dark:text-slate-300 dark:hover:text-white">Continue exploring</button>
     </div>
   </div>;
 }
@@ -103,10 +103,10 @@ export default function Landing() {
             <p className="max-w-md text-sm leading-7 text-muted dark:text-slate-300">Every occasion has its own energy. Explore the people and services that can shape yours.</p>
           </div>
           <div className="mt-9 grid gap-4 lg:grid-cols-3">
-            {EXPERIENCES.map((item, index) => <article key={item.name} className="group relative flex min-h-[330px] flex-col justify-end overflow-hidden rounded-3xl bg-navy p-6 text-white shadow-lg sm:min-h-[370px] sm:p-8">
-              {index === 0 ? <img src="/images/customer-wedding-hero.jpg" alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className={'absolute inset-0 bg-gradient-to-br ' + item.tone} />}
+            {EXPERIENCES.map((item) => <article key={item.name} className="group relative flex min-h-[330px] flex-col justify-end overflow-hidden rounded-3xl bg-navy p-6 text-white shadow-lg sm:min-h-[370px] sm:p-8">
+              <img src={item.image} alt="" loading="lazy" decoding="async" style={{ objectPosition: item.position }} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-navy-deep via-navy-deep/40 to-transparent" />
-              <div className="relative z-10"><div className="mb-5 grid h-11 w-11 place-items-center rounded-2xl border border-white/30 bg-white/15 backdrop-blur-sm"><Icon name={item.icon} size={21} /></div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-200">{item.eyebrow}</p><h3 className="mt-2 text-2xl font-extrabold">{item.name}</h3><p className="mt-2 max-w-sm text-sm leading-6 text-white/80">{item.description}</p><button type="button" onClick={() => {setEventType(item.name);document.getElementById('plan-event')?.scrollIntoView({ behavior: 'smooth' });}} className="mt-5 inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-sky-200 hover:text-white">Start planning <Icon name="arrowRight" size={15} /></button></div>
+              <div className="relative z-10"><div className="mb-5 grid h-11 w-11 place-items-center rounded-2xl border border-white/30 bg-white/15 backdrop-blur-sm"><Icon name={item.icon} size={21} /></div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-200">{item.eyebrow}</p><h3 className="mt-2 text-2xl font-extrabold">{item.name}</h3><p className="mt-2 max-w-sm text-sm leading-6 text-white/80">{item.description}</p><button type="button" onClick={() => {setEventType(item.eventType);document.getElementById('plan-event')?.scrollIntoView({ behavior: 'smooth' });}} className="mt-5 inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-sky-200 hover:text-white">Start planning <Icon name="arrowRight" size={15} /></button></div>
             </article>)}
           </div>
         </div>
