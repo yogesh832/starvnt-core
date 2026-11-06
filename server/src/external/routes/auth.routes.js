@@ -1,3 +1,4 @@
+import { authAcquisitionReceipt } from '../services/vendorAcquisition.service.js';
 import { rejectPortalMismatch, portalMismatch, requestedSurface } from '../services/portalPolicy.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
 import { Router } from "express";
@@ -181,12 +182,14 @@ async function createSession(user, req, accountType = user.accountType) {
     expiresAt,
     accountType,
   });
+  session.$locals.acquisition = await authAcquisitionReceipt(user, session, req).catch(() => undefined);
   user.$locals.activeAccountType = accountType;
   return { session, refreshToken };
 }
 
 function issueTokens(user, session) {
   return {
+    ...(session.$locals.acquisition ? { acquisition: session.$locals.acquisition } : {}),
     accessToken: signExternalAccessToken(
       user,
       session._id,
@@ -307,6 +310,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
 
     const normalizedPhone = phone ? normalizePhone(phone) : undefined;
 
+    req.acquisitionCreated = true;
     const user = await ExternalUser.create({
       fullName,
       email,
@@ -457,6 +461,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
       const targetAccountType =
         accountType === "VENDOR" ? "VENDOR" : "CUSTOMER";
       signInAs = targetAccountType;
+      req.acquisitionCreated = true;
       user = await ExternalUser.create({
         fullName: googleUser.fullName,
         email: googleUser.email,
@@ -784,6 +789,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
           ? businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`
           : `Customer ${cleanDigits.slice(-4)}`);
 
+      req.acquisitionCreated = true;
       user = await ExternalUser.create({
         fullName: defaultName,
         email: `${cleanDigits}@phone.starvnt.com`,
@@ -893,6 +899,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
           ? businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`
           : `Customer ${cleanDigits.slice(-4)}`);
 
+      req.acquisitionCreated = true;
       user = await ExternalUser.create({
         fullName: defaultName,
         email: `${cleanDigits}@phone.starvnt.com`,

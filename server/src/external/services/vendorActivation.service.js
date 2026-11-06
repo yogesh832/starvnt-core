@@ -1,3 +1,4 @@
+import { observeVendorAcquisition } from './vendorAcquisition.service.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { VendorService } from '../models/VendorService.js';
 import { VendorCapability } from '../models/VendorCapability.js';
@@ -155,8 +156,8 @@ export async function evaluateVendorActivation(vendorId) {
   }
 
   // 6. Portfolio projects check
-  const portfolioCount = await PortfolioItem.countDocuments({ vendor: vendorId });
-  const hasPortfolio = portfolioCount > 0;
+  const firstPortfolio = await PortfolioItem.findOne({ vendor: vendorId }).sort({ createdAt: 1 }).select('createdAt').lean();
+  const hasPortfolio = Boolean(firstPortfolio);
   if (!hasPortfolio) {
     reasonCodes.add('PORTFOLIO_MISSING');
   }
@@ -197,7 +198,31 @@ export async function evaluateVendorActivation(vendorId) {
   const isCommerciallyActive = matchingEligible;
 
 
+  // Operational evidence is persisted independently of advertising consent. No Meta requests here.
+  const submission = vendor.activationHistory?.find(h => h.action === 'SUBMITTED');
+  const approval = vendor.activationHistory?.find(h => h.action === 'APPROVE');
+  const evidenceDates = [hasProfile && vendor.updatedAt, ...services.map(s => s.updatedAt), ...capabilities.map(c => c.updatedAt), ...locations.map(l => l.updatedAt), ...coverages.map(c => c.updatedAt), firstPortfolio?.createdAt].filter(Boolean).map(d => new Date(d).getTime());
+  const acquisitionEvents = await observeVendorAcquisition(vendor, {
+    VendorOnboardingStarted: hasProfile || hasActiveService || hasCapability || hasLocation || hasPortfolio,
+    VendorBusinessInformationAdded: hasProfile,
+    VendorProfileCompleted: hasProfile,
+    VendorPortfolioUploaded: hasPortfolio,
+    VendorOnboardingCompleted: completionPercentage === 100,
+    SubmitApplication: Boolean(submission),
+    VendorVerified: vendor.activationReview?.status === 'APPROVED' && vendor.status === 'ACTIVE',
+  }, {
+    VendorOnboardingStarted: evidenceDates.length ? new Date(Math.min(...evidenceDates)) : vendor.createdAt,
+    VendorBusinessInformationAdded: vendor.updatedAt,
+    VendorProfileCompleted: vendor.updatedAt,
+    VendorPortfolioUploaded: firstPortfolio?.createdAt,
+    VendorOnboardingCompleted: evidenceDates.length ? new Date(Math.max(...evidenceDates)) : vendor.updatedAt,
+    SubmitApplication: submission?.at,
+    VendorVerified: approval?.at || vendor.activationReview?.reviewedAt,
+  }).catch(() => []); // Analytics must never break readiness, auth or approval.
+
+
   return {
+    acquisitionEvents,
     vendorId: vendor._id,
     businessName: vendor.businessName,
     activationState: targetState,

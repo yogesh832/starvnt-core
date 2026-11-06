@@ -1,3 +1,4 @@
+import { partnerPixel } from '../../lib/metaPixel.js';
 import { portalLoginUrl } from '../../lib/portalAccess.js';
 import VendorCategoryPicker from "../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useRef } from "react";
@@ -51,6 +52,20 @@ export default function ExternalLogin() {
 
   const [mode, setMode] = useState(isRegisterPath ? "register" : "login");
   const accountType = "VENDOR";
+  function trackRegistrationStart() {
+    if (mode !== 'register' || accountType !== 'VENDOR' || !partnerPixel?.getConsent().allowed) return;
+    let id;
+    try {
+      id = sessionStorage.getItem('starvnt-registration-intent');
+      if (!id) { id = crypto.randomUUID(); sessionStorage.setItem('starvnt-registration-intent', id); }
+    } catch { id = 'registration-start'; }
+    void partnerPixel.track('VendorRegistrationStarted', id);
+  }
+  useEffect(() => {
+    const start = event => { if (event.target.matches?.('input, select, textarea')) trackRegistrationStart(); };
+    document.addEventListener('input', start);
+    return () => document.removeEventListener('input', start);
+  }, [mode, accountType]);
 
   // Auth Method: 'GOOGLE' | 'PHONE' | 'EMAIL'
   const [authMethod, setAuthMethod] = useState("EMAIL");
@@ -172,6 +187,7 @@ export default function ExternalLogin() {
 
   // ── Handler 1: Email & Password ───────────────────────────────────────────
   async function handleEmailSubmit(e) {
+    trackRegistrationStart();
     e.preventDefault();
     clearLoginError();
     setBusy(true);
@@ -297,6 +313,7 @@ export default function ExternalLogin() {
 
   // ── Handler 2: Google Authentication ──────────────────────────────────────
   async function handleGoogleCredentialResponse(response) {
+    trackRegistrationStart();
     if (!response?.credential) return;
     clearLoginError();
     setBusy(true);
@@ -334,6 +351,7 @@ export default function ExternalLogin() {
   }
 
   async function triggerGoogleDirect() {
+    trackRegistrationStart();
     if (window.google?.accounts?.id) {
       window.google.accounts.id.prompt();
     } else {
@@ -427,6 +445,7 @@ export default function ExternalLogin() {
   }
 
   async function handleSendOtp(e) {
+    trackRegistrationStart();
     if (e) e.preventDefault();
     if (!form.phone || form.phone.trim().length < 10) {
       setError("Please enter a valid 10-digit mobile number.");
