@@ -1,4 +1,9 @@
 export const PORTAL_SURFACE = 'CUSTOMER';
+export function portalNextPath(path, surface = PORTAL_SURFACE) {
+  const base = surface === 'VENDOR' ? '/vendor' : '/customer';
+  if (typeof path !== 'string' || !path.startsWith('/') || path.includes('\\') || /[\u0000-\u001f]/.test(path)) return base;
+  try { const url = new URL(path, 'https://portal.invalid'); return url.origin === 'https://portal.invalid' && (url.pathname === base || url.pathname.startsWith(`${base}/`)) ? `${url.pathname}${url.search}${url.hash}` : base; } catch { return base; }
+}
 const configured = () => ({
   CUSTOMER: import.meta.env?.VITE_CUSTOMER_PORTAL_URL,
   VENDOR: import.meta.env?.VITE_VENDOR_PORTAL_URL,
@@ -12,6 +17,12 @@ export function portalLoginUrl(type, settings = configured()) {
     url.pathname = '/login'; url.search = ''; url.hash = '';
     return url.href;
   } catch { return `${fallback}/login`; }
+}
+export function portalSignupUrl(type, settings = configured()) {
+  const url = new URL(portalLoginUrl(type, settings));
+  url.pathname = '/signup';
+  url.search = `?as=${type === 'VENDOR' ? 'vendor' : 'customer'}`;
+  return url.href;
 }
 export function mismatchError(type) {
   const label = type === 'VENDOR' ? 'vendor' : 'customer';

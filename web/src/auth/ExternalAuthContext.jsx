@@ -147,6 +147,13 @@ export function ExternalAuthProvider({ children }) {
     await request.catch(() => {});
   }
 
+  async function refreshIdentity() {
+    const expected = sessionRevision.current;
+    const data = await externalApi.call('/auth/me');
+    if (data?.user) return storeSession(data, expected);
+    return null;
+  }
+
   return (
     <ExternalAuthContext.Provider
       value={{
@@ -166,6 +173,7 @@ export function ExternalAuthProvider({ children }) {
         loginWithWidgetOtp,
         switchSurface,
         logout,
+        refreshIdentity,
       }}
     >
       {children}

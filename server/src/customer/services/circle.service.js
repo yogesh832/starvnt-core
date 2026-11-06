@@ -616,6 +616,10 @@ export async function updates(customerId) {
       }
       return {
         id: String(n._id),
+        sourceType: n.payload?.messageId ? 'event_message' : 'notification',
+        sourceId: String(n.payload?.messageId || n._id),
+        channel: n.channel || 'IN_APP',
+        readAt: n.readAt || null,
         type: n.type || 'system',
         important: IMPORTANT.includes(n.type),
         title: n.title,

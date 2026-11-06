@@ -1,5 +1,4 @@
-import { CustomerFeedback } from '../../common/productObservability.js';
-import { CustomerEvent, CustomerNotification } from '../models/index.js';
+import { readCustomerFeedback, saveCustomerFeedback } from '../../common/customerFeedback.service.js';
 import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
 import express, { Router } from 'express';
 import { requireCustomer } from '../middleware/requireCustomer.js';
@@ -13,13 +12,11 @@ import * as i from '../controllers/internal.controller.js';
 export const customerRouter = Router();
 customerRouter.use(requireCustomer);
 customerRouter.use(notificationPreferencesRoutes('CUSTOMER'));
+customerRouter.get('/feedback', h(async (req, res) => {
+  res.json({ ok: true, feedback: await readCustomerFeedback(req.externalUser._id, req.query) });
+}));
 customerRouter.post('/feedback', h(async (req, res) => {
-  const { kind, reference, score } = req.body || {};
-  if (!['EVENT', 'NOTIFICATION'].includes(kind) || !Number.isInteger(score) || score < 1 || score > 5) return res.status(400).json({ error: 'INVALID_FEEDBACK' });
-  const Model = kind === 'EVENT' ? CustomerEvent : CustomerNotification;
-  if (!await Model.exists({ _id: reference, customer: req.externalUser._id })) return res.status(404).json({ error: 'RECORD_NOT_FOUND' });
-  await CustomerFeedback.findOneAndUpdate({ customer: req.externalUser._id, kind, reference }, { $set: { score } }, { upsert: true, runValidators: true });
-  res.json({ ok: true });
+  res.json({ ok: true, feedback: await saveCustomerFeedback(req.externalUser._id, req.body || {}) });
 }));
 customerRouter.get('/profile', h(c.getProfile));
 customerRouter.patch('/profile', h(c.patchProfile));
@@ -39,6 +36,9 @@ customerRouter.post('/favorites', h(c.saveFavorite));
 customerRouter.delete('/favorites/:favoriteId', h(c.removeFavorite));
 
 customerRouter.get('/events', h(c.listEvents));
+customerRouter.post('/event-drafts', h(c.createPlanningDraft));
+customerRouter.get('/events/:id/planning-draft', h(c.getPlanningDraft));
+customerRouter.put('/events/:id/planning-draft', h(c.savePlanningDraft));
 customerRouter.post('/events', h(c.createEvent));
 customerRouter.get('/events/:id', h(c.getEvent));
 customerRouter.patch('/events/:id', h(c.patchEvent));

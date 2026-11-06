@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { LogoWord } from './ui.jsx';
+import { portalSignupUrl } from '../lib/portalAccess.js';
 
-export default function PublicFooter({ showTrustStrip = true, marketing = false, onAuraClick }) {
+export default function PublicFooter({ showTrustStrip = true, marketing = false, editorial = false, onAuraClick }) {
   return (
     <footer className={`w-full mt-auto ${marketing ? 'marketing-footer' : ''}`}>
       {/* Product information; market and custody claims are omitted until verified. */}
@@ -20,12 +21,12 @@ export default function PublicFooter({ showTrustStrip = true, marketing = false,
           {/* Brand Column */}
           <div className="md:col-span-2 space-y-4">
             <Link to="/" className="inline-block hover:opacity-90 transition">
-              <LogoWord light={marketing} />
+              <LogoWord light={marketing && !editorial} />
             </Link>
             <p className="text-xs sm:text-sm text-muted max-w-sm leading-relaxed">
               Tools for planning events, discovering vendor services, and managing booking details.
             </p>
-            <p className="pt-1 text-xs text-muted">Payment status is shown after provider confirmation.</p>
+            {!marketing && <p className="pt-1 text-xs text-muted">Payment status is shown after provider confirmation.</p>}
           </div>
 
           {/* Public customer and partner journeys */}
@@ -45,7 +46,7 @@ export default function PublicFooter({ showTrustStrip = true, marketing = false,
                 <a href="/#plan-event" className="hover:text-primary transition">Plan your event</a>
               </li>
               <li>
-                <a href="https://vendor.starvnt.com/signup?as=vendor" className="hover:text-primary transition">Become a partner</a>
+                <a href={portalSignupUrl('VENDOR')} className="hover:text-primary transition">Become a partner</a>
               </li>
             </ul>
           </div>
@@ -64,7 +65,7 @@ export default function PublicFooter({ showTrustStrip = true, marketing = false,
                   Terms of Service
                 </Link>
               </li>
-              <li className="pt-2">
+              {!marketing && <li className="pt-2">
                 <Link
                   to="/admin/login"
                   className="inline-flex items-center gap-1 text-xs font-semibold text-muted hover:text-navy transition"
@@ -72,7 +73,7 @@ export default function PublicFooter({ showTrustStrip = true, marketing = false,
                   <span>Internal Admin Portal</span>
                   <span aria-hidden="true">→</span>
                 </Link>
-              </li>
+              </li>}
             </ul>
           </div>
         </div>

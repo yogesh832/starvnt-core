@@ -1,119 +1,41 @@
 import NotificationPreferences from '../../components/NotificationPreferences.jsx';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Icon from '../../components/Icon.jsx';
+import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { customerApi, errorText } from './customerApi.js';
-import { EventCard, useLoad } from './customerUi.jsx';
-
-const CLOSED = ['completed', 'cancelled'];
+import { useLoad } from './customerUi.jsx';
+import { eventCounts } from './accountState.js';
+import AccountEventHistory from './AccountEventHistory.jsx';
 
 export default function MePage({ user, logout }) {
-  const profile = useLoad(() => customerApi.profile(), []);
-  const events = useLoad(() => customerApi.events(), []);
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ fullName: '', phone: '' });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const p = profile.data?.profile || user;
-  const all = events.data?.events || [];
-  const active = all.filter((e) => !CLOSED.includes(e.status));
-  const past = all.filter((e) => CLOSED.includes(e.status));
-
-  async function save(e) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
+  const profile = useLoad(() => customerApi.profile(), []), events = useLoad(() => customerApi.events(), []);
+  const { refreshIdentity } = useExternalAuth();
+  const [editing, setEditing] = useState(false), [fullName, setFullName] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('');
+  const editButton = useRef(null), nameInput = useRef(null);
+  const p = profile.data?.profile || user, counts = eventCounts(events.data?.events);
+  function closeEditor() { setEditing(false); requestAnimationFrame(() => editButton.current?.focus()); }
+  async function save(event) {
+    event.preventDefault(); setBusy(true); setError(''); setMessage('');
     try {
-      const r = await customerApi.patchProfile({ fullName: form.fullName, phone: p?.phone || '' });
-      profile.setData(r);
-      setEditing(false);
-    } catch (err) {
-      const f = err?.data?.fields;
-      setError(f ? Object.values(f).join(' · ') : errorText(err));
-    } finally {
-      setBusy(false);
-    }
+      const result = await customerApi.patchProfile({ fullName: fullName.trim() });
+      profile.setData(result); closeEditor(); setMessage('Your name has been saved.');
+      try { await refreshIdentity(); } catch { setMessage('Your name has been saved. Refresh the page to update the account header.'); }
+    } catch (err) { setError(err?.data?.fields ? Object.values(err.data.fields).join(' · ') : errorText(err)); }
+    finally { setBusy(false); }
   }
-
-  return (
-    <div className="space-y-4 max-w-2xl mx-auto">
-      <Link to="/customer/customer-360" className="inline-block text-primary underline text-sm">My Customer 360, referrals & event interests</Link>
-      <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-lg font-extrabold shrink-0">
-          {p?.fullName?.[0]?.toUpperCase() || '?'}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-extrabold text-base truncate">{p?.fullName}</div>
-          <div className="text-xs text-muted truncate">{p?.email}</div>
-          {p?.phone && <div className="text-xs text-muted truncate">{p.phone}</div>}
-        </div>
-        <button
-          onClick={() => {
-            setForm({ fullName: p?.fullName || '', phone: p?.phone || '' });
-            setEditing((v) => !v);
-          }}
-          className="text-xs font-bold rounded-xl border border-gray-200 px-3 py-2 text-navy"
-        >
-          Edit profile
-        </button>
-      </div>
-
-      {editing && (
-        <form onSubmit={save} className="bg-white rounded-2xl shadow-sm p-4 grid gap-2.5 text-xs">
-          <label>
-            <span className="text-[10px] text-muted">Name</span>
-            <input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-primary" />
-          </label>
-          <label>
-            <span className="text-[10px] text-muted">Phone — update with OTP in <Link to="/customer/settings" className="underline">privacy settings</Link></span>
-            <input value={p?.phone || ''} readOnly className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-primary" />
-          </label>
-          {error && <div className="text-red-500">{error}</div>}
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setEditing(false)} className="font-bold text-muted px-3">Cancel</button>
-            <button disabled={busy} className="rounded-xl bg-primary text-white font-bold px-4 py-2 disabled:opacity-60">Save</button>
-          </div>
-        </form>
-      )}
-
-      <div className="grid grid-cols-3 gap-2 text-center">
-        {[['Events', all.length], ['Active', active.length], ['Past', past.length]].map(([k, v]) => (
-          <div key={k} className="bg-white rounded-2xl shadow-sm py-3">
-            <div className="text-lg font-extrabold text-navy">{v}</div>
-            <div className="text-[10px] text-muted">{k}</div>
-          </div>
-        ))}
-      </div>
-
-      <NotificationPreferences />
-      {active.length > 0 && (
-        <section>
-          <div className="text-sm font-extrabold text-navy mb-2">My events</div>
-          <div className="grid gap-2">{active.map((e) => <EventCard key={e.id} event={e} />)}</div>
-        </section>
-      )}
-      {past.length > 0 && (
-        <section>
-          <div className="text-sm font-extrabold text-navy mb-2">Past events</div>
-          <div className="grid gap-2">{past.map((e) => <EventCard key={e.id} event={e} />)}</div>
-        </section>
-      )}
-
-      <div className="bg-white rounded-2xl shadow-sm p-2">
-        {[
-          ['bell', 'Messages & updates', '/customer/updates'],
-          ['shield', 'Privacy & permissions', '/customer/settings'],
-          ['star', 'Talk to Aura+', '/customer/aura'],
-        ].map(([icon, label, to]) => (
-          <Link key={label} to={to} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-lavender text-xs font-semibold text-navy">
-            <Icon name={icon} size={14} className="text-primary" /> {label}
-            <span className="ml-auto text-muted">›</span>
-          </Link>
-        ))}
-      </div>
-
-      <button onClick={logout} className="w-full rounded-2xl bg-white text-red-500 text-sm font-bold py-3.5 shadow-sm hover:bg-red-50 transition">Log out</button>
-    </div>
-  );
+  return <div className="customer-account space-y-5 max-w-3xl mx-auto">
+    <header><h1 className="text-2xl font-extrabold">My account & event history</h1><p className="text-sm text-muted mt-2">Your profile, event records, saved references and communication choices in one place.</p></header>
+    <section className="customer-home-panel space-y-3" aria-labelledby="account-profile-title"><h2 id="account-profile-title" className="font-bold">Profile</h2><div className="flex flex-wrap items-center gap-4"><div aria-hidden="true" className="w-12 h-12 rounded-full bg-primary text-white grid place-items-center font-bold shrink-0">{p?.fullName?.[0]?.toUpperCase() || '?'}</div><div className="min-w-0 flex-1"><p className="font-bold break-words">{p?.fullName || 'Your profile'}</p><p className="text-sm break-all">{p?.email || 'Email not recorded'}</p><p className="text-sm">{p?.phone || 'Mobile not recorded'}</p></div><button ref={editButton} disabled={profile.loading || Boolean(profile.error) || !profile.data || busy} className="customer-secondary-action w-full sm:w-auto" onClick={() => { setFullName(profile.data.profile.fullName || ''); setError(''); setMessage(''); setEditing(true); requestAnimationFrame(() => nameInput.current?.focus()); }}>Edit name</button></div>
+      <p className="text-xs text-muted">Your name is self-reported. Update your mobile through the existing OTP verification flow.</p><Link className="customer-secondary-action" to="/customer/settings">Verify mobile & manage privacy</Link>
+      {profile.loading && <p role="status">Loading your saved profile…</p>}{profile.error && <div role="alert" className="text-sm">Saved profile could not be refreshed. The account identity above is the last available session record. <button className="customer-secondary-action" onClick={profile.reload}>Retry profile</button></div>}
+      {editing && <form onSubmit={save} className="space-y-3 border-t pt-3"><label className="block text-sm">Name<input ref={nameInput} className="account-field" required maxLength={120} autoComplete="name" value={fullName} onChange={event => setFullName(event.target.value)} /></label>{error && <p role="alert" className="text-red-600 text-sm">{error}</p>}<div className="flex flex-wrap gap-3"><button className="customer-primary-action" disabled={busy || !fullName.trim()}>{busy ? 'Saving…' : 'Save name'}</button><button type="button" className="customer-secondary-action" disabled={busy} onClick={closeEditor}>Cancel edit</button></div></form>}
+      {message && <p role="status" className="text-sm">{message}</p>}
+    </section>
+    <section className="customer-home-panel space-y-3" aria-labelledby="account-records-title"><h2 id="account-records-title" className="font-bold">My records & choices</h2><div className="grid sm:grid-cols-2 gap-3">{[['Event documents', '/customer/documents'], ['Saved items & selections', '/customer/favorites'], ['Proposals', '/customer/proposals'], ['Messages & updates', '/customer/updates'], ['Event reminders', '/customer/reminders'], ['Relationships & feedback', '/customer/customer-360'], ['Privacy & permissions', '/customer/settings']].map(([label, to]) => <Link className="customer-secondary-action" key={to} to={to}>{label}</Link>)}</div><p className="text-sm text-muted">For an event or payment question, open the relevant event conversation. Privacy and account requests use the existing settings flow.</p></section>
+    <section aria-label="Saved event counts" className="grid grid-cols-2 sm:grid-cols-4 gap-3">{[['Events', counts?.total], ['Active', counts?.active], ['Completed', counts?.completed], ['Cancelled', counts?.cancelled]].map(([label, value]) => <div key={label} className="customer-home-panel text-center"><p className="text-xl font-bold">{value ?? '—'}</p><p className="text-xs">{label}</p></div>)}</section>
+    {events.loading && <p role="status">Loading saved event history…</p>}{events.error && <div role="alert" className="customer-home-panel">Event history could not be refreshed.{events.data ? ' Counts and records below are from the last successful load.' : ' Event counts are unavailable.'} <button className="customer-secondary-action" onClick={events.reload}>Retry event history</button></div>}
+    {events.data && <AccountEventHistory events={events.data.events || []} />}
+    <section aria-labelledby="account-communication-title"><h2 id="account-communication-title" className="text-lg font-bold mb-3">Communication preferences</h2><NotificationPreferences /></section>
+    <div className="flex flex-wrap gap-3"><Link className="customer-primary-action" to="/customer/events/new">Plan another event</Link><Link className="customer-secondary-action" to="/customer/aura">Talk to Aura+</Link><button className="customer-secondary-action" onClick={logout}>Log out</button></div>
+  </div>;
 }

@@ -9,6 +9,7 @@
  * is still recorded explicitly on the AdminUser document and in audit logs.
  */
 const CATALOG = {
+  proposals: ['read', 'manage', 'approve', 'send', 'discuss', 'handover'],
   discovery: ['review'],
   reviews: ['read', 'moderate', 'media'],
   growth: ['read', 'manage'],

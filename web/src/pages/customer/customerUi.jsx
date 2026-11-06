@@ -75,15 +75,16 @@ export function EventMeta({ event }) {
   );
 }
 
-export function EventCard({ event }) {
+export function EventCard({ event, actions }) {
   return (
+    <div className="min-w-0 space-y-2">
     <Link to={`/customer/events/${event.id}`} className="block bg-white dark:bg-[#161926] rounded-2xl shadow-sm p-4 hover:shadow-md transition border border-gray-100 dark:border-gray-800">
       <div className="flex items-center justify-between gap-2">
         <div className="font-bold text-navy dark:text-white truncate">{event.title || event.eventTypeLabel || 'Event'}</div>
         <EventStatusPill status={event.status} />
       </div>
       <div className="mt-1"><EventMeta event={event} /></div>
-      {event.status !== 'draft' && (
+      {!['draft', 'completed', 'cancelled'].includes(event.status) && (
         <>
           <div className="mt-3"><ProgressBar percent={event.progressPercent} /></div>
           <div className="text-[10px] text-muted dark:text-slate-400 mt-1.5">
@@ -92,6 +93,8 @@ export function EventCard({ event }) {
         </>
       )}
     </Link>
+    {actions && <div className="flex flex-wrap justify-end gap-2">{actions}</div>}
+    </div>
   );
 }
 
@@ -487,5 +490,5 @@ export function useLoad(loader, deps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick]);
-  return { ...state, reload: () => setTick((t) => t + 1), setData: (data) => setState((s) => ({ ...s, data })) };
+  return { ...state, reload: () => setTick((t) => t + 1), setData: (data) => setState((s) => ({ ...s, data: typeof data === 'function' ? data(s.data) : data })) };
 }

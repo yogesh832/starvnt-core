@@ -11,11 +11,13 @@ import {
   Tabs,
   categoryIcon,
   DetailSkeleton,
+  EventStatusPill,
   useLoad,
 } from './customerUi.jsx';
 import UnderstandingCard, { EditForm } from './UnderstandingCard.jsx';
 import CustomerEventSummary from './CustomerEventSummary.jsx';
-import { attentionLink, formatINR, planStatus } from './format.js';
+import PostEventRecords from './PostEventRecords.jsx';
+import { attentionLink, formatDate, formatINR, planStatus } from './format.js';
 
 const TONE = { amber: 'text-amber-600', emerald: 'text-emerald-600', primary: 'text-primary', muted: 'text-muted' };
 
@@ -177,6 +179,10 @@ function BudgetCard({ eventId, budget }) {
   );
 }
 
+function EventLibraryLinks({ eventId }) {
+  return <nav aria-label="Event records" className="flex flex-wrap gap-3"><Link className="customer-secondary-action" to={`/customer/reminders?event=${encodeURIComponent(eventId)}`}>Event reminders</Link><Link className="customer-secondary-action" to={`/customer/documents?event=${encodeURIComponent(eventId)}`}>Event documents</Link><Link className="customer-secondary-action" to={`/customer/favorites?event=${encodeURIComponent(eventId)}`}>Saved items & selections</Link><Link className="customer-secondary-action" to={`/customer/updates?event=${encodeURIComponent(eventId)}`}>Event updates</Link></nav>;
+}
+
 export default function EventPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -189,6 +195,7 @@ export default function EventPage() {
     return (
       <div className="max-w-3xl mx-auto">
         <BackLink to="/customer/events">All events</BackLink>
+        {!error && data?.event && <EventLibraryLinks eventId={data.event.id} />}
         <div className="mt-3 text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>
       </div>
     );
@@ -199,6 +206,8 @@ export default function EventPage() {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <BackLink to="/customer/events">All events</BackLink>
+        {!error && data?.event && <EventLibraryLinks eventId={data.event.id} />}
+        <Link className="customer-primary-action" to={'/customer/events/new?draft=' + encodeURIComponent(event.id)}>Continue guided planning</Link>
         <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={() => setEditing(true)}><LocationDetails event={event} /></CustomerEventSummary>
         <UnderstandingCard understanding={understanding} event={event} onChanged={reload} editing={editing} onEditingChange={setEditing} />
         <div className="bg-white rounded-2xl shadow-sm p-4">
@@ -209,27 +218,22 @@ export default function EventPage() {
     );
   }
 
-  if (event.status === 'completed') {
-    return (
-      <div className="max-w-3xl mx-auto space-y-4">
-        <BackLink to="/customer/events">All events</BackLink>
-        <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments}><LocationDetails event={event} /></CustomerEventSummary>
-        <div className="bg-white rounded-3xl shadow-sm p-6 text-center">
-          <div className="text-3xl">🎉</div>
-          <div className="mt-2 text-lg font-extrabold text-navy">Your {event.eventTypeLabel?.toLowerCase()} is complete</div>
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Link to={`/customer/events/${event.id}/history`} className="rounded-xl border border-gray-200 text-xs font-bold px-4 py-2.5 text-navy">View event summary</Link>
-            <Link to="/customer/aura?new=1" className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5">Plan another event</Link>
-          </div>
-        </div>
-      </div>
-    );
+  if (['completed', 'cancelled'].includes(event.status)) {
+    return <div className="customer-account max-w-3xl mx-auto space-y-4">
+      <BackLink to="/customer/events">All events</BackLink>
+      <h1 className="text-xl font-extrabold text-navy">{event.status === 'cancelled' ? 'This event is cancelled' : `Your ${event.eventTypeLabel?.toLowerCase() || 'event'} is complete`}</h1>
+      <EventLibraryLinks eventId={event.id} />
+      <section className="customer-home-panel space-y-3"><div className="flex flex-wrap items-center gap-3"><h2 className="font-bold">{event.title || event.eventTypeLabel || 'Event'}</h2><EventStatusPill status={event.status} /></div><dl className="grid sm:grid-cols-3 gap-3 text-sm"><div><dt className="text-muted">Event date</dt><dd>{formatDate(event.eventDate) || 'Not set'}</dd></div><div><dt className="text-muted">Location</dt><dd>{event.city || event.location?.city || 'Not set'}</dd></div><div><dt className="text-muted">Guests</dt><dd>{event.guestCount ?? 'Not set'}</dd></div></dl><LocationDetails event={event} /></section>
+      <PostEventRecords event={event} bookings={bookings} payments={payments} />
+      <div className="flex flex-wrap gap-3"><Link className="customer-primary-action" to="/customer/events/new">Plan another event</Link><Link className="customer-secondary-action" to="/customer/aura?new=1">Plan with Aura+</Link></div>
+    </div>;
   }
 
   const editable = event.status === 'planning';
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <BackLink to="/customer/events">All events</BackLink>
+        {!error && data?.event && <EventLibraryLinks eventId={data.event.id} />}
       <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={editable ? () => setEditing(value => !value) : undefined}><LocationDetails event={event} /></CustomerEventSummary>
       {event.status === 'in_progress' && (
         <Link to={`/customer/events/${event.id}/event-day`} className="flex items-center gap-2 rounded-2xl bg-red-50 text-red-600 px-4 py-3 text-sm font-bold">
@@ -258,6 +262,7 @@ export default function EventPage() {
             </div>
           </div>
 
+          <div className="flex flex-wrap gap-3"><Link className="customer-secondary-action" to={`/customer/events/${event.id}/quotes`}>Quotes & offers</Link><Link className="customer-secondary-action" to={`/customer/proposals?event=${encodeURIComponent(event.id)}`}>Event proposals</Link><Link className="customer-secondary-action" to={`/customer/events/${event.id}/bookings`}>Bookings & payments</Link></div>
           <FinancialPicture truth={financialTruth} eventId={event.id} />
 
           <Tabs

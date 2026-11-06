@@ -193,15 +193,19 @@ export function validateFacts(input = {}) {
 
   // A range in the customer's own numbers ("10 to 15 lakh").
   if (input.budgetMin !== undefined || input.budgetMax !== undefined) {
-    const lo = Number(input.budgetMin);
-    const hi = input.budgetMax == null ? null : Number(input.budgetMax);
-    if (out.budget != null || input.budgetRange) errors.budgetMin = 'Give either an exact budget or a range, not both';
-    else if (!Number.isFinite(lo) || lo < 0 || (hi != null && (!Number.isFinite(hi) || hi <= lo || hi > 1e10))) {
-      errors.budgetMin = 'Budget range must go from a lower to a higher amount';
+    if (input.budgetMin === null && input.budgetMax === null) {
+      out.budgetMin = null; out.budgetMax = null;
     } else {
-      out.budget = null;
-      out.budgetMin = Math.round(lo);
-      out.budgetMax = hi == null ? null : Math.round(hi);
+      const lo = Number(input.budgetMin);
+      const hi = input.budgetMax == null ? null : Number(input.budgetMax);
+      if (out.budget != null || input.budgetRange) errors.budgetMin = 'Give either an exact budget or a range, not both';
+      else if (!Number.isFinite(lo) || lo < 0 || (hi != null && (!Number.isFinite(hi) || hi <= lo || hi > 1e10))) {
+        errors.budgetMin = 'Budget range must go from a lower to a higher amount';
+      } else {
+        out.budget = null;
+        out.budgetMin = Math.round(lo);
+        out.budgetMax = hi == null ? null : Math.round(hi);
+      }
     }
   }
   if (input.customType !== undefined) {
@@ -221,27 +225,7 @@ export function validateFacts(input = {}) {
   return out;
 }
 
-/**
- * The venue is one fact in two places: the event location's venue name and
- * the "venue" plan item (arranged by the customer). Keep them in step so the
- * manual form and Aura+ always converge on the same data.
- */
-async function syncVenueRequirement(event, venueName, actor) {
-  if (!venueName) return;
-  const existing = await reqRepo.findRequirement(event._id, 'venue');
-  if (existing && LOCKED_REQUIREMENT_STATUSES.includes(existing.status)) return;
-  if (existing?.status === 'customer_provided' && existing.providedValue === venueName) return;
-  const { changed } = await reqRepo.upsertRequirement(
-    event._id,
-    'venue',
-    { status: 'customer_provided', source: 'customer', providedValue: venueName, ...NO_SELECTION },
-    { onlyIfStatusIn: ['missing', 'pending', 'customer_provided'] }
-  );
-  if (changed) {
-    await eventsRepo.appendHistory({ eventId: event._id, ...actor, action: 'requirement_updated', details: { category: 'venue', status: 'customer_provided' } });
-  }
-}
-
+// Venue names are location facts, never evidence of an arranged service.
 async function syncLocationVenue(event, venueName) {
   if (!venueName || event.location?.venueName === venueName) return;
   if (!EDITABLE_STATUSES.includes(event.status)) return;
@@ -328,7 +312,6 @@ export async function patchEvent(customerId, eventId, input, { actorType = 'cust
   if ('eventDate' in clean && actorType === 'customer') {
     await auraRepo.setContext(event._id, 'event.date', { value: { date: clean.eventDate }, state: 'KNOWN', source: 'customer' });
   }
-  if (clean['location.venueName']) await syncVenueRequirement(updated, clean['location.venueName'], { actorType, actorId });
   const changeHistory = await eventsRepo.appendHistory({
     eventId: event._id,
     actorType,
@@ -727,8 +710,7 @@ export async function createManualEvent(customerId, body = {}, { idempotencyKey:
   }
   const actor = { actorType: 'customer', actorId: customerId };
   const venueStatement = statements.find((s) => s.category === 'venue' && s.status === 'customer_provided' && s.providedValue);
-  if (facts['location.venueName']) await syncVenueRequirement(event, facts['location.venueName'], actor);
-  else if (venueStatement) await syncLocationVenue(event, venueStatement.providedValue);
+  if (venueStatement) await syncLocationVenue(event, venueStatement.providedValue);
   await eventsRepo.appendHistory({ eventId: event._id, ...actor, action: 'event_created_manually', details: { eventType: event.eventType } });
   return eventDetail(customerId, event._id);
 }

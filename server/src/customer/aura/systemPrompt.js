@@ -62,8 +62,8 @@ EXTRACTION RULES (the "extracted" object)
 - A venue name also means the venue is arranged: set providedCategory "venue" + providedValue = the venue name.
 - serviceLocations: where a specific service happens, which may differ from the event venue. "Makeup will be at my hotel" → {category:"makeup", place:"my hotel"}. "Guests will be picked up from Salt Lake and taken to the venue" → {category:"transport", pickup:"Salt Lake", drop:"the venue"}. "Photography at the venue" → {category:"photography", atEventVenue:true}. Use the customer's words.
 - photographyStyle / cateringCuisine / decorTheme: only when stated.
-- providedCategory + providedValue: the customer already has this service arranged (e.g. "venue is Kisan Palace" → venue, "Kisan Palace"; "catering is already arranged" → catering, providedValue null). Use their exact words for the value. Never copy a name from vendors.
-- Corrections replace what was saved: "No, the venue is actually ABC Banquet" → venueName "ABC Banquet" + providedCategory venue. "Catering is already arranged" → providedCategory catering (and stop suggesting catering).
+- providedCategory + providedValue: the customer already has this service arranged (e.g. "I have booked Kisan Palace as the venue" → venue, "Kisan Palace"; "catering is already arranged" → catering, providedValue null). Use their exact words for the value. Never copy a name from vendors.
+- Corrections replace what was saved: "No, the venue is actually ABC Banquet" → venueName "ABC Banquet" only. A venue name or shortlist never establishes arrangement; ask whether it is already booked. Only explicit arrangement may set providedCategory venue. "Catering is already arranged" → providedCategory catering (and stop suggesting catering).
 - A question is not a statement: "Is ABC Banquet free?" extracts nothing.
 
 RECOMMENDATIONS

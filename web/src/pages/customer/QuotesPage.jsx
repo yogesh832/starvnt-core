@@ -1,20 +1,23 @@
-import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, CardSkeleton, PageSkeleton, useLoad } from './customerUi.jsx';
 import { formatINR } from './format.js';
+import { offerTerms, offersForEvent, offerBlockReason, proposalLink } from './transactionState.js';
 
-function VendorOfferCard({ quote, eventId, onChanged }) {
+function VendorOfferCard({ quote, event, onChanged }) {
+  const eventId = event.id;
   const navigate = useNavigate();
   const [message, setMessage] = useState('');
   const [counterBudget, setCounterBudget] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const total = quote.totalAmount || quote.pricingBreakdown?.totalAmount || 0;
-  const advance = quote.advanceAmount || Math.ceil(total * 0.3);
-  const balance = Math.max(0, total - advance);
+  const [reviewing, setReviewing] = useState(false);
+  const { total, advance, percent, balance } = offerTerms(quote);
+  const money = value => value == null ? 'Not specified' : formatINR(value);
+  const blocked = offerBlockReason(quote, event);
   const isAccepted = quote.status === 'APPROVED' || quote.status === 'accepted';
-  const canAct = quote.status === 'SUBMITTED';
+  const canAct = ['SUBMITTED', 'APPROVED'].includes(quote.status) && !blocked;
 
   async function negotiate() {
     if (!message.trim() && !counterBudget.trim()) return;
@@ -33,6 +36,7 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
   }
 
   async function acceptOffer() {
+    if (blocked) { setError(blocked); return; }
     setBusy('accept');
     setError('');
     try {
@@ -44,12 +48,11 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
       }
     } catch (err) {
       setError(errorText(err, 'Could not accept this quote offer.'));
-      setBusy('');
-    }
+    } finally { setBusy(''); }
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-4 border border-primary/10">
+    <div id={`quote-${quote.id}`} tabIndex={-1} className="bg-white rounded-2xl shadow-sm p-4 border border-primary/10 scroll-mt-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-wide font-extrabold text-primary">Vendor offer</div>
@@ -71,15 +74,15 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
       <div className="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
         <div className="rounded-xl bg-gray-50 p-3">
           <div className="text-muted text-[10px] font-bold">Total quote</div>
-          <div className="font-extrabold text-navy text-base">{formatINR(total)}</div>
+          <div className="font-extrabold text-navy text-base">{money(total)}</div>
         </div>
         <div className="rounded-xl bg-emerald-50 p-3">
-          <div className="text-emerald-700 text-[10px] font-bold">Pay now ({quote.advancePercentage ?? 30}%)</div>
-          <div className="font-extrabold text-emerald-700 text-base">{formatINR(advance)}</div>
+          <div className="text-emerald-700 text-[10px] font-bold">Recorded advance{percent != null ? ` (${percent}%)` : ''}</div>
+          <div className="font-extrabold text-emerald-700 text-base">{money(advance)}</div>
         </div>
         <div className="rounded-xl bg-gray-50 p-3">
           <div className="text-muted text-[10px] font-bold">Balance later</div>
-          <div className="font-extrabold text-navy text-base">{formatINR(balance)}</div>
+          <div className="font-extrabold text-navy text-base">{money(balance)}</div>
         </div>
       </div>
 
@@ -91,10 +94,14 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
         </div>
       )}
 
+      <p className="text-xs text-muted mt-3">Reference: {quote.quoteReference || quote.id}{quote.validUntil ? ` · Valid until ${new Date(quote.validUntil).toLocaleString('en-IN')}` : ''}</p>
+      {blocked && <p role="status" className="text-xs text-amber-700 mt-2">{blocked}</p>}
+      {error && <p role="alert" className="text-xs text-red-500 mt-2">{error}</p>}
       {canAct && (
         <div className="mt-4 grid gap-2">
           <div className="flex gap-2">
             <input
+              aria-label="Counter offer budget"
               type="number"
               value={counterBudget}
               onChange={(e) => setCounterBudget(e.target.value)}
@@ -102,6 +109,7 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
               className="w-1/3 rounded-2xl bg-lavender/60 border border-gray-200 p-3 text-xs outline-none focus:border-primary"
             />
             <textarea
+              aria-label="Message to vendor"
               rows={2}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
@@ -109,14 +117,14 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
               className="flex-1 rounded-2xl bg-lavender/60 border border-gray-200 p-3 text-xs outline-none focus:border-primary resize-none"
             />
           </div>
-          {error && <div className="text-xs text-red-500">{error}</div>}
+
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={acceptOffer}
+              onClick={() => setReviewing(true)}
               disabled={busy}
               className="rounded-xl bg-primary text-white text-xs font-bold px-4 py-2.5 disabled:opacity-50"
             >
-              {busy === 'accept' ? 'Accepting...' : 'Accept offer'}
+              {isAccepted ? 'Review reservation' : 'Review offer acceptance'}
             </button>
             <button
               onClick={negotiate}
@@ -129,6 +137,12 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
         </div>
       )}
 
+      {reviewing && canAct && <section aria-label="Review offer acceptance" className="mt-3 rounded-xl border border-primary/20 p-4 space-y-3">
+        <h3 className="text-sm font-bold">Accept this exact offer?</h3>
+        <p className="text-xs">{quote.vendorName} · {quote.serviceName} · {quote.quoteReference || quote.id} · {event.title} · {quote.eventDate}</p>
+        <p className="text-xs">Total {money(total)} · Recorded advance {money(advance)}. Acceptance opens or resumes a reservation after availability checks. It does not charge a payment or confirm a booking. Review the reservation and saved terms before paying.</p>
+        <div className="flex flex-wrap gap-3"><button className="customer-primary-action" disabled={Boolean(busy)} onClick={acceptOffer}>{busy === 'accept' ? 'Accepting…' : 'Accept offer & review reservation'}</button><button className="customer-secondary-action" disabled={Boolean(busy)} onClick={() => setReviewing(false)}>Keep reviewing</button></div>
+      </section>}
       {isAccepted && (
         <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
           <span className="text-xs text-muted">Offer accepted · Pay 30% advance on Bookings</span>
@@ -146,8 +160,15 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
 
 export default function QuotesPage() {
   const { id } = useParams();
+  return <EventQuotes key={id} id={id} />;
+}
+
+function EventQuotes({ id }) {
+  const [params] = useSearchParams();
   const { data, error, loading } = useLoad(() => customerApi.quotes(id), [id]);
-  const vendorOffers = useLoad(() => customerApi.vendorQuotes(), [id]);
+  const vendorOffers = useLoad(() => customerApi.vendorQuotes(id), [id]);
+  const selected = params.get('quote');
+  useEffect(() => { if (vendorOffers.data && selected) document.getElementById(`quote-${selected}`)?.focus(); }, [vendorOffers.data, selected]);
 
   if (loading && !data) return <PageSkeleton title="Quotes & Offers" count={3} type="cards" />;
   if (error) {
@@ -159,35 +180,29 @@ export default function QuotesPage() {
     );
   }
   const { event } = data;
-  const commercialQuotes = Array.isArray(vendorOffers.data?.quotes)
-    ? vendorOffers.data.quotes.filter((q) => !event.eventDate || q.eventDate === event.eventDate)
-    : [];
-  const quotedOpportunityIds = new Set(commercialQuotes.map((q) => q.opportunityId).filter(Boolean));
-  const pendingVendorRequests = Array.isArray(vendorOffers.data?.opportunities)
-    ? vendorOffers.data.opportunities.filter((o) =>
-        (!event.eventDate || o.eventDate === event.eventDate) &&
-        !quotedOpportunityIds.has(String(o._id || o.id))
-      )
-    : [];
+  const { quotes: commercialQuotes, requests: pendingVendorRequests } = offersForEvent(vendorOffers.error ? null : vendorOffers.data, id);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div className="customer-transactions max-w-3xl mx-auto space-y-4">
       <BackLink to={`/customer/events/${id}`}>{event.title}</BackLink>
       <h1 className="text-xl font-extrabold text-navy">Quotes & Offers</h1>
+      {selected && vendorOffers.data && !vendorOffers.error && !commercialQuotes.some(quote => quote.id === selected) && <p role="status">This offer is unavailable for this event. Review an available offer below or ask for an updated quote.</p>}
+      <p className="text-sm text-muted">Compare the scope, exclusions, dates and recorded price before accepting. A selected option or accepted offer is not a confirmed booking.</p>
+      <div className="flex flex-wrap gap-3"><Link className="customer-secondary-action" to={`/customer/events/${id}/services`}>Explore & compare services</Link><Link className="customer-secondary-action" to={proposalLink(id)}>Proposals for this event</Link><Link className="customer-secondary-action" to={`/customer/events/${id}/bookings`}>Reservations & payments</Link></div>
 
       <div className="space-y-3">
         <div>
           <h2 className="text-sm font-extrabold text-navy">Vendor offers from enquiries</h2>
-          <p className="text-xs text-muted">These are direct vendor quotes with their price, message, negotiation history, and 30% advance payment.</p>
+          <p className="text-xs text-muted">Offers linked to this event, with saved prices, messages and negotiation history. Payment terms come from the recorded offer and reservation.</p>
         </div>
-        {vendorOffers.loading && !vendorOffers.data ? (
+        {vendorOffers.error ? <div role="alert" className="customer-home-panel">Offers could not be refreshed. <button className="customer-secondary-action" onClick={vendorOffers.reload}>Try again</button></div> : vendorOffers.loading && !vendorOffers.data ? (
           <CardSkeleton count={2} />
         ) : commercialQuotes.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm p-4 text-xs text-muted">
             No vendor offers yet. When a vendor responds with price and message, the offer appears here.
           </div>
         ) : (
-          commercialQuotes.map((q) => <VendorOfferCard key={q.id} quote={q} eventId={id} onChanged={vendorOffers.reload} />)
+          commercialQuotes.map((q) => <VendorOfferCard key={q.id} quote={q} event={event} onChanged={vendorOffers.reload} />)
         )}
         {pendingVendorRequests.length > 0 && (
           <div className="rounded-2xl border border-primary/10 bg-primary-soft/40 p-3 text-xs">

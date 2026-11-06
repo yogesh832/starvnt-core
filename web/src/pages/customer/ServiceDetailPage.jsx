@@ -6,6 +6,7 @@ import { ArtTile, AvailabilityPill, BackLink, DemoBadge, DetailSkeleton, PriceTe
 import { formatINR } from './format.js';
 import SelectOptionButton from './SelectOptionButton.jsx';
 import { workingHoursLabel } from './workingHours.js';
+import SaveOptionButton from './SaveOptionButton.jsx';
 
 function Line({ label, value }) {
   return (
@@ -482,6 +483,10 @@ function WorkingHoursSection({ hours }) {
    ═══════════════════════════════════════════════════════════════ */
 export default function ServiceDetailPage() {
   const { id, serviceId } = useParams();
+  return <ServiceDetails key={`${id}:${serviceId}`} id={id} serviceId={serviceId} />;
+}
+
+function ServiceDetails({ id, serviceId }) {
   const { data, error, loading, setData } = useLoad(() => customerApi.serviceDetail(id, serviceId), [id, serviceId]);
 
   if (loading) return <DetailSkeleton />;
@@ -651,6 +656,7 @@ export default function ServiceDetailPage() {
 
       {/* ─── Action Bar ─── */}
       <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
+        <div className="mb-4"><SaveOptionButton key={`${id}:${option.id}`} eventId={id} option={option} /></div>
         <div className="flex flex-wrap items-center gap-3">
           <SelectOptionButton
             eventId={id}

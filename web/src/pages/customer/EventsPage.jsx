@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useCurrentEvent } from './currentEvent.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { CardSkeleton, Empty, EventCard, useLoad } from './customerUi.jsx';
+import useEventArchive from './useEventArchive.js';
+import { isEventArchived } from './accountState.js';
 
 function EventActions({ event, onDelete }) {
   const [open, setOpen] = useState(false);
@@ -14,8 +16,8 @@ function EventActions({ event, onDelete }) {
     document.addEventListener('pointerdown', close); document.addEventListener('keydown', escape);
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); };
   }, [open]);
-  return <div ref={ref} className="absolute top-2 right-2">
-    <button type="button" aria-label={`Actions for ${event.title || 'event'}`} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(value => !value)} className="w-9 h-9 rounded-xl text-xl grid place-items-center text-muted dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10">⋮</button>
+  return <div ref={ref} className="relative">
+    <button type="button" aria-label={`Actions for ${event.title || 'event'}`} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(value => !value)} className="w-11 h-11 rounded-xl text-xl grid place-items-center text-muted dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10">⋮</button>
     {open && <div role="menu" aria-label="Event actions" className="absolute top-10 right-0 z-30 w-56 p-1.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1e2235] shadow-xl text-xs">
       <Link role="menuitem" to={`/customer/events/${event.id}`} className="block rounded-xl px-3 py-2.5 text-navy dark:text-white hover:bg-lavender dark:hover:bg-white/10">View event</Link>
       {['draft', 'planning'].includes(event.status) && <Link role="menuitem" to={`/customer/events/${event.id}?edit=1`} className="block rounded-xl px-3 py-2.5 text-navy dark:text-white hover:bg-lavender dark:hover:bg-white/10">Edit event</Link>}
@@ -30,6 +32,8 @@ export default function EventsPage() {
   const { refresh, current: selectedEvent, setCurrent } = useCurrentEvent();
   const [deleting, setDeleting] = useState(null), [busy, setBusy] = useState(false), [deleteError, setDeleteError] = useState('');
   const deleteTrigger = useRef(null);
+  const { archivedIds, setArchived, error: archiveError } = useEventArchive();
+  const [showArchived, setShowArchived] = useState(false);
   const askDelete = (event, trigger) => { deleteTrigger.current = trigger; setDeleteError(''); setDeleting(event); };
   const keepEvent = () => { setDeleting(null); requestAnimationFrame(() => deleteTrigger.current?.focus()); };
   async function removeEvent() {
@@ -47,7 +51,8 @@ export default function EventsPage() {
   }
   const events = data?.events || [];
   const current = events.filter((e) => !['completed', 'cancelled'].includes(e.status));
-  const past = events.filter((e) => ['completed', 'cancelled'].includes(e.status));
+  const past = events.filter((e) => ['completed', 'cancelled'].includes(e.status) && isEventArchived(e, archivedIds) === showArchived);
+  const archivedCount = data ? events.filter(e => isEventArchived(e, archivedIds)).length : null;
 
   return (
     <div className="space-y-4 max-w-3xl mx-auto">
@@ -64,22 +69,24 @@ export default function EventsPage() {
 
       {loading && <CardSkeleton count={2} />}
       {error && <div className="text-xs text-red-500">{errorText(error, "Couldn't load your events.")}</div>}
+      <div className="space-y-2"><button className="customer-secondary-action" disabled={!data} onClick={() => setShowArchived(value => !value)}>{showArchived ? 'Show main event list' : `Show archived events (${archivedCount ?? '—'})`}</button><p className="text-xs text-muted">Archive is a view preference on this browser. Records and event status stay unchanged.</p>{archiveError && <p role="alert" className="text-sm text-red-600">{archiveError}</p>}</div>
       {!loading && !error && events.length === 0 && (
         <Empty title="No events yet">Start a conversation with Aura+ and your first event will appear here.</Empty>
       )}
 
       <div className="grid sm:grid-cols-2 gap-3">
-        {current.map((e) => <EventCard key={e.id} event={e} actions={<EventActions event={e} onDelete={askDelete} />} />)}
+        {!showArchived && current.map((e) => <EventCard key={e.id} event={e} actions={<EventActions event={e} onDelete={askDelete} />} />)}
       </div>
 
       {past.length > 0 && (
         <>
-          <h2 className="text-sm font-extrabold text-navy pt-2">Past events</h2>
+          <h2 className="text-sm font-extrabold text-navy pt-2">{showArchived ? 'Archived on this browser' : 'Past events'}</h2>
           <div className="grid sm:grid-cols-2 gap-3">
-            {past.map((e) => <EventCard key={e.id} event={e} actions={<EventActions event={e} onDelete={askDelete} />} />)}
+            {past.map((e) => <EventCard key={e.id} event={e} actions={<div className="flex flex-wrap gap-2 items-center"><button className="customer-secondary-action" onClick={() => { setArchived(e, !showArchived); requestAnimationFrame(() => document.getElementById('events-title')?.focus()); }}>{showArchived ? 'Restore to main list' : 'Archive on this browser'}</button><EventActions event={e} onDelete={askDelete} /></div>} />)}
           </div>
         </>
       )}
+      {showArchived && !past.length && !loading && !error && <Empty title="No archived events">Completed and cancelled events can be archived without deleting their records.</Empty>}
       {deleting && <div onKeyDown={event => {
         if (event.key === 'Escape' && !busy) { event.preventDefault(); keepEvent(); }
         if (event.key === 'Tab') {

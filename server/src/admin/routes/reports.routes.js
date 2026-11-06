@@ -1,3 +1,4 @@
+import { listCustomerFeedback } from '../../common/customerFeedback.service.js';
 import { productMetrics } from '../services/productMetrics.js';
 import express from 'express';
 import { requireAdminAuth, requireAnyPermission } from '../middleware/requireAdminAuth.js';
@@ -10,6 +11,10 @@ const router = express.Router();
 
 router.use(requireAdminAuth);
 router.get('/product-metrics', requireAnyPermission('analytics.read', 'reports.read'), async (req, res, next) => { try { res.json({ ok: true, metrics: await productMetrics() }); } catch (err) { next(err); } });
+
+router.get('/customer-feedback', requireAnyPermission('analytics.read', 'reports.read'), async (req, res, next) => {
+  try { res.json({ ok: true, ...await listCustomerFeedback() }); } catch (err) { next(err); }
+});
 
 router.get('/financial-summary', requireAnyPermission('revenue.read', 'reports.read'), async (req, res, next) => {
   try {

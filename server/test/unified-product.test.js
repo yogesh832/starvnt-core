@@ -598,6 +598,29 @@ test('feedback and notification preferences are validated and product outcomes r
   await request(app).get('/api/admin/reports/product-metrics').set(auth(restrictedAdminToken)).expect(403);
 });
 
+test('customer feedback persists, updates once and is visible only to permitted administrators', async () => {
+  const event = await CustomerEvent.create({ customer: customer._id, title: 'Feedback persistence event', status: 'planning' });
+  const url = `/api/customer/feedback?kind=EVENT&reference=${event._id}`;
+  assert.equal((await request(app).get(url).set(auth(customerToken)).expect(200)).body.feedback, null);
+  await request(app).post('/api/customer/feedback').set(auth(customerToken)).send({ kind: 'EVENT', reference: event._id, score: 2 }).expect(200);
+  assert.equal((await request(app).get(url).set(auth(customerToken)).expect(200)).body.feedback.score, 2);
+  await request(app).post('/api/customer/feedback').set(auth(customerToken)).send({ kind: 'EVENT', reference: event._id, score: 5 }).expect(200);
+  assert.equal((await request(app).get(url).set(auth(customerToken)).expect(200)).body.feedback.score, 5);
+  const rows = (await request(app).get('/api/admin/reports/customer-feedback').set(auth(adminToken)).expect(200)).body.responses.filter(row => row.reference === String(event._id));
+  assert.equal(rows.length, 1); assert.equal(rows[0].score, 5); assert.equal(rows[0].referenceTitle, event.title);
+  assert.equal(rows[0].customerName, customer.fullName); assert.equal('email' in rows[0], false);
+  await request(app).get('/api/admin/reports/customer-feedback').set(auth(restrictedAdminToken)).expect(403);
+  await request(app).get('/api/admin/reports/customer-feedback').set(auth(customerToken)).expect(401);
+  await request(app).get(url).expect(401);
+  const other = await CustomerEvent.create({ customer: new mongoose.Types.ObjectId(), title: 'Private event' });
+  for (const method of ['get', 'post']) {
+    const req = method === 'get' ? request(app).get(`/api/customer/feedback?kind=EVENT&reference=${other._id}`) : request(app).post('/api/customer/feedback').send({ kind: 'EVENT', reference: other._id, score: 3 });
+    await req.set(auth(customerToken)).expect(404);
+  }
+  await request(app).get('/api/customer/feedback?kind=EVENT&reference=invalid').set(auth(customerToken)).expect(400);
+  for (const score of [0, 6, 2.5, '5']) await request(app).post('/api/customer/feedback').set(auth(customerToken)).send({ kind: 'EVENT', reference: event._id, score }).expect(400);
+});
+
 test('support actions consistently use the configured international number', () => {
   assert.equal(new URL(VENDOR_SUPPORT.whatsapp).pathname, '/919403891095');
   assert.equal(VENDOR_SUPPORT.phone, 'tel:+919403891095');

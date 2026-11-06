@@ -5,12 +5,8 @@ import { customerApi, errorText } from './customerApi.js';
 import { BackLink, DemoBadge, Empty, PageSkeleton, useLoad } from './customerUi.jsx';
 import { formatDate, formatINR } from './format.js';
 import { openCheckout } from './razorpay.js';
+import { bookingLabel, reservationPayment, reservationCanPay, proposalLink } from './transactionState.js';
 
-const BOOKING_STATUS = {
-  confirmed: ['✓ Confirmed', 'bg-emerald-50 text-emerald-700'],
-  pending: ['⏳ Under review', 'bg-amber-50 text-amber-700'],
-  cancelled: ['Cancelled', 'bg-gray-100 text-muted'],
-};
 const PAYMENT_STATUS = {
   pending: 'Started',
   processing: 'Processing — waiting for confirmation',
@@ -34,15 +30,16 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
   const [coupon, setCoupon] = useState(null);
   const [couponBusy, setCouponBusy] = useState(false);
   const [error, setError] = useState('');
-  const packageTotal = reservation.packageTotal || reservation.amount;
-  const originalAdvance = reservation.advanceAmount || reservation.amount;
+  const packageTotal = reservation.packageTotal ?? reservation.amount;
+  const originalAdvance = reservation.advanceAmount ?? reservation.amount;
   const discountAmount = coupon?.discountAmount || 0;
-  const payableAdvance = coupon?.payableAmount || Math.max(1, originalAdvance - discountAmount);
+  const payableAdvance = coupon?.payableAmount ?? originalAdvance;
   const balanceAfterAdvance = Math.max(0, packageTotal - payableAdvance);
-  const canPay = !busy && !couponBusy;
+  const canPay = !busy && !couponBusy && new Date(reservation.expiresAt).getTime() > Date.now();
   const canApplyCoupon = !busy && !couponBusy && !coupon && Boolean(couponCode.trim());
 
   async function pay() {
+    if (!canPay) { setError('This reservation has expired. Refresh the event before paying.'); return; }
     setBusy(true);
     setError('');
     try {
@@ -156,7 +153,7 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
             <span className="text-lg font-extrabold text-navy">{formatINR(packageTotal)}</span>
           </div>
           <div className="flex justify-between gap-3 border-t border-gray-50 px-3 py-2">
-            <span className="text-xs font-semibold text-muted">Advance before coupon ({reservation.advancePercent || 30}%)</span>
+            <span className="text-xs font-semibold text-muted">Advance before coupon{reservation.advancePercent != null ? ` (${reservation.advancePercent}%)` : ''}</span>
             <span className={coupon ? 'text-sm font-bold text-muted line-through' : 'text-sm font-bold text-navy'}>{formatINR(originalAdvance)}</span>
           </div>
           {coupon && (
@@ -197,19 +194,19 @@ function sanitizePackageTitle(name, label, vendorName) {
 function BookingCard({ b, eventId, onVerify, verifying, onPay, onCancel, cancelling }) {
   const [open, setOpen] = useState(true);
 
-  let [label, cls] = BOOKING_STATUS[b.status] || ['✓ Confirmed', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40'];
-  if (b.executionStatus === 'SERVICE_STARTED') {
+  let [label, cls] = bookingLabel(b);
+  if (b.status !== 'cancelled' && (!b.source || b.source === 'STARVNT') && b.executionStatus === 'SERVICE_STARTED') {
     label = '⚡ Work Started — In Progress';
     cls = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/40 font-extrabold';
-  } else if (b.executionStatus === 'COMPLETION_SUBMITTED') {
+  } else if (b.status !== 'cancelled' && (!b.source || b.source === 'STARVNT') && b.executionStatus === 'COMPLETION_SUBMITTED') {
     label = '⏳ Work Completed — Action Required';
     cls = 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/40 font-extrabold';
-  } else if (b.executionStatus === 'COMPLETION_VERIFIED') {
+  } else if (b.status !== 'cancelled' && (!b.source || b.source === 'STARVNT') && b.executionStatus === 'COMPLETION_VERIFIED') {
     label = '✓ Completed & Verified';
     cls = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40 font-extrabold';
   }
 
-  const isActionRequired = b.executionStatus === 'COMPLETION_SUBMITTED';
+  const isActionRequired = b.status !== 'cancelled' && (!b.source || b.source === 'STARVNT') && b.executionStatus === 'COMPLETION_SUBMITTED';
   const pkgName = sanitizePackageTitle(b.packageName, b.label, b.vendorName);
 
   return (
@@ -236,7 +233,7 @@ function BookingCard({ b, eventId, onVerify, verifying, onPay, onCancel, cancell
               <span className={`text-[10px] font-bold rounded-full px-2.5 py-0.5 border ${cls}`}>{label}</span>
             </div>
             <div className="text-[11px] text-muted dark:text-slate-400 mt-1 font-medium flex items-center gap-1.5 flex-wrap">
-              <span>Booking #{b.reference} · Total <b className="text-navy dark:text-slate-200">{formatINR(b.packageTotal || b.amount)}</b> · Paid advance {formatINR(b.paidAmount || b.amount)}</span>
+              <span>Booking #{b.reference} · Total <b className="text-navy dark:text-slate-200">{formatINR(b.packageTotal || b.amount)}</b> · Paid advance {formatINR(b.paidAmount ?? 0)}</span>
               {b.balanceAmount > 0 && <span className="text-amber-700 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-800/40">Balance {formatINR(b.balanceAmount)}</span>}
             </div>
           </div>
@@ -273,6 +270,7 @@ function BookingCard({ b, eventId, onVerify, verifying, onPay, onCancel, cancell
 
       {open && (
         <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-800/60 bg-gray-50/40 dark:bg-[#131622] space-y-3">
+          {b.status === 'pending' && b.underReviewReason && <p role="status" className="text-xs text-amber-700">{b.underReviewReason}</p>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <div className="bg-white dark:bg-[#1a1d2d] border border-gray-100 dark:border-gray-800 rounded-xl p-3 min-w-0">
               <div className="text-[10px] text-muted dark:text-slate-400 font-bold uppercase tracking-wider">Package</div>
@@ -280,7 +278,7 @@ function BookingCard({ b, eventId, onVerify, verifying, onPay, onCancel, cancell
             </div>
             <div className="bg-white dark:bg-[#1a1d2d] border border-gray-100 dark:border-gray-800 rounded-xl p-3 min-w-0">
               <div className="text-[10px] text-muted dark:text-slate-400 font-bold uppercase tracking-wider">Paid Advance</div>
-              <div className="font-extrabold text-emerald-700 dark:text-emerald-400 mt-1">{formatINR(b.paidAmount || b.amount)}</div>
+              <div className="font-extrabold text-emerald-700 dark:text-emerald-400 mt-1">{formatINR(b.paidAmount ?? 0)}</div>
             </div>
             <div className="bg-white dark:bg-[#1a1d2d] border border-gray-100 dark:border-gray-800 rounded-xl p-3 min-w-0">
               <div className="text-[10px] text-muted dark:text-slate-400 font-bold uppercase tracking-wider">Remaining Balance</div>
@@ -599,9 +597,16 @@ function EvidenceInspectionModal({ booking, onClose, onConfirm, verifying }) {
 
 export default function BookingsPage() {
   const { id } = useParams();
+  return <EventBookings key={id} id={id} />;
+}
+
+function EventBookings({ id }) {
   const [params] = useSearchParams();
   const { data, error, loading, reload } = useLoad(() => customerApi.bookings(id), [id]);
   const [paying, setPaying] = useState(null);
+  const [actionError, setActionError] = useState('');
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
   const [verifying, setVerifying] = useState(null);
   const [cancelling, setCancelling] = useState(null);
   const [inspectingBooking, setInspectingBooking] = useState(null);
@@ -612,10 +617,7 @@ export default function BookingsPage() {
     if (inspectId && data?.bookings?.length) {
       const match = data.bookings.find(
         (b) =>
-          b.id === inspectId ||
-          String(b.dbId || '') === inspectId ||
-          String(b.id || '').endsWith(inspectId) ||
-          inspectId.endsWith(String(b.dbId || ''))
+          [b.id, b.dbId, b.coreBookingId, b.reference].filter(Boolean).map(String).includes(inspectId)
       );
       if (match) {
         setInspectingBooking(match);
@@ -625,11 +627,11 @@ export default function BookingsPage() {
 
   const handleCancelBooking = async (bId) => {
     try {
-      setCancelling(bId);
+      setActionError(''); setCancelling(bId);
       await customerApi.cancelBooking(bId);
       await reload();
-    } catch {
-      // ignore
+    } catch (err) {
+      setActionError(errorText(err));
     } finally {
       setCancelling(null);
     }
@@ -637,19 +639,19 @@ export default function BookingsPage() {
 
   const handleVerifyCompletion = async (b) => {
     try {
-      setVerifying(b.id);
-      await customerApi.verifyVendorBookingCompletion(b.id);
+      setActionError(''); setVerifying(b.id);
+      await customerApi.verifyVendorBookingCompletion(b.coreBookingId || b.id);
       setInspectingBooking(null);
       await reload();
-    } catch {
-      // ignore
+    } catch (err) {
+      setActionError(errorText(err));
     } finally {
       setVerifying(null);
     }
   };
 
   // Poll while any payment is waiting for verification.
-  const waiting = data?.payments?.some((p) => ['processing', 'paid'].includes(p.status));
+  const waiting = data?.payments?.some((p) => ['pending', 'processing', 'paid'].includes(p.status));
   useEffect(() => {
     if (!waiting) return undefined;
     const t = setInterval(reload, 5000);
@@ -668,12 +670,16 @@ export default function BookingsPage() {
   }
   const { event, reservations, bookings, payments, paymentsConfigured } = data;
   const awaiting = reservations.filter((r) => r.status === 'pending_payment');
-  const paymentFor = (rid) => payments.find((p) => p.reservationId === rid);
+  const paymentFor = rid => reservationPayment(payments, rid);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
+    <div className="customer-transactions max-w-3xl mx-auto space-y-4">
       <BackLink to={`/customer/events/${id}`}>{event.title}</BackLink>
       <h1 className="text-xl font-extrabold text-navy">Bookings & payments</h1>
+      <p className="text-sm text-muted">Offer acceptance opens a reservation. Payment is verified separately, and STARVNT records booking confirmation.</p>
+      <div className="flex flex-wrap gap-3"><Link className="customer-secondary-action" to={`/customer/events/${id}/quotes`}>Event offers</Link><Link className="customer-secondary-action" to={proposalLink(id)}>Event proposals</Link><button className="customer-secondary-action" disabled={loading} onClick={reload}>{loading ? 'Refreshing…' : 'Refresh saved status'}</button><Link className="customer-secondary-action" to={`/customer/events/${id}/circle`}>Payment help & conversations</Link></div>
+      {actionError && <p role="alert" className="text-sm text-red-600">{actionError}</p>}
+      <p className="text-xs text-muted">If money was debited and confirmation is missing, refresh the saved status and share the payment reference in your event conversation. A browser checkout response alone does not verify payment.</p>
 
       {awaiting.length > 0 && (
         <section className="bg-white rounded-2xl shadow-sm p-4">
@@ -682,19 +688,22 @@ export default function BookingsPage() {
           <ul className="mt-2 divide-y divide-gray-50">
             {awaiting.map((r) => {
               const p = paymentFor(r.id);
-              const inFlight = p && ['processing', 'paid'].includes(p.status);
+              const inFlight = p && ['processing', 'paid', 'verified'].includes(p.status);
               return (
                 <li key={r.id} className="py-3 flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-bold text-navy truncate">{r.label}: {r.vendorName} {r.isDemo && <DemoBadge />}</div>
                     <div className="text-[11px] text-muted">
-                      Advance {formatINR(r.advanceAmount || r.amount)} of {formatINR(r.packageTotal || r.amount)} · Balance {formatINR(r.balanceAmount || 0)} · {holdLeft(r.expiresAt)}
+                      Advance {formatINR(r.advanceAmount ?? r.amount)} of {formatINR(r.packageTotal ?? r.amount)} · Balance {formatINR(r.balanceAmount || 0)} · {holdLeft(r.expiresAt)}
                     </div>
-                    {inFlight && <div className="text-[11px] text-primary">Payment received — waiting for verification…</div>}
+                    {p && <div className="text-[11px] text-muted break-all">Payment reference: {p.id}</div>}
+                    {p?.status === 'pending' && <div className="text-[11px] text-amber-700">Payment started; provider confirmation has not been recorded.</div>}
+                    {p && ['processing', 'paid'].includes(p.status) && <div className="text-[11px] text-primary">Payment response recorded — waiting for provider verification.</div>}
+                    {p?.status === 'verified' && <div className="text-[11px] text-primary">Payment verified. Check the booking status below; if it is missing, ask for reconciliation before paying again.</div>}
                     {p?.status === 'failed' && <div className="text-[11px] text-red-500">Last attempt failed. You can try again.</div>}
                   </div>
                   {!inFlight && (
-                    <button onClick={() => setPaying(r)} disabled={!paymentsConfigured} className="rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 disabled:opacity-50">
+                    <button onClick={() => setPaying(r)} disabled={!reservationCanPay(r, p, paymentsConfigured, now)} className="rounded-xl bg-primary text-white text-xs font-bold px-3 py-2 disabled:opacity-50">
                       Review & pay
                     </button>
                   )}
@@ -751,7 +760,7 @@ export default function BookingsPage() {
                     )}
                   </td>
                   <td className={`py-2 ${p.status === 'verified' ? 'text-emerald-600 font-bold' : p.status === 'failed' ? 'text-red-500' : 'text-muted'}`}>
-                    {PAYMENT_STATUS[p.status]}{p.failureReason ? ` — ${p.failureReason}` : ''}
+                    {PAYMENT_STATUS[p.status] || 'Status unavailable'}<span className="block text-[10px] break-all text-muted">Reference: {p.id}</span>{p.failureReason ? ` — ${p.failureReason}` : ''}
                   </td>
                 </tr>
               ))}

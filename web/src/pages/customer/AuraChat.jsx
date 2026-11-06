@@ -768,6 +768,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
           )}
           <div className="text-[10px] text-muted dark:text-slate-400">Your event assistant</div>
         </div>
+        {(activeEvent?.id || scopedEventId) && <button type="button" disabled={sending || loading} className="customer-secondary-action shrink-0" onClick={() => navigate('/customer/events/new?draft=' + encodeURIComponent(activeEvent?.id || scopedEventId))}>Edit plan</button>}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-5 space-y-4 max-w-3xl w-full mx-auto" onScroll={event => { const view = event.currentTarget; nearBottom.current = view.scrollHeight - view.scrollTop - view.clientHeight < 160; }}>

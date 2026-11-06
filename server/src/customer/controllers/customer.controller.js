@@ -7,6 +7,7 @@ import * as threadMessages from '../services/threadMessages.service.js';
 import * as library from '../services/library.service.js';
 import { customerFinancialTruth } from '../../common/financialTruth.service.js';
 import { deleteDraftEvent } from '../services/deleteEvent.service.js';
+import * as planning from '../services/planning.service.js';
 
 const me = (req) => req.externalUser._id;
 export const readThreadMessages = async (req, res) => res.json(await threadMessages.readCustomerThread(me(req), req.params.threadId));
@@ -18,6 +19,9 @@ export const patchProfile = async (req, res) => res.json({ profile: await profil
 export const planOptions = async (req, res) => res.json(events.planOptions(req.query.eventType));
 
 export const listEvents = async (req, res) => res.json({ events: await events.listEvents(me(req)) });
+export const createPlanningDraft = async (req, res) => res.status(201).json(await planning.createPlanningDraft(me(req), req.body));
+export const getPlanningDraft = async (req, res) => res.json(await planning.planningDraft(me(req), req.params.id));
+export const savePlanningDraft = async (req, res) => res.json(await planning.savePlanningDraft(me(req), req.params.id, req.body));
 export const deleteEvent = async (req, res) => res.json(await deleteDraftEvent(me(req), req.params.id));
 export const getEvent = async (req, res) => res.json(await events.eventDetail(me(req), req.params.id));
 export const patchEvent = async (req, res) => {
@@ -81,13 +85,13 @@ export const notifications = async (req, res) => {
 };
 export const readAll = async (req, res) => res.json(await circleSvc.readAll(me(req)));
 export const readOne = async (req, res) => res.json(await circleSvc.readOne(me(req), req.params.id));
-export const documents = async (req, res) => res.json(await library.listDocuments(me(req)));
+export const documents = async (req, res) => res.json(await library.listDocuments(me(req), { eventId: req.query.eventId, type: req.query.type }));
 export const downloadDocument = async (req, res) => {
   const doc = await library.documentPdf(me(req), req.params.documentId);
   if (doc.redirectUrl) {
     // Native networking stacks can retain authorization across redirects. Return
     // the owned document's target so the app fetches it without a STARVNT bearer.
-    if (req.get('X-Starvnt-Client') === 'native') return res.json({ downloadUrl: doc.redirectUrl });
+    if (req.get('X-Starvnt-Client') === 'native' || req.query.delivery === 'link') return res.json({ downloadUrl: doc.redirectUrl });
     return res.redirect(302, doc.redirectUrl);
   }
   res.setHeader('Content-Type', 'application/pdf');

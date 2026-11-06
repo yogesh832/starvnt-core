@@ -5,6 +5,8 @@ import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { Empty, PageSkeleton, Tabs, useLoad } from './customerUi.jsx';
 import { isQuoteMessage, quoteReviewLink } from './quoteMessageActions.js';
+import { useCurrentEvent } from './currentEvent.jsx';
+import { notificationTarget, updateCategory, belongsToEvent, withoutDuplicateMessages } from './updateState.js';
 
 const when = (t) => {
   if (!t) return '';
@@ -79,6 +81,7 @@ const ICONS = {
 };
 
 function getSafeNotificationLink(n) {
+  if (n.to && !['/customer', '/customer/updates', '/customer/events'].includes(n.to)) return notificationTarget(n);
   if (isQuoteMessage(n)) return quoteReviewLink(n);
   const type = String(n.type || '').toLowerCase();
   const body = String(n.body || n.lastMessageText || n.text || '').toLowerCase();
@@ -134,6 +137,28 @@ function VendorChatModal({ thread, onClose, onSent }) {
   const [activeZoomImage, setActiveZoomImage] = useState(null);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
+  const dialogRef = useRef(null), dismissRef = useRef(null);
+  dismissRef.current = { onClose, sending, uploading, activeZoomImage };
+  useEffect(() => {
+    const previous = document.activeElement;
+    dialogRef.current?.querySelector('[aria-label="Close chat"]')?.focus();
+    const keyboard = event => {
+      const state = dismissRef.current;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (state.activeZoomImage) setActiveZoomImage(null);
+        else if (!state.sending && !state.uploading) state.onClose();
+      }
+      if (event.key !== 'Tab') return;
+      const controls = [...(dialogRef.current?.querySelectorAll('button:not(:disabled),a[href],input:not(:disabled),textarea:not(:disabled),[tabindex="0"]') || [])].filter(node => node.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (!first) { event.preventDefault(); dialogRef.current?.focus(); return; }
+      if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !dialogRef.current?.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', keyboard);
+    return () => { document.removeEventListener('keydown', keyboard); if (previous?.isConnected) previous.focus(); };
+  }, []);
 
   const ctx = {
     threadId: directThreadId,
@@ -242,7 +267,7 @@ function VendorChatModal({ thread, onClose, onSent }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-navy/60 dark:bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-2xl bg-white dark:bg-[#161926] border border-gray-100 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[600px] max-h-[90vh]">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="customer-conversation-title" tabIndex={-1} className="w-full max-w-2xl bg-white dark:bg-[#161926] border border-gray-100 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[600px] max-h-[90vh]">
         {/* Chat Header */}
         <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#1e2235]/60 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
@@ -251,7 +276,7 @@ function VendorChatModal({ thread, onClose, onSent }) {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-extrabold text-navy dark:text-white truncate">{thread.vendorName}</h3>
+                <h3 id="customer-conversation-title" className="text-sm font-extrabold text-navy dark:text-white truncate">{thread.vendorName}</h3>
                 {thread.vendorCategory && (
                   <span className="text-[10px] font-bold bg-primary-soft dark:bg-primary/20 text-primary dark:text-[#a5b4fc] px-2 py-0.5 rounded-full">
                     {thread.vendorCategory}
@@ -450,6 +475,7 @@ function VendorChatModal({ thread, onClose, onSent }) {
           </button>
           <input
             value={text}
+            aria-label="Message to vendor"
             onChange={(e) => setText(e.target.value)}
             disabled={sending || uploading}
             placeholder={uploading ? 'Uploading media to Cloudinary...' : `Type a message to ${thread.vendorName}...`}
@@ -482,6 +508,11 @@ export default function UpdatesPage({ onRead }) {
   const initialTab = searchParams.get('tab') || 'all';
   const { data, error, loading, reload, setData } = useLoad(() => customerApi.updates(), []);
   const [tab, setTab] = useState(initialTab);
+  const { events } = useCurrentEvent();
+  const eventId = searchParams.get('event') || '';
+  const [category, setCategory] = useState('');
+  const [actionError, setActionError] = useState('');
+  useEffect(() => { setActiveThread(null); }, [eventId]);
   const [markingRead, setMarkingRead] = useState(false);
   const [activeThread, setActiveThread] = useState(null);
   const openedQueryThread = useRef(null);
@@ -490,12 +521,12 @@ export default function UpdatesPage({ onRead }) {
     const id = searchParams.get('thread');
     if (!id) { openedQueryThread.current = null; return; }
     if (openedQueryThread.current === id) return;
-    const match = data?.threads?.find((item) => item.id === id);
+    const match = data?.threads?.find((item) => item.id === id && belongsToEvent(item, eventId));
     if (match) {
       openedQueryThread.current = id;
       setActiveThread(match);
     }
-  }, [searchParams, data?.threads]);
+  }, [searchParams, data?.threads, eventId]);
 
   useEffect(() => {
     const queryTab = searchParams.get('tab');
@@ -506,17 +537,17 @@ export default function UpdatesPage({ onRead }) {
 
   const handleTabChange = (newTab) => {
     setTab(newTab);
-    setSearchParams({ tab: newTab });
+    const next = new URLSearchParams(searchParams); next.set('tab', newTab); setSearchParams(next);
   };
 
   const handleMarkAllRead = async () => {
     try {
-      setMarkingRead(true);
+      setActionError(''); setMarkingRead(true);
       await customerApi.readAll();
       onRead?.();
       await reload();
-    } catch {
-      // ignore
+    } catch (err) {
+      setActionError(errorText(err));
     } finally {
       setMarkingRead(false);
     }
@@ -544,15 +575,13 @@ export default function UpdatesPage({ onRead }) {
     );
   }
 
-  const notifications = Array.isArray(data?.notifications) ? data.notifications : [];
-  const threads = Array.isArray(data?.threads) ? data.threads : [];
-  const vendorMessages = Array.isArray(data?.vendorMessages) ? data.vendorMessages : [];
-  const auraConversations = Array.isArray(data?.auraConversations) ? data.auraConversations : [];
+  const notifications = (data?.notifications || []).filter(item => belongsToEvent(item, eventId) && (!category || updateCategory(item) === category));
+  const threads = (data?.threads || []).filter(item => belongsToEvent(item, eventId));
+  const vendorMessages = (data?.vendorMessages || []).filter(item => belongsToEvent(item, eventId));
+  const auraConversations = (data?.auraConversations || []).filter(item => belongsToEvent(item, eventId));
   const important = notifications.filter((n) => n.important);
 
-  const notifSignatures = new Set(notifications.map((n) => `${n.title}|${n.body}`));
-  const uniqueMessageItems = vendorMessages
-    .filter((m) => !notifSignatures.has(`${m.senderName} replied|${m.body}`))
+  const uniqueMessageItems = withoutDuplicateMessages(vendorMessages, notifications)
     .map((m) => {
       const bodyLower = String(m.body || '').toLowerCase();
       const isCompletionMsg =
@@ -576,46 +605,20 @@ export default function UpdatesPage({ onRead }) {
       };
     });
 
-  const allItems = [...notifications, ...uniqueMessageItems].sort(
+  const allItems = [...notifications, ...uniqueMessageItems.filter(item => !category || updateCategory(item) === category)].sort(
     (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
   );
 
-  const openThread = (t) => {
-    setActiveThread(t);
-    if (t.unreadCount > 0) {
-      setData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          unread: Math.max(0, (prev.unread || 0) - (t.unreadCount || 1)),
-          threads: (prev.threads || []).map((item) =>
-            item.id === t.id ? { ...item, unreadCount: 0 } : item
-          ),
-        };
-      });
-      onRead?.();
-    }
-  };
+  const openThread = t => { setActiveThread(t); };
 
-  const handleNotificationClick = async (n) => {
-    if (!n.read && n.id && !String(n.id).startsWith('msg:')) {
-      setData((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          unread: Math.max(0, (prev.unread || 1) - 1),
-          notifications: (prev.notifications || []).map((item) =>
-            item.id === n.id ? { ...item, read: true, readAt: new Date().toISOString() } : item
-          ),
-        };
-      });
+  const handleNotificationClick = async n => {
+    if (n.read || !n.id || String(n.id).startsWith('msg:')) return;
+    setActionError('');
+    try {
+      await customerApi.readNotification(n.id);
+      setData(previous => ({ ...previous, unread: Math.max(0, (previous.unread || 0) - 1), notifications: (previous.notifications || []).map(row => row.id === n.id ? { ...row, read: true, readAt: new Date().toISOString() } : row) }));
       onRead?.();
-      try {
-        await customerApi.readNotification(n.id);
-      } catch {
-        // ignore
-      }
-    }
+    } catch (err) { setActionError(errorText(err, 'Could not mark this update as read.')); }
   };
 
   const renderNotificationList = (items) =>
@@ -642,6 +645,7 @@ export default function UpdatesPage({ onRead }) {
                     bookingId: n.bookingId,
                   });
                 },
+                role: 'button', tabIndex: 0, onKeyDown: event => { if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); handleNotificationClick(n); openThread(threads.find(t => t.id === n.threadId) || { threadId: n.threadId, eventId: n.eventId, vendorName: n.title }); } },
                 className: `block bg-white dark:bg-[#161926] rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-primary/40 dark:hover:border-primary/50 shadow-xs hover:shadow-sm p-4 transition group cursor-pointer ${
                   !n.read ? 'ring-1 ring-primary/40' : ''
                 }`,
@@ -656,16 +660,17 @@ export default function UpdatesPage({ onRead }) {
 
           return (
             <div key={n.id || `notif-${idx}`}><ContentWrapper {...wrapperProps}>
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span
                   className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider rounded-full px-2.5 py-0.5 border ${
                     TONE[typeKey] || TONE.system
                   }`}
                 >
                   <Icon name={ICONS[typeKey] || 'bell'} size={12} />
-                  <span>{typeLabel}</span>
+                  <span>{typeLabel} · {updateCategory(n)}</span>
                 </span>
                 <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted">{n.read ? 'Read' : 'Unread'} · In-app</span>
                   {!n.read && <span className="w-2 h-2 rounded-full bg-primary" title="Unread" />}
                   <span className="text-[10px] text-muted dark:text-slate-400">{when(n.createdAt)}</span>
                 </div>
@@ -674,10 +679,10 @@ export default function UpdatesPage({ onRead }) {
               {n.body && <p className="text-xs text-ink/80 dark:text-slate-300 mt-1 leading-relaxed">{n.body}</p>}
               <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-gray-50 dark:border-gray-800">
                 <span className="text-[11px] font-medium text-muted dark:text-slate-400 truncate">
-                  {n.eventTitle ? `📍 ${n.eventTitle}` : 'STARVNT Core'}
+                  {n.eventTitle ? `📍 ${n.eventTitle}` : 'Account update'}
                 </span>
                 <span className={`${isQuoteMessage(n) ? 'rounded-xl bg-primary text-white px-3 py-2' : 'text-primary dark:text-[#a5b4fc]'} text-xs font-bold group-hover:translate-x-0.5 transition flex items-center gap-0.5`}>
-                  <span>{isQuoteMessage(n) ? 'Review quote' : isMsg ? 'Open Live Chat' : ['completion', 'booking', 'payment'].includes(typeKey) ? 'View Booking & Verify' : 'View'}</span>
+                  <span>{isQuoteMessage(n) ? 'Review quote' : isMsg ? 'Open conversation' : ['completion', 'booking', 'payment'].includes(typeKey) ? 'View booking status' : 'View'}</span>
                   <Icon name="chevronRight" size={13} />
                 </span>
               </div>
@@ -690,12 +695,12 @@ export default function UpdatesPage({ onRead }) {
     );
 
   return (
-    <div className="space-y-4 max-w-3xl mx-auto">
+    <div className="customer-library space-y-4 max-w-3xl mx-auto">
       {/* Header with Title and Quick Actions */}
-      <div className="flex items-center justify-between gap-3 pb-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
         <div>
           <h1 className="text-xl font-extrabold text-navy dark:text-white">Messages & updates</h1>
-          <p className="text-xs text-muted dark:text-slate-400 mt-0.5">Real-time alerts, bookings, vendor chats and Aura+ sessions.</p>
+          <p className="text-xs text-muted dark:text-slate-400 mt-0.5">Saved event activity, vendor conversations and Aura+ sessions. Refresh to check for updates.</p>
         </div>
         <div className="flex items-center gap-2">
           {data?.unread > 0 && (
@@ -704,7 +709,7 @@ export default function UpdatesPage({ onRead }) {
               disabled={markingRead}
               className="rounded-xl border border-primary/30 bg-primary-soft dark:bg-primary/20 hover:bg-primary hover:text-white text-primary dark:text-[#a5b4fc] px-3 py-1.5 text-xs font-bold transition shadow-xs cursor-pointer"
             >
-              {markingRead ? 'Marking...' : 'Mark all read'}
+              {markingRead ? 'Marking...' : 'Mark all account updates read'}
             </button>
           )}
           <button
@@ -718,6 +723,9 @@ export default function UpdatesPage({ onRead }) {
         </div>
       </div>
 
+      {actionError && <p role="alert" className="text-sm text-red-600">{actionError}</p>}
+      <div className="grid sm:grid-cols-2 gap-3"><label className="block text-sm">Filter updates by event<select aria-label="Filter updates by event" className="block w-full rounded-xl border bg-white text-navy p-3 mt-1" value={eventId} onChange={event => { const next = new URLSearchParams(searchParams); event.target.value ? next.set('event', event.target.value) : next.delete('event'); next.delete('thread'); openedQueryThread.current = null; setSearchParams(next); }}><option value="">All events & account</option>{events.map(event => <option key={event.id} value={event.id}>{event.title || event.eventTypeLabel}</option>)}</select></label><label className="block text-sm">Activity category (All & Important)<select aria-label="Activity category (All & Important)" className="block w-full rounded-xl border bg-white text-navy p-3 mt-1" value={category} onChange={event => setCategory(event.target.value)}><option value="">All categories</option>{['Transactional', 'Operational', 'Aura+', 'Promotional'].map(value => <option key={value}>{value}</option>)}</select></label></div>
+      <Link className="customer-secondary-action" to="/customer/settings">Communication preferences</Link>
       {/* Filter Tabs */}
       <Tabs
         value={tab}
@@ -746,6 +754,7 @@ export default function UpdatesPage({ onRead }) {
               {threads.map((t) => (
                 <div
                   key={t.id}
+                  role="button" tabIndex={0} onKeyDown={event => { if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openThread(t); } }}
                   onClick={() => openThread(t)}
                   className={`bg-white dark:bg-[#161926] rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-primary/40 dark:hover:border-primary/50 shadow-xs hover:shadow-md p-4 transition group cursor-pointer ${
                     t.unreadCount > 0 ? 'ring-1 ring-primary/40' : ''
@@ -883,7 +892,7 @@ export default function UpdatesPage({ onRead }) {
       {activeThread && (
         <VendorChatModal
           thread={activeThread}
-          onClose={() => setActiveThread(null)}
+          onClose={() => { setActiveThread(null); reload(); onRead?.(); }}
           onSent={() => reload()}
         />
       )}

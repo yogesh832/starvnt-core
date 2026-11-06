@@ -16,6 +16,7 @@ import { resolveEventSwitch, eventChoices, switchReply } from './eventSwitch.js'
 import { isVendorRequest, isCatalogLookupOnly, selectVendorRows, vendorTruthReply, scopeMatchesEvent } from './vendorTruth.js';
 import { rememberCatalog, catalogScopeFor } from './catalogMemory.js';
 import { activityAnswer } from '../../common/auraActivityAnswer.js';
+import { explicitVenueArrangement } from './venueEvidence.js';
 
 const SESSION_ID_RE = /^[A-Za-z0-9_-]{8,80}$/;
 const SKIP_TOPIC_RE = /^(event|requirement|location)\.[a-z_]+$/;
@@ -296,6 +297,10 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
   // 6–7. Guards, then the deterministic fallback parser (blanks only)
   const { extracted: guarded, dropped } = applyGuards(rawExtracted, text, { askedTopic });
   let x = backfillFacts(text, guarded, { askedTopic });
+  if (!explicitVenueArrangement(text, { askedTopic, venueName: x.venueName })) {
+    if (x.providedCategory === 'venue') { delete x.providedCategory; delete x.providedValue; }
+    if (x.providedCategories) x.providedCategories = x.providedCategories.filter(category => category !== 'venue');
+  }
   // A catalogue-backed place match is safe for a planning statement, including
   // lowercase Roman Hindi. Pure catalogue queries returned above without writes.
   if (!x.city && !x.newEventCity && cityHint) x.city = cityHint;

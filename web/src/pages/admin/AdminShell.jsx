@@ -1,6 +1,7 @@
 import ProductMetrics from './ProductMetrics.jsx';
 import ExperienceControls from './ExperienceControls.jsx';
 import DiscoveryRewardsAdmin from './DiscoveryRewardsAdmin.jsx';
+import { ProposalStudio } from '../ProposalWorkspace.jsx';
 import Foundation from './Foundation.jsx';
 import Availability from './Availability.jsx';
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
@@ -25,6 +26,7 @@ import { loadAdminNotifications, notificationReadKey } from '../../lib/adminNoti
  * (UX only; every API enforces permissions itself on the backend).
  */
 const MODULES = [
+  { path: 'proposals', label: 'Proposal Studio', icon: 'documents', anyOf: ['proposals.read'] },
   { path: 'dashboard', label: 'Dashboard', icon: 'dashboard', anyOf: null },
   { path: 'notifications', label: 'Notifications', icon: 'bell', anyOf: null },
   { path: 'customers', label: 'Customers', icon: 'customers', anyOf: ['customers.read'] },
@@ -361,6 +363,7 @@ export default function AdminShell() {
               <Route path="foundation" element={<Foundation />} />
               <Route path="experience" element={<ExperienceControls />} />
               <Route path="discovery-rewards" element={<DiscoveryRewardsAdmin />} />
+              <Route path="proposals" element={<ProposalStudio />} />
               <Route path="settings" element={<ModuleTable kind="settings" />} />
             </Routes>
           </div>

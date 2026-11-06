@@ -34,6 +34,7 @@ import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
 import { metricsMiddleware, renderPrometheusMetrics } from './metrics.js';
 import { pushRoutes } from './notifications/push.routes.js';
+import { adminProposals, customerProposals } from './proposals/routes.js';
 
 export function createApp() {
   const app = express();
@@ -109,6 +110,7 @@ export function createApp() {
   });
   // Customer App + Aura+ (events, plan, chat)
   app.use('/api/customer', customerRouter);
+  app.use('/api/customer/proposals', customerProposals);
   app.use('/api/customer', foundationCustomerRoutes);
   app.use('/api/customer', experienceCustomerRoutes);
   app.use('/api/customer', customerDiscovery);
@@ -124,6 +126,7 @@ export function createApp() {
 
   // ── INTERNAL ADMIN domain: separate auth + RBAC ───────────────────────────
   app.use('/api/admin/auth', adminAuthRoutes);
+  app.use('/api/admin/proposals', adminProposals);
   app.use('/api/admin/foundation', foundationAdminRoutes);
   app.use('/api/admin/experience', experienceAdminRoutes);
   app.use('/api/admin/discovery-rewards', adminDiscoveryRewards);

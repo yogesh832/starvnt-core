@@ -1,3 +1,4 @@
+import { vendorProposals } from '../../proposals/routes.js';
 import { experienceVendorRoutes } from '../../experience/routes.js';
 import { vendorDiscoveryRewards } from '../../experience/discoveryRewards.routes.js';
 import externalBookingRoutes from './externalBookings.routes.js';
@@ -95,6 +96,7 @@ async function resolveVendorContext(req, res, next) {
 }
 
 router.use(resolveVendorContext);
+router.use('/proposals', vendorProposals);
 router.use(notificationPreferencesRoutes('VENDOR'));
 router.use('/external-bookings', externalBookingRoutes);
 router.use(readinessRoutes);
