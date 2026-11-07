@@ -1,11 +1,11 @@
 /** Shared page scaffolding for Vendor OS sections. */
-export function Page({ title, sub, action, children }) {
+export function Page({ title, sub, action, children, wide = false }) {
   return (
-    <div className="p-4 pb-24 sm:p-6 sm:pb-24 lg:pb-6 space-y-5 max-w-5xl w-full overflow-x-hidden">
+    <div className={`p-4 pb-24 sm:p-6 sm:pb-24 lg:pb-6 space-y-5 w-full ${wide ? '@container/profile min-w-0' : 'max-w-5xl overflow-x-hidden'}`}>
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold truncate">{title}</h1>
-          {sub && <p className="text-sm text-muted mt-0.5 line-clamp-2">{sub}</p>}
+          <h1 className={`font-bold ${wide ? 'text-2xl sm:text-3xl leading-tight text-navy wrap-anywhere' : 'text-xl sm:text-2xl truncate'}`}>{title}</h1>
+          {sub && <p className={`text-muted ${wide ? 'mt-2 text-base leading-relaxed wrap-anywhere' : 'mt-0.5 text-sm line-clamp-2'}`}>{sub}</p>}
         </div>
         {action}
       </div>

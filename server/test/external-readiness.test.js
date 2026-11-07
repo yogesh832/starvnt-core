@@ -11,6 +11,8 @@ import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
 import { VendorService } from '../src/external/models/VendorService.js';
 import { VendorCapability } from '../src/external/models/VendorCapability.js';
+import { VendorAuraSession, VendorAuraMessage } from '../src/external/models/VendorAura.js';
+import { registerLlmAdapter } from '../src/external/aura/llmAdapter.js';
 import { VendorResource } from '../src/external/models/VendorResource.js';
 import { VendorFinancialProfile } from '../src/external/models/VendorFinancialProfile.js';
 import { OperatingLocation } from '../src/external/models/OperatingLocation.js';
@@ -74,6 +76,127 @@ async function create(f, data = body(f)) {
   const res = await request(app).post('/api/vendor/external-bookings').set(auth(f.token)).send(data).expect(201);
   return res.body.booking;
 }
+
+test('Vendor Aura carries a standalone team size into the Hindi equipment reply and saves only after confirmation', async () => {
+  const f = await fixture();
+  const sessionId = key();
+  const send = message => request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId, message }).expect(200);
+  const read = () => VendorCapability.findOne({ vendor: f.vendor._id, vendorService: f.service._id }).lean();
+  const first = await send('Complete capacity, resources and coverage for the same active service');
+  assert.match(first.body.reply, /team size/i);
+  await send('you add this');
+  const team = await send('15');
+  assert.match(team.body.reply, /15/);
+  assert.match(team.body.reply, /equipment/i);
+  assert.equal(team.body.pending, null);
+  const gear = await send('मेरे पास मेरा दो Sony के कैमरे हैं।');
+  assert.equal(gear.body.pending.kind, 'capability');
+  assert.match(gear.body.pending.summary, /15.*दो Sony के कैमरे/);
+  assert.equal((await read()).teamSize, 3);
+  const saved = await send('हाँ');
+  assert.equal(saved.body.pending, null);
+  assert.equal((await read()).teamSize, 15);
+  assert.equal((await read()).simultaneousEventLimit, 5);
+  assert.deepEqual((await read()).equipment, ['दो Sony के कैमरे']);
+});
+
+test('Vendor Aura resumes the repeated-team-size exchange and asks which active service to update', async () => {
+  const f = await fixture();
+  const second = await VendorService.create({
+    vendor: f.vendor._id, name: 'Studio portraits', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 1000 },
+  });
+  await VendorResource.updateOne({ _id: f.resource._id }, { $set: { status: 'MAINTENANCE' } });
+  const sessionId = key();
+  await VendorAuraSession.create({ _id: sessionId, vendor: f.vendor._id, user: f.owner._id, language: 'hi' });
+  await VendorAuraMessage.insertMany([
+    ['model', 'Please tell me your team size and equipment details so I can set them up for you.'],
+    ['user', '15'],
+    ['model', 'Got it, team size is 15. What equipment do you use for your photography services?'],
+    ['user', 'और ये देखवा के'],
+    ['model', 'मैंने 15 सदस्यों की टीम नोट कर ली है। अब कृपया अपने मुख्य उपकरण (Equipment) जैसे कैमरे, ड्रोन या लेंस की जानकारी दें। अभी your team size चाहिए। कृपया बताइए।'],
+    ['user', 'मेरे पास मेरा दो Sony के कैमरे हैं।'],
+    ['model', 'समझ गई। अभी your team size चाहिए। कृपया बताइए।'],
+  ].map(([role, content], index) => ({ session: sessionId, role, content, createdAt: new Date(1000 + index) })));
+  const send = message => request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId, message }).expect(200);
+  const response = await send('15 मैंने पहले ही बता दिया।');
+  assert.equal(response.body.pending, null);
+  assert.match(response.body.reply, /Event photos.*Studio portraits|Studio portraits.*Event photos/);
+  const selected = await send('Studio portraits');
+  assert.match(selected.body.pending.summary, /Studio portraits.*15.*Sony/);
+  const confirmed = await send('yes');
+  assert.equal(confirmed.body.actions.some(action => action.to === '/vendor/readiness'), true);
+  const other = await VendorCapability.findOne({ vendor: f.vendor._id, vendorService: second._id }).lean();
+  assert.equal(other.teamSize, 15);
+  assert.deepEqual(other.equipment, ['दो Sony के कैमरे']);
+  assert.equal((await VendorCapability.findOne({ vendorService: f.service._id }).lean()).teamSize, 3);
+});
+
+test('Vendor Aura understands shorthand and uses AI to interpret service choices in the vendor’s language', async t => {
+  const f = await fixture();
+  const wedding = 'Wedding Photography & Cinematic Video';
+  const preWedding = 'Pre-Wedding & Pahadi Concept Shoot';
+  await VendorService.updateOne({ _id: f.service._id }, { $set: { name: wedding } });
+  const second = await VendorService.create({
+    vendor: f.vendor._id, name: preWedding, category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 1000 },
+  });
+  const inactive = await VendorService.create({
+    vendor: f.vendor._id, name: 'Wedding ceremony archive', category: 'Photography', status: 'PAUSED', pricing: { basePrice: 1000 },
+  });
+  const interpreted = [];
+  registerLlmAdapter({
+    async chat({ message }) {
+      const choice = JSON.parse(message);
+      interpreted.push(choice);
+      const serviceName = choice.reply === 'शादी की रस्मों वाला' ? wedding : inactive.name;
+      return { setupAction: { kind: 'capability', capability: { serviceName, teamSize: 99, equipment: ['Unverified gear'] } } };
+    },
+  });
+  t.after(() => registerLlmAdapter(null));
+
+  const start = async ({ legacyPrompt = false } = {}) => {
+    const sessionId = key();
+    const send = message => request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId, message }).expect(200);
+    await send('Complete capacity, resources and coverage for the same active service');
+    await send('15');
+    const choice = await send('मेरे पास मेरा दो Sony के कैमरे हैं।');
+    assert.equal(choice.body.pending, null);
+    assert.ok(choice.body.reply.includes(wedding));
+    assert.ok(choice.body.reply.includes(preWedding));
+    if (legacyPrompt) {
+      await VendorAuraMessage.updateOne(
+        { session: sessionId, role: 'model', content: choice.body.reply },
+        { $set: { content: 'समझ गई। अभी the active service name चाहिए। कृपया बताइए।' } },
+      );
+    }
+    return send;
+  };
+
+  for (const reply of ['photography', 'wedding photography', 'Film cinematic video वाली।']) {
+    const send = await start({ legacyPrompt: reply.startsWith('Film') });
+    const selected = await send(reply);
+    assert.equal(selected.body.pending.kind, 'capability');
+    assert.match(selected.body.pending.summary, /Wedding Photography & Cinematic Video.*15.*Sony/);
+  }
+  assert.deepEqual(interpreted, []);
+
+  const send = await start();
+  const ambiguous = await send('wedding');
+  assert.equal(ambiguous.body.pending, null);
+  const invalid = await send('पुरानी रस्मों वाला');
+  assert.equal(invalid.body.pending, null);
+  assert.equal(interpreted[0].reply, 'पुरानी रस्मों वाला');
+  assert.deepEqual(interpreted[0].choices.map(choice => choice.name).sort(), [wedding, preWedding].sort());
+  const selected = await send('शादी की रस्मों वाला');
+  assert.equal(selected.body.pending.kind, 'capability');
+  assert.match(selected.body.pending.summary, /Wedding Photography & Cinematic Video.*15.*Sony/);
+  assert.equal(interpreted[1].reply, 'शादी की रस्मों वाला');
+  assert.equal((await VendorCapability.findOne({ vendorService: f.service._id }).lean()).teamSize, 3);
+  assert.equal(await VendorCapability.countDocuments({ vendorService: second._id }), 0);
+  await send('हाँ');
+  const saved = await VendorCapability.findOne({ vendorService: f.service._id }).lean();
+  assert.equal(saved.teamSize, 15);
+  assert.deepEqual(saved.equipment, ['दो Sony के कैमरे']);
+});
 
 test('external intake persists private source, service quantities, overdue contract balance and server actor, without a Core contract', async () => {
   const f = await fixture(), input = body(f);

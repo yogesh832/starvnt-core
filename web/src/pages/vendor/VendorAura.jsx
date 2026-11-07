@@ -29,6 +29,8 @@ function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
   const next = steps.find((s) => !s.isDone);
   const doneCount = steps.filter((s) => s.isDone).length;
   const nextLabel = next ? next.title.replace('Brand name, category & city', 'Profile').replace('Add a service with a price', 'Service') : 'Ready';
+  const matchingStatus = !setup.checklist.verified ? 'verification pending'
+    : setup.matchingEligible ? 'ready for matching' : 'matching locked';
   return (
     <div className="mx-3 mt-2 rounded-xl border border-primary/15 bg-white/95 px-2.5 py-2 shadow-xs shrink-0">
       <div className="flex items-center gap-2 min-w-0">
@@ -38,7 +40,7 @@ function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
         <div className="min-w-0 flex-1 text-[11px] text-muted">
           <span className="font-extrabold text-navy">Profile {setup.percent}%</span>
           <span> · {doneCount}/{steps.length} done</span>
-          {!next ? <span>{setup.checklist.verified ? ' · ready for matching' : ' · verification pending'}</span> : <span> · next: {nextLabel}</span>}
+          {!next ? <span> · {matchingStatus}</span> : <span> · next: {nextLabel}</span>}
         </div>
         {next ? (
           <div className="flex items-center gap-1 shrink-0">
@@ -60,6 +62,8 @@ function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
           </div>
         ) : !setup.checklist.verified ? (
           <button onClick={() => onManual('/vendor/profile?tab=documents')} className="rounded-lg border border-amber-300 px-2 py-1 text-[10px] font-bold text-amber-800 shrink-0">Verify</button>
+        ) : !setup.matchingEligible ? (
+          <button onClick={() => onManual('/vendor/readiness')} className="rounded-lg border border-amber-300 px-2 py-1 text-xs font-bold text-amber-800 shrink-0">Check readiness</button>
         ) : (
           <Icon name="check" size={14} className="text-emerald-600 shrink-0" />
         )}
@@ -1022,7 +1026,7 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
 
   const showingLocationPicker = !pending && !sending && messages.at(-1)?.role === 'model' && requestsVendorLocation(messages.at(-1)?.content);
   const chips = showingLocationPicker ? [] : getAuraPrompts({ page, setup, messages, pending, sending, steps: SETUP_STEPS });
-  const setupCard = setupIncomplete && (
+  const setupCard = (setupIncomplete || setup?.matchingEligible === false) && (
     <SetupCard
       setup={setup}
       expanded={setupExpanded}

@@ -53,7 +53,11 @@ export default function VendorPortal() {
   async function loadSetup() {
     try {
       const res = await externalApi.call('/vendor/activation-status');
-      if (res?.status?.checklist) setSetup({ percent: res.status.completionPercentage ?? 0, checklist: res.status.checklist });
+      if (res?.status?.checklist) setSetup({
+        percent: res.status.completionPercentage ?? 0,
+        checklist: res.status.checklist,
+        matchingEligible: res.status.matchingEligible,
+      });
     } catch {
       /* setup card simply stays hidden */
     }

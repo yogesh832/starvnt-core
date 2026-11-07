@@ -14,6 +14,7 @@ import { createQuote, assertQuoteSubmission } from '../services/quoteStateMachin
 import { notifyCustomer } from '../../notifications/notification.service.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
+import { explicitTeamSize, isCapabilityDetail, namedCapabilityServices } from './capabilityIntake.js';
 
 /**
  * Operational & profile-setup actions Vendor Aura+ can carry out from chat/voice:
@@ -368,7 +369,7 @@ function pickService(services, name) {
  * Turn the model's proposal into a clean action, or { error } explaining what is missing.
  * `said` = the vendor's recent messages (oldest → newest).
  */
-export function validateAction(raw, { said, vendor = {}, services = [], context = {} } = {}) {
+export function validateAction(raw, { said, vendor = {}, services = [], context = {}, capabilityDraft = null } = {}) {
   const kind = raw?.kind;
   const stated = new Set(amountsIn(said));
 
@@ -388,22 +389,25 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
 
   if (kind === 'capability') {
     const c = raw.capability || {};
-    const service = pickService(services, c.serviceName);
-    if (!service) return { error: 'a service first (add one before team & gear)' };
-    const savedService = context.services?.find(s => s.id === String(service._id));
+    const active = services.filter(service => service.status === 'ACTIVE');
+    const matching = namedCapabilityServices(said, active);
+    const service = capabilityDraft?.service || (matching.length === 1 ? matching[0] : active.length === 1 ? active[0] : null);
+    if (!service) return { error: active.length ? 'the active service name' : 'a service first (add one before team & gear)' };
+    const serviceId = String(service._id ?? service.id);
+    const savedService = context.services?.find(s => s.id === serviceId);
     const savedTeam = Number(savedService?.capabilities?.[0]?.teamSize);
-    const teamSize = Number(c.teamSize) || numberBefore(said, 'log|logon|people|persons?|members?|jan|crew|team|photographers?|staff') || savedTeam;
-    if (!(teamSize >= 1 && teamSize <= 500) || (!stated.has(teamSize) && teamSize !== savedTeam)) return { error: 'your team size' };
+    const teamSize = capabilityDraft?.teamSize || explicitTeamSize(said) || savedTeam;
+    if (!Number.isInteger(teamSize) || teamSize < 1 || teamSize > 500) return { error: 'your team size' };
     return {
       action: {
         kind,
         capability: {
-          serviceId: String(service._id),
+          serviceId,
           serviceName: service.name,
           teamSize,
-          equipment: list(c.equipment).length ? list(c.equipment) : equipmentFrom(said),
+          equipment: capabilityDraft ? list(capabilityDraft.equipment) : list(c.equipment).length ? list(c.equipment) : equipmentFrom(said),
           styles: list(c.styles),
-          format: str(c.format, 40) || 'Full day',
+          format: str(c.format, 40),
         },
       },
     };
@@ -656,17 +660,17 @@ export async function executeAction(vendor, a) {
 
   if (a.kind === 'capability') {
     const c = a.capability;
-    const service = await VendorService.findOne({ _id: c.serviceId, vendor: vendorId });
+    const service = await VendorService.findOne({ _id: c.serviceId, vendor: vendorId, status: 'ACTIVE' });
     if (!service) throw new Error('SERVICE_NOT_FOUND');
     const existing = await VendorCapability.findOne({ vendor: vendorId, vendorService: service._id });
     if (existing) {
       existing.teamSize = c.teamSize;
       if (c.equipment.length) existing.equipment = c.equipment;
       if (c.styles.length) existing.styles = c.styles;
-      existing.format = c.format;
+      if (c.format) existing.format = c.format;
       await existing.save();
     } else {
-      await VendorCapability.create({ vendor: vendorId, vendorService: service._id, styles: c.styles, format: c.format, teamSize: c.teamSize, simultaneousEventLimit: 1, equipment: c.equipment, categoryAttributes: {} });
+      await VendorCapability.create({ vendor: vendorId, vendorService: service._id, styles: c.styles, format: c.format || 'Full day', teamSize: c.teamSize, simultaneousEventLimit: 1, equipment: c.equipment, categoryAttributes: {} });
     }
     return evaluateVendorActivation(vendorId);
   }
@@ -963,8 +967,7 @@ export function isMessageRelevantToPending(pending, text) {
   }
 
   if (pending.kind === 'capability') {
-    if (/\b(team|gear|equipment|camera|lens|size|people|log|staff|crew)\b/i.test(s)) return true;
-    return false;
+    return isCapabilityDetail(text) || /\b(team|gear|equipment|camera|lens|size|people|log|staff|crew)\b/i.test(s);
   }
 
   if (pending.kind === 'location') {

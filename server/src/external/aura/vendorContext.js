@@ -25,7 +25,7 @@ import { VENDOR_CATEGORY_VALUES } from '../../common/vendorCategories.js';
 export const CATEGORIES = VENDOR_CATEGORY_VALUES;
 
 export const PAGES = [
-  'dashboard', 'enquiries', 'quotes', 'bookings', 'calendar', 'portfolio', 'services', 'availability',
+  'dashboard', 'enquiries', 'quotes', 'bookings', 'calendar', 'portfolio', 'services', 'availability', 'readiness',
   'payments', 'reviews', 'analytics', 'messages', 'updates', 'documents', 'profile', 'settings',
 ];
 
