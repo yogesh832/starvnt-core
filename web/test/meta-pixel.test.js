@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPartnerPixel, campaignFromUrl, pageLabel, PIXEL_ID, CONSENT_KEY } from '../src/lib/metaPixel.js';
+import { syncPartnerTagManager } from '../src/lib/partnerTagManager.js';
 
 function browser(shared = new Map()) {
   let time = 1800000000000, count = 0, optedOut = false;
@@ -75,4 +76,49 @@ test('storage restrictions, Meta failure, consent expiry and cross-tab rejection
   broken.env.image = () => { throw Error('Meta unavailable'); };
   const pixel = createPartnerPixel(broken.env); pixel.setConsent(true); pixel.page('/vendor', 'one');
   assert.equal(await pixel.track('CompleteRegistration', 'unavailable'), false);
+});
+
+test('existing Meta consent requires a fresh choice before Google Tag Manager loads', () => {
+  const b = browser();
+  const originalConsent = { version: 1, allowed: true, at: b.env.now() };
+  b.localStorage.setItem(CONSENT_KEY, JSON.stringify(originalConsent));
+  b.pixel.syncConsent();
+  const scripts = [];
+  const browserWindow = {
+    document: {
+      getElementById: id => scripts.find(script => script.id === id),
+      createElement: () => ({}),
+      head: { append: script => scripts.push(script) },
+    },
+  };
+  const sync = () => {
+    const consent = b.pixel.getConsent();
+    syncPartnerTagManager(browserWindow, consent.allowed && consent.googleTagManager === true);
+  };
+
+  sync();
+  assert.equal(scripts.length, 0);
+  assert.equal(browserWindow.dataLayer, undefined);
+  b.advance(1000);
+  b.pixel.setConsent(true);
+  sync();
+  sync();
+  assert.equal(b.pixel.getConsent().at, originalConsent.at);
+  assert.equal(scripts.length, 1);
+  assert.equal(scripts[0].src, 'https://www.googletagmanager.com/gtm.js?id=GTM-PWG3DN52');
+  const commands = browserWindow.dataLayer.map(args => Array.from(args));
+  assert.equal(commands.length, 3);
+  assert.deepEqual(commands.slice(0, 2).map(args => args.slice(0, 2)), [
+    ['consent', 'default'], ['consent', 'update'],
+  ]);
+  assert.equal(commands[2][0], 'js');
+  assert.ok(commands[2][1] instanceof Date);
+  assert.equal(commands[0][2].analytics_storage, 'denied');
+  assert.equal(commands[1][2].analytics_storage, 'granted');
+  assert.equal(commands[1][2].ad_user_data, 'denied');
+
+  b.pixel.setConsent(false);
+  sync();
+  assert.equal(browserWindow.dataLayer.at(-1)[2].analytics_storage, 'denied');
+  assert.equal(scripts.length, 1);
 });

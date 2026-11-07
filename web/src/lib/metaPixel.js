@@ -73,10 +73,17 @@ export function createPartnerPixel(env) {
     return true;
   }
   function setConsent(allowed) {
-    if (allowed === true && permitted()) return;
-    consent = { version: 1, allowed: allowed === true && !env.optOut(), at: env.now() };
+    const keepMetaConsent = allowed === true && permitted();
+    if (keepMetaConsent && consent.googleTagManager === true) return;
+    const accepted = allowed === true && !env.optOut();
+    consent = {
+      version: 1,
+      allowed: accepted,
+      googleTagManager: accepted,
+      at: keepMetaConsent ? consent.at : env.now(),
+    };
     write(storage(), CONSENT_KEY, consent);
-    lastVisit = null;
+    if (!keepMetaConsent) lastVisit = null;
     if (permitted()) loadAttribution(); else { clearMarketing(); landing = { capturedAt: env.now() }; }
     env.consentChanged?.();
   }
