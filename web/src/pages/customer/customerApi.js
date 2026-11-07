@@ -13,6 +13,8 @@ export const customerApi = {
   requestIdentityLink: body => externalApi.call('/customer/identity/link-requests', { method: 'POST', body }),
   revokeIdentityLink: id => externalApi.call(`/customer/identity/link-requests/${id}/revoke`, { method: 'POST' }),
   profile: () => externalApi.call('/customer/profile'),
+  uploadProfilePhoto: file => { const body = new FormData(); body.append('image', file); return externalApi.call('/customer/profile/picture', { method: 'PUT', body }); },
+  removeProfilePhoto: () => externalApi.call('/customer/profile/picture', { method: 'DELETE' }),
   planOptions: (eventType) => externalApi.call(`/customer/plan-options${eventType ? `?eventType=${encodeURIComponent(eventType)}` : ''}`),
   events: () => externalApi.call('/customer/events'),
   createPlanningDraft: body => externalApi.call('/customer/event-drafts', { method: 'POST', body }),

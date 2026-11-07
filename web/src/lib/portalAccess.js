@@ -1,4 +1,4 @@
-export const PORTAL_SURFACE = 'CUSTOMER';
+export const PORTAL_SURFACE = import.meta.env?.VITE_PORTAL_SURFACE === 'VENDOR' ? 'VENDOR' : 'CUSTOMER';
 export function portalNextPath(path, surface = PORTAL_SURFACE) {
   const base = surface === 'VENDOR' ? '/vendor' : '/customer';
   if (typeof path !== 'string' || !path.startsWith('/') || path.includes('\\') || /[\u0000-\u001f]/.test(path)) return base;

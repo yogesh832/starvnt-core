@@ -1,5 +1,6 @@
 import { runReminderBatch, runEventDeadlineBatch } from '../notifications/reminders.worker.js';
 import { runDiscoveryNotificationBatch } from '../experience/discoveryNotifications.worker.js';
+import { runDiscoveryRetentionBatch } from '../experience/discoveryRetention.worker.js';
 import { reconcileBookingBatch } from '../customer/services/bookingTruth.service.js';
 import { expireExternalHolds } from '../external/services/commitments.service.js';
 import { config } from '../config.js';
@@ -32,6 +33,10 @@ export function startCoreWorkers() {
   let discoveryBusy = false;
   const discovery = async () => { if (discoveryBusy) return; discoveryBusy = true; try { await runDiscoveryNotificationBatch(); } catch (err) { console.warn('[discovery-notifications]', err.message); } finally { discoveryBusy = false; } };
   setInterval(discovery, 300000).unref();
+  let retentionBusy = false;
+  const retention = async () => { if (retentionBusy) return; retentionBusy = true; try { await runDiscoveryRetentionBatch(); } catch (err) { console.warn('[discovery-retention]', err.message); } finally { retentionBusy = false; } };
+  setInterval(retention, 86400000).unref();
+  setTimeout(retention, 60000).unref();
   let foundationBusy = false;
   const foundation = async () => {
     if (foundationBusy) return;

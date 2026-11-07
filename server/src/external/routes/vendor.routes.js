@@ -1,6 +1,10 @@
-import { vendorProposals } from '../../proposals/routes.js';
+import { claimVendorAcquisition } from '../services/vendorAcquisition.service.js';
 import { experienceVendorRoutes } from '../../experience/routes.js';
+import { vendorIdentityRoutes } from './vendorIdentity.routes.js';
+import { vendorLearningRoutes } from '../../learning/routes.js';
+import { vendorMeetingRoutes } from '../../learning/meetingRoutes.js';
 import { vendorDiscoveryRewards } from '../../experience/discoveryRewards.routes.js';
+import { vendorProposals } from '../../proposals/routes.js';
 import externalBookingRoutes from './externalBookings.routes.js';
 import readinessRoutes from './readiness.routes.js';
 import { observeProduct } from '../../common/productObservability.js';
@@ -96,6 +100,20 @@ async function resolveVendorContext(req, res, next) {
 }
 
 router.use(resolveVendorContext);
+router.use(vendorIdentityRoutes);
+router.use('/academy', vendorLearningRoutes);
+router.use('/growth-meetings', vendorMeetingRoutes);
+
+// Consent is browser-specific; only post-consent achievements may be dispatched.
+router.post('/acquisition-events/claim', async (req, res, next) => {
+  try {
+    const since = Number(req.body?.consentSince);
+    if (!Number.isFinite(since) || since <= 0 || since > Date.now() || Date.now() - since > 90 * 86400000) return res.status(400).json({ error: 'INVALID_MARKETING_CONSENT_TIME' });
+    await evaluateVendorActivation(req.vendorId);
+    res.json({ ok: true, events: await claimVendorAcquisition(req.vendorId, since) });
+  } catch (err) { next(err); }
+});
+
 router.use('/proposals', vendorProposals);
 router.use(notificationPreferencesRoutes('VENDOR'));
 router.use('/external-bookings', externalBookingRoutes);

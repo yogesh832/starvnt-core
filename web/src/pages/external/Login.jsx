@@ -1,5 +1,5 @@
-import { portalLoginUrl } from '../../lib/portalAccess.js';
-import { customerNextPath } from "../../lib/customerSurface.js";
+import { partnerPixel } from '../../lib/metaPixel.js';
+import { portalLoginUrl, PORTAL_SURFACE, portalNextPath } from '../../lib/portalAccess.js';
 import VendorCategoryPicker from "../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -8,6 +8,7 @@ import { useTheme } from "../../lib/ThemeContext.jsx";
 import PublicNavbar from "../../components/PublicNavbar.jsx";
 import PublicFooter from "../../components/PublicFooter.jsx";
 import { LogoWord } from "../../components/ui.jsx";
+import { useSignupDocuments } from "../../lib/useSignupDocuments.js";
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -17,6 +18,11 @@ const MSG91_WIDGET_ID =
 const MSG91_WIDGET_TOKEN =
   import.meta.env.VITE_MSG91_WIDGET_TOKEN || "567508TgmtIu2qfrl6a9e4925P1";
 
+const authScripts = [
+  ['starvnt-google-signin', 'https://accounts.google.com/gsi/client'],
+  ['starvnt-phone-otp', 'https://verify.msg91.com/otp-provider.js'],
+];
+
 /**
  * Customer OS Authentication:
  * Supports customers with 3 independent authentication methods:
@@ -25,6 +31,18 @@ const MSG91_WIDGET_TOKEN =
  * 3. Email & Password
  */
 export default function ExternalLogin() {
+  useEffect(() => {
+    for (const [id, src] of authScripts) {
+      if (document.getElementById(id)) continue;
+      const script = document.createElement('script');
+      script.id = id;
+      script.src = src;
+      script.async = true;
+      script.onerror = () => script.remove();
+      document.head.append(script);
+    }
+  }, []);
+
   const {
     login,
     register,
@@ -50,7 +68,43 @@ export default function ExternalLogin() {
     params.get("mode") === "register";
 
   const [mode, setMode] = useState(isRegisterPath ? "register" : "login");
-  const accountType = "CUSTOMER";
+  const accountType = PORTAL_SURFACE;
+  const [documentsRevision, setDocumentsRevision] = useState(0);
+  const [acceptedVersions, setAcceptedVersions] = useState('');
+  const signupDocuments = useSignupDocuments(mode === 'register' ? accountType : null, documentsRevision);
+  const documentReferences = signupDocuments.documents?.map(({ kind, version, hash }) => ({ kind, version, hash })) || [];
+  const currentVersions = documentReferences.length ? JSON.stringify(documentReferences) : '';
+  const signupAcceptance = mode === 'register' && currentVersions && acceptedVersions === currentVersions
+    ? { accepted: true, documents: documentReferences }
+    : undefined;
+  function requireSignupDocuments() {
+    if (mode !== 'register') return;
+    if (signupDocuments.loading || signupDocuments.error || (signupDocuments.required && documentReferences.length !== 2)) {
+      throw new Error('Signup documents are unavailable. Reload them before continuing.');
+    }
+    if (signupDocuments.required && !signupAcceptance) {
+      throw new Error('Review and accept the signup documents before continuing.');
+    }
+  }
+  function refreshChangedDocuments(error) {
+    if (error.data?.error !== 'SIGNUP_DOCUMENTS_CHANGED') return;
+    setAcceptedVersions('');
+    setDocumentsRevision(revision => revision + 1);
+  }
+  function trackRegistrationStart() {
+    if (mode !== 'register' || accountType !== 'VENDOR' || !partnerPixel?.getConsent().allowed) return;
+    let id;
+    try {
+      id = sessionStorage.getItem('starvnt-registration-intent');
+      if (!id) { id = crypto.randomUUID(); sessionStorage.setItem('starvnt-registration-intent', id); }
+    } catch { id = 'registration-start'; }
+    void partnerPixel.track('VendorRegistrationStarted', id);
+  }
+  useEffect(() => {
+    const start = event => { if (event.target.matches?.('input, select, textarea')) trackRegistrationStart(); };
+    document.addEventListener('input', start);
+    return () => document.removeEventListener('input', start);
+  }, [mode, accountType]);
 
   // Auth Method: 'GOOGLE' | 'PHONE' | 'EMAIL'
   const [authMethod, setAuthMethod] = useState("EMAIL");
@@ -89,7 +143,7 @@ export default function ExternalLogin() {
 
 
   function redirectAfterAuth() {
-    navigate(customerNextPath(nextPath), { replace: true });
+    navigate(portalNextPath(nextPath), { replace: true });
   }
 
   useEffect(() => {
@@ -106,6 +160,8 @@ export default function ExternalLogin() {
   }, [timer]);
 
   // Initialize Google Identity Services
+  const googleCredentialHandler = useRef(handleGoogleCredentialResponse);
+  googleCredentialHandler.current = handleGoogleCredentialResponse;
   useEffect(() => {
     if (authMethod !== "GOOGLE" && mode !== "login") return;
 
@@ -113,7 +169,7 @@ export default function ExternalLogin() {
       if (window.google?.accounts?.id) {
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
-          callback: handleGoogleCredentialResponse,
+          callback: response => googleCredentialHandler.current(response),
           auto_select: false,
         });
 
@@ -146,10 +202,12 @@ export default function ExternalLogin() {
 
   // ── Handler 1: Email & Password ───────────────────────────────────────────
   async function handleEmailSubmit(e) {
+    trackRegistrationStart();
     e.preventDefault();
     clearLoginError();
     setBusy(true);
     try {
+      requireSignupDocuments();
       if (!emailOtpSent) {
         const otpRes = await sendEmailOtp(form.email, {
           mode,
@@ -195,6 +253,7 @@ export default function ExternalLogin() {
               email: form.email,
               phone: form.phone,
               password: form.password,
+              signupAcceptance,
               accountType,
               businessName:
                 accountType === "VENDOR" ? form.businessName : undefined,
@@ -205,6 +264,7 @@ export default function ExternalLogin() {
             });
       redirectAfterAuth(u);
     } catch (err) {
+      refreshChangedDocuments(err);
       setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       const map = {
         INVALID_CREDENTIALS: "Incorrect email or password.",
@@ -271,12 +331,15 @@ export default function ExternalLogin() {
 
   // ── Handler 2: Google Authentication ──────────────────────────────────────
   async function handleGoogleCredentialResponse(response) {
+    trackRegistrationStart();
     if (!response?.credential) return;
     clearLoginError();
     setBusy(true);
     try {
+      requireSignupDocuments();
       const u = await loginWithGoogle(response.credential, {
         accountType,
+        signupAcceptance,
         businessName:
           mode === "register" && form.businessName?.trim()
             ? form.businessName.trim()
@@ -296,6 +359,7 @@ export default function ExternalLogin() {
       });
       redirectAfterAuth(u);
     } catch (err) {
+      refreshChangedDocuments(err);
       setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       setError(
         err.data?.error === "ACCOUNT_TYPE_MISMATCH"
@@ -308,6 +372,7 @@ export default function ExternalLogin() {
   }
 
   async function triggerGoogleDirect() {
+    trackRegistrationStart();
     if (window.google?.accounts?.id) {
       window.google.accounts.id.prompt();
     } else {
@@ -335,6 +400,7 @@ export default function ExternalLogin() {
 
     setBusy(true);
     try {
+      requireSignupDocuments();
       window.initSendOTP({
         widgetId: MSG91_WIDGET_ID,
         tokenAuth: MSG91_WIDGET_TOKEN,
@@ -367,6 +433,7 @@ export default function ExternalLogin() {
 
             const u = await loginWithWidgetOtp(accessToken, {
               accountType,
+              signupAcceptance,
               phone,
               fullName: form.fullName?.trim() || undefined,
               businessName: form.businessName?.trim() || undefined,
@@ -376,6 +443,7 @@ export default function ExternalLogin() {
             });
             redirectAfterAuth(u);
           } catch (err) {
+            refreshChangedDocuments(err);
       setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
             setError(
               err.data?.error === "ACCOUNT_TYPE_MISMATCH"
@@ -401,6 +469,7 @@ export default function ExternalLogin() {
   }
 
   async function handleSendOtp(e) {
+    trackRegistrationStart();
     if (e) e.preventDefault();
     if (!form.phone || form.phone.trim().length < 10) {
       setError("Please enter a valid 10-digit mobile number.");
@@ -419,8 +488,10 @@ export default function ExternalLogin() {
     clearLoginError();
     setBusy(true);
     try {
+      requireSignupDocuments();
       const u = await loginWithOtp(form.phone, form.otp, {
         accountType,
+        signupAcceptance,
         fullName: form.fullName?.trim() || undefined,
         businessName:
           mode === "register" && form.businessName?.trim()
@@ -441,6 +512,7 @@ export default function ExternalLogin() {
       });
       redirectAfterAuth(u);
     } catch (err) {
+      refreshChangedDocuments(err);
       setPortalMismatch(err.data?.error === 'ACCOUNT_TYPE_MISMATCH' ? err.data : null);
       const map = {
         INVALID_OTP: "Invalid OTP code. Please check and retry.",
@@ -621,7 +693,7 @@ export default function ExternalLogin() {
                   </p>
                 </div>
 
-                <span className="rounded-xl bg-lavender px-3 py-1.5 text-xs font-bold text-navy">Customer OS</span>
+                <span className="rounded-xl bg-lavender px-3 py-1.5 text-xs font-bold text-navy">{accountType === 'VENDOR' ? 'Vendor OS' : 'Customer OS'}</span>
               </div>
 
               {/* 3 Authentication Option Tabs */}
@@ -719,6 +791,21 @@ export default function ExternalLogin() {
                 </button>
               </div>
 
+              {mode === 'register' && <div className="my-3 space-y-2 text-xs text-ink">
+                {signupDocuments.loading && <p role="status">Loading signup documents…</p>}
+                {(signupDocuments.error || (signupDocuments.required && documentReferences.length !== 2)) &&
+                  <button type="button" className="underline" onClick={() => setDocumentsRevision(value => value + 1)}>Signup documents unavailable. Retry</button>}
+                {signupDocuments.required && documentReferences.length === 2 && <>
+                  <div className="flex flex-wrap gap-4">
+                    <a className="underline" href={`/terms?for=${accountType.toLowerCase()}`} target="_blank" rel="noreferrer">{accountType === 'VENDOR' ? 'Vendor Terms' : 'Terms of Service'}</a>
+                    <a className="underline" href={`/privacy?for=${accountType.toLowerCase()}`} target="_blank" rel="noreferrer">Privacy Policy</a>
+                  </div>
+                  <label className="flex min-h-11 items-center gap-2">
+                    <input type="checkbox" checked={Boolean(signupAcceptance)} onChange={event => setAcceptedVersions(event.target.checked ? currentVersions : '')} />
+                    I accept the Terms and acknowledge the Privacy Policy.
+                  </label>
+                </>}
+              </div>}
               {/* Error Banner */}
               {authMethod === "EMAIL" && emailOtpSent && !emailOtpVerified && emailDeliveryNotice && <p role="status" className="mb-3 rounded-xl bg-primary/10 p-3 text-sm text-ink dark:text-slate-200">{emailDeliveryNotice}</p>}
               {(error || mismatch) && (

@@ -5,6 +5,7 @@ import ProfileStatus from '../../../components/ProfileStatus.jsx';
 import { VENDOR_SETUP_STEPS } from '../../../../../server/src/common/vendorSetupSteps.js';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { NextGrowthMeetingCard } from './GrowthMeetings.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import { externalApi } from '../../../lib/api.js';
@@ -1557,6 +1558,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             onMarkAllRead={handleMarkAllNotificationsRead}
           />
         </div>
+
+        <NextGrowthMeetingCard />
 
         {/* Conversion Funnel Performance */}
         <div className="md:col-span-2 xl:col-span-1 min-w-0">

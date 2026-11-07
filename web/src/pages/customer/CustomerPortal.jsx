@@ -110,6 +110,7 @@ function Avatar({ user, firstName, size = 'w-8 h-8' }) {
 /** Top bar: Ask STARVNT, event switcher, updates bell, profile menu. */
 function TopBar({ user, firstName, unread, logout }) {
   const navigate = useNavigate();
+  const isProfile = useLocation().pathname === '/customer/me';
   const { dark, toggle: toggleTheme } = useTheme();
   const { events, current, setCurrent } = useCurrentEvent();
   const [q, setQ] = useState('');
@@ -138,7 +139,7 @@ function TopBar({ user, firstName, unread, logout }) {
         <Icon name="search" size={15} className="text-muted dark:text-slate-400" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask STARVNT anything…" className="flex-1 bg-transparent outline-none text-sm text-navy dark:text-white placeholder:text-muted/70 dark:placeholder:text-slate-400 font-medium" />
       </form>
-      <EventSwitcher />
+      {!isProfile && <EventSwitcher />}
       <button onClick={() => navigate('/customer/updates')} className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender dark:hover:bg-white/10 text-muted dark:text-slate-300 transition" aria-label="Updates">
         <Icon name="bell" size={18} />
         <span className="absolute -top-0.5 -right-0.5"><Badge n={unread} /></span>
@@ -316,7 +317,7 @@ function Shell() {
           <button onClick={() => navigate('/customer/me')} className="h-10 w-10 shrink-0 grid place-items-center" aria-label="Profile"><Avatar user={user} firstName={firstName} /></button>
         </header>
 
-        <div className="md:hidden customer-mobile-context"><EventSwitcher /></div>
+        {pathname !== '/customer/me' && <div className="md:hidden customer-mobile-context"><EventSwitcher /></div>}
 
         {tab === 'aura' ? (
           <main className="flex-1 min-h-0 flex flex-col pb-28 md:pb-0">

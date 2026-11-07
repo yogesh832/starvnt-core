@@ -1,0 +1,26 @@
+# STARVNT Phase 1 · Founder handoff
+
+Founder can send the items below as a single approved decision note with the referenced files. Each approval should identify the final version, approval owner, effective date and applicable release. Legal, Finance or Ops can supply their portion for Founder sign-off.
+
+## Needed first
+
+| Founder action | What to send | What it unlocks |
+| --- | --- | --- |
+| Approve the signup legal pack with Legal | Exact final Customer Terms, Vendor Terms and applicable Privacy Notice for each audience. Include legal entity name, CIN, statutory and grievance contacts, document versions, effective time and approver. Identify which supplementary policies can publish and who handles withdrawals or complaints. | Legal pages and enforceable signup acceptance on the supported web and native builds. |
+| Confirm the master Vendor Partnership Agreement and Compliance Engine owner | Approved master agreement and annexes, signatory and acceptance rules, effective version, reacceptance triggers and how existing vendors are treated. Include approved compliance, suspension and appeal rules. Identify the current engine or owner if it exists outside this repo. | Agreement integration and independent onboarding/compliance states. |
+| Approve media-rights policy with Legal | Approved vendor and third-party release templates. State who can grant each permission, whether it applies to profile display, public sharing, downloads, organic marketing or paid ads, and the allowed channels, territory, duration and removal SLA. Decide how to treat existing portfolio assets whose rights are unknown. | Per-use rights capture, share eligibility, campaign asset approval and safe remediation of historical URLs. |
+| Approve the public Partnership content and host plan | Final copy, claims, CTA destinations, preferred Partner host and approved production domain ownership for `/partners`, `/partners/demo` and public profiles. Supply authentic Founder footage, approved script, portrait and landscape cuts, posters, captions and permission to publish. Confirm whose approval can turn the rollout flags on. | Public launch after staging acceptance. |
+| Approve Academy starter content | A small initial set of final lesson titles, objectives and text or videos. For each video include final MP4, duration, caption file, supporting notes, audience and a recorded rights approval or expiry. Name editors and publishers. Engineering or Ops can provision the authenticated assets after access is granted. | Approved Academy publication, including secure video staging. |
+
+## Commercial and programme decisions
+
+| Founder action | What to send | What it unlocks |
+| --- | --- | --- |
+| Approve Partner subscriptions with Finance/CA | Confirm or replace the proposed ₹999 monthly price, up to six free calendar months and 31 May 2027 cutoff. Decide eligibility, configured business timezone, GST display, trial start and expiry, cancellation, refunds, post-expiry access and whether recurring mandates are in scope. | Entitlement, checkout and price publication with an approved basis. |
+| Approve non-ticket booking finance policy with Finance/Legal | Applicable advance calculation and base, refund tiers and cutoffs, cancellation authority and exceptions, merchant/funds flow, settlement review timing and evidence. Name independent policy author and approver. Assign Razorpay sandbox and reconciliation owners. | End-to-end payment authorization and verified staging reconciliation before any live activation. |
+| Assign a Growth Meetings and community owner | Audience, frequency/timezone, invite and reminder policy, Workspace host account and admission controls. Decide whether recording is allowed, with notice, consent and retention. Approve the success-story release, final vendor approval and correction/removal process. | Staff-managed meetings and approved community publishing. |
+| Approve recognition rules or defer launch | Confirm scoring weights, minimum verified evidence, tie-breaks, who approves decisions and appeal response times. Decide separately whether the Family Experience is deferred or gets a budget, eligibility and travel policy. | Fair recognition launch. Family details are collected only after an authorized programme selects participants. |
+| Approve company marketing authority and analytics scope | Name campaign planner, publisher, budget approver and reconciler. Set caps and pause authority. Confirm intended Meta account/domain, whether CAPI is approved, attribution window, data retention and what can be sent. | Company campaign launch, measurable spending controls and approved conversion reporting. |
+| Assign staging and production sign-off | Name the environment owner and approvers for code, privacy, finance and content. Confirm release flag owners and rollback authority. Grant the needed sandbox and staging permissions through the existing access or secret manager. | Real-provider checks, device acceptance and staged release. |
+
+Engineering can continue with draft tooling, fixtures, tests, permission enforcement and migration rehearsals while those decisions are being prepared. Send approval evidence and final assets through the agreed workspace. Provider credentials belong in the existing secret manager.

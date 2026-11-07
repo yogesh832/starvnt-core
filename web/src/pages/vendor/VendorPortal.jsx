@@ -1,5 +1,9 @@
 import CustomerGrowth from './pages/CustomerGrowth.jsx';
 import DiscoveryRewards from './pages/DiscoveryRewards.jsx';
+import VendorIdentity from './pages/VendorIdentity.jsx';
+import Academy from './pages/Academy.jsx';
+import GrowthMeetings from './pages/GrowthMeetings.jsx';
+import { VendorProposalAgreements } from '../ProposalWorkspace.jsx';
 import LaunchpadPage from './pages/LaunchpadPage.jsx';
 import AuraMark from '../../components/AuraMark.jsx';
 import { useState, useEffect, useRef } from 'react';
@@ -294,7 +298,10 @@ export default function VendorPortal() {
     { to: 'customers', label: 'Customer 360', icon: 'customers' },
     { to: 'experience-qr', label: 'Experience QR', icon: 'reviews' },
     { to: 'growth', label: 'Customer growth', icon: 'analytics' },
+    { to: 'share', label: 'Share Your Business', icon: 'link' },
+    { to: 'learning', label: 'Learning & Growth', icon: 'documents' },
     { to: 'discovery-rewards', label: 'Discovery & rewards', icon: 'star' },
+    { to: 'proposals', label: 'Proposal agreements', icon: 'documents' },
     { to: 'portfolio', label: 'Portfolio', icon: 'gallery' },
     { to: 'services', label: 'Services', icon: 'services' },
     { to: 'availability', label: 'Availability', icon: 'availability' },
@@ -575,7 +582,11 @@ export default function VendorPortal() {
             <Route path="customers" element={<CustomerGrowth />} />
             <Route path="experience-qr" element={<CustomerGrowth mode="qr" />} />
             <Route path="growth" element={<CustomerGrowth mode="growth" />} />
+            <Route path="share" element={<VendorIdentity key="share" share />} />
+            <Route path="learning" element={<Academy />} />
+            <Route path="learning/meetings" element={<GrowthMeetings />} />
             <Route path="discovery-rewards" element={<DiscoveryRewards />} />
+            <Route path="proposals" element={<VendorProposalAgreements />} />
             <Route path="notifications" element={<Navigate to="/vendor/updates" replace />} />
             <Route path="updates" element={<VendorUpdates notificationProps={notificationProps} onOpenAura={openAuraConversation} />} />
             <Route path="portfolio" element={<PortfolioPage />} />
@@ -587,6 +598,7 @@ export default function VendorPortal() {
             <Route path="messages" element={<Navigate to={`/vendor/updates?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.search)), tab: 'messages' })}`} replace />} />
             <Route path="documents" element={<DocumentsPage user={user} business={businessName} />} />
             <Route path="profile" element={<ProfilePage user={user} business={businessName} />} />
+            <Route path="profile/social-links" element={<VendorIdentity key="social-links" />} />
             <Route path="settings" element={<SettingsPage user={user} business={businessName} />} />
           </Routes>
         </div>

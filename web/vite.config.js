@@ -7,6 +7,8 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   return {
+    define: mode === 'vendor' ? { 'import.meta.env.VITE_PORTAL_SURFACE': JSON.stringify('VENDOR') } : {},
+    build: { outDir: mode === 'vendor' ? 'dist-vendor' : 'dist' },
     plugins: [react(), tailwindcss()],
     server: {
       port: Number(env.VITE_DEV_PORT || 5173),

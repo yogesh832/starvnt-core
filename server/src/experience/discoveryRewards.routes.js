@@ -67,8 +67,14 @@ vendorDiscoveryRewards.post('/discovery/projects', uploadLimit, (req, res, next)
   res.status(201).json({ project: { _id: project._id, status: project.status } });
 }));
 vendorDiscoveryRewards.post('/discovery/projects/:id/withdraw', h(async (req, res) => {
-  const project = await DiscoveryProject.findOneAndUpdate({ _id: req.params.id, vendor: req.vendorId, status: { $ne: 'WITHDRAWN' } }, { $set: { status: 'WITHDRAWN' }, $push: { history: { actor: String(req.externalUser._id), action: 'WITHDRAWN' } } }, { new: true });
+  const project = await DiscoveryProject.findOneAndUpdate({ _id: req.params.id, vendor: req.vendorId, status: { $ne: 'WITHDRAWN' } }, { $set: { status: 'WITHDRAWN', withdrawnAt: new Date() }, $push: { history: { actor: String(req.externalUser._id), action: 'WITHDRAWN' } } }, { new: true });
   if (!project) throw fail('PROJECT_NOT_FOUND', 'Project unavailable.', 404); res.json({ status: project.status });
+}));
+vendorDiscoveryRewards.post('/discovery/projects/:id/purge', h(async (req, res) => {
+  if (req.body.confirm !== true) throw fail('CONFIRMATION_REQUIRED', 'Confirm permanent removal of the withdrawn discovery copy.');
+  const project = await DiscoveryProject.findOneAndUpdate({ _id: req.params.id, vendor: req.vendorId, status: 'WITHDRAWN', mediaPurgedAt: { $exists: false } }, { $unset: { image: 1 }, $set: { mediaPurgedAt: new Date() }, $push: { history: { actor: String(req.externalUser._id), action: 'MEDIA_PURGED', reason: 'Owner requested removal of the withdrawn discovery copy' } } }, { new: true });
+  if (!project) throw fail('PROJECT_UNAVAILABLE', 'Withdrawn media is unavailable or already removed.', 404);
+  res.json({ status: project.status, mediaPurgedAt: project.mediaPurgedAt });
 }));
 vendorDiscoveryRewards.get('/rewards', h(async (req, res) => {
   let evidence, policy;
@@ -117,8 +123,8 @@ customerDiscovery.put('/discovery/preferences', h(async (req, res) => {
   const preferences = await DiscoveryPreference.findOneAndUpdate({ customer: req.externalUser._id }, { $set: { point: { type: 'Point', coordinates: [lng, lat] }, radiusKm, place: clean(req.body.place, 100) } }, { upsert: true, new: true }); res.json({ preferences });
 }));
 customerDiscovery.put('/discovery/notifications', h(async (req, res) => {
-  if (typeof req.body.enabled !== 'boolean' || !Array.isArray(req.body.categories) || req.body.categories.some(c => !categories.includes(c))) throw fail('INVALID_PREFERENCES', 'Choose notification preferences and valid event categories.');
-  const preferences = await DiscoveryPreference.findOneAndUpdate({ customer: req.externalUser._id, radiusKm: { $in: [25, 50, 75, 100] } }, { $set: { notificationsEnabled: req.body.enabled, notificationCategories: [...new Set(req.body.categories)] } }, { new: true });
+  if (typeof req.body.enabled !== 'boolean' || (req.body.pushEnabled !== undefined && typeof req.body.pushEnabled !== 'boolean') || !Array.isArray(req.body.categories) || req.body.categories.some(c => !categories.includes(c))) throw fail('INVALID_PREFERENCES', 'Choose notification preferences and valid event categories.');
+  const preferences = await DiscoveryPreference.findOneAndUpdate({ customer: req.externalUser._id, radiusKm: { $in: [25, 50, 75, 100] } }, { $set: { notificationsEnabled: req.body.enabled, notificationCategories: [...new Set(req.body.categories)], ...(req.body.pushEnabled !== undefined ? { pushEnabled: req.body.pushEnabled } : {}) } }, { new: true });
   if (!preferences) throw fail('LOCATION_REQUIRED', 'Choose a discovery location first.'); res.json({ preferences });
 }));
 customerDiscovery.get('/discovery/feed', h(async (req, res) => {
@@ -142,7 +148,7 @@ customerDiscovery.post('/discovery/saved/:token', h(async (req, res) => {
 }));
 customerDiscovery.delete('/discovery/saved/:token', h(async (req, res) => { await DiscoveryPreference.updateOne({ customer: req.externalUser._id }, { $pull: { saved: req.params.token } }); res.json({ ok: true }); }));
 customerDiscovery.post('/discovery/interactions/:token', h(async (req, res) => {
-  if (!['WATCH', 'SIMILAR', 'PROPOSAL', 'AURA'].includes(req.body.kind)) throw fail('INVALID_INTERACTION', 'Invalid discovery interaction.');
+  if (!['WATCH', 'SIMILAR', 'PROPOSAL', 'AURA', 'SHARE'].includes(req.body.kind)) throw fail('INVALID_INTERACTION', 'Invalid discovery interaction.');
   const project = await DiscoveryProject.findOne({ publicToken: req.params.token, status: 'APPROVED' }).select('_id'); if (!project) throw fail('PROJECT_NOT_FOUND', 'Project unavailable.', 404);
   await recordInteraction(req.externalUser._id, project._id, req.body.kind); res.json({ ok: true });
 }));

@@ -1,4 +1,6 @@
 import { NotificationPreference } from './preferences.models.js';
+import { DiscoveryPreference, DiscoveryProject } from '../experience/discoveryRewards.models.js';
+import { PortfolioItem } from '../external/models/PortfolioItem.js';
 import { communicationAllowed } from '../foundation/consent.service.js';
 import { notificationDelivery } from './policy.js';
 import crypto from "node:crypto";
@@ -296,6 +298,19 @@ export async function deliverOne(
     return finish({ status: "FAILED", lastError: "EXPIRED" });
   if (!job.ticketId && binding.surface !== 'ADMIN') {
     if (binding.surface === 'CUSTOMER' && !await communicationAllowed(binding.ownerId, { purpose: job.purpose || (/marketing|campaign|referral|promotion|growth|loyalty/i.test(job.type || '') ? 'MARKETING' : 'TRANSACTIONAL'), channel: 'PUSH' })) return finish({ status: 'CANCELLED', lastError: 'CONSENT_WITHDRAWN' });
+    if (binding.surface === 'CUSTOMER' && job.purpose === 'PERSONALIZATION' && String(job.sourceId || '').startsWith('customer:')) {
+      const notification = await CustomerNotification.findOne({ _id: String(job.sourceId).slice(9), customer: binding.audienceId }).lean();
+      if (!notification || (String(notification.idempotencyKey || '').startsWith('discovery:') && !notification.payload?.discoveryToken)) return finish({ status: 'CANCELLED', lastError: 'DISCOVERY_CONTEXT_UNAVAILABLE' });
+      if (notification?.payload?.discoveryToken) {
+        const preference = await DiscoveryPreference.findOne({ customer: binding.ownerId, notificationsEnabled: true, pushEnabled: true }).lean();
+        const point = preference?.point?.coordinates;
+        if (!Array.isArray(point) || point.length !== 2 || ![25, 50, 75, 100].includes(preference.radiusKm)) return finish({ status: 'CANCELLED', lastError: 'DISCOVERY_PREFERENCE_CHANGED' });
+        const filter = { publicToken: notification.payload.discoveryToken, status: 'APPROVED', point: { $geoWithin: { $centerSphere: [point, preference.radiusKm / 6371] } } };
+        if (preference.notificationCategories?.length) filter.category = { $in: preference.notificationCategories };
+        const project = await DiscoveryProject.findOne(filter).select('vendor portfolio').lean();
+        if (!project || !await PortfolioItem.exists({ _id: project.portfolio, vendor: project.vendor, visibility: 'PUBLIC', status: { $in: ['PUBLISHED', 'VERIFIED', 'BOOKING_PROVEN'] } })) return finish({ status: 'CANCELLED', lastError: 'DISCOVERY_PROJECT_UNAVAILABLE' });
+      }
+    }
     const policy = await NotificationPreference.findById(`${binding.surface}:${binding.audienceId}`).lean();
     const delivery = notificationDelivery(policy || undefined, job.type || '');
     if (!delivery.allowed) return finish(delivery.disabled ? { status: 'CANCELLED', lastError: 'USER_PREFERENCE' } : { status: 'QUEUED', nextAttemptAt: delivery.nextAttemptAt, lastError: 'QUIET_HOURS', attempts: Math.max(0, (job.attempts || 1) - 1) });

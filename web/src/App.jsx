@@ -1,3 +1,4 @@
+import PartnerMarketing from './components/PartnerMarketing.jsx';
 import './components/auraMark.css';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -7,12 +8,15 @@ import { LogoWord } from './components/ui.jsx';
 import ExternalLogin from './pages/external/Login.jsx';
 import Landing from './pages/customer/Landing.jsx';
 import CustomerPortal from './pages/customer/CustomerPortal.jsx';
+import VendorPortal from './pages/vendor/VendorPortal.jsx';
+import { PORTAL_SURFACE } from './lib/portalAccess.js';
 import ExperiencePage from './pages/ExperiencePage.jsx';
 import AdminLogin from './pages/admin/AdminLogin.jsx';
 import AdminShell from './pages/admin/AdminShell.jsx';
 import DevApiTest from './pages/DevApiTest.jsx';
 import DevSingleClickAuth from './pages/DevSingleClickAuth.jsx';
 import PublicPolicyPage from './pages/PublicPolicyPage.jsx';
+import PublicVendorProfile from './pages/PublicVendorProfile.jsx';
 
 const DEV_TOOLS_ENABLED = import.meta.env.DEV;
 
@@ -79,32 +83,12 @@ function FullScreenLoader() {
 
 /** External surface guard: requires ACTIVE external session of accountType. */
 function RequireExternal({ type, children }) {
-  const { user, ready, switchSurface } = useExternalAuth();
+  const { user, ready } = useExternalAuth();
   const loc = useLocation();
-  const [switching, setSwitching] = useState(false);
-  const [switchFailed, setSwitchFailed] = useState(false);
-
-  useEffect(() => {
-    if (ready && user && type && user.accountType !== type && !switching && !switchFailed) {
-      setSwitching(true);
-      switchSurface(type)
-        .catch((err) => {
-          console.error(`Failed to switch surface to ${type}:`, err);
-          setSwitchFailed(true);
-        })
-        .finally(() => {
-          setSwitching(false);
-        });
-    }
-  }, [ready, user, type, switching, switchFailed, switchSurface]);
-
-  if (!ready || switching) return <FullScreenLoader />;
+  if (!ready) return <FullScreenLoader />;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(`${loc.pathname}${loc.search}${loc.hash}`)}`} replace />;
   if (type && user.accountType !== type) {
-    if (switchFailed) {
-      return <Navigate to="/customer" replace />;
-    }
-    return <FullScreenLoader />;
+    return <Navigate to="/login" replace />;
   }
   return children;
 }
@@ -121,11 +105,11 @@ function RootRedirect() {
   const { user, ready } = useExternalAuth();
   if (!ready) return <FullScreenLoader />;
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to="/customer" replace />;
+  return <Navigate to={PORTAL_SURFACE === 'VENDOR' ? '/vendor' : '/customer'} replace />;
 }
 
 export default function App() {
-  return <ErrorBoundary><ApplicationRoutes /></ErrorBoundary>;
+  return <ErrorBoundary><PartnerMarketing /><ApplicationRoutes /></ErrorBoundary>;
 }
 
 function ApplicationRoutes() {
@@ -137,25 +121,26 @@ function ApplicationRoutes() {
         element={
           window.location.hostname.startsWith('admin.')
             ? <Navigate to="/admin" replace />
-            : <Landing />
+            : PORTAL_SURFACE === 'VENDOR' ? <Navigate to="/vendor" replace /> : <Landing />
         } 
       />
-      {/* External domain — customer-only auth and portal */}
+      {/* External domain — independent customer and vendor build surfaces. */}
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />
       <Route path="/register" element={<ExternalLogin />} />
       <Route path="/experience/:token" element={<ExperiencePage />} />
       <Route path="/privacy" element={<PublicPolicyPage kind="privacy" />} />
       <Route path="/terms" element={<PublicPolicyPage kind="terms" />} />
+      <Route path="/vendors/:vendorId" element={<PublicVendorProfile />} />
       <Route
         path="/customer/*"
         element={
-          <RequireExternal type="CUSTOMER">
+          PORTAL_SURFACE === 'CUSTOMER' ? <RequireExternal type="CUSTOMER">
             <CustomerPortal />
-          </RequireExternal>
+          </RequireExternal> : <Navigate to="/vendor" replace />
         }
       />
-      <Route path="/vendor/*" element={<Navigate to="/customer" replace />} />
+      <Route path="/vendor/*" element={PORTAL_SURFACE === 'VENDOR' ? <RequireExternal type="VENDOR"><VendorPortal /></RequireExternal> : <Navigate to="/customer" replace />} />
 
       {/* Internal domain — fully separate admin experience */}
       <Route

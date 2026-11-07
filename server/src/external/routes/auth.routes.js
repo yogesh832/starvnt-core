@@ -1,3 +1,4 @@
+import { authAcquisitionReceipt } from '../services/vendorAcquisition.service.js';
 import { findPhoneIdentity, recordVerifiedIdentity, identityConflict } from '../../foundation/identity.service.js';
 import { rejectPortalMismatch, portalMismatch, requestedSurface } from '../services/portalPolicy.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
@@ -33,7 +34,27 @@ import {
   normalizePhone,
 } from "../services/otp.service.js";
 
+import { checkSignupAcceptance, signupDocuments } from "../../foundation/signupDocuments.js";
+
 const router = Router();
+
+router.get("/signup-documents", (req, res) => {
+  const result = signupDocuments(req.query.accountType);
+  if (!result) return res.status(400).json({ error: "INVALID_ACCOUNT_TYPE" });
+  return res.set("Cache-Control", "no-store").json(result);
+});
+
+async function createSignupAccount(req, fields) {
+  const acceptance = checkSignupAcceptance(fields.accountType, req.body?.signupAcceptance);
+  if (acceptance.error) {
+    throw Object.assign(new Error(acceptance.message), {
+      status: acceptance.status,
+      code: acceptance.error,
+    });
+  }
+  req.acquisitionCreated = true;
+  return ExternalUser.create({ ...fields, signupAcceptance: acceptance.record });
+}
 router.use(nativeAuthTransport(config.refreshCookieName));
 router.use((req, res, next) => {
   if (req.body?.accountType && !['CUSTOMER', 'VENDOR'].includes(req.body.accountType)) return res.status(400).json({ error: 'INVALID_ACCOUNT_TYPE' });
@@ -87,6 +108,7 @@ router.post("/dev-auth", async (req, res, next) => {
     // Quick sign-in creates only the requested development identity. It must
     // never reseed the shared vendor catalog as a side effect of a login.
     if (!user) {
+      req.acquisitionCreated = true;
       user = await ExternalUser.create({
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         email,
@@ -191,12 +213,14 @@ async function createSession(user, req, accountType = user.accountType) {
     expiresAt,
     accountType,
   });
+  session.$locals.acquisition = await authAcquisitionReceipt(user, session, req).catch(() => undefined);
   user.$locals.activeAccountType = accountType;
   return { session, refreshToken };
 }
 
 function issueTokens(user, session) {
   return {
+    ...(session.$locals.acquisition ? { acquisition: session.$locals.acquisition } : {}),
     accessToken: signExternalAccessToken(
       user,
       session._id,
@@ -319,7 +343,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
     const normalizedPhone = phone ? normalizePhone(phone) : undefined;
     if (normalizedPhone && await findPhoneIdentity(normalizedPhone)) throw identityConflict();
 
-    const user = await ExternalUser.create({
+    const user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
       fullName,
       email,
@@ -474,7 +498,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
       const targetAccountType =
         accountType === "VENDOR" ? "VENDOR" : "CUSTOMER";
       signInAs = targetAccountType;
-      user = await ExternalUser.create({
+      user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: googleUser.fullName,
         email: googleUser.email,
@@ -811,7 +835,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
           ? businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`
           : `Customer ${cleanDigits.slice(-4)}`);
 
-      user = await ExternalUser.create({
+      user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: defaultName,
         email: `${cleanDigits}@phone.starvnt.com`,
@@ -924,7 +948,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
           ? businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`
           : `Customer ${cleanDigits.slice(-4)}`);
 
-      user = await ExternalUser.create({
+      user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: defaultName,
         email: `${cleanDigits}@phone.starvnt.com`,

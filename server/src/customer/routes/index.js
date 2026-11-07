@@ -1,4 +1,5 @@
 import { readCustomerFeedback, saveCustomerFeedback } from '../../common/customerFeedback.service.js';
+import { profilePictureRoutes } from './profilePicture.routes.js';
 import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
 import express, { Router } from 'express';
 import { requireCustomer } from '../middleware/requireCustomer.js';
@@ -11,6 +12,7 @@ import * as i from '../controllers/internal.controller.js';
 /** /api/customer/* — Customer App API. Every route is customer-authenticated. */
 export const customerRouter = Router();
 customerRouter.use(requireCustomer);
+customerRouter.use(profilePictureRoutes);
 customerRouter.use(notificationPreferencesRoutes('CUSTOMER'));
 customerRouter.get('/feedback', h(async (req, res) => {
   res.json({ ok: true, feedback: await readCustomerFeedback(req.externalUser._id, req.query) });
