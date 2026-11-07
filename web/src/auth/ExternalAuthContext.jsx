@@ -10,14 +10,13 @@ const ExternalAuthContext = createContext(null);
 export function ExternalAuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
-  const [sessionError, setSessionError] = useState(null);
 
   const sessionRevision = useRef(0);
   async function storeSession(data, expected = sessionRevision.current) {
     const current = () => expected === sessionRevision.current;
     const nextUser = await acceptPortalSession(data, externalApi, current);
     if (current()) {
-      setUser(nextUser); setSessionError(null);
+      setUser(nextUser);
       if (nextUser?.accountType === 'VENDOR' && data.acquisition?.name === 'VendorLogin') partnerPixel?.receipts([data.acquisition]);
     }
     return nextUser;
@@ -37,8 +36,8 @@ export function ExternalAuthProvider({ children }) {
 
         const data = await externalApi.refresh();
         if (data?.user) await storeSession(data, expected);
-      } catch (error) {
-        if (error.data?.error === 'ACCOUNT_TYPE_MISMATCH') setSessionError(error.data);
+      } catch {
+        // Background restore failures return the user to a clean sign-in form.
         if (expected === sessionRevision.current) { externalApi.setToken(null); setUser(null); }
       } finally {
         setReady(true);
@@ -156,8 +155,6 @@ export function ExternalAuthProvider({ children }) {
       value={{
         user,
         ready,
-        sessionError,
-        clearSessionError: () => setSessionError(null),
         login,
         register,
         loginWithGoogle,

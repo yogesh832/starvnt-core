@@ -51,7 +51,7 @@ try {
   const service = await VendorService.create({ vendor: vendor._id, name: 'QA Photography', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 20000 } });
   await VendorCapability.create({ vendor: vendor._id, vendorService: service._id, teamSize: 2, simultaneousEventLimit: 1 });
   await VendorFinancialProfile.create({ vendor: vendor._id, pan: { verificationStatus: 'VERIFIED' }, bankAccount: { verificationStatus: 'VERIFIED' } });
-  await OperatingLocation.create({ vendor: vendor._id, label: 'QA Studio', city: 'Pune' });
+  await OperatingLocation.create({ vendor: vendor._id, label: 'QA Studio', city: 'Pune', coordinates: { lat: 18.52, lng: 73.85 } });
   await ServiceCoverage.create({ vendor: vendor._id, vendorService: service._id, coverageType: 'CITY', city: 'Pune' });
   await PortfolioItem.create({ vendor: vendor._id, mediaType: 'IMAGE', url: 'https://example.test/qa.jpg' });
   const enquiryBase = { vendor: vendor._id, customer: customer._id, vendorService: service._id, serviceName: service.name, eventDate: dateOnly(ago(-7)) };
@@ -192,24 +192,44 @@ try {
     await guestPage.waitForURL(path === '/admin' ? '**/admin/login' : '**/login?next=*');
     check(`Production ${path} has a visible protected sign-in destination`, (await guestPage.locator('body').innerText()).trim().length > 100, true);
   }
+  await guestPage.goto('http://127.0.0.1:5197/login?as=customer&next=/customer', { waitUntil: 'domcontentloaded' });
+  await guestPage.getByRole('heading', { name: 'Vendor Sign in', exact: true }).waitFor();
+  check('A fresh visit to the legacy customer login URL shows no account mismatch', await guestPage.getByRole('link', { name: 'Go to customer dashboard login', exact: false }).count(), 0);
   await guestPage.goto('http://127.0.0.1:5197/auth-test', { waitUntil: 'domcontentloaded' });
   await guestPage.waitForURL('**/login');
   check('Production development shortcut stays disabled', (await guestPage.locator('body').innerText()).includes('Single Click'), false);
   check('Production guest routes have no JavaScript exceptions', guestErrors, []);
-  await guest.close();
-
   const customerLogin = await fetch('http://127.0.0.1:4117/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: customer.email, password, accountType: 'CUSTOMER' }) });
   check('Customer fixture uses the real password sign-in API', customerLogin.status, 200);
   const customerSession = await customerLogin.json();
+  const [refreshCookie] = customerLogin.headers.getSetCookie();
+  const [cookieName, cookieValue] = refreshCookie.split(';')[0].split('=');
+  await guest.addCookies([{ name: cookieName, value: cookieValue, url: 'http://127.0.0.1:4117' }]);
+  const [rejectedRefresh] = await Promise.all([
+    guestPage.waitForResponse(response => response.url().endsWith('/api/auth/refresh')),
+    guestPage.goto('http://127.0.0.1:5197/vendor', { waitUntil: 'domcontentloaded' }),
+  ]);
+  check('A customer refresh cookie is rejected on Vendor OS', rejectedRefresh.status(), 403);
+  await guestPage.waitForURL('**/login?next=*');
+  check('A rejected refresh cookie shows no account mismatch', await guestPage.getByRole('link', { name: 'Go to customer dashboard login', exact: false }).count(), 0);
+  await guest.close();
+
   const customerContext = await browser.newContext({ viewport: { width: 1366, height: 768 } });
   await customerContext.addInitScript(token => localStorage.setItem('starvnt_external_access_token', token), customerSession.accessToken);
   const customerPage = await customerContext.newPage(); customerPage.setDefaultTimeout(10000);
   const customerErrors = []; report.customerErrors = customerErrors; report.customerConsole = [];
   customerPage.on('pageerror', error => customerErrors.push(error.message));
   customerPage.on('console', message => { if (message.type() === 'error') report.customerConsole.push(message.text()); });
-  await customerPage.goto('http://127.0.0.1:5197/customer', { waitUntil: 'domcontentloaded' });
-  await customerPage.getByRole('link', { name: 'Go to customer dashboard login', exact: false }).waitFor();
-  check('Vendor OS rejects a saved customer identity with its correct portal link', await customerPage.evaluate(() => localStorage.getItem('starvnt_external_access_token')), null);
+  await customerPage.goto('http://127.0.0.1:5197/login?as=customer&next=/customer', { waitUntil: 'domcontentloaded' });
+  await customerPage.getByRole('heading', { name: 'Vendor Sign in', exact: true }).waitFor();
+  await customerPage.waitForFunction(() => localStorage.getItem('starvnt_external_access_token') === null);
+  check('Vendor OS clears a saved customer identity', await customerPage.evaluate(() => localStorage.getItem('starvnt_external_access_token')), null);
+  const customerPortalLink = customerPage.getByRole('link', { name: 'Go to customer dashboard login', exact: false });
+  check('A rejected background session shows no account mismatch', await customerPortalLink.count(), 0);
+  await customerPage.getByPlaceholder('you@example.com').fill(customer.email);
+  await customerPage.getByRole('button', { name: 'Send OTP to Email', exact: true }).click();
+  await customerPortalLink.waitFor();
+  report.checks.push({ name: 'Submitting a customer email shows the customer portal link', passed: true });
   check('Wrong-portal customer session has no JavaScript exceptions', customerErrors, []);
   await customerPage.screenshot({ path: resolve(output, 'customer-wrong-portal.png') }); report.screenshots.push('customer-wrong-portal.png');
   await customerContext.close();

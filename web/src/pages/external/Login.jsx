@@ -37,8 +37,6 @@ export default function ExternalLogin() {
     loginWithOtp,
     loginWithWidgetOtp,
     user,
-    sessionError,
-    clearSessionError,
   } = useExternalAuth();
   const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -92,14 +90,12 @@ export default function ExternalLogin() {
 
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
-  const [portalMismatch, setPortalMismatch] = useState(null);
-  const mismatch = portalMismatch || sessionError;
+  const [mismatch, setPortalMismatch] = useState(null);
   const [busy, setBusy] = useState(false);
   const googleBtnRef = useRef(null);
   function clearLoginError() {
     setError('');
     setPortalMismatch(null);
-    clearSessionError();
   }
 
 
