@@ -6,6 +6,8 @@ import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 import VendorMessageField from '../VendorMessageField.jsx';
 
+const DECLINE_REASON_LIMIT = 500;
+
 export default function Enquiries() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -37,7 +39,8 @@ export default function Enquiries() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [declining, setDeclining] = useState(null);
+  const [declineDraft, setDeclineDraft] = useState(null);
+  const [declining, setDeclining] = useState(false);
 
   useEffect(() => {
     if (!requestedRecord || loading) return;
@@ -98,17 +101,29 @@ export default function Enquiries() {
     setNotes('');
   }
 
-  async function declineOpportunity(opportunity) {
-    if (declining) return;
-    setDeclining(opportunity.id);
+  function openDeclineForm(opportunity) {
+    setFeedback(null);
+    setDeclineDraft({ id: opportunity.id, reason: '', error: '' });
+  }
+
+  async function declineOpportunity(event, opportunity) {
+    event.preventDefault();
+    if (declining || declineDraft?.id !== opportunity.id) return;
+    const reason = declineDraft.reason.trim();
+    if (!reason || reason.length > DECLINE_REASON_LIMIT) {
+      setDeclineDraft({ ...declineDraft, error: 'Enter a reason of up to 500 characters.' });
+      return;
+    }
+    setDeclining(true);
     try {
-      await externalApi.call(`/vendor/opportunities/${opportunity.dbId}/decline`, { method: 'POST' });
+      await externalApi.call(`/vendor/opportunities/${opportunity.dbId}/decline`, { method: 'POST', body: { reason } });
       setOpportunities((rows) => rows.map((row) => row.id === opportunity.id ? { ...row, status: 'DECLINED' } : row));
+      setDeclineDraft(null);
       setFeedback('Enquiry declined. This status is saved.');
     } catch (error) {
-      setFeedback(`Notice: ${error.message}`);
+      setDeclineDraft({ ...declineDraft, error: error.message });
     } finally {
-      setDeclining(null);
+      setDeclining(false);
     }
   }
 
@@ -279,15 +294,48 @@ export default function Enquiries() {
                         Ask a question
                       </button>
                       <button
-                        disabled={Boolean(declining)}
-                        onClick={() => declineOpportunity(o)}
-                        className="rounded-xl text-xs font-semibold px-4 py-2.5 text-muted hover:text-red-500 transition cursor-pointer"
+                        type="button"
+                        disabled={declining}
+                        aria-expanded={declineDraft?.id === o.id}
+                        onClick={() => declineDraft?.id === o.id ? setDeclineDraft(null) : openDeclineForm(o)}
+                        className="rounded-xl text-sm font-semibold px-4 py-2.5 text-muted hover:text-red-500 transition cursor-pointer disabled:opacity-50"
                       >
                         Decline
                       </button>
                     </>
                   )}
                 </div>
+                {declineDraft?.id === o.id && (
+                  <form onSubmit={(event) => declineOpportunity(event, o)} className="mt-3 w-full max-w-xl rounded-xl border border-gray-200 bg-white p-4">
+                    <label htmlFor={`decline-reason-${o.id}`} className="block text-sm font-bold text-navy">
+                      Reason for declining (required)
+                    </label>
+                    <p id={`decline-help-${o.id}`} className="mt-1 text-sm text-muted">Enter up to {DECLINE_REASON_LIMIT} characters.</p>
+                    <textarea
+                      id={`decline-reason-${o.id}`}
+                      aria-describedby={`decline-help-${o.id}`}
+                      aria-invalid={Boolean(declineDraft.error)}
+                      autoFocus
+                      required
+                      rows={3}
+                      maxLength={DECLINE_REASON_LIMIT}
+                      value={declineDraft.reason}
+                      onChange={(event) => setDeclineDraft({ ...declineDraft, reason: event.target.value, error: '' })}
+                      disabled={declining}
+                      placeholder="e.g. Unavailable on the event date"
+                      className="mt-2 block w-full rounded-xl border border-gray-200 bg-lavender/60 px-3 py-2 text-base text-navy outline-none focus:border-primary"
+                    />
+                    {declineDraft.error && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-300">{declineDraft.error}</p>}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => setDeclineDraft(null)} disabled={declining} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-navy disabled:opacity-50">
+                        Cancel
+                      </button>
+                      <button type="submit" disabled={declining} className="rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-800 disabled:opacity-50">
+                        {declining ? 'Saving…' : 'Confirm decline'}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             )}
           </Card>

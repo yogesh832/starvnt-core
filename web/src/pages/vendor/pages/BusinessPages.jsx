@@ -95,7 +95,8 @@ function activationStepList(activation) {
   ];
 }
 
-function VendorActivationCard({ activation, compact = false }) {
+function VendorActivationCard({ activation }) {
+  const [showSteps, setShowSteps] = useState(false);
   if (!activation) return null;
   const steps = activationStepList(activation);
   const next = steps.find((step) => !step.done);
@@ -105,12 +106,11 @@ function VendorActivationCard({ activation, compact = false }) {
     activation.missingRequirements?.[0] ||
     (next ? next.label : readiness.matchingEligibility || "Core readiness locked");
   const percent = activation.completionPercentage ?? 0;
-  const [showSteps, setShowSteps] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#161926] p-4 shadow-xs space-y-3">
+    <div className="@container/readiness rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#161926] p-4 shadow-xs space-y-3">
       {/* Header Row: Status & Readiness % */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col @min-[32rem]/readiness:flex-row @min-[32rem]/readiness:items-start justify-between gap-3">
         <div className="min-w-0 flex items-start gap-3">
           <span
             className={`mt-0.5 h-9 w-9 rounded-2xl grid place-items-center shrink-0 ${
@@ -123,11 +123,11 @@ function VendorActivationCard({ activation, compact = false }) {
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-extrabold uppercase tracking-wide text-muted dark:text-gray-400">
+              <span className="text-sm font-bold text-navy">
                 {matchingEligible ? "Client matching active" : "Client matching locked"}
               </span>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                className={`px-2.5 py-1 rounded-full text-xs font-semibold leading-snug ${
                   matchingEligible
                     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"
                     : "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"
@@ -136,33 +136,34 @@ function VendorActivationCard({ activation, compact = false }) {
                 {matchingEligible ? "Live" : next ? `Next: ${next.label}` : readiness.matchingEligibility || "Locked"}
               </span>
             </div>
-            <h2 className="mt-0.5 text-sm font-extrabold text-navy dark:text-white truncate">
+            <h2 className="mt-2 text-lg font-bold leading-snug text-navy dark:text-white wrap-anywhere">
               {matchingEligible
                 ? "Live for customer matching"
                 : `Locked: ${reasonText}`}
             </h2>
-            <p className="mt-0.5 text-[11px] text-muted dark:text-gray-400 leading-snug">
+            <p className="mt-1 text-sm leading-relaxed text-muted">
               Profile completion and matching eligibility are separate. Core requires verification, capacity, coverage, availability, portfolio, and financial readiness.
             </p>
           </div>
         </div>
 
-        <div className="shrink-0 flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1">
+        <div className="shrink-0 flex flex-wrap @min-[32rem]/readiness:flex-col items-center @min-[32rem]/readiness:items-end justify-between gap-1">
           <div className="flex items-center gap-1.5">
-            <span className="text-xl font-black text-navy dark:text-white font-mono">
+            <span className="text-2xl font-bold tabular-nums text-navy dark:text-white">
               {percent}%
             </span>
-            <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted dark:text-gray-400">
+            <span className="text-sm font-semibold text-muted">
               readiness
             </span>
           </div>
           <button
             type="button"
-            onClick={() => setShowSteps(!showSteps)}
-            className="text-[11px] font-bold text-primary dark:text-[#a5b4fc] hover:underline cursor-pointer flex items-center gap-1"
+            onClick={() => setShowSteps(value => !value)}
+            aria-expanded={showSteps}
+            className="min-h-11 text-sm font-bold text-primary dark:text-[#a5b4fc] hover:underline cursor-pointer flex items-center gap-1.5"
           >
             <span>{showSteps ? "Hide Steps" : "View Steps"}</span>
-            <Icon name={showSteps ? "chevronUp" : "chevronDown"} size={12} />
+            <Icon name="chevronDown" size={14} className={showSteps ? "rotate-180" : undefined} />
           </button>
         </div>
       </div>
@@ -180,32 +181,32 @@ function VendorActivationCard({ activation, compact = false }) {
           />
         </div>
 
-        {/* Compact Horizontal Step Indicators */}
-        <div className="flex items-center justify-between gap-1 overflow-x-auto py-1 no-scrollbar">
+        {/* Compact Step Indicators */}
+        {!showSteps && <div className="flex flex-wrap gap-x-4 gap-y-1.5 py-1">
           {steps.map((step) => (
-            <div key={step.key} className="flex items-center gap-1 text-[10px] shrink-0">
+            <div key={step.key} className="flex max-w-full items-start gap-1.5 text-sm">
               <span
-                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
                   step.done
                     ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"
                     : "bg-gray-300 dark:bg-gray-700"
                 }`}
               />
               <span
-                className={`truncate max-w-[90px] sm:max-w-[120px] ${
-                  step.done ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-muted dark:text-gray-400 opacity-80"
+                className={`min-w-0 wrap-anywhere ${
+                  step.done ? "text-emerald-700 dark:text-emerald-400 font-semibold" : "text-muted"
                 }`}
               >
                 {step.label}
               </span>
             </div>
           ))}
-        </div>
+        </div>}
       </div>
 
       {/* Expandable Checklist Cards */}
       {showSteps && (
-        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
+        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 grid @min-[24rem]/readiness:grid-cols-2 @min-[45rem]/readiness:grid-cols-3 gap-2">
           {steps.map((step) => (
             <a
               key={step.key}
@@ -227,10 +228,10 @@ function VendorActivationCard({ activation, compact = false }) {
                   <Icon name={step.done ? "check" : "chevronRight"} size={11} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[11px] font-extrabold truncate">
+                  <span className="block text-sm font-bold wrap-anywhere">
                     {step.label}
                   </span>
-                  <span className="block text-[10px] text-muted dark:text-gray-400 leading-snug truncate">
+                  <span className="mt-0.5 block text-sm text-muted leading-snug wrap-anywhere">
                     {step.done ? "Done" : step.action}
                   </span>
                 </span>
@@ -242,16 +243,16 @@ function VendorActivationCard({ activation, compact = false }) {
 
       {/* Next Action Banner */}
       {!matchingEligible && next && (
-        <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40 p-3">
-          <div className="text-xs">
-            <div className="font-extrabold text-navy dark:text-white">
+        <div className="mt-2 flex flex-col @min-[32rem]/readiness:flex-row @min-[32rem]/readiness:items-center justify-between gap-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40 p-3">
+          <div className="min-w-0 text-sm wrap-anywhere">
+            <div className="font-bold text-navy dark:text-white">
               Next step: {next.label}
             </div>
-            <div className="text-muted dark:text-gray-400 text-[11px] mt-0.5">{next.detail}</div>
+            <div className="text-muted mt-1">{next.detail}</div>
           </div>
           <a
             href={next.href}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-dark cursor-pointer shrink-0"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-primary-dark cursor-pointer shrink-0"
           >
             <span>{next.action}</span>
             <Icon name="chevronRight" size={12} />
@@ -666,7 +667,7 @@ export function ServicesPage() {
         </button>
       }
     >
-      <VendorActivationCard activation={activation} compact />
+      <VendorActivationCard activation={activation} />
 
       {gearFeedback && (
         <div className="mb-4 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-2">
@@ -4406,8 +4407,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
       id: "profile",
       label: "Business Profile",
       icon: "profile",
-      desc: googleRating?.rating ? `★ ${googleRating.rating} on Google Maps` : "Brand details & category",
-      badge: googleRating?.rating ? `★ ${googleRating.rating}` : null,
+      desc: "Brand details & category",
     },
     {
       id: "locations",
@@ -4431,40 +4431,41 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
 
   return (
     <Page
+      wide
       title={
-        <div className="flex flex-wrap items-center gap-2.5">
+        <span className="flex flex-wrap items-center gap-2.5">
           <span>Vendor Profile & Business Hub</span>
           {googleRating?.rating && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold shadow-xs">
+            <span className="inline-flex max-w-full flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-sm font-bold shadow-xs">
               <span className="text-amber-500 font-extrabold text-sm">★</span>
               <span>{googleRating.rating}</span>
-              <span className="text-muted font-normal text-[11px]">
+              <span className="text-muted font-normal text-sm">
                 ({googleRating.reviewCount || 0} reviews on Google Maps)
               </span>
             </span>
           )}
-        </div>
+        </span>
       }
       sub={
         loadingProfile && !activation
           ? "Loading your vendor details, readiness, locations, and account settings."
-          : `${profile.businessName || "Your Brand"} — ${profile.category || "Setup Pending"}${googleRating?.rating ? ` · ★ ${googleRating.rating} Google Maps (${googleRating.reviewCount || 0} reviews)` : ''} · Central administration for brand profile, operational locations, KYC documents, and account settings.`
+          : `${profile.businessName || "Your Brand"} · ${profile.category || "Setup Pending"}`
       }
     >
-      <div className="grid lg:grid-cols-[240px_1fr] gap-4 lg:gap-6 items-start w-full">
+      <div className="grid grid-cols-1 @min-[52rem]/profile:grid-cols-[16rem_minmax(0,1fr)] gap-4 @min-[52rem]/profile:gap-6 items-start">
         {/* Profile Sub-Sidebar Navigation */}
-        <div className="bg-white rounded-2xl p-2 border border-gray-100 shadow-xs lg:sticky lg:top-20 shrink-0">
+        <nav aria-label="Profile sections" className="min-w-0 bg-white rounded-2xl p-3 border border-gray-100 shadow-xs @min-[52rem]/profile:sticky @min-[52rem]/profile:top-20">
           {/* Header row: label + readiness badge on mobile */}
-          <div className="flex items-center justify-between px-2 py-1.5">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">
-              Profile Sections
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2 px-2 py-1.5">
+            <span className="text-sm font-bold text-navy">
+              Profile sections
             </span>
             {loadingProfile && !activation ? (
-              <SkeletonLine className="lg:hidden h-5 w-16" />
+              <SkeletonLine className="@min-[52rem]/profile:hidden h-5 w-16" />
             ) : (
               activation && (
                 <span
-                  className={`lg:hidden text-[10px] font-bold px-2 py-0.5 rounded-full ${activation.matchingEligible ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                  className={`@min-[52rem]/profile:hidden text-xs font-bold px-2.5 py-1 rounded-full ${activation.matchingEligible ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
                 >
                   {activation.completionPercentage ?? 0}%{" "}
                   {activation.matchingEligible ? "Active" : "Locked"}
@@ -4473,22 +4474,23 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
             )}
           </div>
 
-          {/* Tabs: 2-col grid on mobile, vertical list on desktop */}
-          <div className="grid grid-cols-2 lg:grid-cols-1 gap-1">
+          <div className="grid grid-cols-1 @min-[21rem]/profile:grid-cols-2 @min-[52rem]/profile:grid-cols-1 gap-1.5">
             {SUB_TABS.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
+                  type="button"
                   onClick={() => handleTabChange(tab.id)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-2 lg:px-3 lg:py-2.5 rounded-xl text-left transition cursor-pointer ${
+                  aria-current={isActive ? "true" : undefined}
+                  className={`min-w-0 min-h-11 w-full flex items-start gap-2.5 px-2.5 py-2.5 rounded-xl text-left transition cursor-pointer ${
                     isActive
-                      ? "bg-primary-soft text-primary font-bold shadow-xs"
-                      : "text-ink/70 hover:bg-lavender hover:text-navy font-medium"
+                      ? "bg-primary-soft text-indigo-800 dark:text-indigo-200 shadow-xs"
+                      : "text-navy hover:bg-lavender"
                   }`}
                 >
                   <div
-                    className={`w-7 h-7 rounded-lg grid place-items-center shrink-0 ${
+                    className={`mt-0.5 size-8 rounded-lg grid place-items-center shrink-0 ${
                       isActive
                         ? "bg-primary text-white"
                         : "bg-gray-100 text-muted"
@@ -4500,17 +4502,10 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                     />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-bold leading-tight truncate">
-                        {tab.label}
-                      </span>
-                      {tab.badge && (
-                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 shrink-0">
-                          {tab.badge}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[10px] text-muted leading-tight mt-0.5 hidden lg:block truncate">
+                    <span className="block text-sm font-bold leading-snug wrap-anywhere">
+                      {tab.label}
+                    </span>
+                    <div className="mt-1 text-xs leading-snug text-muted wrap-anywhere">
                       {tab.desc}
                     </div>
                   </div>
@@ -4520,7 +4515,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
           </div>
 
           {/* Desktop-only readiness bar */}
-          <div className="pt-3 mt-2 border-t border-gray-100 px-2 pb-1 hidden lg:block">
+          <div className="pt-3 mt-2 border-t border-gray-100 px-2 pb-1 hidden @min-[52rem]/profile:block">
             {loadingProfile && !activation ? (
               <div className="space-y-2 mt-2">
                 <div className="flex items-center justify-between">
@@ -4531,7 +4526,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between text-[11px] font-bold text-navy">
+                <div className="flex items-center justify-between gap-2 text-sm font-bold text-navy">
                   <span>Readiness</span>
                   <span
                     className={
@@ -4554,7 +4549,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   />
                 </div>
                 <div
-                  className={`mt-1.5 text-[10px] font-bold ${
+                  className={`mt-2 text-sm font-medium leading-snug wrap-anywhere ${
                     activation?.matchingEligible ? "text-emerald-600" : "text-amber-600"
                   }`}
                 >
@@ -4565,10 +4560,10 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
               </>
             )}
           </div>
-        </div>
+        </nav>
 
         {/* Tab Content Area */}
-        <div className="min-w-0 space-y-5">
+        <div className="@container/details min-w-0 space-y-5 [&_h2]:text-lg">
           <VendorActivationCard activation={activation} />
 
           {/* TAB 1: Business Profile */}
@@ -4578,8 +4573,8 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
               <Card title="Display Settings">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-navy">Dark Mode</h3>
-                    <p className="text-xs text-muted mt-0.5">
+                    <h3 className="text-base font-bold text-navy">Dark Mode</h3>
+                    <p className="mt-1 text-sm text-muted">
                       Toggle the application theme for the entire site
                     </p>
                   </div>
@@ -4600,9 +4595,9 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
 
               {/* Profile Picture */}
               <Card title="Profile Picture">
-                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
+                <div className="flex flex-col @min-[30rem]/details:flex-row items-center @min-[30rem]/details:items-start gap-4 @min-[30rem]/details:gap-6">
                   {/* Avatar + edit overlay — pb-3 gives space for the absolute edit button */}
-                  <div className="relative shrink-0 mx-auto sm:mx-0 pb-3 pr-3">
+                  <div className="relative shrink-0 pb-3 pr-3">
                     {profilePicUrl ? (
                       <img
                         src={profilePicUrl}
@@ -4618,7 +4613,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                       type="button"
                       onClick={() => picInputRef.current?.click()}
                       disabled={uploadingPic}
-                      className="absolute bottom-1 right-1 w-9 h-9 rounded-full bg-primary text-white grid place-items-center shadow-lg hover:bg-primary-dark transition cursor-pointer disabled:opacity-60 border-2 border-white dark:border-[#1a1d2e]"
+                      className="absolute bottom-1 right-1 size-11 rounded-full bg-primary text-white grid place-items-center shadow-lg hover:bg-primary-dark transition cursor-pointer disabled:opacity-60 border-2 border-white dark:border-[#1a1d2e]"
                       title="Change profile picture"
                     >
                       <Icon name="edit" size={15} />
@@ -4632,12 +4627,12 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                     />
                   </div>
                   {/* Info + actions */}
-                  <div className="flex-1 min-w-0 text-center sm:text-left w-full">
-                    <h3 className="font-extrabold text-base text-navy truncate">
+                  <div className="flex-1 min-w-0 text-center @min-[30rem]/details:text-left w-full">
+                    <h3 className="font-bold text-lg text-navy wrap-anywhere">
                       {profile.businessName || "Your Brand"}
                     </h3>
-                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-0.5">
-                      <span className="text-sm text-muted truncate">
+                    <div className="flex flex-wrap items-center justify-center @min-[30rem]/details:justify-start gap-2 mt-0.5">
+                      <span className="text-sm text-muted wrap-anywhere">
                         {profile.category || "Setup Pending"} &middot;{" "}
                         {profile.location || "City not set"}
                       </span>
@@ -4651,12 +4646,12 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                         </span>
                       )}
                     </div>
-                    <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                    <div className="mt-4 flex flex-wrap items-center justify-center @min-[30rem]/details:justify-start gap-3">
                       <button
                         type="button"
                         onClick={() => picInputRef.current?.click()}
                         disabled={uploadingPic}
-                        className="text-xs font-bold bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary-dark transition shadow-sm cursor-pointer disabled:opacity-60"
+                        className="min-h-11 text-sm font-bold bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary-dark transition shadow-sm cursor-pointer disabled:opacity-60"
                       >
                         {uploadingPic
                           ? "Uploading..."
@@ -4688,13 +4683,13 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                               alert(`Could not remove picture: ${err.message}`);
                             }
                           }}
-                          className="text-xs font-bold text-rose-500 bg-rose-50 px-4 py-2 rounded-xl hover:bg-rose-100 dark:bg-rose-950/40 transition cursor-pointer"
+                          className="min-h-11 text-sm font-bold text-rose-500 bg-rose-50 px-4 py-2 rounded-xl hover:bg-rose-100 dark:bg-rose-950/40 transition cursor-pointer"
                         >
                           Remove
                         </button>
                       )}
                     </div>
-                    <p className="text-[10px] text-muted mt-2.5">
+                    <p className="text-sm text-muted mt-2.5">
                       Recommended: Square image, at least 400×400px. Max 5 MB.
                     </p>
                   </div>
@@ -4715,13 +4710,14 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   ) : null
                 }
               >
-                <form onSubmit={handleSaveProfile} className="space-y-4">
-                  <div className="grid sm:grid-cols-2 gap-3">
+                <form onSubmit={handleSaveProfile} className="space-y-5 [&_input]:text-base [&_textarea]:text-base">
+                  <div className="grid @min-[34rem]/details:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                      <label htmlFor="vendor-profile-brand" className="text-sm font-semibold text-navy">
                         Brand / Display Name (Trade Name) *
                       </label>
                       <input
+                        id="vendor-profile-brand"
                         placeholder="e.g. Himalayan Heritage Pine Lawns & Resort"
                         value={profile.brandName || ""}
                         onChange={(e) =>
@@ -4732,15 +4728,16 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                         }
                         className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-navy dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
-                      <span className="text-[10px] text-muted dark:text-gray-400 mt-0.5 block">
+                      <span className="mt-1 block text-sm leading-snug text-muted">
                         Visible to customers on STARVNT marketplace
                       </span>
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                      <label htmlFor="vendor-profile-legal-name" className="text-sm font-semibold text-navy">
                         Legal Business Entity Name (PAN / GST Name) *
                       </label>
                       <input
+                        id="vendor-profile-legal-name"
                         placeholder="e.g. BILLIONEDGE INVESTMENT ADVISORS"
                         value={profile.businessName || ""}
                         onChange={(e) =>
@@ -4752,21 +4749,22 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                         required
                         className="mt-1 w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-navy dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
-                      <span className="text-[10px] text-muted dark:text-gray-400 mt-0.5 block">
+                      <span className="mt-1 block text-sm leading-snug text-muted">
                         Registered company/firm name used for PAN/GST verification
                       </span>
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                      <span className="mb-1 block text-sm font-semibold text-navy">
                         Primary Category
-                      </label>
+                      </span>
                       <VendorCategoryPicker value={profile.category} onChange={(category) => setProfile({ ...profile, category })} required />
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                      <label htmlFor="vendor-profile-city" className="text-sm font-semibold text-navy">
                         Primary City / Hub
                       </label>
                       <input
+                        id="vendor-profile-city"
                         placeholder="e.g. Mumbai, Kolkata, Delhi NCR, Bengaluru..."
                         value={profile.location}
                         onChange={(e) =>
@@ -4777,10 +4775,11 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                      <label htmlFor="vendor-profile-phone" className="text-sm font-semibold text-navy">
                         Contact Phone
                       </label>
                       <input
+                        id="vendor-profile-phone"
                         placeholder="+91 98765 43210"
                         value={profile.phone}
                         onChange={(e) =>
@@ -4792,10 +4791,11 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                    <label htmlFor="vendor-profile-website" className="text-sm font-semibold text-navy">
                       Website (Optional)
                     </label>
                     <input
+                      id="vendor-profile-website"
                       placeholder="https://yourbrand.com"
                       value={profile.website}
                       onChange={(e) =>
@@ -4806,10 +4806,11 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase tracking-wide text-muted font-semibold">
+                    <label htmlFor="vendor-profile-bio" className="text-sm font-semibold text-navy">
                       About / Bio
                     </label>
                     <textarea
+                      id="vendor-profile-bio"
                       rows={3}
                       placeholder="Briefly describe your signature style, experience and services..."
                       value={profile.bio}
@@ -4823,7 +4824,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                     <button
                       type="submit"
-                      className="rounded-xl bg-primary text-white text-xs font-bold px-5 py-2.5 shadow-sm hover:bg-primary-dark transition cursor-pointer"
+                      className="min-h-11 rounded-xl bg-primary text-white text-sm font-bold px-5 py-2.5 shadow-sm hover:bg-primary-dark transition cursor-pointer"
                     >
                       Save Profile Details
                     </button>
@@ -4922,7 +4923,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-3 sm:gap-2 sm:shrink-0 pl-12 sm:pl-0">
+                          <div className="flex flex-wrap items-center gap-3 sm:gap-2 sm:shrink-0">
                             {!loc.isPrimary && (
                               <button
                                 onClick={() => handleSetPrimary(loc._id)}
@@ -4959,7 +4960,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                       <div className="h-4 w-44 rounded-full bg-slate-200/80 animate-pulse" />
                       <div className="h-5 w-16 rounded-full bg-slate-200/60 animate-pulse" />
                     </div>
-                    <div className="h-3 w-72 rounded-full bg-slate-200/50 animate-pulse" />
+                    <div className="h-3 w-72 max-w-full rounded-full bg-slate-200/50 animate-pulse" />
                     <div className="h-16 rounded-xl bg-slate-100/70 animate-pulse" />
                   </div>
                 )}
