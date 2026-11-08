@@ -229,7 +229,7 @@ try {
   await customerPage.getByPlaceholder('you@example.com').fill(customer.email);
   await customerPage.getByRole('button', { name: 'Send OTP to Email', exact: true }).click();
   await customerPortalLink.waitFor();
-  report.checks.push({ name: 'Submitting a customer email shows the customer portal link', passed: true });
+  check('Submitting a customer email links to production Customer OS', await customerPortalLink.getAttribute('href'), 'https://starvnt.com/login');
   check('Wrong-portal customer session has no JavaScript exceptions', customerErrors, []);
   await customerPage.screenshot({ path: resolve(output, 'customer-wrong-portal.png') }); report.screenshots.push('customer-wrong-portal.png');
   await customerContext.close();

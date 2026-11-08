@@ -5,10 +5,12 @@ const configured = () => ({
 });
 export function portalLoginUrl(type, settings = configured()) {
   const label = type === 'VENDOR' ? 'vendor' : 'customer';
-  const fallback = type === 'VENDOR' ? 'https://vendor.starvnt.com' : 'https://starvnt-core.vercel.app';
+  const fallback = type === 'VENDOR' ? 'https://vendor.starvnt.com' : 'https://starvnt.com';
   try {
     const url = new URL(settings[type] || fallback);
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error();
+    // Older AWS builds can still receive the retired Vercel URL from their environment.
+    if (type === 'CUSTOMER' && url.hostname === 'starvnt-core.vercel.app') return `${fallback}/login`;
     url.pathname = '/login'; url.search = ''; url.hash = '';
     return url.href;
   } catch { return `${fallback}/login`; }
