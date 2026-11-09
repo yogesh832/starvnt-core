@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { externalApi } from '../../../lib/api.js';
 import { Card, Page } from './shared.jsx';
+import { VENDOR_QR_ENABLED } from '../../../../../server/src/common/vendorQrRelease.js';
 
 const button = 'inline-flex items-center justify-center rounded-xl border px-4 min-h-11 text-sm font-semibold disabled:opacity-50';
 const field = 'w-full min-h-11 rounded-lg border px-3 text-sm';
@@ -76,11 +77,11 @@ export default function VendorIdentity({ share = false }) {
           })}>Copy link</button>}
           {navigator.share && <button type="button" className={button} disabled={busy}
             onClick={() => act(() => navigator.share(shareData))}>Share link</button>}
-          <button type="button" className={button} disabled={busy} onClick={() => act(async () => {
+          {VENDOR_QR_ENABLED && <button type="button" className={button} disabled={busy} onClick={() => act(async () => {
             setQr(await externalApi.call('/vendor/profile/share-qr', { method: 'POST' }));
-          })}>Generate QR</button>
+          })}>Generate QR</button>}
         </div>
-        {qr?.url === url && <div className="space-y-2">
+        {VENDOR_QR_ENABLED && qr?.url === url && <div className="space-y-2">
           <img src={qr.qrDataUrl} width="240" height="240" className="max-w-full" alt="QR code for your STARVNT public profile" />
           <a className={button} href={qr.qrDataUrl} download="starvnt-business-profile-qr.png">Download QR</a>
         </div>}

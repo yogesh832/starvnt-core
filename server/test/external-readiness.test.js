@@ -6,6 +6,7 @@ import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { externalConn, adminConn } from '../src/db/index.js';
 import { createApp } from '../src/app.js';
+import { config } from '../src/config.js';
 import { ExternalUser } from '../src/external/models/ExternalUser.js';
 import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
@@ -531,6 +532,10 @@ test('public vendor identity is owner-scoped and share QR follows current public
     name: f.vendor.businessName, category: 'Photography',
     socialLinks: [{ platform: 'instagram', label: 'Instagram', url: instagram }],
   });
+  assert.equal(config.vendorQrEnabled, false);
+  await shareQr().expect(404);
+  config.vendorQrEnabled = true;
+  t.after(() => { config.vendorQrEnabled = false; });
   const qr = await shareQr().expect(200);
   assert.equal(qr.body.url, `https://starvnt.example/vendors/${f.vendor._id}`);
   assert.match(qr.body.qrDataUrl, /^data:image\/png;base64,/);

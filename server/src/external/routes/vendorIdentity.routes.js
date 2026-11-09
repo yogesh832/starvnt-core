@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import QRCode from 'qrcode';
+import { config } from '../../config.js';
 import { ExternalUser } from '../models/ExternalUser.js';
 import { VendorOrganization } from '../models/VendorOrganization.js';
 import { publicSocialLinks, socialPlatforms, validateSocialUrl } from '../services/socialLinks.service.js';
@@ -78,6 +79,7 @@ vendorIdentityRoutes.put('/profile/social-links', async (req, res, next) => {
 });
 
 vendorIdentityRoutes.post('/profile/share-qr', async (req, res, next) => {
+  if (!config.vendorQrEnabled) return res.sendStatus(404);
   try {
     const { url } = ownerView(req.vendor, req.externalUser);
     if (!url) return res.status(404).json({ error: 'PUBLIC_PROFILE_UNAVAILABLE', message: 'Publish your profile before generating a QR.' });

@@ -5,6 +5,7 @@ import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
 import { externalApi } from '../../../lib/api.js';
 import VendorMessageField from '../VendorMessageField.jsx';
+import { VENDOR_QR_ENABLED } from '../../../../../server/src/common/vendorQrRelease.js';
 
 function readFileAsDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -367,7 +368,7 @@ export default function Bookings() {
                       </button>
                     ) : null}
 
-                    {b.executionStatus === 'COMPLETION_VERIFIED' && (
+                    {VENDOR_QR_ENABLED && b.executionStatus === 'COMPLETION_VERIFIED' && (
                       <button
                         type="button"
                         onClick={() => navigate('/vendor/experience-qr')}

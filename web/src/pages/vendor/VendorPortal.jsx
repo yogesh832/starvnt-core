@@ -1,4 +1,5 @@
 import CustomerGrowth from './pages/CustomerGrowth.jsx';
+import { VENDOR_QR_ENABLED } from '../../../../server/src/common/vendorQrRelease.js';
 import DiscoveryRewards from './pages/DiscoveryRewards.jsx';
 import VendorIdentity from './pages/VendorIdentity.jsx';
 import Academy from './pages/Academy.jsx';
@@ -346,7 +347,7 @@ export default function VendorPortal() {
     { to: 'external-bookings', label: 'External bookings', icon: 'calendar' },
     { to: 'readiness', label: 'Business readiness', icon: 'check' },
     { to: 'customers', label: 'Customer 360', icon: 'customers' },
-    { to: 'experience-qr', label: 'Experience QR', icon: 'reviews' },
+    ...(VENDOR_QR_ENABLED ? [{ to: 'experience-qr', label: 'Experience QR', icon: 'reviews' }] : []),
     { to: 'growth', label: 'Customer growth', icon: 'analytics' },
     { to: 'share', label: 'Share Your Business', icon: 'link' },
     { to: 'learning', label: 'Learning & Growth', icon: 'documents' },
@@ -629,7 +630,7 @@ export default function VendorPortal() {
             <Route path="external-bookings" element={<ExternalBookings />} />
             <Route path="readiness" element={<ReadinessPage />} />
             <Route path="customers" element={<CustomerGrowth />} />
-            <Route path="experience-qr" element={<CustomerGrowth mode="qr" />} />
+            {VENDOR_QR_ENABLED && <Route path="experience-qr" element={<CustomerGrowth mode="qr" />} />}
             <Route path="growth" element={<CustomerGrowth mode="growth" />} />
             <Route path="share" element={<VendorIdentity key="share" share />} />
             <Route path="learning" element={<Academy />} />

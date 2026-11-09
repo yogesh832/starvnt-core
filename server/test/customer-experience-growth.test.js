@@ -6,6 +6,7 @@ import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { externalConn, adminConn } from '../src/db/index.js';
 import { createApp } from '../src/app.js';
+import { config } from '../src/config.js';
 import { ExternalUser } from '../src/external/models/ExternalUser.js';
 import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
@@ -24,6 +25,9 @@ import { CustomerNotification } from '../src/customer/models/index.js';
 import { Experience, LoyaltyRule, LoyaltyAward, CampaignDelivery } from '../src/experience/models.js';
 import { NotificationPreference } from '../src/notifications/preferences.models.js';
 let app, mongo, phoneCounter = 0;
+const qrEnabledByDefault = config.vendorQrEnabled;
+before(() => { config.vendorQrEnabled = true; });
+after(() => { config.vendorQrEnabled = qrEnabledByDefault; });
 const id = () => new mongoose.Types.ObjectId(), key = () => crypto.randomUUID(), auth = token => ({ Authorization: `Bearer ${token}` });
 before(async () => { mongo = await MongoMemoryServer.create(); await Promise.all([externalConn.openUri(mongo.getUri('experience')), adminConn.openUri(mongo.getUri('experience_admin'))]); app = createApp(); await Promise.all([...Object.values(externalConn.models), ...Object.values(adminConn.models)].map(m => m.init())); }, { timeout: 120000 });
 after(async () => { await Promise.all([externalConn.close(), adminConn.close()]); await mongo.stop(); });
@@ -41,6 +45,19 @@ async function access(f, issued) { const token = new URL(issued.url).pathname.sp
 const feedback = (extra = {}) => ({ name: 'Client name', rating: 1, criteria: { quality: 1, punctuality: 2, staff: 3, communication: 4 }, reviewText: 'The service did not meet my expectations.', eventConfirmed: true, ecosystem: false, marketing: false, channel: 'NONE', noticeVersion: CUSTOMER_NOTICE.version, revision: 0, idempotencyKey: key(), ...extra });
 async function grant(customer, extra = {}) { return setConsent(customer, { purpose: 'ECOSYSTEM', channel: 'ALL', status: 'GRANTED', noticeVersion: CUSTOMER_NOTICE.version, revision: 0, idempotencyKey: key(), ...extra }); }
 async function admin(permissions) { const user = await AdminUser.create({ fullName: 'Reviewer', email: `${key()}@example.test`, passwordHash: 'fixture', role: 'ADMIN', permissions }); const session = await AdminSession.create({ admin: user._id, refreshTokenHash: key(), expiresAt: new Date(Date.now() + 3600000) }); return signAdminAccessToken(user, session._id); }
+
+test('the release disables Experience QR issuance and access to previously issued QR links', async t => {
+  const f = await fixture();
+  const issued = await issue(f);
+  const token = new URL(issued.url).pathname.split('/').at(-1);
+  config.vendorQrEnabled = qrEnabledByDefault;
+  t.after(() => { config.vendorQrEnabled = true; });
+  assert.equal(config.vendorQrEnabled, false);
+  await request(app).post('/api/vendor/experiences').set(auth(f.token))
+    .send({ source: 'VENDOR_PRIVATE', booking: f.booking._id, idempotencyKey: key() }).expect(404);
+  await request(app).get(`/api/experience/${token}`).expect(404);
+  await request(app).post('/api/customer/experience/claim').set(auth(f.customerToken)).send({ token }).expect(404);
+});
 
 test('QR issuance is owner-bound, non-guessable, replay-safe and public metadata has no recipient or event details', async () => {
   const f = await fixture(), other = await fixture(), input = { idempotencyKey: key() }, qr = await issue(f, input), replay = await issue(f, input);
