@@ -55,7 +55,6 @@ export function makeApi(base, refreshPath, options = {}) {
   let refreshing = null;
   let generation = 0;
   let sessionBlocked = false;
-  let lastTrackedSearch = null;
 
   if (storageKey && typeof window !== "undefined") {
     token = window.localStorage.getItem(storageKey);
@@ -148,15 +147,7 @@ export function makeApi(base, refreshPath, options = {}) {
 
   async function call(path, { method = "GET", body } = {}) {
     const res = await raw(path, { method, body });
-    const data = await res.json().catch(() => ({}));
-    if (typeof window !== 'undefined' && options.surface === 'VENDOR' && method !== 'GET' && path.startsWith('/vendor/') && path !== '/vendor/acquisition-events/claim' && data.ok !== false && !data.error) {
-      window.dispatchEvent(new Event('starvnt-vendor-saved'));
-    }
-    if (typeof window !== 'undefined' && options.surface === 'VENDOR' && path.startsWith('/vendor/google-places/search?') && Array.isArray(data.places) && path !== lastTrackedSearch) {
-      lastTrackedSearch = path;
-      window.dispatchEvent(new Event('starvnt-vendor-search'));
-    }
-    return data;
+    return res.json().catch(() => ({}));
   }
 
   async function stream(path, { method = "POST", body, headers = {}, signal } = {}, onEvent) {

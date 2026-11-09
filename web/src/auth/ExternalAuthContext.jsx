@@ -1,4 +1,3 @@
-import { partnerPixel } from '../lib/metaPixel.js';
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { externalApi } from "../lib/api.js";
 
@@ -15,10 +14,7 @@ export function ExternalAuthProvider({ children }) {
   async function storeSession(data, expected = sessionRevision.current) {
     const current = () => expected === sessionRevision.current;
     const nextUser = await acceptPortalSession(data, externalApi, current);
-    if (current()) {
-      setUser(nextUser);
-      if (nextUser?.accountType === 'VENDOR' && data.acquisition?.name === 'VendorLogin') partnerPixel?.receipts([data.acquisition]);
-    }
+    if (current()) setUser(nextUser);
     return nextUser;
   }
 

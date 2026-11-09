@@ -1,4 +1,3 @@
-import PartnerMarketing from './components/PartnerMarketing.jsx';
 import './components/auraMark.css';
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -111,7 +110,7 @@ function RootRedirect() {
 }
 
 export default function App() {
-  return <ErrorBoundary><PartnerMarketing /><ApplicationRoutes /></ErrorBoundary>;
+  return <ErrorBoundary><ApplicationRoutes /></ErrorBoundary>;
 }
 
 function ApplicationRoutes() {

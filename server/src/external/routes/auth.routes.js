@@ -1,4 +1,3 @@
-import { authAcquisitionReceipt } from '../services/vendorAcquisition.service.js';
 import { findPhoneIdentity, recordVerifiedIdentity, identityConflict } from '../../foundation/identity.service.js';
 import { rejectPortalMismatch, portalMismatch, requestedSurface } from '../services/portalPolicy.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
@@ -210,14 +209,12 @@ async function createSession(user, req, accountType = user.accountType) {
     expiresAt,
     accountType,
   });
-  session.$locals.acquisition = await authAcquisitionReceipt(user, session, req).catch(() => undefined);
   user.$locals.activeAccountType = accountType;
   return { session, refreshToken };
 }
 
 function issueTokens(user, session) {
   return {
-    ...(session.$locals.acquisition ? { acquisition: session.$locals.acquisition } : {}),
     accessToken: signExternalAccessToken(
       user,
       session._id,
@@ -340,7 +337,6 @@ router.post("/register", authLimiter, async (req, res, next) => {
     const normalizedPhone = phone ? normalizePhone(phone) : undefined;
     if (normalizedPhone && await findPhoneIdentity(normalizedPhone)) throw identityConflict();
 
-    req.acquisitionCreated = true;
     const user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
       fullName,
@@ -496,7 +492,6 @@ router.post("/google", authLimiter, async (req, res, next) => {
       const targetAccountType =
         accountType === "VENDOR" ? "VENDOR" : "CUSTOMER";
       signInAs = targetAccountType;
-      req.acquisitionCreated = true;
       user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: googleUser.fullName,
@@ -834,7 +829,6 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
           ? businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`
           : `Customer ${cleanDigits.slice(-4)}`);
 
-      req.acquisitionCreated = true;
       user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: defaultName,
@@ -948,7 +942,6 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
           ? businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`
           : `Customer ${cleanDigits.slice(-4)}`);
 
-      req.acquisitionCreated = true;
       user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: defaultName,
