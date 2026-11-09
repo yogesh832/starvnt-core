@@ -98,7 +98,7 @@ function RequireExternal({ type, children }) {
   }, [ready, user, type, switching, switchFailed, switchSurface]);
 
   if (!ready || switching) return <FullScreenLoader />;
-  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(`${loc.pathname}${loc.search}`)}`} replace />;
+  if (!user) return <Navigate to={`/login?next=${encodeURIComponent(`${loc.pathname}${loc.search}${loc.hash}`)}`} replace />;
   if (type && user.accountType !== type) {
     if (switchFailed) {
       return <Navigate to="/customer" replace />;

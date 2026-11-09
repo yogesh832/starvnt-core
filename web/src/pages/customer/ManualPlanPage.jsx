@@ -245,7 +245,7 @@ export default function ManualPlanPage() {
       </Step>
 
       {error && <div className="text-sm text-red-500">{error}</div>}
-      <div className="sticky bottom-20 md:bottom-4 z-20">
+      <div className="mt-6">
         <button disabled={busy || !eventType} className="w-full rounded-2xl bg-primary text-white text-sm font-extrabold py-3.5 shadow-lg shadow-primary/30 disabled:opacity-50">
           {busy ? 'Creating…' : 'Create my event plan'}
         </button>

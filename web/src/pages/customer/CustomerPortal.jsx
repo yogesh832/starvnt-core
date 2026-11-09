@@ -8,6 +8,7 @@ import './customerDesign.css';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import AuraChat from './AuraChat.jsx';
 import HomePage from './HomePage.jsx';
+import EventSwitcher from './EventSwitcher.jsx';
 import EventsPage from './EventsPage.jsx';
 import EventPage from './EventPage.jsx';
 import EventPlanPage from './EventPlanPage.jsx';
@@ -32,11 +33,12 @@ import { takePendingPrompt } from './pendingPrompt.js';
 
 /* Sidebar (reference screen set 4). Per-event sections open the current event. */
 const SIDEBAR = [
+  { key: 'me', label: 'My Account', icon: 'profile', to: '/customer/me' },
   { key: 'home', label: 'Home', icon: 'dashboard', to: '/customer' },
   { key: 'new', label: 'New Event', icon: 'plus', to: '/customer/events/new' },
   { key: 'aura', label: 'Aura+', icon: 'aura', to: '/customer/aura' },
   { key: 'events', label: 'My Events', icon: 'events', to: '/customer/events' },
-  { key: 'messages', label: 'Messages', icon: 'message', to: '/customer/updates?tab=messages', badge: true },
+  { key: 'messages', label: 'Updates', icon: 'message', to: '/customer/updates', badge: true },
   { key: 'quotes', label: 'Plans & Quotes', icon: 'quotes', to: '/customer/go/quotes' },
   { key: 'bookings', label: 'Bookings', icon: 'bookings', to: '/customer/go/bookings' },
   { key: 'payments', label: 'Payments', icon: 'payments', to: '/customer/go/payments' },
@@ -48,8 +50,9 @@ const SIDEBAR = [
 ];
 
 const SIDEBAR_GROUPS = [
-  { label: 'Plan', keys: ['home', 'new', 'aura', 'events'] },
-  { label: 'Current Event', keys: ['messages', 'quotes', 'bookings', 'payments', 'vendors', 'timeline'] },
+  { label: 'Workspace', keys: ['home', 'events', 'aura', 'messages', 'me'] },
+  { label: 'Explore & plan', keys: ['new'] },
+  { label: 'Current Event', keys: ['quotes', 'bookings', 'payments', 'vendors', 'timeline'] },
   { label: 'Library', keys: ['documents', 'favorites', 'settings'] },
 ];
 const SIDEBAR_BY_KEY = Object.fromEntries(SIDEBAR.map((item) => [item.key, item]));
@@ -92,7 +95,7 @@ function Avatar({ user, firstName, size = 'w-8 h-8' }) {
   return user?.avatarUrl ? (
     <img src={user.avatarUrl} alt="" className={`${size} rounded-full object-cover shrink-0 border border-gray-200`} />
   ) : (
-    <div className={`${size} rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center text-xs font-bold shrink-0`}>
+    <div className={`${size} rounded-full bg-gradient-to-br from-primary to-sky-500 text-white grid place-items-center text-xs font-bold shrink-0`}>
       {firstName[0]?.toUpperCase()}
     </div>
   );
@@ -129,19 +132,7 @@ function TopBar({ user, firstName, unread, logout }) {
         <Icon name="search" size={15} className="text-muted dark:text-slate-400" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask STARVNT anything…" className="flex-1 bg-transparent outline-none text-sm text-navy dark:text-white placeholder:text-muted/70 dark:placeholder:text-slate-400 font-medium" />
       </form>
-      {events.length > 1 && (
-        <select
-          value={current?.id || ''}
-          onChange={(e) => {
-            setCurrent(e.target.value);
-            navigate('/customer');
-          }}
-          className="max-w-[220px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1e2235] px-3 py-2 text-xs font-semibold text-navy dark:text-slate-200 outline-none cursor-pointer shadow-xs"
-          title="Current event"
-        >
-          {events.map((e) => <option key={e.id} value={e.id} className="bg-white dark:bg-[#1e2235] text-navy dark:text-white">{e.title}</option>)}
-        </select>
-      )}
+      <EventSwitcher />
       <button onClick={() => navigate('/customer/updates')} className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender dark:hover:bg-white/10 text-muted dark:text-slate-300 transition" aria-label="Updates">
         <Icon name="bell" size={18} />
         <span className="absolute -top-0.5 -right-0.5"><Badge n={unread} /></span>
@@ -186,7 +177,7 @@ function Shell() {
   const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
-  const { error: eventLoadError, refresh: refreshEvents } = useCurrentEvent();
+  const { current, error: eventLoadError, refresh: refreshEvents } = useCurrentEvent();
   const firstName = user?.fullName?.split(' ')[0] || 'there';
   const tab = activeKey(pathname);
   const canOpenWithoutEventList = tab === 'messages' || ['me', 'settings', 'documents', 'favorites', 'events', 'new'].includes(tab);
@@ -253,7 +244,7 @@ function Shell() {
           <button type="button" data-close-menu onClick={() => setMenuOpen(false)} aria-label="Close customer navigation" className="md:hidden h-10 w-10 shrink-0 grid place-items-center rounded-xl text-muted dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10"><Icon name="close" size={20} /></button>
         </div>
         <nav aria-label="Customer sections" className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-4">
-          {SIDEBAR_GROUPS.map((group) => (
+          {SIDEBAR_GROUPS.filter(group => group.label !== 'Current Event' || current).map((group) => (
             <div key={group.label} className="space-y-1">
               <div className="block md:hidden lg:block px-3 pb-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-muted dark:text-slate-500">
                 {group.label}
@@ -286,7 +277,7 @@ function Shell() {
         </nav>
         <button
           onClick={() => menuNavigate('/customer/aura?new=1')}
-          className="flex md:hidden lg:flex mt-4 mx-1 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-primary to-[#9b6dff] text-white text-xs font-bold py-3 shadow-sm shadow-primary/25 hover:brightness-110 transition"
+          className="flex md:hidden lg:flex mt-4 mx-1 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-primary to-sky-500 text-white text-xs font-bold py-3 shadow-sm shadow-primary/25 hover:brightness-110 transition"
         >
           <Icon name="aura" size={13} /> Plan with Aura+
         </button>
@@ -318,6 +309,8 @@ function Shell() {
           </button>
           <button onClick={() => navigate('/customer/me')} className="h-10 w-10 shrink-0 grid place-items-center" aria-label="Profile"><Avatar user={user} firstName={firstName} /></button>
         </header>
+
+        <div className="md:hidden customer-mobile-context"><EventSwitcher /></div>
 
         {tab === 'aura' ? (
           <main className="flex-1 min-h-0 flex flex-col pb-28 md:pb-0">
@@ -389,8 +382,9 @@ function Shell() {
 
 /* ── Portal shell (reference screen set 4) ─────────────────────────────── */
 export default function CustomerPortal() {
+  const { user } = useExternalAuth();
   return (
-    <CurrentEventProvider>
+    <CurrentEventProvider key={user?.id || user?._id || 'guest'}>
       <Shell />
     </CurrentEventProvider>
   );

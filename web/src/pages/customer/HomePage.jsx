@@ -1,6 +1,5 @@
 import ProductFeedback from '../../components/ProductFeedback.jsx';
 import { externalApi } from '../../lib/api.js';
-import NotificationPreferences from '../../components/NotificationPreferences.jsx';
 import FinancialOverview from '../../components/FinancialOverview.jsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -17,12 +16,12 @@ import {
   RatingText,
   useLoad,
 } from './customerUi.jsx';
-import { attentionLink, budgetText, formatDate, formatINR, planStatus } from './format.js';
+import { budgetText, formatDate, formatINR, planStatus } from './format.js';
 import { useCurrentEvent } from './currentEvent.jsx';
 import { milestones } from './EventHistoryPage.jsx';
-import AuraChat from './AuraChat.jsx';
 import SelectOptionButton from './SelectOptionButton.jsx';
-import CustomerHero from './CustomerHero.jsx';
+import { EventHomeHeader, WelcomeHome, PastEventHome } from './HomeOverview.jsx';
+import { nextHomeAction } from './homeActions.js';
 import EventSummary from './CustomerEventSummary.jsx';
 
 const TONE = { amber: 'text-amber-600 dark:text-amber-400', emerald: 'text-emerald-600 dark:text-emerald-400', primary: 'text-primary dark:text-[#a5b4fc]', muted: 'text-muted dark:text-slate-400' };
@@ -176,52 +175,6 @@ function Section({ title, action, children, className = '' }) {
       </div>
       {children}
     </section>
-  );
-}
-
-function ShopComingSoonCard() {
-  return (
-    <section className={`${card} p-5 overflow-hidden`}>
-      <div className="flex items-start gap-3">
-        <span className="w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 grid place-items-center shrink-0">
-          <Icon name="services" size={18} />
-        </span>
-        <div className="min-w-0">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Coming soon</div>
-          <h2 className="text-sm font-extrabold text-navy dark:text-white mt-0.5">StarVnt Shop</h2>
-          <p className="text-[11px] text-muted dark:text-slate-400 mt-1 leading-relaxed">
-            Curated event essentials and gifting will appear here after the shop catalog is live. Checkout is not enabled yet.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ── No event yet ─────────────────────────────────────────────────────── */
-function Welcome({ firstName, onEventChanged }) {
-  return (
-    <div className="max-w-6xl mx-auto space-y-5">
-      <CustomerHero firstName={firstName} />
-      <div className="grid lg:grid-cols-[1fr_320px] gap-5 items-start">
-        <div className={`${card} h-[520px] overflow-hidden flex flex-col`}>
-          <AuraChat firstName={firstName} embedded onEventChanged={onEventChanged} />
-        </div>
-        <div className="space-y-3">
-          <Link to="/customer/events/new" className={`${card} p-5 block hover:shadow-md transition`}>
-            <div className="text-2xl">📝</div>
-            <div className="text-sm font-extrabold text-navy dark:text-white mt-1">Fill details manually</div>
-            <div className="text-[11px] text-muted dark:text-slate-400 mt-0.5">Event, full location, budget and services in one form.</div>
-          </Link>
-          <Link to="/customer/aura?new=1" className={`${card} p-5 block hover:shadow-md transition`}>
-            <Icon name="aura" size={30} />
-            <div className="text-sm font-extrabold text-navy dark:text-white mt-1">Plan with Aura+</div>
-            <div className="text-[11px] text-muted dark:text-slate-400 mt-0.5">Describe it in your own words; Aura+ asks only what's missing.</div>
-          </Link>
-          <ShopComingSoonCard />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -433,7 +386,7 @@ function Workspace({ firstName, event }) {
   const ms = useMemo(() => milestones(hist.data?.history || []), [hist.data]);
 
   if (dash.loading && !dash.data) return <CustomerDashboardSkeleton />;
-  if (dash.error) return <div className="text-sm text-red-500 dark:text-red-400">{errorText(dash.error)}</div>;
+  if (dash.error && !dash.data) return <div role="alert" className="customer-home-panel"><p>{errorText(dash.error)}</p><button className="customer-secondary-action" onClick={reload}>Try again</button></div>;
   const { summary, steps, attention, payments = [], financialTruth, experience, bookings = [] } = dash.data;
   const ev = dash.data.event;
   const firstOpen = summary.items.find((i) => i.status === 'pending' || (i.status === 'missing' && i.tier === 'essential'));
@@ -442,8 +395,14 @@ function Workspace({ firstName, event }) {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-5">
-      <CustomerHero firstName={firstName} eventId={ev.id} />
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl p-4 border text-sm"><span><b>{experience?.lifecycle || 'Planning'}</b>{experience?.daysUntilEvent != null ? ` · ${experience.daysUntilEvent === 0 ? 'Event day' : experience.daysUntilEvent > 0 ? `${experience.daysUntilEvent} days to go` : `${Math.abs(experience.daysUntilEvent)} days since the event date`}` : ' · Date not set'}</span><span>{experience?.decisionsPending ?? 0} requirement{experience?.decisionsPending === 1 ? '' : 's'} awaiting a decision</span><button className="text-primary underline" onClick={reload}>Refresh</button></div>
+      <EventHomeHeader firstName={firstName} event={ev} attention={attention} />
+      {dash.error && <div role="status" className="customer-home-panel"><p>Showing the last loaded event records. We could not refresh them.</p><button onClick={reload} className="customer-secondary-action">Try again</button></div>}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl p-4 border text-sm"><span><b>{experience?.lifecycle || 'Planning'}</b>{experience?.daysUntilEvent != null ? ` · ${experience.daysUntilEvent === 0 ? 'Event day' : experience.daysUntilEvent > 0 ? `${experience.daysUntilEvent} days to go` : `${Math.abs(experience.daysUntilEvent)} days since the event date`}` : ev.eventDate ? ' · Date saved' : ' · Date not set'}</span><span>{experience?.decisionsPending != null && <>{experience.decisionsPending} requirement{experience?.decisionsPending === 1 ? '' : 's'} awaiting a decision</>}</span><button className="text-primary underline" onClick={reload}>Refresh</button></div>
+      {(attention.length > 1 || firstOpen) && <Section title="More to plan">
+        {attention.slice(1).map((action, index) => <Link key={index} to={nextHomeAction(ev, [action]).to} className="block rounded-xl border p-3 mb-2 text-sm"><b>{action.title}</b><p>{action.detail}</p></Link>)}
+        {summary.items.filter(item => item.status === 'pending' || (item.status === 'missing' && item.tier === 'essential')).slice(0, 4).map(item => <Link key={item.category} to={'/customer/events/' + ev.id + '/requirements'} className="block rounded-xl border p-3 mb-2 text-sm"><b>{item.label}</b><p>{planStatus(item).text} · Review requirement →</p></Link>)}
+      </Section>}
+
       {!!experience?.proposedRequirements?.length && <Section title="Confirm Aura suggestions"><p className="text-sm mb-3">These suggestions have not been confirmed by you and do not count as completed requirements.</p>{experience.proposedRequirements.map(r => <div key={r.category} className="border rounded-xl p-3 mb-2 text-sm"><p>{r.category} · {r.status.replaceAll('_', ' ')} {r.value || ''}</p><button className="underline text-primary" onClick={async () => { try { await externalApi.call(`/customer/events/${ev.id}/requirements/${r.category}/confirm`, { method: 'POST' }); setProposalError(''); reload(); } catch (err) { setProposalError(err.message); } }}>Confirm this requirement</button></div>)}{proposalError && <p role="alert">{proposalError}</p>}</Section>}
       {!!experience?.risks?.length && <Section title="Changes to review">{experience.risks.map((risk, i) => <Link key={i} to={risk.actionUrl} className="block p-3 rounded-xl bg-amber-50 mb-2 text-sm"><b>{risk.title}</b><p>{risk.detail}</p></Link>)}</Section>}
       {!!bookings.filter(b => b.status === 'confirmed').length && <Section title="Confirmed bookings"><ul className="grid sm:grid-cols-2 gap-3">{bookings.filter(b => b.status === 'confirmed').map(b => <li key={b.id}><Link className="block border rounded-xl p-3 text-sm" to={`/customer/events/${ev.id}/bookings#${b.id}`}><b>{b.vendorName}</b><p>{b.packageName} · {b.executionStatus || 'Confirmed'}</p></Link></li>)}</ul></Section>}
@@ -482,7 +441,7 @@ function Workspace({ firstName, event }) {
         </Section>
       </div>
 
-      <NotificationPreferences eventId={ev.id} />
+      <Link className="customer-secondary-action" to="/customer/settings">Manage privacy & notification preferences →</Link>
       <div className="bg-white border rounded-2xl p-4"><ProductFeedback kind="EVENT" reference={ev.id} /></div>
       {/* Row 3: recommendations + next actions */}
       <div className="grid xl:grid-cols-12 gap-5 items-start">
@@ -494,68 +453,8 @@ function Workspace({ firstName, event }) {
           <ActionRail event={ev} />
         </div>
         <div className="xl:col-span-4 space-y-5">
-          <ShopComingSoonCard />
-          <Section title="Upcoming actions">
-            {attention.length > 0 ? (
-              <ul className="space-y-2">
-                {attention.map((a, i) => (
-                  <li key={i}>
-                    <Link to={attentionLink(a)} className="block rounded-xl bg-amber-50/80 dark:bg-amber-950/20 hover:bg-amber-100/80 dark:hover:bg-amber-950/40 p-2.5 text-xs transition border border-amber-200/60 dark:border-amber-900/40">
-                      <b className="text-amber-900 dark:text-amber-200">{a.title}</b>
-                      <div className="text-amber-700/80 dark:text-amber-300/80 text-[11px] mt-0.5">{a.detail}</div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (() => {
-              const unbookedItems = (summary?.items || []).filter((i) => (i.tier === 'essential' || i.status === 'pending') && ['missing', 'pending'].includes(i.status) && !i.selectedOption?.vendorName);
-              if (unbookedItems.length > 0) {
-                return (
-                  <div className="space-y-3">
-                    <div className="rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 p-3">
-                      <div className="flex items-center gap-2 text-xs font-extrabold text-indigo-700 dark:text-indigo-300">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0" />
-                        {ev?.title || 'Event'} status
-                      </div>
-                      <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80 mt-0.5 leading-relaxed">
-                        No urgent alerts. {unbookedItems.length} service category{unbookedItems.length > 1 ? 's' : ''} remaining for vendor selection.
-                      </p>
-                    </div>
-                    <ul className="space-y-2">
-                      {unbookedItems.slice(0, 3).map((item) => (
-                        <li key={item.category}>
-                          <Link
-                            to={`/customer/events/${ev.id}/services?category=${item.category}`}
-                            className="block rounded-xl bg-lavender/60 dark:bg-white/5 hover:bg-primary-soft dark:hover:bg-primary/20 p-2.5 text-xs transition border border-transparent"
-                          >
-                            <div className="flex items-center justify-between">
-                              <b className="text-navy dark:text-white">Choose {item.label}</b>
-                              <span className="text-[10px] font-bold text-primary dark:text-[#a5b4fc]">Select →</span>
-                            </div>
-                            <div className="text-muted dark:text-slate-400 text-[11px] mt-0.5">
-                              {item.optionCount ? `${item.optionCount} verified options available` : 'Explore recommendations for your event'}
-                            </div>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              }
-              return (
-                <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 p-3.5">
-                  <div className="flex items-center gap-2 text-xs font-extrabold text-emerald-700 dark:text-emerald-300">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                    You're all caught up for {ev?.title || 'your event'} 🎉
-                  </div>
-                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-1 leading-relaxed">
-                    No pending customer action was found in the current records. You can review your plan and bookings at any time.
-                  </p>
-                </div>
-              );
-            })()}
-          </Section>
           <Section title="Event timeline" action={<Link to={`/customer/events/${ev.id}/history`} className="text-[11px] font-bold text-primary dark:text-[#a5b4fc]">View full</Link>}>
+            {hist.error && <p role="status" className="text-sm">Event history could not be refreshed. <button onClick={reload} className="underline">Try again</button></p>}
             <ol className="space-y-2.5">
               {ms.map(([label, done]) => (
                 <li key={label} className="flex items-start gap-2 text-[11px]">
@@ -575,11 +474,11 @@ function Workspace({ firstName, event }) {
 }
 
 export default function HomePage({ firstName }) {
-  const { current, loading, refresh } = useCurrentEvent();
+  const { current, events, loading, error, refresh } = useCurrentEvent();
   if (loading) return <CustomerDashboardSkeleton />;
-  return (
-    <div className="space-y-5">
-      {current ? <Workspace firstName={firstName} event={current} key={current.id} /> : <Welcome firstName={firstName} onEventChanged={() => refresh()} />}
-    </div>
-  );
+  if (error && !events.length) return <div role="alert" className="customer-home-panel"><h1>Your workspace is temporarily unavailable.</h1><p>{errorText(error)}</p><button className="customer-secondary-action" onClick={refresh}>Try again</button></div>;
+  if (!events.length) return <WelcomeHome firstName={firstName} />;
+  if (!current) return <div className="customer-home-panel"><h1>Select an event to continue.</h1><Link to="/customer/events">Open My Events</Link></div>;
+  if (['completed', 'cancelled'].includes(current.status)) return <PastEventHome event={current} events={events} />;
+  return <Workspace firstName={firstName} event={current} key={current.id} />;
 }

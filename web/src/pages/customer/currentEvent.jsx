@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { customerApi } from './customerApi.js';
 import { CustomerErrorScreen, CustomerLoadingScreen, Empty } from './customerUi.jsx';
 import { Link } from 'react-router-dom';
@@ -10,56 +10,72 @@ import { Link } from 'react-router-dom';
  * The choice is a per-browser convenience; the events themselves come from
  * the backend.
  */
-const KEY = 'starvnt_current_event';
-const CLOSED = ['completed', 'cancelled'];
+import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
+import { eventStorageKey, latestRequestGate, resolveCurrentEvent, routeEventId } from './eventContext.js';
 const Ctx = createContext(null);
 
-function readStored() {
+function readStored(key) {
   try {
-    return localStorage.getItem(KEY);
+    return key ? localStorage.getItem(key) : null;
   } catch {
     return null;
   }
 }
-function writeStored(id) {
+function writeStored(key, id) {
+  if (!key) return;
   try {
-    if (id) localStorage.setItem(KEY, id);
-    else localStorage.removeItem(KEY);
+    if (id) localStorage.setItem(key, id);
+    else localStorage.removeItem(key);
   } catch {
     /* per-viewer convenience only */
   }
 }
 
 export function CurrentEventProvider({ children }) {
+  const { user } = useExternalAuth();
+  const { pathname, search } = useLocation();
+  const key = eventStorageKey(user?.id || user?._id);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedId, setSelectedId] = useState(readStored());
+  const [selectedId, setSelectedId] = useState(() => readStored(key));
+  const gate = useRef(latestRequestGate());
+  const loaded = useRef(false);
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
+    const request = gate.current.next();
     setError(null);
-    setLoading(true);
-    return customerApi
-      .events()
-      .then((d) => setEvents(d.events || []))
-      .catch((err) => setError(err))
-      .finally(() => setLoading(false));
+    if (!loaded.current) setLoading(true);
+    try {
+      const data = await customerApi.events();
+      if (gate.current.current(request)) {
+        setEvents(data.events || []);
+        loaded.current = true;
+      }
+    } catch (err) {
+      if (gate.current.current(request)) setError(err);
+    } finally {
+      if (gate.current.current(request)) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     refresh();
+    return () => gate.current.invalidate();
   }, [refresh]);
 
-  const current = useMemo(() => {
-    const byId = events.find((e) => e.id === selectedId);
-    if (byId) return byId;
-    return events.find((e) => !CLOSED.includes(e.status)) || events[0] || null;
-  }, [events, selectedId]);
+  const current = useMemo(() => resolveCurrentEvent(events, selectedId, pathname, search), [events, selectedId, pathname, search]);
+  const routedId = routeEventId(pathname, search);
+  useEffect(() => {
+    if (!routedId || !events.some(event => event.id === routedId)) return;
+    setSelectedId(routedId);
+    writeStored(key, routedId);
+  }, [routedId, events, key]);
 
   const setCurrent = useCallback((id) => {
     setSelectedId(id);
-    writeStored(id);
-  }, []);
+    writeStored(key, id);
+  }, [key]);
 
   const value = useMemo(() => ({ events, current, setCurrent, refresh, loading, error }), [events, current, setCurrent, refresh, loading, error]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
