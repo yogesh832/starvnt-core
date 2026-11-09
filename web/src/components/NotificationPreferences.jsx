@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { externalApi } from '../lib/api.js';
+import CustomerNotificationForm from './CustomerNotificationForm.jsx';
+
 export default function NotificationPreferences({ surface = 'customer', eventId }) {
   const [policy, setPolicy] = useState(null);
+  const [pushAvailable, setPushAvailable] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [reminders, setReminders] = useState([]);
@@ -11,13 +15,25 @@ export default function NotificationPreferences({ surface = 'customer', eventId 
   const refreshReminders = async () => { if (surface === 'customer') { const data = await externalApi.call(`${prefix}/reminders`); setReminders(data.reminders || []); } };
   useEffect(() => {
     let live = true;
-    externalApi.call(`${prefix}/notification-preferences`).then(data => { if (live) setPolicy(data.policy); }).catch(err => { if (live) setMessage(err.message); });
+    externalApi.call(`${prefix}/notification-preferences`).then(data => {
+      if (live) {
+        setPolicy(data.policy);
+        setPushAvailable(data.pushAvailable === true);
+      }
+    }).catch(err => { if (live) setMessage(err.message); });
     refreshReminders().catch(err => { if (live) setMessage(err.message); });
     return () => { live = false; };
   }, [prefix]);
   async function save(e) {
     e.preventDefault(); setBusy(true);
-    try { await externalApi.call(`${prefix}/notification-preferences`, { method: 'PUT', body: policy }); setMessage('Notification preferences saved.'); }
+    try {
+      const result = await externalApi.call(`${prefix}/notification-preferences`, { method: 'PUT', body: policy });
+      if (surface === 'customer') {
+        setPolicy(result.policy);
+        setDirty(false);
+      }
+      setMessage('Notification preferences saved.');
+    }
     catch (err) { setMessage(err.data?.message || err.message); } finally { setBusy(false); }
   }
   async function addReminder(e) {
@@ -26,7 +42,16 @@ export default function NotificationPreferences({ surface = 'customer', eventId 
     catch (err) { setMessage(err.data?.message || err.message); } finally { setBusy(false); }
   }
   return <section className="bg-white rounded-2xl p-4 border space-y-4"><h2 className="font-extrabold">Notifications & reminders</h2>
-    {policy && <form onSubmit={save} className="space-y-3 text-sm">
+    {surface === 'customer' && !policy && !message && <p role="status">Loading saved notification preferences…</p>}
+    {policy && surface === 'customer' && <CustomerNotificationForm
+      policy={policy}
+      pushAvailable={pushAvailable}
+      busy={busy}
+      canSave={dirty}
+      onChange={value => { setPolicy(value); setDirty(true); setMessage(''); }}
+      onSave={save}
+    />}
+    {policy && surface !== 'customer' && <form onSubmit={save} className="space-y-3 text-sm">
       <p className="text-xs text-muted">The in-app inbox remains available. Quiet hours delay push delivery in your chosen timezone.</p>
       <label className="flex gap-2"><input type="checkbox" checked={policy.channels?.PUSH !== false} onChange={e => setPolicy({ ...policy, channels: { PUSH: e.target.checked } })} />Push notifications</label>
       <label className="block">Timezone<input required className="border rounded-lg p-2 ml-2" value={policy.timezone} onChange={e => setPolicy({ ...policy, timezone: e.target.value })} /></label>

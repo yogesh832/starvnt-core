@@ -26,6 +26,7 @@ import UpdatesPage from './UpdatesPage.jsx';
 import MePage from './MePage.jsx';
 import VendorsPage from './VendorsPage.jsx';
 import { DocumentsPage, FavoritesPage, SettingsPage } from './PlaceholderPages.jsx';
+import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import { CurrentEventProvider, GoToSection, useCurrentEvent } from './currentEvent.jsx';
 import { customerApi } from './customerApi.js';
 import { CustomerErrorScreen } from './customerUi.jsx';
@@ -348,6 +349,7 @@ function Shell() {
               <Route path="documents" element={<DocumentsPage />} />
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="settings/notifications" element={<NotificationSettingsPage />} />
               <Route path="me" element={<MePage user={user} logout={logout} />} />
               <Route path="*" element={<Navigate to="/customer" replace />} />
             </Routes>

@@ -222,8 +222,10 @@ export function SettingsPage() {
         <Link to="/customer/me" className="flex items-center justify-between px-3 py-3 rounded-xl hover:bg-lavender text-sm font-semibold text-navy">
           Profile (name, phone) <span className="text-muted">›</span>
         </Link>
+        <Link to="/customer/settings/notifications" className="flex items-center justify-between px-3 py-3 rounded-xl hover:bg-lavender text-sm font-semibold text-navy">
+          Notifications <span aria-hidden="true" className="text-muted">›</span>
+        </Link>
       </div>
-      <Empty title="More settings coming">Notification and privacy preferences aren't available yet.</Empty>
     </Placeholder>
   );
 }

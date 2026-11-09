@@ -1,4 +1,3 @@
-import NotificationPreferences from '../../components/NotificationPreferences.jsx';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
@@ -85,7 +84,9 @@ export default function MePage({ user, logout }) {
         ))}
       </div>
 
-      <NotificationPreferences />
+      <Link to="/customer/settings" className="customer-secondary-action flex items-center justify-between rounded-2xl border bg-white p-4 font-semibold">
+        Settings <span aria-hidden="true">›</span>
+      </Link>
       {active.length > 0 && (
         <section>
           <div className="text-sm font-extrabold text-navy mb-2">My events</div>

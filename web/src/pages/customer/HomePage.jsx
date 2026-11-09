@@ -441,8 +441,8 @@ function Workspace({ firstName, event }) {
         </Section>
       </div>
 
-      <Link className="customer-secondary-action" to="/customer/settings">Manage privacy & notification preferences →</Link>
-      <div className="bg-white border rounded-2xl p-4"><ProductFeedback kind="EVENT" reference={ev.id} /></div>
+      <Link className="customer-secondary-action" to="/customer/settings/notifications">Manage notifications →</Link>
+      <ProductFeedback kind="EVENT" reference={ev.id} />
       {/* Row 3: recommendations + next actions */}
       <div className="grid xl:grid-cols-12 gap-5 items-start">
         <div className="xl:col-span-8 space-y-5">
