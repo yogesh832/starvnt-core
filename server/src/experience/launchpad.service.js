@@ -6,6 +6,7 @@ import { VendorBlockout } from '../external/models/VendorBlockout.js';
 import { VendorReview } from '../external/models/VendorReview.js';
 import { QuoteProposal } from '../external/models/QuoteProposal.js';
 import { vendorGrowthEvidence } from '../external/services/discoveryReadiness.service.js';
+import { config } from '../config.js';
 
 /**
  * 30-Day Launchpad & Founding Partner Service
@@ -115,9 +116,9 @@ export async function getLaunchpadProgress(vendorId) {
       key: 'FIRST_REVIEW',
       phase: 'Grow',
       label: 'Collect customer experience review',
-      description: 'Issue an Experience QR and collect verified customer feedback.',
+      description: config.vendorQrEnabled ? 'Issue an Experience QR and collect verified customer feedback.' : 'Review published customer feedback.',
       completed: reviewsCount >= 1,
-      actionLink: '/vendor/experience-qr',
+      actionLink: config.vendorQrEnabled ? '/vendor/experience-qr' : '/vendor/reviews',
     },
   ];
 

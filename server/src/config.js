@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { VENDOR_QR_ENABLED } from "./common/vendorQrRelease.js";
 
 // Also load the server's env file when Node is launched from the repository
 // root. Existing process / working-directory settings keep their precedence.
@@ -41,6 +42,7 @@ const cookieSecure =
  * so a token from one domain can never be replayed against the other.
  */
 export const config = {
+  vendorQrEnabled: VENDOR_QR_ENABLED,
   customerPortalUrl: process.env.CUSTOMER_PORTAL_URL || 'https://starvnt-core.vercel.app',
   vendorPortalUrl: process.env.VENDOR_PORTAL_URL || 'https://vendor.starvnt.com',
   pushEnabled: String(process.env.PUSH_ENABLED || '').toLowerCase() === 'true',

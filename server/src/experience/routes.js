@@ -17,7 +17,12 @@ import { issueExperience, publicExperience, requestFeedbackOtp, verifyFeedbackOt
 import { vendorDirectory, customerRelationship, saveInterests, referralCode, attributeReferral, reconcileLoyalty, growthOverview, createCampaign, publishCampaign, vendorGrowth } from './growth.service.js';
 
 export const experiencePublicRoutes = Router();
+function requireVendorQr(_req, res, next) {
+  if (!config.vendorQrEnabled) return res.sendStatus(404);
+  return next();
+}
 experiencePublicRoutes.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); res.set('Referrer-Policy', 'no-referrer'); next(); });
+experiencePublicRoutes.use(requireVendorQr);
 experiencePublicRoutes.use(rateLimit({ windowMs: 60000, limit: 60, standardHeaders: 'draft-7', legacyHeaders: false }));
 const otpLimit = rateLimit({ windowMs: 15 * 60000, limit: 8, standardHeaders: 'draft-7', legacyHeaders: false });
 const proof = req => req.headers['x-feedback-access'] || '';
@@ -75,6 +80,7 @@ import crypto from 'node:crypto';
 const cryptoHash = b => crypto.createHash('sha256').update(b).digest('hex');
 
 export const experienceVendorRoutes = Router();
+experienceVendorRoutes.use('/experiences', requireVendorQr);
 experienceVendorRoutes.get('/customer-directory', h(async (req, res) => res.json(await vendorDirectory(req.vendorId))));
 experienceVendorRoutes.get('/experiences', h(async (req, res) => res.json({ experiences: (await Experience.find({ vendor: req.vendorId }).sort({ createdAt: -1 }).limit(100)).map(safeExperience) })));
 experienceVendorRoutes.post('/experiences', h(async (req, res) => {
@@ -108,7 +114,7 @@ experienceCustomerRoutes.use(requireCustomer);
 experienceCustomerRoutes.get('/relationships', h(async (req, res) => res.json(await customerRelationship(req.externalUser._id))));
 experienceCustomerRoutes.put('/interests', h(async (req, res) => { const row = await saveInterests(req.externalUser._id, req.body); res.json({ interests: row.interests, revision: row.revision, preferredChannel: row.preferredChannel }); }));
 experienceCustomerRoutes.delete('/interests', h(async (req, res) => { await CustomerInterests.deleteOne({ customer: req.externalUser._id }); res.json({ ok: true }); }));
-experienceCustomerRoutes.post('/experience/claim', h(async (req, res) => res.json({ review: await claimFeedback(req.externalUser._id, req.body.token, req.body.accessToken) })));
+experienceCustomerRoutes.post('/experience/claim', requireVendorQr, h(async (req, res) => res.json({ review: await claimFeedback(req.externalUser._id, req.body.token, req.body.accessToken) })));
 experienceCustomerRoutes.get('/growth', h(async (req, res) => res.json(await growthOverview(req.externalUser._id))));
 experienceCustomerRoutes.post('/growth/campaigns/:id/feedback', h(async (req, res) => {
   if (typeof req.body.helpful !== 'boolean') throw fail('INVALID_FEEDBACK', 'Choose whether this campaign was helpful.');

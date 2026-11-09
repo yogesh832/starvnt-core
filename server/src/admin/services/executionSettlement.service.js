@@ -5,6 +5,7 @@ import { VendorFinancialProfile } from '../../external/models/VendorFinancialPro
 import { Payment, Reservation } from '../../customer/models/index.js';
 import { ensureInvoiceForBooking, recordSettlementRelease, settlementMath } from './financeLedger.service.js';
 import { recordBusinessAudit } from '../utils/audit.js';
+import { config } from '../../config.js';
 
 /**
  * Execution, Completion Validation & Settlement Service (Spec §11, §12).
@@ -289,11 +290,10 @@ export async function validateCompletionFromCore(bookingId, { approved = true, n
     }).catch(() => null);
   }
 
-  if (booking.vendorId && booking.customerId) {
+  if (config.vendorQrEnabled && booking.vendorId && booking.customerId) {
     try {
       const { issueExperience } = await import('../../experience/feedback.service.js');
       const { notifyCustomer } = await import('../../notifications/notification.service.js');
-      const { config } = await import('../../config.js');
       const idempotencyKey = `auto-complete-exp:${booking._id}`;
       const issued = await issueExperience(booking.vendorId, coreActor, {
         source: 'STARVNT',

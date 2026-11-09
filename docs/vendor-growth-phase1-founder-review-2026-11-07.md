@@ -8,7 +8,7 @@
 
 **First release blocker.** An anonymous request returned synthetic private and unlisted portfolio asset URLs on the audited branch. Resolve the public media authorization and direct-URL exposure before enabling Share Center, share QR or new public profile routes. Deployed exposure remains unverified.
 
-The entire Vendor Growth & Marketing workstream belongs to Phase 1. Blueprint §§30 and 32 describe the order of work inside Phase 1. Older repository labels such as “Phase 2 experience” describe earlier sequencing and do not set this release boundary. Phase 2 is exclusively event ticket sales and ticket booking, ticket QR generation/scanning, ticket orders/payments, refunds/settlements and related workflows. Vendor share QR and Experience QR feedback belong to Phase 1. Preserve the Customer, Partner and Admin portals, Marketplace, Lead Management, proposals, quotes, bookings, payments, commercial workflows, service cart and Experience QR.
+Vendor Growth and non-ticketing governance belong to Phase 1. Blueprint §§30 and 32 describe the order of work inside Phase 1. Phase 2 covers event ticket sales and booking, ticket QR generation and scanning, ticket orders and payments, ticket refunds and settlements, and ticketing-specific workflows and modules. The Phase 2 rollout also covers vendor profile QR and Experience QR feedback. The Phase 1 rollout retains regular profile links and the existing non-ticketing booking and payment workflows.
 
 **Requirements source.** STARVNT Unified Vendor Growth & Marketing Ecosystem Master Blueprint, Founder Review Edition, 18 pages, §§0–34 and appendices A–D. The accompanying developer prompt controls scope and authorization. Paths below are relative to this report or explicitly qualified as application routes.
 
