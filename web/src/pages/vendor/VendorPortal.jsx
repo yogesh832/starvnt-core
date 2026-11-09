@@ -349,7 +349,6 @@ export default function VendorPortal() {
     { to: 'customers', label: 'Customer 360', icon: 'customers' },
     ...(VENDOR_QR_ENABLED ? [{ to: 'experience-qr', label: 'Experience QR', icon: 'reviews' }] : []),
     { to: 'growth', label: 'Customer growth', icon: 'analytics' },
-    { to: 'share', label: 'Share Your Business', icon: 'link' },
     { to: 'learning', label: 'Learning & Growth', icon: 'documents' },
     { to: 'discovery-rewards', label: 'Discovery & rewards', icon: 'star' },
     { to: 'portfolio', label: 'Portfolio', icon: 'gallery' },
@@ -632,7 +631,8 @@ export default function VendorPortal() {
             <Route path="customers" element={<CustomerGrowth />} />
             {VENDOR_QR_ENABLED && <Route path="experience-qr" element={<CustomerGrowth mode="qr" />} />}
             <Route path="growth" element={<CustomerGrowth mode="growth" />} />
-            <Route path="share" element={<VendorIdentity key="share" share />} />
+            {/* Share Your Business is deferred to Phase 2. */}
+            <Route path="share" element={<Navigate to="/vendor/profile/social-links" replace />} />
             <Route path="learning" element={<Academy />} />
             <Route path="learning/meetings" element={<GrowthMeetings />} />
             <Route path="discovery-rewards" element={<DiscoveryRewards />} />
