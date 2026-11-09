@@ -278,6 +278,9 @@ router.post('/vendor/portfolio/project', requireExternalAuth, requireAccountType
     if (!projectName) {
       return res.status(400).json({ error: 'PROJECT_NAME_REQUIRED' });
     }
+    if (!['UPLOADED', 'PROCESSING', 'VENDOR_REVIEW', 'PUBLISHED'].includes(status)) {
+      return res.status(400).json({ error: 'INVALID_PORTFOLIO_STATUS', message: 'Verification and booking evidence are assigned by Core.' });
+    }
 
     const defaultCover =
       coverUrl ||
@@ -519,11 +522,8 @@ router.get('/vendor/portfolio/projects', requireExternalAuth, requireAccountType
 router.get('/vendors/:vendorId/portfolio', async (req, res, next) => {
   try {
     const { vendorId } = req.params;
-    const items = (await queryVendorPortfolio(vendorId, {
-      ...req.query,
-      status: { $in: ['PUBLISHED', 'VERIFIED', 'BOOKING_PROVEN'] },
-    })).map(compactPortfolioItem);
-    res.json({ ok: true, count: items.length, items });
+    const items = (await queryVendorPortfolio(vendorId, req.query, { publicOnly: true })).map(compactPortfolioItem);
+    res.set('Cache-Control', 'no-store').json({ ok: true, count: items.length, items });
   } catch (err) {
     next(err);
   }
