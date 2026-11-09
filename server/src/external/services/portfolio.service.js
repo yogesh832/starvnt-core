@@ -134,19 +134,35 @@ export async function bulkIngestMedia(vendorId, items = [], defaultContext = {})
  * Vendor reviews Aura+ classifications and publishes the portfolio items.
  */
 export async function vendorReviewAndPublish(vendorId, itemIds, bulkUpdates = {}) {
+  const editable = ['title', 'description', 'eventType', 'style', 'tags', 'visibility', 'isFeatured'];
+  if (!bulkUpdates || typeof bulkUpdates !== 'object' || Array.isArray(bulkUpdates) ||
+      Object.keys(bulkUpdates).some(key => key !== 'status' && !editable.includes(key))) {
+    throw Object.assign(new Error('Only portfolio presentation fields can be edited.'), { status: 400, code: 'INVALID_PORTFOLIO_UPDATE' });
+  }
   const query = {
     _id: { $in: itemIds },
     vendor: vendorId, // Strict tenant isolation
   };
 
-  const updateFields = {
-    status: 'PUBLISHED',
-    ...bulkUpdates,
-  };
+  const updateFields = Object.fromEntries(editable.filter(key => Object.hasOwn(bulkUpdates, key)).map(key => [key, bulkUpdates[key]]));
+  if (Object.hasOwn(bulkUpdates, 'status')) {
+    // Existing clients include the displayed status when editing details.
+    // Treat it as a precondition and never accept a caller-supplied transition.
+    if (typeof bulkUpdates.status !== 'string') {
+      throw Object.assign(new Error('The portfolio status is invalid.'), { status: 400, code: 'INVALID_PORTFOLIO_UPDATE' });
+    }
+    query.status = bulkUpdates.status;
+  } else {
+    query.status = { $in: ['UPLOADED', 'PROCESSING', 'VENDOR_REVIEW', 'PUBLISHED'] };
+    updateFields.status = 'PUBLISHED';
+  }
+  if (Object.keys(updateFields).length) {
+    await PortfolioItem.updateMany(query, { $set: updateFields }, { runValidators: true });
+  }
 
-  await PortfolioItem.updateMany(query, { $set: updateFields });
-
-  const published = await PortfolioItem.find(query);
+  const published = await PortfolioItem.find({
+    ...query, status: Object.hasOwn(bulkUpdates, 'status') ? bulkUpdates.status : 'PUBLISHED',
+  });
   return {
     publishedCount: published.length,
     items: published,
@@ -189,14 +205,19 @@ export async function linkPortfolioToBooking(itemId, bookingId) {
 /**
  * Retrieves vendor portfolio with location-linked and category filters.
  */
-export async function queryVendorPortfolio(vendorId, filters = {}) {
+export async function queryVendorPortfolio(vendorId, filters = {}, { publicOnly = false } = {}) {
   const query = { vendor: vendorId };
 
   if (filters.mediaType) query.mediaType = filters.mediaType;
   if (filters.eventType) query.eventType = filters.eventType;
   if (filters.style) query.style = filters.style;
   if (filters.locality) query['location.locality'] = filters.locality;
-  if (filters.status) query.status = filters.status;
+  if (publicOnly) {
+    query.visibility = 'PUBLIC';
+    query.status = { $in: ['PUBLISHED', 'VERIFIED', 'BOOKING_PROVEN'] };
+  } else if (filters.status) {
+    query.status = filters.status;
+  }
 
   return await PortfolioItem.find(query)
     .sort({ isFeatured: -1, createdAt: -1 })
