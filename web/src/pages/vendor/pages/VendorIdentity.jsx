@@ -60,7 +60,6 @@ export default function VendorIdentity({ share = false }) {
     <nav className="flex flex-wrap gap-4 text-sm">
       <Link className="underline text-primary" to="/vendor/profile">Profile & Hub</Link>
       <Link className="underline text-primary" to="/vendor/profile/social-links">Social Media Links</Link>
-      <Link className="underline text-primary" to="/vendor/share">Share Your Business</Link>
     </nav>
     {error && <p role="alert" className="text-sm text-red-700">{error} <button type="button" className="underline"
       onClick={() => act(async () => { setProfile(await externalApi.call(endpoint)); setQr(null); })}>Reload saved profile</button></p>}
