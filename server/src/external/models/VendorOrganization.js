@@ -21,6 +21,15 @@ const vendorOrganizationSchema = new Schema(
       launchpadCompletedAt: { type: Date, default: null },
     },
     growthPreferences: { marketingOptIn: { type: Boolean, default: false }, history: [{ actor: String, at: Date, enabled: Boolean, key: String }] },
+    socialIdentity: {
+      revision: { type: Number, default: 0 },
+      publishProfile: { type: Boolean, default: false },
+      links: [new Schema({
+        platform: { type: String, required: true },
+        url: { type: String, required: true, maxlength: 1024 },
+        public: { type: Boolean, default: false },
+      }, { _id: false })],
+    },
     googleBusiness: { placeId: String, displayName: String, rating: Number, reviewCount: Number, mapsUrl: String, syncedAt: Date },
     category: { type: String, trim: true, default: '' }, // Photography, Catering, Venue, Decoration…
     owner: { type: Schema.Types.ObjectId, ref: 'ExternalUser', required: true, index: true },

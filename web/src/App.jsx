@@ -16,6 +16,7 @@ import AdminShell from './pages/admin/AdminShell.jsx';
 import DevApiTest from './pages/DevApiTest.jsx';
 import DevSingleClickAuth from './pages/DevSingleClickAuth.jsx';
 import PublicPolicyPage from './pages/PublicPolicyPage.jsx';
+import PublicVendorProfile from './pages/PublicVendorProfile.jsx';
 
 const DEV_TOOLS_ENABLED = import.meta.env.DEV;
 
@@ -113,6 +114,8 @@ export default function App() {
 }
 
 function ApplicationRoutes() {
+  const { search } = useLocation();
+  const policyAudience = new URLSearchParams(search).get('for');
   return (
     <Routes>
       {/* Public landing — guests plan here, partner/admin subdomains redirect appropriately */}
@@ -125,14 +128,14 @@ function ApplicationRoutes() {
         } 
       />
       {/* External domain — one auth UI, two portals */}
-      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/privacy" element={['vendor', 'customer'].includes(policyAudience) ? <PublicPolicyPage kind="privacy" /> : <PrivacyPolicy />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/login" element={<ExternalLogin />} />
       <Route path="/signup" element={<ExternalLogin />} />
       <Route path="/register" element={<ExternalLogin />} />
       <Route path="/experience/:token" element={<ExperiencePage />} />
-      <Route path="/privacy" element={<PublicPolicyPage kind="privacy" />} />
       <Route path="/terms" element={<PublicPolicyPage kind="terms" />} />
+      <Route path="/vendors/:vendorId" element={<PublicVendorProfile />} />
       <Route
         path="/customer/*"
         element={

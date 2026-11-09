@@ -1,5 +1,8 @@
 import { claimVendorAcquisition } from '../services/vendorAcquisition.service.js';
 import { experienceVendorRoutes } from '../../experience/routes.js';
+import { vendorIdentityRoutes } from './vendorIdentity.routes.js';
+import { vendorLearningRoutes } from '../../learning/routes.js';
+import { vendorMeetingRoutes } from '../../learning/meetingRoutes.js';
 import { vendorDiscoveryRewards } from '../../experience/discoveryRewards.routes.js';
 import externalBookingRoutes from './externalBookings.routes.js';
 import readinessRoutes from './readiness.routes.js';
@@ -108,6 +111,9 @@ router.post('/acquisition-events/claim', async (req, res, next) => {
 });
 
 
+router.use(vendorIdentityRoutes);
+router.use('/academy', vendorLearningRoutes);
+router.use('/growth-meetings', vendorMeetingRoutes);
 router.use(notificationPreferencesRoutes('VENDOR'));
 router.use('/external-bookings', externalBookingRoutes);
 router.use(readinessRoutes);
