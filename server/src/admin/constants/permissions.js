@@ -12,6 +12,8 @@ const CATALOG = {
   discovery: ['review'],
   reviews: ['read', 'moderate', 'media'],
   growth: ['read', 'manage'],
+  academy: ['read', 'edit', 'publish'],
+  growthMeetings: ['read', 'schedule', 'run'],
   privacy: ['read', 'manage'],
   identity: ['read', 'link'],
   customerContacts: ['read', 'export'],

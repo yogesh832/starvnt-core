@@ -13,6 +13,9 @@ import vendorRoutes from './external/routes/vendor.routes.js';
 import commercialRoutes from './external/routes/commercial.routes.js';
 import transactionRoutes from './external/routes/transaction.routes.js';
 import portfolioRoutes from './external/routes/portfolio.routes.js';
+import { publicVendorIdentityRoutes } from './external/routes/vendorIdentity.routes.js';
+import { adminLearningRoutes } from './learning/routes.js';
+import { adminMeetingRoutes } from './learning/meetingRoutes.js';
 import aiRoutes from './external/routes/ai.routes.js';
 import { requireExternalAuth, requireAccountType } from './external/middleware/requireExternalAuth.js';
 import { customerRouter, auraRouter, internalRouter, webhookRouter } from './customer/routes/index.js';
@@ -120,6 +123,7 @@ export function createApp() {
   app.use('/api/commercial', commercialRoutes);
   app.use('/api', transactionRoutes);
   app.use('/api', portfolioRoutes);
+  app.use('/api', publicVendorIdentityRoutes);
   app.use('/api/ai', aiRoutes);
 
   // ── INTERNAL ADMIN domain: separate auth + RBAC ───────────────────────────
@@ -127,6 +131,8 @@ export function createApp() {
   app.use('/api/admin/foundation', foundationAdminRoutes);
   app.use('/api/admin/experience', experienceAdminRoutes);
   app.use('/api/admin/discovery-rewards', adminDiscoveryRewards);
+  app.use('/api/admin/academy', adminLearningRoutes);
+  app.use('/api/admin/growth-meetings', adminMeetingRoutes);
   app.use('/api/admin/availability', adminAvailabilityRoutes);
   app.use('/api/admin/users', adminUsersRoutes);
   app.use('/api/admin/permissions', adminPermissionsRoutes);

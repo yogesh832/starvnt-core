@@ -32,6 +32,7 @@ import {
   verifyWidgetAccessToken,
   normalizePhone,
 } from "../services/otp.service.js";
+import { checkSignupAcceptance, signupDocuments } from "../../foundation/signupDocuments.js";
 
 const router = Router();
 router.use(nativeAuthTransport(config.refreshCookieName));
@@ -50,6 +51,23 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "RATE_LIMITED" },
 });
+
+router.get("/signup-documents", (req, res) => {
+  const result = signupDocuments(req.query.accountType);
+  if (!result) return res.status(400).json({ error: "INVALID_ACCOUNT_TYPE" });
+  return res.set("Cache-Control", "no-store").json(result);
+});
+
+async function createSignupAccount(req, fields) {
+  const acceptance = checkSignupAcceptance(fields.accountType, req.body?.signupAcceptance);
+  if (acceptance.error) {
+    throw Object.assign(new Error(acceptance.message), {
+      status: acceptance.status,
+      code: acceptance.error,
+    });
+  }
+  return ExternalUser.create({ ...fields, signupAcceptance: acceptance.record });
+}
 
 function refreshCookieOptions() {
   return {
@@ -319,7 +337,7 @@ router.post("/register", authLimiter, async (req, res, next) => {
     const normalizedPhone = phone ? normalizePhone(phone) : undefined;
     if (normalizedPhone && await findPhoneIdentity(normalizedPhone)) throw identityConflict();
 
-    const user = await ExternalUser.create({
+    const user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
       fullName,
       email,
@@ -474,7 +492,7 @@ router.post("/google", authLimiter, async (req, res, next) => {
       const targetAccountType =
         accountType === "VENDOR" ? "VENDOR" : "CUSTOMER";
       signInAs = targetAccountType;
-      user = await ExternalUser.create({
+      user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: googleUser.fullName,
         email: googleUser.email,
@@ -811,7 +829,7 @@ router.post("/otp/verify", authLimiter, async (req, res, next) => {
           ? businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`
           : `Customer ${cleanDigits.slice(-4)}`);
 
-      user = await ExternalUser.create({
+      user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: defaultName,
         email: `${cleanDigits}@phone.starvnt.com`,
@@ -924,7 +942,7 @@ router.post("/otp/widget-verify", authLimiter, async (req, res, next) => {
           ? businessName || brandName || `Vendor ${cleanDigits.slice(-4)}`
           : `Customer ${cleanDigits.slice(-4)}`);
 
-      user = await ExternalUser.create({
+      user = await createSignupAccount(req, {
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         fullName: defaultName,
         email: `${cleanDigits}@phone.starvnt.com`,

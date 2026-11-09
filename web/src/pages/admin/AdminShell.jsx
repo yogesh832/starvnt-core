@@ -1,6 +1,8 @@
 import ProductMetrics from './ProductMetrics.jsx';
 import ExperienceControls from './ExperienceControls.jsx';
 import DiscoveryRewardsAdmin from './DiscoveryRewardsAdmin.jsx';
+import AcademyAdmin from './AcademyAdmin.jsx';
+import GrowthMeetingsAdmin from './GrowthMeetingsAdmin.jsx';
 import Foundation from './Foundation.jsx';
 import Availability from './Availability.jsx';
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
@@ -42,6 +44,8 @@ const MODULES = [
   { path: 'foundation', label: 'Data & identity', icon: 'access', anyOf: ['privacy.read', 'identity.read', 'bookings.reconcile'] },
   { path: 'experience', label: 'Customer experience', icon: 'customers', anyOf: ['reviews.read', 'issues.read', 'growth.read', 'growth.manage', 'customerContacts.read'] },
   { path: 'discovery-rewards', label: 'Discovery & rewards', icon: 'star', anyOf: ['discovery.review', 'growth.read', 'growth.manage', 'analytics.read'] },
+  { path: 'academy', label: 'Partner Academy', icon: 'documents', anyOf: ['academy.read', 'academy.edit', 'academy.publish'] },
+  { path: 'growth-meetings', label: 'Growth Meetings', icon: 'calendar', anyOf: ['growthMeetings.read', 'growthMeetings.schedule', 'growthMeetings.run'] },
   { path: 'settings', label: 'Settings', icon: 'settings', anyOf: ['settings.read'] },
 ];
 
@@ -361,6 +365,8 @@ export default function AdminShell() {
               <Route path="foundation" element={<Foundation />} />
               <Route path="experience" element={<ExperienceControls />} />
               <Route path="discovery-rewards" element={<DiscoveryRewardsAdmin />} />
+              <Route path="academy" element={<AcademyAdmin />} />
+              <Route path="growth-meetings" element={<GrowthMeetingsAdmin />} />
               <Route path="settings" element={<ModuleTable kind="settings" />} />
             </Routes>
           </div>

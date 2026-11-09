@@ -1,4 +1,6 @@
 import VendorBusinessDashboard from '../VendorBusinessDashboard.jsx';
+import { NextGrowthMeetingCard } from './GrowthMeetings.jsx';
+import { ContinueWatchingCard } from './Academy.jsx';
 import { notificationAction } from '../vendorNotificationUi.js';
 import ProfileStatus from '../../../components/ProfileStatus.jsx';
 import { VENDOR_SETUP_STEPS } from '../../../../../server/src/common/vendorSetupSteps.js';
@@ -1532,6 +1534,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             onMarkAllRead={handleMarkAllNotificationsRead}
           />
         </div>
+
+        <NextGrowthMeetingCard />
+        <ContinueWatchingCard />
 
         {/* Conversion Funnel Performance */}
         <div className="md:col-span-2 xl:col-span-1 min-w-0">

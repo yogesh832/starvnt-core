@@ -43,6 +43,8 @@ import { AdminUser } from '../src/admin/models/AdminUser.js';
 import { AdminSession } from '../src/admin/models/AdminSession.js';
 import { signAdminAccessToken } from '../src/admin/utils/tokens.js';
 
+import { GrowthMeeting, MeetingParticipation } from '../src/learning/meetingModels.js';
+
 let app, mongo;
 const id = () => new mongoose.Types.ObjectId(), key = () => crypto.randomUUID();
 const auth = token => ({ Authorization: `Bearer ${token}` });
@@ -362,7 +364,7 @@ test('vendor XP uses active versioned rules, is idempotent, tenant scoped and re
   await VendorRewardRule.updateMany({}, { $set: { active: false } });
   await VendorRewardRule.create({ version: key(), values: { VERIFICATION: 20 }, active: true });
   const one = await request(app).get('/api/vendor/rewards').set(auth(f.token)).expect(200);
-  assert.equal(one.body.xp, 20); assert.equal(one.body.credits, null);
+  assert.equal(one.body.xp, 20); assert.equal(one.body.credits, 0);
   await request(app).get('/api/vendor/rewards').set(auth(f.token)).expect(200);
   assert.equal(await VendorAchievement.countDocuments({ vendor: f.vendor._id, milestone: 'VERIFICATION' }), 1);
   assert.equal(await Notification.countDocuments({ vendor: f.vendor._id, title: 'Achievement earned' }), 1);
@@ -474,6 +476,256 @@ test('public catalogue hides private base coordinates, address and private portf
   await request(app).put(`/api/vendor/locations/${f.location._id}`).set(auth(f.token)).send({ publicVisibility: 'EXACT', actor: 'spoofed' }).expect(200);
   assert.equal((await findBookableService(f.service._id)).matchedLocation.address, 'Sensitive home address');
   const stored = await OperatingLocation.findById(f.location._id); assert.equal(stored.history.at(-1).actor, String(f.owner._id));
+});
+
+test('anonymous portfolio returns only published public items even with visibility and status overrides', async () => {
+  const f = await fixture();
+  const rows = await PortfolioItem.create([
+    { visibility: 'PRIVATE', status: 'PUBLISHED' },
+    { visibility: 'UNLISTED', status: 'PUBLISHED' },
+    { visibility: 'PUBLIC', status: 'VENDOR_REVIEW' },
+  ].map((record, index) => ({
+    ...record, vendor: f.vendor._id, mediaType: 'IMAGE', url: `https://example.test/restricted-${index}.jpg`,
+  })));
+  const response = await request(app).get(`/api/vendors/${f.vendor._id}/portfolio`)
+    .query({ visibility: 'PRIVATE', status: 'VENDOR_REVIEW' }).expect(200);
+  assert.equal(response.headers['cache-control'], 'no-store');
+  assert.deepEqual(response.body.items.map(item => item.url), ['https://example.test/public.jpg']);
+  const owned = await request(app).get('/api/vendor/portfolio').set(auth(f.token)).expect(200);
+  assert.ok(rows.every(row => owned.body.items.some(item => item._id === String(row._id))));
+  await PortfolioItem.updateMany({ vendor: f.vendor._id, visibility: 'PUBLIC' }, { $set: { visibility: 'PRIVATE' } });
+  const withdrawn = await request(app).get(`/api/vendors/${f.vendor._id}/portfolio`).expect(200);
+  assert.equal(withdrawn.body.count, 0);
+});
+
+test('public vendor identity is owner-scoped and share QR follows current publication', async t => {
+  const origin = process.env.STARVNT_VENDOR_PUBLIC_ORIGIN;
+  process.env.STARVNT_VENDOR_PUBLIC_ORIGIN = 'https://starvnt.example';
+  t.after(() => {
+    if (origin === undefined) delete process.env.STARVNT_VENDOR_PUBLIC_ORIGIN;
+    else process.env.STARVNT_VENDOR_PUBLIC_ORIGIN = origin;
+  });
+  const f = await fixture();
+  const other = await fixture();
+  const endpoint = '/api/vendor/profile/social-links';
+  const profile = `/api/vendors/${f.vendor._id}/public-profile`;
+  const update = (value, token = f.token) => request(app).put(endpoint).set(auth(token)).send(value);
+  const shareQr = () => request(app).post('/api/vendor/profile/share-qr').set(auth(f.token));
+  await request(app).get(profile).expect(404);
+  await request(app).get(endpoint).expect(401);
+  await shareQr().expect(404);
+  for (const url of ['javascript:alert(1)', 'https://instagram.com.evil.test/cedar', 'https://instagram.com@evil.test/cedar', 'https://instagram.com/p/abc', 'https://instagram.com/acc%6funts']) {
+    await update({ revision: 0, publishProfile: false, links: [{ platform: 'instagram', url, public: true }] }).expect(400);
+  }
+  const instagram = 'https://www.instagram.com/cedar.studio/?igsh=fixture';
+  const links = [
+    { platform: 'instagram', url: instagram, public: true },
+    { platform: 'youtube', url: 'https://www.youtube.com/@cedar-studio', public: false },
+  ];
+  await update({ revision: 0, publishProfile: true, links, vendorId: other.vendor._id }).expect(200);
+  const otherSettings = await request(app).get(endpoint).set(auth(other.token)).expect(200);
+  assert.deepEqual(otherSettings.body.links, []);
+  await update({ revision: 0, publishProfile: false, links: [] }).expect(409);
+  const result = await request(app).get(profile).expect(200);
+  assert.deepEqual(result.body, {
+    name: f.vendor.businessName, category: 'Photography',
+    socialLinks: [{ platform: 'instagram', label: 'Instagram', url: instagram }],
+  });
+  const qr = await shareQr().expect(200);
+  assert.equal(qr.body.url, `https://starvnt.example/vendors/${f.vendor._id}`);
+  assert.match(qr.body.qrDataUrl, /^data:image\/png;base64,/);
+  await ExternalUser.updateOne({ _id: f.owner._id }, { $set: { status: 'SUSPENDED' } });
+  await request(app).get(profile).expect(404);
+  await ExternalUser.updateOne({ _id: f.owner._id }, { $set: { status: 'ACTIVE' } });
+  await update({ revision: 1, publishProfile: false, links }).expect(200);
+  await request(app).get(profile).expect(404);
+  await shareQr().expect(404);
+});
+
+test('portfolio editors cannot transfer media or assign Core verification', async () => {
+  const f = await fixture();
+  const other = await fixture();
+  const row = await PortfolioItem.findOne({ vendor: f.vendor._id });
+  const publish = bulkUpdates => request(app).post('/api/vendor/portfolio/publish').set(auth(f.token))
+    .send({ itemIds: [row._id], bulkUpdates });
+  await publish({ vendor: other.vendor._id }).expect(400);
+  const unverified = await publish({ status: 'VERIFIED' }).expect(200);
+  assert.equal(unverified.body.publishedCount, 0);
+  await request(app).post('/api/vendor/portfolio/project').set(auth(f.token))
+    .send({ projectName: 'Unapproved verification', status: 'BOOKING_PROVEN' }).expect(400);
+  const edited = await publish({ title: 'Updated title', status: 'PUBLISHED' }).expect(200);
+  assert.equal(edited.body.items[0].title, 'Updated title');
+  assert.equal(String((await PortfolioItem.findById(row._id)).vendor), String(f.vendor._id));
+});
+
+test('Academy enforces draft and rights boundaries and preserves vendor-scoped revisioned progress', async t => {
+  const vendor = await fixture();
+  const other = await fixture();
+  async function staff(permissions) {
+    const user = await AdminUser.create({ email: `${key()}@example.test`, fullName: 'Academy staff', passwordHash: 'fixture', role: 'ADMIN', permissions });
+    const session = await AdminSession.create({ admin: user._id, refreshTokenHash: key(), expiresAt: new Date(Date.now() + 3600000) });
+    return auth(signAdminAccessToken(user, session._id));
+  }
+  const editor = await staff(['academy.edit']);
+  const publisher = await staff(['academy.publish']);
+  const draft = { title: 'Write a scoped quote', category: 'Quotation & Sales', objective: 'Define what the quote covers', content: 'Record the scope, exclusions and timeline.', requestKey: key() };
+  const create = value => request(app).post('/api/admin/academy').set(editor).send(value);
+  const created = (await create(draft).expect(201)).body.lesson;
+  assert.equal((await create(draft).expect(201)).body.lesson.id, created.id);
+  await create({ ...draft, title: 'Different title' }).expect(409);
+  const publicPath = `/api/vendor/academy/${created.id}`;
+  const adminPath = `/api/admin/academy/${created.id}`;
+  const read = () => request(app).get(publicPath).set(auth(vendor.token));
+  const publication = (actor, body) => request(app).post(`${adminPath}/publication`).set(actor).send(body);
+  await read().expect(404);
+  await request(app).get(publicPath).expect(401);
+  await publication(editor, { revision: 1, action: 'PUBLISH', reason: 'No publishing authority' }).expect(403);
+  await publication(publisher, { revision: 1, action: 'PUBLISH', reason: 'Missing approval evidence' }).expect(400);
+  await publication(publisher, { revision: 1, action: 'PUBLISH', reason: 'Approved', rightsReference: 'LEGAL-FIXTURE', rightsExpiresAt: '2020-01-01T00:00:00Z' }).expect(400);
+  const scheduled = (await publication(publisher, { revision: 1, action: 'PUBLISH', reason: 'Approved for schedule', rightsReference: 'LEGAL-FIXTURE', publishAt: new Date(Date.now() + 3600000).toISOString() }).expect(200)).body.lesson;
+  await read().expect(404);
+  const withdrawn = (await publication(publisher, { revision: scheduled.revision, action: 'WITHDRAW', reason: 'Schedule changed' }).expect(200)).body.lesson;
+  const published = (await publication(publisher, { revision: withdrawn.revision, action: 'PUBLISH', reason: 'Approved for immediate release', rightsReference: 'LEGAL-FIXTURE' }).expect(200)).body.lesson;
+  const details = (await read().expect(200)).body.lesson;
+  assert.equal(details.content, draft.content);
+  assert.equal(details.rightsReference, undefined);
+  assert.equal(details.videoId, undefined);
+  const finish = () => request(app).put(`${publicPath}/progress`).set(auth(vendor.token)).send({ positionSeconds: 0, complete: true, contentVersion: 1 });
+  const complete = (await finish().expect(200)).body;
+  assert.ok(complete.completedAt);
+  assert.equal((await finish().expect(200)).body.completedAt, complete.completedAt);
+  const otherList = (await request(app).get('/api/vendor/academy').set(auth(other.token)).expect(200)).body.lessons;
+  assert.equal(otherList.find(row => row.id === created.id).completedAt, null);
+  await publication(publisher, { revision: published.revision, action: 'WITHDRAW', reason: 'Rights withdrawn' }).expect(200);
+  await read().expect(404);
+  await finish().expect(404);
+  const updated = (await request(app).put(adminPath).set(editor).send({ ...draft, revision: published.revision + 1, title: 'Revised quote lesson' }).expect(200)).body.lesson;
+  await publication(publisher, { revision: updated.revision, action: 'PUBLISH', reason: 'New version approved', rightsReference: 'LEGAL-FIXTURE-2' }).expect(200);
+  await finish().expect(409);
+  const owned = (await request(app).get('/api/vendor/academy').set(auth(vendor.token)).expect(200)).body.lessons.find(row => row.id === created.id);
+  assert.equal(owned.contentVersion, 2);
+  assert.equal(owned.completedAt, null);
+
+  const previousConfig = { ...cloudinary.config() };
+  cloudinary.config({ cloud_name: 'fixture', api_key: 'fixture', api_secret: 'fixture' });
+  t.after(() => { cloudinary.config(true); cloudinary.config(previousConfig); });
+  const videoId = 'starvnt_private/academy/quote-fixture';
+  let type = 'upload';
+  t.mock.method(cloudinary.api, 'resource', async (id, options) => {
+    assert.equal(id, videoId);
+    assert.deepEqual(options, { type: 'authenticated', resource_type: 'video' });
+    return { public_id: id, type, resource_type: 'video', format: 'mp4' };
+  });
+  const video = (await create({
+    ...draft, requestKey: key(), videoId, durationSeconds: 30,
+    captions: 'WEBVTT\n\n00:00.000 --> 00:03.000\nStart with the agreed scope.',
+  }).expect(201)).body.lesson;
+  const videoAdmin = `/api/admin/academy/${video.id}/publication`;
+  const playback = () => request(app).post(`/api/vendor/academy/${video.id}/playback`).set(auth(vendor.token));
+  const rightsExpiresAt = new Date(Date.now() + 120000).toISOString();
+  const approval = { revision: 1, action: 'PUBLISH', reason: 'Approved authenticated asset', rightsReference: 'VIDEO-RIGHTS-FIXTURE', rightsExpiresAt };
+  await request(app).post(videoAdmin).set(publisher).send(approval).expect(409);
+  type = 'authenticated';
+  await request(app).post(videoAdmin).set(publisher).send(approval).expect(200);
+  const grant = await playback().expect(200);
+  assert.equal(grant.headers['cache-control'], 'no-store');
+  assert.ok(new Date(grant.body.expiresAt) <= new Date(rightsExpiresAt));
+  assert.match(grant.body.url, /\/video\/download\?/);
+  await request(app).post(videoAdmin).set(publisher).send({ revision: 2, action: 'WITHDRAW', reason: 'Withdraw video rights' }).expect(200);
+  await playback().expect(404);
+});
+
+test('Growth Meetings protect invite-only access, RSVP revisions, join links and post-meeting records', async () => {
+  const invited = await fixture();
+  const outside = await fixture();
+  async function staff(permissions) {
+    const user = await AdminUser.create({ email: `${key()}@example.test`, fullName: 'Meeting staff', passwordHash: 'fixture', role: 'ADMIN', permissions });
+    const session = await AdminSession.create({ admin: user._id, refreshTokenHash: key(), expiresAt: new Date(Date.now() + 3600000) });
+    return auth(signAdminAccessToken(user, session._id));
+  }
+  const scheduler = await staff(['growthMeetings.schedule']);
+  const operator = await staff(['growthMeetings.run']);
+  const adminPath = '/api/admin/growth-meetings';
+  const vendorPath = '/api/vendor/growth-meetings';
+  const start = Date.now() + 3600000;
+  const schedule = {
+    title: 'Better event scopes', agenda: 'Review quote examples', startsAt: new Date(start).toISOString(),
+    endsAt: new Date(start + 3600000).toISOString(), timezone: 'Asia/Kolkata',
+    meetUrl: 'https://meet.google.com/abc-defg-hij', audience: 'INVITED', invitees: [String(invited.vendor._id)],
+    requestKey: key(), reason: 'Schedule learning session',
+  };
+  const create = (body, actor = scheduler) => request(app).post(adminPath).set(actor).send(body);
+  await create(schedule, operator).expect(403);
+  await create({ ...schedule, startsAt: '2028-02-31T09:00:00+05:30' }).expect(400);
+  await create({ ...schedule, meetUrl: 'https://meet.google.com.evil.test/abc-defg-hij' }).expect(400);
+  await create({ ...schedule, agenda: schedule.meetUrl }).expect(400);
+  const lookup = await request(app).get(`${adminPath}/invitees`).set(scheduler).query({ q: invited.vendor.businessName }).expect(200);
+  assert.deepEqual(lookup.body.vendors, [{ id: String(invited.vendor._id), name: invited.vendor.businessName }]);
+  const { meeting } = (await create(schedule).expect(201)).body;
+  assert.equal((await create(schedule).expect(201)).body.meeting.id, meeting.id);
+  await create({ ...schedule, title: 'Changed on retry' }).expect(409);
+  const admin = `${adminPath}/${meeting.id}`;
+  const vendor = `${vendorPath}/${meeting.id}`;
+  const list = token => request(app).get(vendorPath).set(auth(token));
+  const rsvp = (token, scheduleVersion) => request(app).put(`${vendor}/rsvp`).set(auth(token)).send({ rsvp: 'GOING', scheduleVersion });
+  const join = (token, scheduleVersion) => request(app).post(`${vendor}/join`).set(auth(token)).send({ scheduleVersion });
+  const operatorView = (await request(app).get(adminPath).set(operator).expect(200)).body.meetings.find(row => row.id === meeting.id);
+  assert.equal(operatorView.meetUrl, undefined);
+  const listed = (await list(invited.token).expect(200)).body.meetings.find(row => row.id === meeting.id);
+  assert.equal(listed.meetUrl, undefined);
+  assert.equal(listed.invitees, undefined);
+  assert.equal((await list(outside.token).expect(200)).body.meetings.some(row => row.id === meeting.id), false);
+  assert.equal((await request(app).get(`${vendorPath}/next`).set(auth(outside.token)).expect(200)).body.meeting, null);
+  const next = (await request(app).get(`${vendorPath}/next`).set(auth(invited.token)).expect(200)).body.meeting;
+  assert.equal(next.id, meeting.id);
+  assert.equal(next.meetUrl, undefined);
+  await join(outside.token, 1).expect(404);
+  await join(invited.token, 1).expect(409);
+  await rsvp(invited.token, 1).expect(200);
+  const newStart = Date.now() + 5 * 60000;
+  const revised = (await request(app).put(`${admin}/schedule`).set(scheduler).send({
+    ...schedule, startsAt: new Date(newStart).toISOString(), endsAt: new Date(newStart + 3600000).toISOString(),
+    meetUrl: 'https://meet.google.com/jkl-mnop-qrs', revision: 1, scheduleVersion: 1,
+  }).expect(200)).body.meeting;
+  assert.equal(revised.scheduleVersion, 2);
+  await rsvp(invited.token, 1).expect(409);
+  await join(invited.token, 1).expect(409);
+  const reloaded = (await list(invited.token).expect(200)).body.meetings.find(row => row.id === meeting.id);
+  assert.equal(reloaded.rsvp, null);
+  assert.equal((await join(invited.token, 2).expect(200)).body.url, revised.meetUrl);
+  await join(outside.token, 2).expect(404);
+  await rsvp(invited.token, 2).expect(200);
+  await rsvp(invited.token, 2).expect(200);
+  assert.equal(await MeetingParticipation.countDocuments({ meeting: meeting.id, vendor: invited.vendor._id }), 2);
+  await request(app).post(`${admin}/cancel`).set(scheduler).send({ revision: 1, reason: 'Stale cancellation' }).expect(409);
+
+  const second = (await create({ ...schedule, requestKey: key() }).expect(201)).body.meeting;
+  await request(app).post(`${adminPath}/${second.id}/cancel`).set(scheduler).send({ revision: 1, reason: 'Facilitator unavailable' }).expect(200);
+  await request(app).post(`${vendorPath}/${second.id}/join`).set(auth(invited.token)).send({ scheduleVersion: 1 }).expect(409);
+  assert.equal((await list(invited.token).expect(200)).body.meetings.find(row => row.id === second.id).status, 'CANCELLED');
+
+  await GrowthMeeting.updateOne({ _id: meeting.id }, { $set: { startsAt: new Date(Date.now() - 7200000), endsAt: new Date(Date.now() - 3600000) } });
+  await join(invited.token, 2).expect(409);
+  const feedback = () => request(app).put(`${vendor}/feedback`).set(auth(invited.token)).send({ scheduleVersion: 2, feedback: 'Useful examples.' });
+  await feedback().expect(403);
+  const attendance = vendorId => request(app).put(`${admin}/attendance`).set(operator).send({ vendorId, attended: true, scheduleVersion: 2 });
+  await attendance(outside.vendor._id).expect(403);
+  await attendance(invited.vendor._id).expect(200);
+  await feedback().expect(200);
+  await request(app).put(`${admin}/summary`).set(operator).send({
+    revision: revised.revision, summary: 'We discussed quote inclusions.', resources: 'Use a scope checklist.', reason: 'Reviewed after the session',
+  }).expect(200);
+  await request(app).get(`${admin}/participation`).set(scheduler).expect(403);
+  const records = (await request(app).get(`${admin}/participation`).set(operator).expect(200)).body.participants;
+  assert.deepEqual(records.map(row => [row.vendorId, row.rsvp, row.attended, row.feedback]), [[String(invited.vendor._id), 'GOING', true, 'Useful examples.']]);
+  const after = (await list(invited.token).expect(200)).body.meetings.find(row => row.id === meeting.id);
+  assert.equal(after.summary, 'We discussed quote inclusions.');
+  assert.equal(after.attended, true);
+
+  const open = (await create({ ...schedule, audience: 'ACTIVE', invitees: [], requestKey: key() }).expect(201)).body.meeting;
+  assert.equal((await list(outside.token).expect(200)).body.meetings.some(row => row.id === open.id), true);
+  await VendorOrganization.updateOne({ _id: outside.vendor._id }, { $set: { status: 'SUSPENDED' } });
+  await list(outside.token).expect(403);
 });
 
 test('location archival preserves history and invalid create cannot unset the current primary', async () => {

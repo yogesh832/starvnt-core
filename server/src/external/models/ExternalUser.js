@@ -20,6 +20,15 @@ const externalUserSchema = new Schema(
       googleId: { digest: String, method: String, verifiedAt: Date },
     },
     privacy: { deletionRequestedAt: Date, anonymizedAt: Date, retentionReason: String, retainedUntil: Date },
+    signupAcceptance: {
+      type: new Schema({
+        accountType: { type: String, enum: ['CUSTOMER', 'VENDOR'], required: true },
+        acceptedAt: { type: Date, required: true },
+        documents: [new Schema({ kind: String, version: String, hash: String }, { _id: false })],
+      }, { _id: false }),
+      immutable: true,
+      select: false,
+    },
     sourceAttribution: {
       entryPoint: { type: String, immutable: true },
       authenticationMethod: { type: String, immutable: true },

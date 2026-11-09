@@ -1,6 +1,6 @@
 import VendorCategoryPicker from "../../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Page, Card } from "./shared.jsx";
 import { StatusChip } from "../../../components/ui.jsx";
 import Icon from "../../../components/Icon.jsx";
@@ -4710,6 +4710,9 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   ) : null
                 }
               >
+                <Link to="/vendor/profile/social-links" className="mb-4 inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-semibold text-primary">
+                  Social Media Links
+                </Link>
                 <form onSubmit={handleSaveProfile} className="space-y-5 [&_input]:text-base [&_textarea]:text-base">
                   <div className="grid @min-[34rem]/details:grid-cols-2 gap-4">
                     <div>
