@@ -1,13 +1,30 @@
 import { Router } from 'express';
+import { config } from '../config.js';
 import { NotificationPreference, CustomerReminder } from './preferences.models.js';
 import { DEFAULT_NOTIFICATION_POLICY, validateNotificationPolicy } from './policy.js';
+import { PushSubscription } from './push.models.js';
 import { CustomerEvent } from '../customer/models/index.js';
 
 export function notificationPreferencesRoutes(surface) {
   const router = Router();
   const owner = req => `${surface}:${surface === 'VENDOR' ? req.vendorId : req.externalUser._id}`;
   router.get('/notification-preferences', async (req, res, next) => {
-    try { const row = await NotificationPreference.findById(owner(req)).lean(); const { history, ...policy } = row || DEFAULT_NOTIFICATION_POLICY; res.json({ ok: true, policy }); } catch (err) { next(err); }
+    try {
+      const row = await NotificationPreference.findById(owner(req)).lean();
+      const { history, ...policy } = row || DEFAULT_NOTIFICATION_POLICY;
+      if (surface !== 'CUSTOMER') return res.json({ ok: true, policy });
+
+      const customerId = req.externalUser._id;
+      const pushAvailable = config.pushEnabled && Boolean(await PushSubscription.exists({
+        domain: 'external',
+        surface: 'CUSTOMER',
+        ownerId: customerId,
+        audienceId: customerId,
+        enabled: true,
+        expiresAt: { $gt: new Date() },
+      }));
+      res.json({ ok: true, policy, pushAvailable });
+    } catch (err) { next(err); }
   });
   router.put('/notification-preferences', async (req, res) => {
     try {

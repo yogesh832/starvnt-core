@@ -53,7 +53,7 @@ import { createQuote as createVendorQuote } from '../src/external/services/quote
 import { recordLifecycleEventMessage } from '../src/customer/services/circle.service.js';
 import { EventMessage } from '../src/customer/models/index.js';
 import { withVendorSchedule } from '../src/external/services/scheduleLock.js';
-import { devToolsAllowed } from '../src/config.js';
+import { config, devToolsAllowed } from '../src/config.js';
 import { CorePolicyRevision } from '../src/admin/models/CorePolicyRevision.js';
 import { getCommercialPolicyForCategory } from '../src/common/policyResolver.js';
 import { calculateEligibleAdvanceRefund } from '../src/common/policyResolver.js';
@@ -612,6 +612,38 @@ test('feedback and notification preferences are validated and product outcomes r
   assert.equal(result.body.metrics.customerSatisfaction.meanScore, 4);
   assert.equal(result.body.metrics.supportLinkReportedOpenRate.percent, null);
   await request(app).get('/api/admin/reports/product-metrics').set(auth(restrictedAdminToken)).expect(403);
+});
+
+test('customer notification preferences report only an active push registration for the signed-in account', async () => {
+  const original = config.pushEnabled;
+  const user = await ExternalUser.create({ email: `push-preferences-${key()}@unified.test`, fullName: 'Push Preferences', accountType: 'CUSTOMER' });
+  const session = await ExternalSession.create({ user: user._id, refreshTokenHash: key(), expiresAt: new Date(Date.now() + 3600000) });
+  const token = signExternalAccessToken(user, session._id);
+  const prefs = () => request(app).get('/api/customer/notification-preferences').set(auth(token)).expect(200);
+  const device = await PushSubscription.create({
+    installationId: key(), bindingId: key(), token: key(),
+    domain: 'external', surface: 'CUSTOMER',
+    ownerId: customer._id, audienceId: customer._id, sessionId: new mongoose.Types.ObjectId(),
+    boundAt: new Date(), expiresAt: new Date(Date.now() + 3600000),
+  });
+
+  try {
+    config.pushEnabled = true;
+    assert.equal((await prefs()).body.pushAvailable, false);
+    await PushSubscription.updateOne({ _id: device._id }, { ownerId: user._id, audienceId: user._id, sessionId: session._id });
+    const active = await prefs();
+    assert.equal(active.body.pushAvailable, true);
+    assert.ok(active.body.policy);
+
+    config.pushEnabled = false;
+    assert.equal((await prefs()).body.pushAvailable, false);
+    config.pushEnabled = true;
+    await PushSubscription.updateOne({ _id: device._id }, { enabled: false });
+    assert.equal((await prefs()).body.pushAvailable, false);
+  } finally {
+    config.pushEnabled = original;
+    await PushSubscription.deleteOne({ _id: device._id });
+  }
 });
 
 test('support actions consistently use the configured international number', () => {
