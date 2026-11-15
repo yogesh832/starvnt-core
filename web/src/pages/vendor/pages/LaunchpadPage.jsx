@@ -33,7 +33,8 @@ export default function LaunchpadPage() {
       <div className="space-y-6">
         {error && (
           <div role="alert" className="p-4 rounded-xl bg-red-50 text-red-800 border border-red-200">
-            {error}
+            <p>{error}</p>
+            <button type="button" onClick={loadData} disabled={loading} className="mt-2 text-sm font-semibold underline disabled:opacity-50">Try again</button>
           </div>
         )}
 
