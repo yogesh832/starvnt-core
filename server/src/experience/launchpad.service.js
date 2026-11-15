@@ -4,7 +4,8 @@ import { ServiceCoverage } from '../external/models/ServiceCoverage.js';
 import { CoreBooking } from '../admin/models/CoreBooking.js';
 import { VendorBlockout } from '../external/models/VendorBlockout.js';
 import { VendorReview } from '../external/models/VendorReview.js';
-import { QuoteProposal } from '../external/models/QuoteProposal.js';
+import { Quote } from '../external/models/Quote.js';
+import { VendorService } from '../external/models/VendorService.js';
 import { vendorGrowthEvidence } from '../external/services/discoveryReadiness.service.js';
 import { config } from '../config.js';
 
@@ -35,14 +36,15 @@ export async function getLaunchpadProgress(vendorId) {
   const daysRemaining = Math.max(0, Math.ceil((new Date(offerExpiresAt).getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
 
   // Query evidence in parallel
-  const [evidence, portfolioCount, coverageCount, quotesCount, bookingsCount, reviewsCount] = await Promise.all([
-    vendorGrowthEvidence(vendorId).catch(() => ({ matchingEligible: false, milestones: [] })),
+  const [evidence, portfolioCount, coverageCount, servicesCount, quotesCount, bookingsCount, reviewsCount] = await Promise.all([
+    vendorGrowthEvidence(vendorId),
     PortfolioItem.countDocuments({ vendor: vendorId, visibility: 'PUBLIC' }),
     ServiceCoverage.countDocuments({ vendor: vendorId }),
-    QuoteProposal.countDocuments({ vendorId }),
+    VendorService.countDocuments({ vendor: vendorId, status: 'ACTIVE', 'pricing.basePrice': { $gt: 0 } }),
+    Quote.countDocuments({ vendor: vendorId, $or: [{ status: { $in: ['SUBMITTED', 'APPROVED', 'REJECTED'] } }, { 'history.toStatus': 'SUBMITTED' }] }),
     Promise.all([
       CoreBooking.countDocuments({ vendorId, bookingStatus: 'CONFIRMED' }),
-      VendorBlockout.countDocuments({ vendor: vendorId, recordType: 'EXTERNAL_COMMITMENT' })
+      VendorBlockout.countDocuments({ vendor: vendorId, recordType: 'EXTERNAL_COMMITMENT', status: 'ACTIVE', 'externalBooking.lifecycle': { $in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] } })
     ]).then(([core, ext]) => core + ext),
     VendorReview.countDocuments({ vendor: vendorId, status: 'PUBLISHED' }),
   ]);
@@ -61,8 +63,8 @@ export async function getLaunchpadProgress(vendorId) {
       phase: 'Build',
       label: 'Configure service catalog & pricing',
       description: 'Define your packages, offerings, and standard rates.',
-      completed: coverageCount > 0 || (vendor.category && vendor.businessName),
-      actionLink: '/vendor/business',
+      completed: servicesCount > 0,
+      actionLink: '/vendor/services',
     },
     {
       key: 'UPLOAD_PORTFOLIO',
@@ -78,15 +80,15 @@ export async function getLaunchpadProgress(vendorId) {
       label: 'Set operating service coverage',
       description: 'Define travel radius and service areas on the map.',
       completed: coverageCount >= 1,
-      actionLink: '/vendor/business',
+      actionLink: '/vendor/services',
     },
     {
       key: 'COMPLETE_VERIFICATION',
       phase: 'Showcase',
       label: 'Submit business verification',
       description: 'Verify your identity and bank details for trust and settlement.',
-      completed: Boolean(vendor.verification?.isVerified || vendor.verificationLadderLevel !== 'SELF_DECLARED'),
-      actionLink: '/vendor/verification',
+      completed: evidence.milestones.some(step => step.key === 'VERIFICATION' && step.complete),
+      actionLink: '/vendor/documents',
     },
     {
       key: 'OPERATIONS_READY',
