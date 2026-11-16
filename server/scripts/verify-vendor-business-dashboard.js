@@ -112,6 +112,32 @@ try {
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   await page.getByRole('heading', { name: 'Your business goals', exact: true }).waitFor();
   check('Desktop document has no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.setViewportSize({ width: 1366, height: 605 });
+  await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().height - innerHeight) < 1);
+  await page.mouse.move(700, 400);
+  await page.mouse.wheel(0, 10000);
+  await page.mouse.wheel(0, 10000);
+  await page.evaluate(() => window.scrollTo(0, 100000));
+  const layout = await page.evaluate(() => {
+    const sidebar = document.querySelector('aside');
+    const rect = sidebar.getBoundingClientRect();
+    const account = sidebar.lastElementChild.getBoundingClientRect();
+    const header = sidebar.nextElementSibling.querySelector('header').getBoundingClientRect();
+    return { sidebarTop: rect.top, sidebarBottom: rect.bottom, headerTop: header.top,
+      accountBottom: account.bottom, windowY: scrollY, documentHeight: document.documentElement.scrollHeight, viewport: innerHeight };
+  });
+  check('Desktop workspace scroll keeps sidebar and header pinned', [layout.sidebarTop, layout.headerTop], [0, 0]);
+  check('Sidebar account controls stay at the viewport bottom', Math.abs(layout.accountBottom - layout.viewport) < 1, true);
+  check('Dashboard has no second document scrollbar', layout.documentHeight <= layout.viewport + 1 && layout.windowY === 0, true);
+  const workspace = page.getByRole('main', { name: 'Vendor workspace', exact: true });
+  check('Dashboard content scrolls inside the workspace', await workspace.evaluate(element => element.scrollTop > 0), true);
+  await page.screenshot({ path: resolve(output, 'desktop-scrolled-layout.png') }); report.screenshots.push('desktop-scrolled-layout.png');
+  await page.locator('aside nav').evaluate(element => { element.scrollTop = element.scrollHeight; });
+  check('Sidebar menu scrolls independently', await page.locator('aside nav').evaluate(element => element.scrollTop > 0), true);
+  check('Sidebar menu scroll preserves its brand header', await page.locator('aside > div').first().evaluate(element => element.getBoundingClientRect().top), 0);
+  await page.locator('aside nav').evaluate(element => { element.scrollTop = 0; });
+  await workspace.evaluate(element => { element.scrollTop = 0; });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const financeSection = page.getByRole('heading', { name: 'Financial Clarity', exact: true }).locator('..');
   check('Displayed contract value matches authoritative API value', await financeSection.getByRole('link').filter({ hasText: 'Confirmed booking value' }).getByText('₹20,000', { exact: true }).count(), 1);
   check('Displayed verified payments match authoritative API value', await financeSection.getByRole('link').filter({ hasText: 'Verified payments received' }).getByText('₹6,000', { exact: true }).count(), 1);
@@ -164,6 +190,10 @@ try {
   report.checks.push({ name: 'Mobile navigation opens, closes and hides off-screen controls from keyboard focus', passed: true });
   check('Business sections fit the mobile viewport', await page.locator('section[aria-labelledby^="business-"]').evaluateAll(sections => sections.every(section => { const box = section.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth + 1 && section.scrollWidth <= section.clientWidth + 1; })), true);
   check('Mobile document has no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.getByRole('main', { name: 'Vendor workspace', exact: true }).evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await page.evaluate(() => window.scrollTo(0, 100000));
+  check('Mobile dashboard scroll keeps the app within the viewport', await page.evaluate(() => scrollY === 0 && document.documentElement.scrollHeight <= innerHeight + 1), true);
+  await page.getByRole('main', { name: 'Vendor workspace', exact: true }).evaluate(element => { element.scrollTop = 0; });
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: resolve(output, 'mobile.png') }); report.screenshots.push('mobile.png');
   await page.getByRole('heading', { name: 'Your business goals', exact: true }).scrollIntoViewIfNeeded();
