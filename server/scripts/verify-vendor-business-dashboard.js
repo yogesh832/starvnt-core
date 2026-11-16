@@ -148,6 +148,27 @@ try {
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   await workspace.evaluate(element => { element.scrollTop = 0; });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByTitle('Ask Aura+', { exact: true }).click();
+  await page.getByRole('button', { name: 'Minimize Aura', exact: true }).click();
+  const auraLauncher = page.getByRole('button', { name: 'Open Aura+', exact: true });
+  await page.mouse.move(700, 300);
+  const launcherGeometry = () => auraLauncher.evaluate(button => {
+    const outer = button.getBoundingClientRect(), orb = button.querySelector('.aura-mark').getBoundingClientRect();
+    return { width: outer.width, height: outer.height, orbWidth: orb.width, orbHeight: orb.height,
+      centered: Math.abs(outer.left + outer.width / 2 - orb.left - orb.width / 2) < 1 && Math.abs(outer.top + outer.height / 2 - orb.top - orb.height / 2) < 1,
+      onscreen: outer.left >= 0 && outer.right <= innerWidth && outer.top >= 0 && outer.bottom <= innerHeight };
+  });
+  let launcher = await launcherGeometry();
+  check('Floating Vendor Aura orb matches the Customer navigation size', [launcher.orbWidth, launcher.orbHeight], [60, 60]);
+  check('Floating Aura button is larger and centers the orb', [launcher.width, launcher.height, launcher.centered, launcher.onscreen], [72, 72, true, true]);
+  await page.screenshot({ path: resolve(output, 'aura-launcher-desktop.png') }); report.screenshots.push('aura-launcher-desktop.png');
+  await page.setViewportSize({ width: 390, height: 844 });
+  launcher = await launcherGeometry();
+  check('Floating Aura remains centered and visible on phones', [launcher.centered, launcher.onscreen], [true, true]);
+  await page.screenshot({ path: resolve(output, 'aura-launcher-mobile.png') }); report.screenshots.push('aura-launcher-mobile.png');
+  await auraLauncher.click();
+  await page.getByRole('button', { name: 'Close Aura+', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const financeSection = page.getByRole('heading', { name: 'Financial Clarity', exact: true }).locator('..');
   check('Displayed contract value matches authoritative API value', await financeSection.getByRole('link').filter({ hasText: 'Confirmed booking value' }).getByText('₹20,000', { exact: true }).count(), 1);
   check('Displayed verified payments match authoritative API value', await financeSection.getByRole('link').filter({ hasText: 'Verified payments received' }).getByText('₹6,000', { exact: true }).count(), 1);

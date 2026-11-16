@@ -1009,11 +1009,11 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
       <button
         type="button"
         onClick={() => updateDockMode('docked')}
-        className="fixed right-3 bottom-20 lg:bottom-5 lg:right-5 z-50 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-2xl shadow-primary/30 border border-white/70 hover:scale-105 active:scale-95 transition-all group"
+        className="fixed right-3 bottom-20 lg:bottom-5 lg:right-5 z-50 w-[72px] h-[72px] p-0 leading-none rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shadow-2xl shadow-primary/30 border border-white/70 hover:scale-105 active:scale-95 transition-all focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary group"
         title="Open Aura+"
         aria-label="Open Aura+"
       >
-        <AuraMark variant="orb" size={52} />
+        <AuraMark variant="orb" motion size={60} />
         {pending && (
           <span
             className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white animate-pulse"
