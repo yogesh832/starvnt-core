@@ -58,8 +58,8 @@ export const listPayments = (eventId) => Payment.find({ event: eventId }).sort({
 export const getPayment = (id) => (isId(id) ? Payment.findById(id).lean() : null);
 export const findPaymentByOrder = (orderId) => Payment.findOne({ providerOrderId: orderId }).lean();
 
-export function findOpenPaymentForReservation(reservationId) {
-  return Payment.findOne({ reservation: reservationId, status: { $in: ['pending', 'processing', 'paid', 'verified'] } })
+export function findOpenPaymentForReservation(reservationId, { includeVerified = true } = {}) {
+  return Payment.findOne({ reservation: reservationId, status: { $in: includeVerified ? ['pending', 'processing', 'paid', 'verified'] : ['pending', 'processing', 'paid'] } })
     .sort({ createdAt: -1 })
     .lean();
 }
@@ -105,14 +105,26 @@ export async function countRetryableFailedByEvent(eventIds) {
 }
 
 /** Records a webhook event once; returns false for a duplicate delivery. */
+// Hash the parsed provider payload with stable object-key ordering. The legacy
+// normalizer accounts for empty objects omitted by older Mongoose records.
+function canonicalWebhookPayload(value, omitEmpty = false) {
+  if (Array.isArray(value)) return value.map(item => canonicalWebhookPayload(item, omitEmpty));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalWebhookPayload(value[key], omitEmpty)])
+    .filter(([, item]) => !(omitEmpty && item && !Array.isArray(item) && typeof item === 'object' && Object.keys(item).length === 0)));
+}
+
 export async function recordWebhookEvent(provider, providerEventId, eventType, payload) {
+  const payloadHash = crypto.createHash('sha256').update(JSON.stringify(canonicalWebhookPayload(payload))).digest('hex');
   try {
-    await PaymentWebhookEvent.create({ provider, providerEventId, eventType, payload, processingStatus: 'PENDING' });
+    await PaymentWebhookEvent.create({ provider, providerEventId, eventType, payload, payloadHash, processingStatus: 'PENDING' });
   } catch (err) {
     if (err?.code !== 11000) throw err;
   }
   const existing = await PaymentWebhookEvent.findOne({ provider, providerEventId }).lean();
-  if (existing.eventType !== eventType || JSON.stringify(existing.payload) !== JSON.stringify(payload)) throw Object.assign(new Error('Webhook event ID reused with different content'), { statusCode: 409, code: 'WEBHOOK_CONFLICT' });
+  const samePayload = existing.payloadHash ? existing.payloadHash === payloadHash : JSON.stringify(canonicalWebhookPayload(existing.payload, true)) === JSON.stringify(canonicalWebhookPayload(payload, true));
+  if (existing.eventType !== eventType || !samePayload) throw Object.assign(new Error('Webhook event ID reused with different content'), { statusCode: 409, code: 'WEBHOOK_CONFLICT' });
+  if (!existing.payloadHash) await PaymentWebhookEvent.updateOne({ _id: existing._id, payloadHash: { $exists: false } }, { $set: { payloadHash } });
   if (!existing.processingStatus || existing.processingStatus === 'COMPLETED') return false;
   const lease = crypto.randomUUID();
   const claimed = await PaymentWebhookEvent.findOneAndUpdate({ _id: existing._id, $or: [

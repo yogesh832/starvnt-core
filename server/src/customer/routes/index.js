@@ -76,6 +76,7 @@ if (process.env.ENABLE_QA_PAYMENT_BYPASS === 'true' && process.env.NODE_ENV !== 
   customerRouter.post('/events/:id/reservations/:rid/dev-success-payment', h(c.devVerifyReservationPayment));
 }
 customerRouter.post('/events/:id/payments/:pid/checkout-complete', h(c.checkoutComplete));
+customerRouter.post('/events/:id/payments/:pid/reconcile', h(c.reconcilePayment));
 customerRouter.get('/events/:id/event-day', h(c.eventDay));
 
 customerRouter.get('/events/:id/circle', h(c.circle));

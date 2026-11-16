@@ -247,13 +247,14 @@ const webhookEventSchema = new Schema(
     providerEventId: { type: String, required: true },
     eventType: { type: String, required: true },
     payload: { type: Schema.Types.Mixed, default: {} },
+    payloadHash: { type: String },
     processingStatus: { type: String, enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'], default: 'PENDING', index: true },
     lockedUntil: Date,
     lease: String,
     completedAt: Date,
     lastError: String,
   },
-  { timestamps: { createdAt: true, updatedAt: false }, collection: 'customer_payment_webhook_events' }
+  { timestamps: { createdAt: true, updatedAt: false }, minimize: false, collection: 'customer_payment_webhook_events' }
 );
 webhookEventSchema.index({ provider: 1, providerEventId: 1 }, { unique: true });
 
