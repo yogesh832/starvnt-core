@@ -375,12 +375,12 @@ export default function VendorPortal() {
   };
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-lavender">
+    <div className="vendor-shell fixed inset-0 h-dvh w-full min-h-0 flex overflow-hidden bg-lavender">
       {navOpen && <div className="fixed inset-0 bg-navy/40 z-30 lg:hidden" onClick={() => setNavOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static top-0 left-0 h-screen z-40 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-all duration-300 ease-in-out ${isSidebarMini ? 'lg:w-20 w-64' : 'w-64'} ${navOpen ? 'visible translate-x-0 shadow-2xl' : 'invisible lg:visible -translate-x-full lg:translate-x-0'}`}>
-        <div className={`px-4 py-4 flex items-center ${isSidebarMini ? 'lg:justify-center' : 'justify-between'} border-b border-gray-100 lg:border-none relative h-[68px]`}>
+      <aside className={`fixed lg:static top-0 left-0 h-full min-h-0 z-40 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-all duration-300 ease-in-out ${isSidebarMini ? 'lg:w-20 w-64' : 'w-64'} ${navOpen ? 'visible translate-x-0 shadow-2xl' : 'invisible lg:visible -translate-x-full lg:translate-x-0'}`}>
+        <div className={`px-4 py-4 flex items-center ${isSidebarMini ? 'lg:justify-center' : 'justify-between'} border-b border-gray-100 lg:border-none relative h-[68px] shrink-0`}>
           <div className={`${isSidebarMini ? 'lg:hidden' : 'block'}`}>
             <LogoWord sub="Vendor OS" />
           </div>
@@ -401,7 +401,7 @@ export default function VendorPortal() {
             <Icon name={isSidebarMini ? 'chevronRight' : 'chevronLeft'} size={14} />
           </button>
         </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -428,7 +428,7 @@ export default function VendorPortal() {
         </nav>
 
         {/* Account + logout */}
-        <div className={`p-4 border-t border-gray-100 flex items-center gap-2.5 ${isSidebarMini ? 'lg:flex-col lg:p-2' : ''}`}>
+        <div className={`p-4 border-t border-gray-100 flex items-center gap-2.5 shrink-0 ${isSidebarMini ? 'lg:flex-col lg:p-2' : ''}`}>
           {profilePicUrl || user?.avatarUrl ? (
             <img src={profilePicUrl || user?.avatarUrl} alt="Profile" className={`rounded-full object-cover shrink-0 border border-gray-200 ${isSidebarMini ? 'lg:w-10 lg:h-10 w-9 h-9' : 'w-9 h-9'}`} />
           ) : (
@@ -455,7 +455,7 @@ export default function VendorPortal() {
       </aside>
 
       {/* Main Container */}
-      <div className="flex-1 min-w-0 h-full flex flex-col overflow-y-auto overflow-x-hidden pb-28 lg:pb-0 w-full">
+      <div className="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden w-full">
         {/* Top bar with Dynamic Notification Bell & Mobile Search */}
         <header className="bg-white/95 backdrop-blur-md sticky top-0 z-20 border-b border-gray-100 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-4 shadow-xs shrink-0 w-full">
           <button
@@ -617,7 +617,7 @@ export default function VendorPortal() {
         </header>
 
         {/* Workspace Routes */}
-        <div className="flex-1 min-h-0 w-full min-w-0">
+        <main aria-label="Vendor workspace" className="flex-1 min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-28 lg:pb-0">
           <Routes>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardHome business={businessName} onAskAura={askAura} />} />
@@ -650,7 +650,7 @@ export default function VendorPortal() {
             <Route path="profile/social-links" element={<VendorIdentity key="social-links" />} />
             <Route path="settings" element={<SettingsPage user={user} business={businessName} />} />
           </Routes>
-        </div>
+        </main>
 
 
 
