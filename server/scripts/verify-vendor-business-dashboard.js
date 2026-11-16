@@ -136,6 +136,16 @@ try {
   check('Sidebar menu scrolls independently', await page.locator('aside nav').evaluate(element => element.scrollTop > 0), true);
   check('Sidebar menu scroll preserves its brand header', await page.locator('aside > div').first().evaluate(element => element.getBoundingClientRect().top), 0);
   await page.locator('aside nav').evaluate(element => { element.scrollTop = 0; });
+  await page.getByTitle('Toggle Sidebar', { exact: true }).click();
+  await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().width - 80) < 1);
+  check('Collapsed sidebar remains pinned while dashboard is scrolled', await page.locator('aside').evaluate(element => element.getBoundingClientRect().top), 0);
+  await page.getByTitle('Toggle Sidebar', { exact: true }).click();
+  await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().width - 256) < 1);
+  await page.getByRole('link', { name: 'Launchpad', exact: true }).click();
+  await page.getByRole('heading', { name: '30-Day Partner Launchpad', exact: true }).waitFor();
+  check('Changing sidebar section opens at the top of the workspace', await workspace.evaluate(element => element.scrollTop), 0);
+  await page.getByRole('link', { name: 'Dashboard', exact: true }).first().click();
+  await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   await workspace.evaluate(element => { element.scrollTop = 0; });
   await page.setViewportSize({ width: 1440, height: 1000 });
   const financeSection = page.getByRole('heading', { name: 'Financial Clarity', exact: true }).locator('..');

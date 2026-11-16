@@ -36,6 +36,8 @@ export default function VendorPortal() {
   const { user, logout } = useExternalAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const workspaceRef = useRef(null);
+  useEffect(() => { workspaceRef.current?.scrollTo({ top: 0, left: 0 }); }, [location.pathname]);
   const currentPage = location.pathname.split('/')[2] || 'dashboard';
   const [auraOpen, setAuraOpen] = useState(false);
   const [auraPrompt, setAuraPrompt] = useState(null);
@@ -617,7 +619,7 @@ export default function VendorPortal() {
         </header>
 
         {/* Workspace Routes */}
-        <main aria-label="Vendor workspace" className="flex-1 min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-28 lg:pb-0">
+        <main ref={workspaceRef} aria-label="Vendor workspace" className="flex-1 min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-28 lg:pb-0">
           <Routes>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardHome business={businessName} onAskAura={askAura} />} />
