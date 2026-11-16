@@ -35,6 +35,7 @@ export const customerApi = {
     externalApi.call(`/customer/events/${id}/reservations/${reservationId}/pay`, { method: 'POST', body: { couponCode } }),
   checkoutComplete: (id, paymentId, body) =>
     externalApi.call(`/customer/events/${id}/payments/${paymentId}/checkout-complete`, { method: 'POST', body }),
+  reconcilePayment: (id, paymentId) => externalApi.call(`/customer/events/${id}/payments/${paymentId}/reconcile`, { method: 'POST' }),
   eventDay: (id) => externalApi.call(`/customer/events/${id}/event-day`),
   circle: (id) => externalApi.call(`/customer/events/${id}/circle`),
   messages: (id, ctx = {}) => {
