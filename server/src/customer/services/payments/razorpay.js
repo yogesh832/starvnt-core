@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 /**
- * Razorpay (test mode) via REST + HMAC. Keys live only in .env.
+ * Razorpay via REST + HMAC. The configured key selects live or test mode.
  * Payment infrastructure owns money: we create orders and verify signed
  * webhooks; a browser callback is never proof of payment.
  */
@@ -13,6 +13,7 @@ const env = () => ({
 
 export const isConfigured = () => Boolean(env().keyId && env().keySecret);
 export const webhookConfigured = () => Boolean(env().webhookSecret);
+export const checkoutConfigured = () => isConfigured();
 export const publicKeyId = () => env().keyId;
 
 export const toPaise = (rupees) => Math.round(Number(rupees) * 100);
@@ -74,4 +75,15 @@ export function verifyCheckoutSignature({ orderId, paymentId, signature }) {
   const a = Buffer.from(expected);
   const b = Buffer.from(String(signature));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Capture, order, currency and exact amount must all match. An authorised
+// payment or a valid Checkout HMAC alone is not proof that money was captured.
+export async function findCapturedOrderPayment({ orderId, amount, paymentId }) {
+  if (!orderId || !Number.isFinite(Number(amount)) || Number(amount) <= 0) return null;
+  const payments = await listOrderPayments(orderId);
+  return payments.find(payment => payment.order_id === orderId
+    && (!paymentId || payment.id === paymentId)
+    && Number(payment.amount) === toPaise(amount) && payment.currency === 'INR'
+    && payment.status === 'captured' && payment.captured === true) || null;
 }
