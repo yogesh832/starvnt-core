@@ -138,7 +138,7 @@ try {
   await page.locator('aside nav').evaluate(element => { element.scrollTop = 0; });
   await page.getByTitle('Toggle Sidebar', { exact: true }).click();
   await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().width - 80) < 1);
-  check('Collapsed sidebar remains pinned while dashboard is scrolled', await page.locator('aside').evaluate(element => element.getBoundingClientRect().top), 0);
+  check('Collapsed sidebar remains pinned while dashboard is scrolled', await page.locator('.vendor-shell > aside').evaluate(element => element.getBoundingClientRect().top), 0);
   await page.getByTitle('Toggle Sidebar', { exact: true }).click();
   await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().width - 256) < 1);
   await page.getByRole('link', { name: 'Launchpad', exact: true }).click();
