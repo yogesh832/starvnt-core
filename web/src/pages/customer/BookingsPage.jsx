@@ -47,6 +47,7 @@ function PaySheet({ event, reservation, onClose, onPaid }) {
       const response = await openCheckout(checkout);
       // Recorded only; STARVNT confirms after verifying with Razorpay.
       await customerApi.checkoutComplete(event.id, payment.id, response).catch(() => {});
+      await customerApi.reconcilePayment(event.id, payment.id).catch(() => {});
       onPaid();
     } catch (err) {
       setError(err?.dismissed ? 'Payment window closed. You can try again while the hold is active.' : errorText(err, err?.message));
@@ -610,6 +611,16 @@ function EventBookings({ id }) {
   const [verifying, setVerifying] = useState(null);
   const [cancelling, setCancelling] = useState(null);
   const [inspectingBooking, setInspectingBooking] = useState(null);
+  const [checkingPayment, setCheckingPayment] = useState(null);
+  const [paymentError, setPaymentError] = useState('');
+  async function checkPayment(paymentId) {
+    setCheckingPayment(paymentId);
+    setPaymentError('');
+    try { await customerApi.reconcilePayment(id, paymentId); await reload(); }
+    catch (err) { setPaymentError(errorText(err, 'Could not check payment.')); }
+    finally { setCheckingPayment(null); }
+  }
+
 
   const inspectId = params.get('inspect');
 
@@ -739,6 +750,7 @@ function EventBookings({ id }) {
       {payments.length > 0 && (
         <section className="bg-white rounded-2xl shadow-sm p-4 overflow-x-auto">
           <div className="text-sm font-bold text-navy mb-2">Payments</div>
+          {paymentError && <p role="alert" className="text-xs text-red-600 mb-2">{paymentError}</p>}
           <table className="w-full text-xs min-w-[380px]">
             <thead>
               <tr className="text-left text-muted border-b border-gray-100">
@@ -761,6 +773,7 @@ function EventBookings({ id }) {
                   </td>
                   <td className={`py-2 ${p.status === 'verified' ? 'text-emerald-600 font-bold' : p.status === 'failed' ? 'text-red-500' : 'text-muted'}`}>
                     {PAYMENT_STATUS[p.status] || 'Status unavailable'}<span className="block text-[10px] break-all text-muted">Reference: {p.id}</span>{p.failureReason ? ` — ${p.failureReason}` : ''}
+                    {p.status !== 'verified' && <button disabled={Boolean(checkingPayment)} onClick={() => checkPayment(p.id)} className="block mt-1 text-primary font-bold disabled:opacity-50">{checkingPayment === p.id ? 'Checking…' : 'Check payment status'}</button>}
                   </td>
                 </tr>
               ))}
