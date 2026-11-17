@@ -11,6 +11,7 @@ import { withVendorSchedule } from '../services/scheduleLock.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 
 const router = Router();
+router.use((_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); });
 
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/i;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i;
@@ -78,7 +79,7 @@ router.post('/pan', (req, res, next) => withVendorSchedule(`identity:${req.vendo
   if (verified) profile.identityReviewRequired = false;
   profile.isSettlementEligible = verified && profile.bankAccount?.verificationStatus === 'VERIFIED';
   await profile.save();
-  await VendorDocument.findOneAndUpdate({ vendor: req.vendorId, type: 'PAN' }, { $set: {
+  await VendorDocument.findOneAndUpdate({ vendor: req.vendorId, type: 'PAN', documentNumber: normalizedPan, fileUrl: { $in: ['', null] }, contentHash: { $in: ['', null] } }, { $set: {
     title: 'PAN Card / Tax Identity', type: 'PAN', documentNumber: normalizedPan, fileName: 'PAN identity document',
     status: verified ? 'VERIFIED' : 'SUBMITTED', verificationSource: 'PAN_API', verifiedAt: profile.pan.verifiedAt,
     verificationResult: { matched: verified, confidence: result.confidence || 'NONE', legalName: profile.pan.legalName, checkedAt: profile.pan.checkedAt },
@@ -206,7 +207,7 @@ router.post('/gst', (req, res, next) => withVendorSchedule(`identity:${req.vendo
 
     // Create/update VendorDocument record for GST
     await VendorDocument.findOneAndUpdate(
-      { vendor: req.vendorId, type: 'GST' },
+      { vendor: req.vendorId, type: 'GST', documentNumber: normalizedGstin, fileUrl: { $in: ['', null] }, contentHash: { $in: ['', null] } },
       {
         title: 'GST Registration Certificate',
         type: 'GST',

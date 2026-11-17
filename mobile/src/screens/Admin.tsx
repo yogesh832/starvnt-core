@@ -15,6 +15,7 @@ import { internal } from "../api/runtime";
 import type { Data } from "../api/client";
 import { useSession } from "../auth/Session";
 import { openEvidence } from "./AdminActions";
+import { openPrivateMedia } from '../privateMedia';
 import { adminModules, visibleModules } from "../adminModules";
 import {
   loadAdminNotifications,
@@ -847,13 +848,13 @@ export function AdminKyc({ route }: any) {
             {doc.type} · {doc.documentNumber}
           </Txt>
           <Txt muted>{doc.notes}</Txt>
-          {doc.fileUrl && (
+          {can('vendorIdentity.readSensitive') && doc.contentAccess && doc.contentAccess !== 'NO_FILE' && (
             <Button
               title="Open submitted evidence"
               secondary
               busy={a.busy}
               onPress={() => {
-                void a.run(() => openEvidence(doc.fileUrl));
+                 void a.run(() => openPrivateMedia(internal, `/external-users/organizations/${vendorId}/documents/${id(doc)}/content`, id(doc)));
               }}
             />
           )}
@@ -861,6 +862,7 @@ export function AdminKyc({ route }: any) {
             <>
               <Button
                 title="Approve document"
+                disabled={!notes.trim() || (doc.contentAccess !== 'NO_FILE' && !can('vendorIdentity.readSensitive'))}
                 busy={a.busy}
                 onPress={() =>
                   confirm(
@@ -871,7 +873,7 @@ export function AdminKyc({ route }: any) {
                         await internal.call(
                           `/external-users/organizations/${vendorId}/verification`,
                           "POST",
-                          { documentId: id(doc), approved: true, notes },
+                          { documentId: id(doc), approved: true, notes, expectedDocumentVersion: doc.__v ?? 0 },
                         );
                         r.refresh();
                       });

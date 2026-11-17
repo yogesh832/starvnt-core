@@ -42,6 +42,13 @@ const vendorDocumentSchema = new Schema(
       trim: true,
       default: '',
     },
+    privateContent: { type: Buffer, select: false },
+    contentMime: String,
+    contentSize: Number,
+    contentHash: String,
+    uploadedBy: String,
+    uploadedAt: Date,
+    reviewHistory: [{ actor: String, decision: String, at: Date, reason: String, version: Number, contentHash: String }],
     fileSize: {
       type: String,
       trim: true,
@@ -98,7 +105,7 @@ const vendorDocumentSchema = new Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 vendorDocumentSchema.set('toJSON', { transform: (_doc, value) => publicVendorDocument(value) });

@@ -71,3 +71,19 @@ export async function pickUploads(
   }
   return { uploads, failures };
 }
+
+// KYC evidence is submitted directly to the authenticated document endpoint;
+// it must not pass through the ordinary public media upload route.
+export async function pickPrivateDocument(): Promise<Data | null> {
+  const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  const picked = await DocumentPicker.getDocumentAsync({ type: allowed, copyToCacheDirectory: true });
+  if (picked.canceled) return null;
+  const asset = picked.assets[0], mime = asset.mimeType || '';
+  const file = Platform.OS === 'web' && asset.file ? null : new File(asset.uri);
+  const size = asset.size ?? file?.size ?? 0;
+  if (!allowed.includes(mime) || !size || size > 10 * 1024 * 1024) throw new Error('Choose a PDF, JPEG, PNG or WebP up to 10 MB.');
+  const url = Platform.OS === 'web' && asset.file ? await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error('Could not read this document.')); reader.readAsDataURL(asset.file!);
+  }) : `data:${mime};base64,${await file!.base64()}`;
+  return { url, filename: asset.name, fileSize: size };
+}

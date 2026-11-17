@@ -10,6 +10,11 @@ import { recordAudit, auditContext } from '../utils/audit.js';
 import { ExternalUser } from '../../external/models/ExternalUser.js';
 import { VendorOrganization } from '../../external/models/VendorOrganization.js';
 import { VendorDocument } from '../../external/models/VendorDocument.js';
+import { sendPrivateDocument } from '../../external/services/privateVendorDocument.service.js';
+import mongoose from 'mongoose';
+import { VendorFinancialProfile } from '../../external/models/VendorFinancialProfile.js';
+import { BusinessAuditLog } from '../models/BusinessAuditLog.js';
+import { withVendorSchedule } from '../../external/services/scheduleLock.js';
 
 const router = Router();
 function customerForAdmin(req, customer) {
@@ -567,6 +572,7 @@ router.delete('/organizations/:id', requirePermission('vendors.delete'), async (
  */
 router.get('/organizations/:id/documents', requirePermission('vendors.read'), async (req, res, next) => {
   try {
+    res.set('Cache-Control', 'private, no-store');
     const organization = await VendorOrganization.findById(req.params.id).populate('owner', 'fullName email phone');
     if (!organization) {
       return res.status(404).json({ error: 'VENDOR_ORGANIZATION_NOT_FOUND' });
@@ -581,25 +587,41 @@ router.get('/organizations/:id/documents', requirePermission('vendors.read'), as
   }
 });
 
-router.post('/organizations/:id/verification', requirePermission('vendors.approve'), async (req, res, next) => {
+router.get('/organizations/:id/documents/:documentId/content', requirePermission('vendors.read'), requirePermission('vendorIdentity.readSensitive'), async (req, res, next) => {
   try {
-    const { approved = true, documentId, notes = '' } = req.body || {};
+    const { id, documentId } = req.params;
+    const document = mongoose.isValidObjectId(id) && mongoose.isValidObjectId(documentId) && await VendorDocument.findOne({ _id: documentId, vendor: id }).select('+privateContent');
+    if (!document) return res.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
+    await sendPrivateDocument(res, document, req.admin._id, 'ADMIN');
+  } catch (error) { next(error); }
+});
+
+router.post('/organizations/:id/verification', requirePermission('vendors.read'), requirePermission('vendors.approve'), (req, res, next) => withVendorSchedule(`identity:${req.params.id}`, async () => {
+  try {
+    const { approved, documentId, notes = '', expectedDocumentVersion } = req.body || {};
+    if (typeof approved !== 'boolean' || !mongoose.isValidObjectId(documentId) || typeof notes !== 'string' || !notes.trim() || notes.length > 1000) return res.status(400).json({ error: 'DOCUMENT_REVIEW_REQUIRED', message: 'Choose the exact document, an explicit decision and a review reason.' });
     const organization = await VendorOrganization.findById(req.params.id);
     if (!organization) {
       return res.status(404).json({ error: 'VENDOR_ORGANIZATION_NOT_FOUND' });
     }
 
-    let document = null;
-    if (documentId) {
-      document = await VendorDocument.findOne({ _id: documentId, vendor: organization._id });
-      if (!document) return res.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
-    } else {
-      document = await VendorDocument.findOne({ vendor: organization._id, status: { $in: ['SUBMITTED', 'PENDING'] } }).sort({ createdAt: -1 });
-    }
+    const document = await VendorDocument.findOne({ _id: documentId, vendor: organization._id });
+    if (!document) return res.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
 
+    if (document && (!Number.isInteger(expectedDocumentVersion) || expectedDocumentVersion !== (document.__v || 0))) return res.status(409).json({ error: 'DOCUMENT_VERSION_CONFLICT', message: 'Reload and review the current document before deciding.' });
     if (approved) {
       if (!document) {
         return res.status(409).json({ error: 'NO_PENDING_KYC_DOCUMENT', message: 'A submitted KYC document is required before vendor verification can be approved.' });
+      }
+      const financial = await VendorFinancialProfile.findOne({ vendor: organization._id });
+      if (['PAN', 'GST'].includes(document.type) && (financial?.identityReviewRequired || financial?.[document.type === 'PAN' ? 'pan' : 'gst']?.verificationStatus !== 'VERIFIED')) return res.status(409).json({ error: 'MANUAL_IDENTITY_POLICY_REQUIRED', message: 'Document review cannot override an unresolved identity/provider result. Keep it under review until the authorized identity review policy and evidence are approved.' });
+      if (['PAN', 'GST'].includes(document.type) && (!document.documentNumber || document.documentNumber !== (document.type === 'PAN' ? financial.pan.panNumber : financial.gst.gstin))) return res.status(409).json({ error: 'DOCUMENT_IDENTITY_BINDING_REQUIRED', message: 'This file must be reviewed against the current declared identity number, not a superseded identity.' });
+      const hasFile = Boolean(document.contentHash || document.fileUrl);
+      if (!hasFile && document.status !== 'VERIFIED') return res.status(409).json({ error: 'EVIDENCE_FILE_REQUIRED', message: 'A verification placeholder is not uploaded evidence.' });
+      if (hasFile) {
+        if (req.admin.role !== 'SUPER_ADMIN' && !req.admin.permissions.includes('vendorIdentity.readSensitive')) return res.status(403).json({ error: 'SENSITIVE_EVIDENCE_PERMISSION_REQUIRED', message: 'Sensitive document access permission is required for evidence review.' });
+        const read = await BusinessAuditLog.exists({ actorId: String(req.admin._id), action: 'VENDOR_PRIVATE_DOCUMENT_READ', resourceId: String(document._id), createdAt: { $gte: document.uploadedAt || document.createdAt }, ...(document.contentHash ? { 'traceContext.documentHash': document.contentHash } : {}) });
+        if (!read) return res.status(409).json({ error: 'EVIDENCE_READ_REQUIRED', message: 'Open the private evidence before approving its review.' });
       }
       document.status = 'VERIFIED';
       document.verifiedAt = new Date();
@@ -611,6 +633,7 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
         reviewedBy: req.admin?._id || null,
         reviewedAt: new Date(),
       };
+      document.reviewHistory.push({ actor: String(req.admin._id), decision: 'APPROVED', at: new Date(), reason: notes.trim(), version: expectedDocumentVersion, contentHash: document.contentHash });
       await document.save();
 
       organization.verification = {
@@ -632,6 +655,7 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
     } else {
       if (document) {
         document.status = 'REJECTED';
+        document.verifiedAt = null;
         document.notes = [document.notes, notes || 'Rejected by Core admin.'].filter(Boolean).join(' ');
         document.manualReview = {
           ...(document.manualReview?.toObject?.() || document.manualReview || {}),
@@ -640,6 +664,7 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
           reviewedBy: req.admin?._id || null,
           reviewedAt: new Date(),
         };
+        document.reviewHistory.push({ actor: String(req.admin._id), decision: 'REJECTED', at: new Date(), reason: notes.trim(), version: expectedDocumentVersion, contentHash: document.contentHash });
         await document.save();
       }
 
@@ -672,12 +697,13 @@ router.post('/organizations/:id/verification', requirePermission('vendors.approv
     }
 
     await organization.save();
+    await recordAudit({ ...auditContext(req), action: 'VENDOR_DOCUMENT_REVIEW_DECISION', targetType: 'VendorDocument', targetId: String(document._id), reason: 'Explicit document review decision', toState: { status: document.status, organizationId: String(organization._id), documentVersion: document.__v } });
     const activation = await evaluateVendorActivation(organization._id);
     res.json({ ok: true, organization, document, activation });
   } catch (err) {
     next(err);
   }
-});
+}).catch(next));
 
 router.post('/organizations/:id/activation', async (req, res, next) => {
   if (req.admin?.role === 'SUPER_ADMIN' || req.admin?.permissions?.includes('vendors.approve')) return next();

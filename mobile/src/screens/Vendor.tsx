@@ -11,7 +11,8 @@ import {
   VendorReviews,
 } from "./VendorInsights";
 import { external } from "../api/runtime";
-import { pickUpload } from "../api/upload";
+import { pickUpload, pickPrivateDocument } from "../api/upload";
+import { openPrivateMedia } from '../privateMedia';
 import type { Data } from "../api/client";
 import { FinancialSummary } from "./Customer";
 import {
@@ -260,16 +261,14 @@ function VendorModuleBody({ route, navigation }: any) {
                   {row.manualReview.reason}
                 </Txt>
               )}
-              {!!row.fileUrl && (
+              {row.contentAccess && row.contentAccess !== 'NO_FILE' && (
                 <Button
                   title="Open document"
                   secondary
                   busy={a.busy}
                   onPress={() => {
                     void a.run(async () => {
-                      if (!/^https?:\/\//i.test(row.fileUrl))
-                        throw new Error("This document link is unavailable.");
-                      await Linking.openURL(row.fileUrl);
+                      await openPrivateMedia(external, `/vendor/documents/${id(row)}/content`, id(row));
                     });
                   }}
                 />
@@ -719,13 +718,13 @@ function VendorFormBody({ route, navigation }: any) {
           )}
           <Button
             title={
-              asset ? `Uploaded: ${asset.filename}` : "Choose & upload a file"
+              asset ? `${kind === 'documents' ? 'Selected' : 'Uploaded'}: ${asset.filename}` : "Choose a file"
             }
             secondary
             busy={a.busy}
             onPress={() => {
               void a.run(async () => {
-                const d = await pickUpload(kind === "portfolio");
+                const d = kind === 'documents' ? await pickPrivateDocument() : await pickUpload(kind === "portfolio");
                 if (d) setAsset(d);
               });
             }}

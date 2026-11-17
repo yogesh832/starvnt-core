@@ -33,11 +33,24 @@ export function publicFinancialProfile(profile) {
 }
 export function publicVendorDocument(document) {
   const value = document?.toObject ? document.toObject() : JSON.parse(JSON.stringify(document));
-  if (['PAN', 'GST'].includes(value.type)) {
+  const originalNumber = value.documentNumber;
+  value.contentAccess = value.contentHash || value.fileUrl?.startsWith('data:') ? 'AVAILABLE' : value.fileUrl ? 'LEGACY_EXTERNAL_REVIEW_REQUIRED' : 'NO_FILE';
+  delete value.privateContent;
+  delete value.fileUrl;
+  if (['PAN', 'GST', 'BANK_PROOF', 'ID_PROOF'].includes(value.type)) {
     value.documentNumber = maskIdentity(value.documentNumber);
     value.fileName = `${value.type} identity document`;
     if (value.verificationResult) delete value.verificationResult.pan;
   }
   if (value.verificationResult) { delete value.verificationResult.raw; delete value.verificationResult.address; }
-  return value;
+  const plain = JSON.parse(JSON.stringify(value));
+  const textFields = new Set(['title', 'notes', 'fileName', 'fileSize', 'expiryDate', 'documentNumber', 'legalName', 'tradeName', 'registeredName', 'reason', 'error', 'entityType', 'taxpayerType']);
+  const redact = (item, field) => {
+    if (typeof item === 'string' && textFields.has(field)) return (originalNumber ? item.split(originalNumber).join(maskIdentity(originalNumber)) : item)
+      .replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]{3}\b/gi, maskIdentity).replace(/\b[A-Z]{5}\d{4}[A-Z]\b/gi, maskIdentity);
+    if (Array.isArray(item)) return item.map(entry => redact(entry, field));
+    if (item && typeof item === 'object') return Object.fromEntries(Object.entries(item).map(([key, entry]) => [key, redact(entry, key)]));
+    return item;
+  };
+  return redact(plain);
 }

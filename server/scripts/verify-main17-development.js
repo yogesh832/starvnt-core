@@ -17,6 +17,7 @@ const { LearningLesson, LearningFeedback } = await import('../src/learning/model
 const { VendorService } = await import('../src/external/models/VendorService.js');
 const { Quote } = await import('../src/external/models/Quote.js');
 const { commercialSnapshot } = await import('../src/external/services/commercialSnapshot.service.js');
+const { VendorDocument } = await import('../src/external/models/VendorDocument.js');
 const bcrypt = (await import('bcryptjs')).default;
 const express = (await import('express')).default;
 const checks = [];
@@ -84,6 +85,17 @@ try {
   await page.getByText('Approved policy required', { exact: true }).waitFor();
   checks.push('Existing quote drawer renders prior version amount with private scope protected and no invented advance percentage');
   await page.screenshot({ path: resolve(output, 'quote-versions-desktop.png'), fullPage: true });
+  await page.goto('http://127.0.0.1:5199/vendor/documents');
+  const proof = Buffer.from('%PDF-1.7\nSynthetic private QA proof.');
+  const fileInput = page.locator('input[type="file"]').first();
+  await fileInput.setInputFiles({ name: 'synthetic-private-proof.pdf', mimeType: 'application/pdf', buffer: proof });
+  await page.getByRole('button', { name: 'Preview', exact: true }).first().waitFor();
+  const storedProof = await VendorDocument.findOne({ vendor: vendor._id, type: 'PAN', contentMime: 'application/pdf' }).select('+privateContent');
+  assert.ok(storedProof?.privateContent); assert.deepEqual(Buffer.from(storedProof.privateContent), proof);
+  await page.getByRole('button', { name: 'Preview', exact: true }).first().click();
+  await page.getByRole('link', { name: 'Download private copy', exact: true }).waitFor();
+  checks.push('PDF upload stores actual private bytes and owner preview retrieves an audited authenticated copy');
+  await page.screenshot({ path: resolve(output, 'private-document-owner-desktop.png'), fullPage: true });
   writeFileSync(resolve(output, 'report.json'), JSON.stringify({ environment: 'Synthetic isolated MongoMemoryServer + local Express + production Vite bundle + headless Chrome. Responsive web, not native-device acceptance.', checks, screenshotsContain: 'Synthetic fixtures only', passed: true }, null, 2));
   console.log(JSON.stringify({ passed: true, checks: checks.length, report: resolve(output, 'report.json') }));
 } finally {

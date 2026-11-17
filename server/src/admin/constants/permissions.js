@@ -9,6 +9,7 @@
  * is still recorded explicitly on the AdminUser document and in audit logs.
  */
 const CATALOG = {
+  vendorIdentity: ['readSensitive'],
   vendorCompliance: ['read', 'edit', 'review', 'publish', 'assign', 'export'],
   discovery: ['review'],
   reviews: ['read', 'moderate', 'media'],
