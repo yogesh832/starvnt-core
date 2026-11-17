@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { externalApi } from '../lib/api.js';
+import EventFeedbackCard from './EventFeedbackCard.jsx';
 
 export default function ProductFeedback({ kind, reference }) {
   const [message, setMessage] = useState('');
@@ -26,6 +27,8 @@ export default function ProductFeedback({ kind, reference }) {
       if (current === generation.current) setError(err.message || 'Your feedback could not be saved. Please try again.');
     } finally { if (current === generation.current) setBusy(false); }
   }
+  if (kind === 'EVENT') return <EventFeedbackCard score={score} busy={busy} message={message} error={error} onRate={rate} />;
+
   return <div className="product-feedback space-y-3" aria-busy={busy}>
     <p className="text-sm font-semibold">{kind === 'NOTIFICATION' ? 'Was this notification useful?' : 'How helpful has planning this event been?'}</p>
     <div className="flex flex-wrap gap-2" role="group" aria-label={kind === 'NOTIFICATION' ? 'Notification usefulness' : 'Event planning rating'}>

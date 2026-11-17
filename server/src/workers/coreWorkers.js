@@ -2,6 +2,7 @@ import { runReminderBatch, runEventDeadlineBatch } from '../notifications/remind
 import { runDiscoveryNotificationBatch } from '../experience/discoveryNotifications.worker.js';
 import { runDiscoveryRetentionBatch } from '../experience/discoveryRetention.worker.js';
 import { reconcileBookingBatch } from '../customer/services/bookingTruth.service.js';
+import { reconcileWorkflowBatch } from '../admin/services/bookingWorkflowEffects.service.js';
 import { expireExternalHolds } from '../external/services/commitments.service.js';
 import { config } from '../config.js';
 import { OutboxEvent } from '../admin/models/OutboxEvent.js';
@@ -44,6 +45,7 @@ export function startCoreWorkers() {
     markWorkerStarted('booking-reconciliation');
     try {
       const results = await reconcileBookingBatch();
+      await reconcileWorkflowBatch();
       await expireExternalHolds();
       if (results.some(r => !r.ok)) throw new Error('Booking reconciliation has pending failures');
       markWorkerSuccess('booking-reconciliation', 0);

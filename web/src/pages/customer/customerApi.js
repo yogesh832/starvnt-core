@@ -80,12 +80,12 @@ export const customerApi = {
   createEvent: (body) => externalApi.call('/customer/events', { method: 'POST', body }),
   createMahimanDemoEnquiry: (body = {}) => externalApi.call('/customer/demo/mahiman-enquiry', { method: 'POST', body }),
   vendorQuotes: (eventId) => externalApi.call(`/customer/vendor-quotes${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`),
-  acceptVendorQuote: (quoteId, eventId) =>
-    externalApi.call(`/customer/vendor-quotes/${quoteId}/accept`, { method: 'POST', body: { eventId } }),
+  acceptVendorQuote: (quoteId, eventId, expectedCommercialVersion) =>
+    externalApi.call(`/customer/vendor-quotes/${quoteId}/accept`, { method: 'POST', body: { eventId, expectedCommercialVersion } }),
   negotiateVendorQuote: (quoteId, message, counterBudget) =>
     externalApi.call(`/customer/vendor-quotes/${quoteId}/negotiate`, { method: 'POST', body: { message, counterBudget } }),
-  payVendorQuoteAdvance: (quoteId, couponCode = '') =>
-    externalApi.call(`/customer/vendor-quotes/${quoteId}/pay-advance`, { method: 'POST', body: { couponCode } }),
+  payVendorQuoteAdvance: (quoteId, couponCode = '', expectedCommercialVersion) =>
+    externalApi.call(`/customer/vendor-quotes/${quoteId}/pay-advance`, { method: 'POST', body: { couponCode, expectedCommercialVersion } }),
   completeVendorQuoteCheckout: (quoteId, body) =>
     externalApi.call(`/customer/vendor-quotes/${quoteId}/checkout-complete`, { method: 'POST', body }),
   reconcileVendorQuotePayment: (quoteId) => externalApi.call(`/customer/vendor-quotes/${quoteId}/reconcile-payment`, { method: 'POST' }),

@@ -42,6 +42,7 @@ const quoteSchema = new Schema(
       required: true,
     },
     bookingReview: { status: { type: String, enum: ['CONFLICT_REVIEW', 'RESOLVED'] }, reason: String, updatedAt: Date },
+    commercialSnapshot: { type: Schema.Types.Mixed, default: null },
     category: { type: String, default: '' },
     serviceName: {
       type: String,
@@ -108,7 +109,7 @@ const quoteSchema = new Schema(
       },
     ],
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 export const Quote = externalConn.model('Quote', quoteSchema);

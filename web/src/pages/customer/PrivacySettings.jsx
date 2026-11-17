@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { customerApi, errorText } from './customerApi.js';
-import NotificationPreferences from '../../components/NotificationPreferences.jsx';
 
 const choices = [
   ['ECOSYSTEM', 'ALL', 'Connect my verified customer relationship with STARVNT'],
@@ -26,6 +25,9 @@ export default function PrivacySettings() {
   return <div className="max-w-2xl mx-auto space-y-4">
     <h1 className="text-xl font-extrabold text-navy">Privacy & account settings</h1>
     <Link to="/customer/me" className="text-primary underline">Back to profile</Link>
+    <Link to="/customer/settings/notifications" className="customer-secondary-action flex items-center justify-between rounded-2xl border bg-white p-4 font-semibold">
+      Notifications <span aria-hidden="true">›</span>
+    </Link>
     {error && <p role="alert" className="text-red-600">{error}</p>}
     {message && <p role="status" className="text-green-700">{message}</p>}
     <section className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
@@ -56,7 +58,6 @@ export default function PrivacySettings() {
         <button disabled={busy || !otp} className="bg-primary text-white rounded-xl px-4 min-h-11 disabled:opacity-50">Verify mobile</button>
       </form>}
     </section>
-    <NotificationPreferences />
     <section className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
       <h2 className="font-bold">Link another account you own</h2>
       <p className="text-sm text-muted">Both accounts need verified mobiles and ecosystem permission. STARVNT reviews the request. Linking keeps each account's records and permissions separate.</p>

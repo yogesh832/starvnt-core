@@ -125,7 +125,8 @@ export default function CirclePage() {
   return (
     <div className="max-w-3xl mx-auto space-y-3 flex flex-col">
       <BackLink to={`/customer/events/${id}`}>{event.title}</BackLink>
-      <h1 className="text-xl font-extrabold text-navy dark:text-white">Event Circle</h1>
+      <h1 className="text-xl font-extrabold text-navy dark:text-white">Event conversations</h1>
+      <Link className="customer-secondary-action" to={`/customer/events/${id}/collaboration`}>Open your private Event Circle →</Link>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {contexts.map((c) => (
           <button

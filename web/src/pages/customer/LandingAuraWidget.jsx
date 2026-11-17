@@ -44,7 +44,7 @@ export default function LandingAuraWidget({ open, onOpenChange, onAsk }) {
     </section>}
     <div className="flex items-center gap-2">
       {!open && showHint && <div className="flex items-center gap-2 rounded-2xl border border-sky-200/25 bg-[#0d1c36]/90 py-2 pl-4 pr-2 text-xs font-semibold text-white shadow-xl backdrop-blur-xl"><span>What can I help you plan?</span><button type="button" onClick={() => setShowHint(false)} className="grid h-7 w-7 place-items-center rounded-lg text-slate-300 hover:bg-white/10" aria-label="Dismiss Aura+ message"><Icon name="close" size={13} /></button></div>}
-      <button type="button" onClick={() => { onOpenChange(!open); setShowHint(false); }} aria-label={open ? 'Close Aura+ chat' : 'Open Aura+ chat'} aria-expanded={open} className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-sky-200/30 bg-gradient-to-br from-[#133466] via-[#263f95] to-[#0a8cb8] shadow-[0_9px_32px_rgba(14,165,233,.42)] transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-sky-300 sm:h-[68px] sm:w-[68px]"><AuraMark variant="orb" size={52} motion state={open ? 'active' : 'idle'} /></button>
+      <button type="button" onClick={() => { onOpenChange(!open); setShowHint(false); }} aria-label={open ? 'Close Aura+ chat' : 'Open Aura+ chat'} aria-expanded={open} className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-sky-200/30 bg-gradient-to-br from-[#133466] via-[#263f95] to-[#0a8cb8] shadow-[0_9px_32px_rgba(14,165,233,.42)] transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-sky-300 sm:h-[68px] sm:w-[68px]"><AuraMark variant="orb" size={52} motion={open} state={open ? 'active' : 'idle'} /></button>
     </div>
   </aside>;
 }

@@ -1,5 +1,9 @@
+import mark64 from '../assets/images/brand-mark-64.webp';
+import mark128 from '../assets/images/brand-mark-128.webp';
+import mark192 from '../assets/images/brand-mark-192.webp';
+
 export const BRAND_ASSETS = {
-  mark: '/brand/starvnt-icon.png',
+  mark: mark64,
   wordmark: '/brand/starvnt-wordmark.jpg',
   full: '/brand/starvnt-core-logo.jpg',
 };
@@ -8,6 +12,9 @@ export function LogoMark({ size = 22, className = '' }) {
   return (
     <img
       src={BRAND_ASSETS.mark}
+      srcSet={`${mark64} 64w, ${mark128} 128w, ${mark192} 192w`}
+      sizes={`${size}px`}
+      decoding="async"
       alt=""
       width={size}
       height={size}

@@ -13,6 +13,9 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const root = document.documentElement;
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    const originalThemeColor = themeColor?.getAttribute('content');
+    if (dark) themeColor?.setAttribute('content', '#000000');
     if (dark) {
       root.classList.add('dark');
     } else {
@@ -21,6 +24,9 @@ export function ThemeProvider({ children }) {
     try {
       localStorage.setItem('starvnt-theme', dark ? 'dark' : 'light');
     } catch {}
+    return () => {
+      if (originalThemeColor) themeColor?.setAttribute('content', originalThemeColor);
+    };
   }, [dark]);
 
   return (

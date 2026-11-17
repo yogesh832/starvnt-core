@@ -234,9 +234,9 @@ export function AuraVoice({ onUtterance, onClose, onKeyboard, mode = 'conversati
     <Text size={10} color={c.muted}>{phase === 'speaking' && micMuted ? 'Aura is speaking · microphone muted' : title}</Text>
     {!!error && <View accessibilityRole="alert"><Text size={11} color={c.danger}>{error}</Text></View>}
   </Animated.View>;
-  return <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: '#0f0b24' }}>
-    <StatusBar barStyle="light-content" backgroundColor="#0f0b24" />
-    <AuthGradient vertical colors={['#0f0b24', '#171036', '#0b1026']} />
+  return <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: c.dark ? '#000000' : '#0f0b24' }}>
+    <StatusBar barStyle="light-content" backgroundColor={c.dark ? '#000000' : '#0f0b24'} />
+    <AuthGradient vertical colors={c.dark ? ['#000000', '#111111', '#000000'] : ['#0f0b24', '#171036', '#0b1026']} />
     <View style={{ paddingHorizontal: 24, paddingTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
       <View><Text size={14} bold>Aura+</Text><Text size={11} color="#ffffff99">{mode === 'dictate' ? 'Dictate a message' : 'Your event assistant · voice'}</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel="Switch to keyboard" onPress={() => close(true)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="keypad-outline" size={21} color="#ffffffcc" /></Pressable>
@@ -247,16 +247,16 @@ export function AuraVoice({ onUtterance, onClose, onKeyboard, mode = 'conversati
         {phase === 'listening' && mode === 'conversation' && <Text size={12} color="#ffffff99">Speak naturally. Aura replies automatically when you pause.</Text>}
         <Text size={11} bold color="#ffffff88">{title.toUpperCase()}</Text>
         {micMuted && phase !== 'muted' && <Text size={11} color="#ffffff99">Microphone muted — Aura can keep speaking.</Text>}
-        {processing && <ActivityIndicator color="#c4b5fd" size="small" />}
+        {processing && <ActivityIndicator color={c.dark ? c.chip : '#c4b5fd'} size="small" />}
         {!!caption && <Text size={13} color="#ffffffe6">{caption.slice(0, 260)}{caption.length > 260 ? '…' : ''}</Text>}
         {mode === 'dictate' && phase === 'listening' && <Text size={12} color="#ffffff99">Your words will fill the message box for review.</Text>}
         {!!error && <View accessibilityRole="alert"><Text size={12} color="#fda4af">{error}</Text></View>}
-        {phase === 'error' && <Pressable accessibilityRole="button" onPress={() => { void start(); }} style={{ padding: 10 }}><Text size={12} bold color="#c4b5fd">Try again</Text></Pressable>}
+        {phase === 'error' && <Pressable accessibilityRole="button" onPress={() => { void start(); }} style={{ padding: 10 }}><Text size={12} bold color={c.dark ? c.chip : '#c4b5fd'}>Try again</Text></Pressable>}
         {!!voiceSource && phase === 'speaking' && <Text size={10} color="#ffffff66">{voiceSource}</Text>}
       </View>
     </ScrollView>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, paddingBottom: 28 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel={micMuted ? 'Unmute microphone' : 'Mute microphone'} accessibilityState={{ selected: micMuted }} onPress={toggleMute} style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: micMuted ? '#fff' : '#ffffff1a' }}><Icon name={micMuted ? 'mic-off-outline' : 'mic-outline'} size={22} color={micMuted ? '#171036' : '#fff'} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={micMuted ? 'Unmute microphone' : 'Mute microphone'} accessibilityState={{ selected: micMuted }} onPress={toggleMute} style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: micMuted ? '#fff' : '#ffffff1a' }}><Icon name={micMuted ? 'mic-off-outline' : 'mic-outline'} size={22} color={micMuted ? (c.dark ? '#111111' : '#171036') : '#fff'} /></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="End voice mode" onPress={() => close()} style={{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f43f5e' }}><Icon name="close" size={23} color="#fff" /></Pressable>
     </View>
   </SafeAreaView>;

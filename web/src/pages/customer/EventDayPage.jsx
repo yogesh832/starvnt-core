@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, DemoBadge, Empty, PageSkeleton, categoryIcon, useLoad } from './customerUi.jsx';
+import useCustomerRefresh from './useCustomerRefresh.js';
 
 const time = (t) => (t ? new Date(t).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null);
 
@@ -18,15 +19,18 @@ function Step({ label, at }) {
 /** Event day: built only from recorded check-in / start / complete times. */
 export default function EventDayPage() {
   const { id } = useParams();
-  const { data, error, loading } = useLoad(() => customerApi.eventDay(id), [id]);
+  const { data, error, loading, reload } = useLoad(() => customerApi.eventDay(id), [id]);
+  useCustomerRefresh(reload, id);
 
-  if (loading) return <PageSkeleton title="Your event today" count={3} type="list" />;
-  if (error) return <div className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)}</div>;
+  if (loading && !data) return <PageSkeleton title="Your event today" count={3} type="list" />;
+  if (error && !data) return <div role="alert" className="text-sm text-red-500">{error.status === 404 ? 'Event not found.' : errorText(error)} <button onClick={reload}>Retry</button></div>;
   const { event, live, services, allCompleted } = data;
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
       <BackLink to={`/customer/events/${id}`}>{event.title}</BackLink>
+      {error && <p role="alert">Live updates are unavailable. The last loaded records are shown. <button onClick={reload}>Retry</button></p>}
+      {data.observedAt && <p className="text-xs text-muted">Updated {new Date(data.observedAt).toLocaleTimeString()} · <button onClick={reload} className="underline">Refresh</button></p>}
       <div className="flex items-center gap-2">
         <h1 className="text-xl font-extrabold text-navy">Your event today</h1>
         {live && <span className="text-[10px] font-bold uppercase rounded-full px-2 py-0.5 bg-red-500 text-white animate-pulse">Live</span>}
@@ -48,10 +52,16 @@ export default function EventDayPage() {
                 </div>
               </div>
               <div className="mt-3 space-y-1.5">
+                {s.planned?.date && <p className="text-xs text-muted">Planned service · {s.planned.date}{s.planned.startTime ? ` · ${s.planned.startTime}${s.planned.endTime ? ` – ${s.planned.endTime}` : ''}` : ''}</p>}
                 <Step label="Checked in" at={s.checkedInAt} />
                 <Step label="Started" at={s.startedAt} />
-                <Step label="Completed" at={s.completedAt} />
+                <Step label="Completion submitted" at={s.submittedAt} />
+                <Step label="Completion verified" at={s.completedAt} />
+                {(s.execution?.milestones || []).map(m => <Step key={m.key} label={m.detail || m.key} at={m.at} />)}
               </div>
+              {s.protection?.underReview && <p className="mt-3 text-sm text-amber-700">A service issue is under review.</p>}
+              {(s.delays || []).map((delay, index) => <p key={index} className="mt-2 text-sm text-amber-700">Reported delay · {delay.description}</p>)}
+              {s.workflow && <Link className="mt-3 flex min-h-11 items-center font-semibold text-primary" to={s.nextAction.url}>{s.nextAction.label} or report an issue →</Link>}
               {s.evidence && (
                 <div className="mt-3 rounded-xl bg-lavender/60 p-3 text-[11px]">
                   {s.evidence.note && <div className="text-ink/80">{s.evidence.note}</div>}

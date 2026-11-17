@@ -1,5 +1,9 @@
+import { handleRazorpayBankWebhook } from '../../external/services/razorpayBankVerification.service.js';
 import { readCustomerFeedback, saveCustomerFeedback } from '../../common/customerFeedback.service.js';
 import { profilePictureRoutes } from './profilePicture.routes.js';
+import { eventCircleRoutes } from './eventCircle.routes.js';
+import { eventMediaRoutes } from './eventMedia.routes.js';
+import { bookingWorkflowRoutes } from './bookingWorkflow.routes.js';
 import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
 import express, { Router } from 'express';
 import { requireCustomer } from '../middleware/requireCustomer.js';
@@ -12,6 +16,9 @@ import * as i from '../controllers/internal.controller.js';
 /** /api/customer/* — Customer App API. Every route is customer-authenticated. */
 export const customerRouter = Router();
 customerRouter.use(requireCustomer);
+customerRouter.use(eventCircleRoutes);
+customerRouter.use(eventMediaRoutes);
+customerRouter.use(bookingWorkflowRoutes);
 customerRouter.use(profilePictureRoutes);
 customerRouter.use(notificationPreferencesRoutes('CUSTOMER'));
 customerRouter.get('/feedback', h(async (req, res) => {
@@ -75,6 +82,7 @@ if (process.env.ENABLE_QA_PAYMENT_BYPASS === 'true' && process.env.NODE_ENV !== 
   customerRouter.post('/events/:id/reservations/:rid/dev-success-payment', h(c.devVerifyReservationPayment));
 }
 customerRouter.post('/events/:id/payments/:pid/checkout-complete', h(c.checkoutComplete));
+customerRouter.post('/events/:id/payments/:pid/reconcile', h(c.reconcilePayment));
 customerRouter.get('/events/:id/event-day', h(c.eventDay));
 
 customerRouter.get('/events/:id/circle', h(c.circle));
@@ -106,4 +114,5 @@ internalRouter.use(jsonErrorHandler);
  */
 export const webhookRouter = Router();
 webhookRouter.post('/razorpay', express.raw({ type: '*/*', limit: '1mb' }), h(i.razorpayWebhook));
+webhookRouter.post('/razorpayx', express.raw({ type: '*/*', limit: '1mb' }), h(async (req, res) => res.json(await handleRazorpayBankWebhook(req.body, req.headers))));
 webhookRouter.use(jsonErrorHandler);

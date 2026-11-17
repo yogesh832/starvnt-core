@@ -128,6 +128,7 @@ const coreBookingSchema = new Schema(
       enum: [
         'NOT_STARTED',
         'SERVICE_SCHEDULED',
+        'CHECKED_IN',
         'SERVICE_STARTED',
         'COMPLETION_SUBMITTED',
         'COMPLETION_VERIFIED',
@@ -156,6 +157,26 @@ const coreBookingSchema = new Schema(
       index: true,
     },
     financialPolicySnapshot: { type: Schema.Types.Mixed, default: null },
+    commercialSnapshot: { type: Schema.Types.Mixed, default: null },
+    replacementDecision: { type: Schema.Types.Mixed, default: null },
+    requirementSnapshot: { type: Schema.Types.Mixed, default: null },
+    workflowVersion: { type: Number, default: 0 },
+    execution: {
+      checkedInAt: Date, startedAt: Date, submittedAt: Date,
+      milestones: [{ key: String, detail: String, at: Date, actor: String, correctedAt: Date, correctionReason: String, corrections: [{ previousDetail: String, detail: String, actor: String, at: Date, reason: String }] }],
+      customerAcknowledgement: { actor: String, at: Date, notes: String },
+    },
+    completionPolicySnapshot: { type: Schema.Types.Mixed, default: null },
+    operationReceipts: [{ key: String, hash: String, action: String, actor: String, at: Date }],
+    workflowEvents: [{ key: String, action: String, actor: String, actorType: String, at: Date, reason: String, fromState: Schema.Types.Mixed, toState: Schema.Types.Mixed, dispatchedAt: Date }],
+    financeOperations: [{
+      operationId: String, key: String, kind: { type: String, enum: ['REFUND', 'SETTLEMENT'] }, amount: Number,
+      status: { type: String, enum: ['REQUESTED', 'APPROVED', 'PROCESSING', 'CONFIRMED', 'FAILED', 'UNDER_REVIEW', 'REJECTED'] },
+      method: { type: String, enum: ['MANUAL', 'RAZORPAY'] }, reason: String, requestedBy: String, requestedAt: Date,
+      approvedBy: String, approvedAt: Date, processedBy: String, processedAt: Date,
+      evidence: [{ assetId: String, url: String, note: String }], reference: String, providerId: String,
+      reconciledBy: String, confirmedAt: Date, lastError: String, ledgerPostedAt: Date,
+    }],
     payoutReviewAt: { type: Date, default: null, index: true },
     completionEvidence: [
       {
@@ -166,6 +187,7 @@ const coreBookingSchema = new Schema(
         videos: [{ type: String }],
         files: [
           {
+            assetId: String,
             url: { type: String, default: '' },
             thumbnailUrl: { type: String, default: '' },
             publicId: { type: String, default: '' },
@@ -206,6 +228,11 @@ const coreBookingSchema = new Schema(
     },
     disputes: [
       {
+        requestKey: String, requestHash: String, actorId: String, assignedTo: String, assignedAt: Date,
+        evidence: [{ actor: String, actorType: String, at: Date, note: String, files: [{ assetId: String, url: String, note: String }] }],
+        response: { actor: String, at: Date, notes: String },
+        proposal: { actor: String, at: Date, decision: String, notes: String, refundAmount: Number, settlementAmount: Number },
+        history: [{ actor: String, at: Date, action: String, reason: String }],
         reportedBy: { type: String, enum: ['CUSTOMER', 'VENDOR', 'SYSTEM'] },
         reportedAt: { type: Date, default: Date.now },
         issueType: { type: String, default: 'SERVICE_FAILURE' },
@@ -229,7 +256,7 @@ const coreBookingSchema = new Schema(
       }
     ],
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 coreBookingSchema.index({ customerBookingId: 1 }, { unique: true, partialFilterExpression: { customerBookingId: { $type: 'objectId' } } });

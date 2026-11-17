@@ -83,10 +83,10 @@ export default function AdminLogin() {
         <div className="w-full max-w-4xl bg-white dark:bg-[#111728] rounded-3xl border border-gray-200/90 dark:border-gray-800/90 shadow-2xl shadow-navy/5 dark:shadow-black/40 overflow-hidden grid md:grid-cols-[44%_1fr] transition-all">
           {/* Brand Left Panel */}
           <aside
-            className="relative p-7 sm:p-9 text-white flex flex-col justify-between overflow-hidden min-h-[480px]"
+            className="auth-photo-panel relative p-7 sm:p-9 text-white flex flex-col justify-between overflow-hidden min-h-[480px]"
             style={{
               backgroundImage:
-                "linear-gradient(to bottom, rgba(9, 13, 29, 0.90) 0%, rgba(9, 13, 29, 0.65) 40%, rgba(9, 13, 29, 0.40) 70%, rgba(9, 13, 29, 0.92) 100%), url('https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1600&q=80')",
+                "linear-gradient(to bottom, var(--auth-photo-top, rgba(9, 13, 29, 0.90)) 0%, var(--auth-photo-mid, rgba(9, 13, 29, 0.65)) 40%, var(--auth-photo-clear, rgba(9, 13, 29, 0.40)) 70%, var(--auth-photo-bottom, rgba(9, 13, 29, 0.92)) 100%), url('https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?auto=format&fit=crop&w=1600&q=80')",
               backgroundSize: 'cover',
               backgroundPosition: 'center bottom',
             }}

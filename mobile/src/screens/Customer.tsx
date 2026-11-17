@@ -78,13 +78,22 @@ export function EventCard({
 export function CustomerHome({ navigation }: any) {
   const r = useResource(external, "/customer/home");
   const { user } = useSession();
+  const [selectedEvent, setSelectedEvent] = useState("");
+  const [showEventChoices, setShowEventChoices] = useState(false);
   const events: Data[] = r.data.activeEvents || [];
+  const hasSnapshot = Array.isArray(r.data.activeEvents);
+  const visibleEvents = selectedEvent ? events.filter(event => id(event) === selectedEvent) : events;
+  const attention: Data[] = (r.data.attention || []).filter((item: Data) =>
+    !selectedEvent || item.eventId === selectedEvent);
   return (
     <Page
       {...r}
+      loading={r.loading && !hasSnapshot}
+      error={hasSnapshot ? undefined : r.error}
       title={`Hello, ${user?.fullName?.split(" ")[0] || "there"}.`}
       subtitle="Let’s make something worth remembering."
     >
+      {hasSnapshot && <ErrorNotice message={r.error} retry={r.refresh} />}
       <Card>
         <Pill>YOUR NEXT GREAT MOMENT</Pill>
         <Txt bold size={30}>
@@ -114,17 +123,17 @@ export function CustomerHome({ navigation }: any) {
           onPress={() => navigation.navigate("NewEvent")}
         />
       </View>
-      {events.map((e) => (
-        <EventCard key={id(e)} event={e} navigation={navigation} />
-      ))}
-      {!events.length && (
-        <Empty
-          title="Your calendar is a blank canvas"
-          description="Create your first event, or tell Aura+ what you have in mind."
-        />
-      )}
-      {(r.data.attention || []).map((a: Data, i: number) => (
-        <Card key={i}>
+      {(events.length > 0 || selectedEvent !== "") && <>
+        <MenuRow title="Event focus" icon="calendar-outline"
+          subtitle={selectedEvent ? visibleEvents[0]?.title || human(visibleEvents[0]?.eventType) || "Event no longer active" : "All active events"}
+          onPress={() => setShowEventChoices(value => !value)} />
+        {showEventChoices && <Choice label="Choose an event" value={selectedEvent}
+          values={["", ...events.map(id)]}
+          labels={{ "": "All active events", ...Object.fromEntries(events.map(event => [id(event), event.title || human(event.eventType)])) }}
+          onChange={value => { setSelectedEvent(value); setShowEventChoices(false); }} />}
+      </>}
+      {attention.map((a) => (
+        <Card key={`${a.eventId}:${a.type}`}>
           <Pill>NEEDS YOUR ATTENTION</Pill>
           <Txt bold>{a.title || a.message}</Txt>
           {(a.detail || a.body) && <Txt muted>{a.detail || a.body}</Txt>}
@@ -156,6 +165,16 @@ export function CustomerHome({ navigation }: any) {
           )}
         </Card>
       ))}
+      {visibleEvents.map((event) => (
+        <EventCard key={id(event)} event={event} navigation={navigation} />
+      ))}
+      {!visibleEvents.length && (
+        <Empty
+          title={selectedEvent ? "This event is no longer active" : "No active events"}
+          description={selectedEvent ? "Open Events to see its latest status." : "Start planning a new event or open an earlier one."}
+        />
+      )}
+      {!visibleEvents.length && <Button title="Open Events" secondary onPress={() => navigation.navigate("Events")} />}
     </Page>
   );
 }
@@ -171,6 +190,7 @@ export function EventsScreen({ navigation }: any) {
       title="Your events"
       subtitle="From the first idea to the final memory."
     >
+      <Button title="Invitations & shared events" secondary onPress={() => navigation.navigate('CustomerInvitations')} />
       <Button
         title="Create an event"
         onPress={() => navigation.navigate("NewEvent")}
@@ -217,6 +237,8 @@ export function EventScreen({ route, navigation }: any) {
       {!!r.data.experience?.proposedRequirements?.length && <Card><Txt bold>Confirm Aura suggestions</Txt><Txt muted>These do not count as completed requirements until you confirm.</Txt>{r.data.experience.proposedRequirements.map((row: Data) => <View key={row.category}><Txt>{human(row.category)} · {human(row.status)} {row.value || ''}</Txt><Button title="Confirm this requirement" busy={a.busy} onPress={() => { void a.run(async () => { await external.call(`${eventPath(eventId)}/requirements/${row.category}/confirm`, 'POST'); r.refresh(); }); }} /></View>)}</Card>}
       <NotificationPreferences eventId={eventId} />
       <ProductFeedback kind="EVENT" reference={eventId} />
+      <MenuRow title="Private Event Circle" subtitle="Participants and permissioned conversations." icon="people-outline" onPress={() => navigation.navigate('CustomerCollaboration', { eventId })} />
+      <MenuRow title="Event Memory" subtitle="Your photos, videos, highlights and retained story." icon="images-outline" onPress={() => navigation.navigate('CustomerEventMedia', { eventId, memory: true })} />
       <Stats
         items={[
           ["Services planned", r.data.counts?.services ?? 0],
@@ -321,7 +343,7 @@ export function EventSection(props: any) {
 function EventSectionBody({ route, navigation }: any) {
   const { eventId, section, category, title } = route.params;
   const path = `${eventPath(eventId)}/${section}${category ? `?category=${encodeURIComponent(category)}` : ""}`;
-  const r = useResource(external, path);
+  const r = useResource(external, path, section === 'event-day' ? 20000 : 0);
   const a = useAction();
   const act = (path: string, body?: Data) =>
     a.run(async () => {
@@ -575,6 +597,10 @@ function EventSectionBody({ route, navigation }: any) {
             <Pill>{human(p.status)}</Pill>
             <Txt muted>{date(p.createdAt)}</Txt>
             {p.failureReason && <Txt>{p.failureReason}</Txt>}
+            {p.status !== "verified" && (
+              <Button title="Check payment status" secondary busy={a.busy}
+                onPress={() => act(`${eventPath(eventId)}/payments/${id(p)}/reconcile`)} />
+            )}
           </Card>
         ))}
         {!(
@@ -599,6 +625,15 @@ function EventSectionBody({ route, navigation }: any) {
             </Txt>
             <Txt>{b.packageName}</Txt>
             <Pill>{human(b.executionStatus)}</Pill>
+            {b.planned?.date && <Txt muted>Planned service date · {b.planned.date}</Txt>}
+            <Txt>Check-in · {b.checkedInAt ? new Date(b.checkedInAt).toLocaleString() : 'No recorded check-in'}</Txt>
+            <Txt>Started · {b.startedAt ? new Date(b.startedAt).toLocaleString() : 'No recorded start'}</Txt>
+            <Txt>Completion submitted · {b.submittedAt ? new Date(b.submittedAt).toLocaleString() : 'Awaiting submission'}</Txt>
+            <Txt>Completion verified · {b.completedAt ? new Date(b.completedAt).toLocaleString() : 'Awaiting STARVNT review'}</Txt>
+            {(b.execution?.milestones || []).map((m: Data) => <Txt key={m.key}>{m.detail || human(m.key)} · {new Date(m.at).toLocaleString()}</Txt>)}
+            {b.protection?.underReview && <Txt>Service issue under review</Txt>}
+            {(b.delays || []).map((delay: Data, index: number) => <Txt key={index}>Reported delay · {delay.description}</Txt>)}
+            {b.workflow && <Button title={b.nextAction?.label || 'Service details & report an issue'} onPress={() => navigation.navigate('CustomerBooking', { eventId, bookingId: b.id })} />}
           </Card>
         ))}
         {!r.data.services?.length && (

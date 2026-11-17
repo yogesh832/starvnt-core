@@ -10,22 +10,22 @@
 .marketing-landing #plan-event input:focus-visible, .marketing-landing #plan-event select:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .marketing-landing .marketing-footer > div:last-child { background: #fff !important; }
 
-html.dark .marketing-landing { color: #eaf5ff; background: #040d1e; color-scheme: dark; }
-html.dark .marketing-landing header { background: rgba(4,15,33,.92); }
-html.dark .marketing-landing #experiences, html.dark .marketing-landing main > section:nth-child(4) { background: radial-gradient(circle at 90% 5%,rgba(14,165,233,.11),transparent 36%),#07172c; }
-html.dark .marketing-landing #how-it-works, html.dark .marketing-landing #plan-event { background: radial-gradient(circle at 5% 85%,rgba(37,99,235,.13),transparent 44%),#0a1c33 !important; border-color: rgba(186,230,253,.1) !important; }
-html.dark .marketing-landing main h2, html.dark .marketing-landing main h3, html.dark .marketing-landing main .text-navy { color: #f5fbff !important; }
-html.dark .marketing-landing main .text-muted { color: #adc1d9 !important; }
-html.dark .marketing-landing main .text-primary { color: #a5b4fc !important; }
-html.dark .marketing-landing #experiences article { border-color: rgba(186,230,253,.16); box-shadow: inset 0 1px rgba(255,255,255,.14),0 22px 50px rgba(0,10,35,.28); }
-html.dark .marketing-landing #how-it-works [class*="border-primary"] { border-color: rgba(129,140,248,.55); }
-html.dark .marketing-landing main .bg-white { background: rgba(31,40,64,.78) !important; border-color: rgba(186,230,253,.15) !important; box-shadow: inset 0 1px rgba(255,255,255,.08),0 16px 45px rgba(0,9,32,.15); backdrop-filter: blur(18px); }
-html.dark .marketing-landing main .bg-primary-soft { background: rgba(129,140,248,.15) !important; color: #a5b4fc !important; }
-html.dark .marketing-landing #plan-event input, html.dark .marketing-landing #plan-event select { color: #f5fbff; background: #1e2235 !important; border-color: rgba(186,230,253,.23) !important; color-scheme: dark; }
-html.dark .marketing-landing #plan-event input::placeholder { color: #a6aec5; }
-html.dark .marketing-landing .marketing-footer > div:last-child { background: #161926 !important; border-color: rgba(186,230,253,.12) !important; }
-html.dark .marketing-landing .marketing-footer .text-navy { color: #eff8ff !important; }
-html.dark .marketing-landing .marketing-footer .text-muted { color: #aec2d8 !important; }
-html.dark .marketing-landing .marketing-footer .border-gray-100 { border-color: rgba(186,230,253,.12) !important; }
+html.dark .marketing-landing { color:var(--sv-ink); background:var(--sv-panel); color-scheme:dark; }
+html.dark .marketing-landing header { background:rgba(34, 34, 34, .92); }
+html.dark .marketing-landing #experiences, html.dark .marketing-landing main > section:nth-child(4) { background:radial-gradient(circle at 90% 5%,rgba(34, 34, 34, .11),transparent 36%),var(--sv-panel); }
+html.dark .marketing-landing #how-it-works, html.dark .marketing-landing #plan-event { background:radial-gradient(circle at 5% 85%,rgba(34, 34, 34, .13),transparent 44%),var(--sv-panel) !important; border-color:rgba(48, 48, 48, .1) !important; }
+html.dark .marketing-landing main h2, html.dark .marketing-landing main h3, html.dark .marketing-landing main .text-navy { color:var(--sv-ink) !important; }
+html.dark .marketing-landing main .text-muted { color:var(--sv-muted) !important; }
+html.dark .marketing-landing main .text-primary { color:var(--sv-link) !important; }
+html.dark .marketing-landing #experiences article { border-color:rgba(48, 48, 48, .16); box-shadow:inset 0 1px rgba(0, 0, 0, .14),0 22px 50px rgba(0, 0, 0, .28); }
+html.dark .marketing-landing #how-it-works [class*="border-primary"] { border-color:rgba(48, 48, 48, .55); }
+html.dark .marketing-landing main .bg-white { background:rgba(34, 34, 34, .78) !important; border-color:rgba(48, 48, 48, .15) !important; box-shadow:inset 0 1px rgba(0, 0, 0, .08),0 16px 45px rgba(0, 0, 0, .15); backdrop-filter:blur(18px); }
+html.dark .marketing-landing main .bg-primary-soft { background:rgba(34, 34, 34, .15) !important; color:var(--sv-link) !important; }
+html.dark .marketing-landing #plan-event input, html.dark .marketing-landing #plan-event select { color:var(--sv-ink); background:var(--sv-panel) !important; border-color:rgba(48, 48, 48, .23) !important; color-scheme:dark; }
+html.dark .marketing-landing #plan-event input::placeholder { color:var(--sv-muted); }
+html.dark .marketing-landing .marketing-footer > div:last-child { background:var(--sv-panel) !important; border-color:rgba(48, 48, 48, .12) !important; }
+html.dark .marketing-landing .marketing-footer .text-navy { color:var(--sv-ink) !important; }
+html.dark .marketing-landing .marketing-footer .text-muted { color:var(--sv-muted) !important; }
+html.dark .marketing-landing .marketing-footer .border-gray-100 { border-color:rgba(48, 48, 48, .12) !important; }
 @media (max-width: 639px) { .marketing-landing #plan-event { padding-bottom: 7rem; } }
 @media (prefers-reduced-motion: reduce) { .marketing-landing #experiences article img { transition: none; } }

@@ -1,193 +1,90 @@
-import React, { useState } from "react";
-import { Image, Linking, View } from "react-native";
-import type { Data } from "../api/client";
-import { external } from "../api/runtime";
-import { completionEvidence } from "../completionEvidence";
-import {
-  Button,
-  Card,
-  Choice,
-  confirm,
-  Empty,
-  ErrorNotice,
-  Field,
-  human,
-  Icon,
-  id,
-  money,
-  Page,
-  Pill,
-  Txt,
-  useAction,
-  usePalette,
-  useResource,
-} from "../ui";
+import React, { useState } from 'react';
+import { external } from '../api/runtime';
+import type { Data } from '../api/client';
+import { eventRequestKey, pickPrivateEventMedia, openPrivateEventFile } from '../api/eventMedia';
+import { Button, Card, Choice, confirm, Empty, ErrorNotice, Field, human, money, Page, Pill, Txt, useAction, useResource } from '../ui';
+
+function CustomerIssueForm({ booking, caseId, refresh }: { booking: Data; caseId?: string; refresh: () => Promise<void> }) {
+  const a = useAction();
+  const [description, setDescription] = useState(''), [type, setType] = useState('SERVICE_QUALITY'), [assetId, setAssetId] = useState('');
+  const [rights, setRights] = useState('no'), [requestKey, setRequestKey] = useState(eventRequestKey);
+  return <Card>
+    <Txt bold size={21}>{caseId ? 'Send more information' : 'Report an issue'}</Txt>
+    {!caseId && <Choice label="Issue type" values={['SERVICE_QUALITY', 'SERVICE_DELAY', 'SERVICE_FAILURE', 'BILLING', 'OTHER']} value={type} onChange={value => { setType(value); setRequestKey(eventRequestKey()); }} />}
+    <Field label={caseId ? 'Your response' : 'Describe the issue'} multiline maxLength={4000} editable={!a.busy} value={description} onChangeText={value => { setDescription(value); setRequestKey(eventRequestKey()); }} />
+    <Choice label="I have permission to provide supporting files for review" values={['no', 'yes']} value={rights} onChange={setRights} />
+    <Button title={assetId ? 'Private evidence attached' : 'Add private photo, video or PDF'} secondary disabled={rights !== 'yes'} busy={a.busy} onPress={() => a.run(async () => {
+      const result = await pickPrivateEventMedia(booking.eventId, { purpose: 'CASE_EVIDENCE', bookingId: booking.id, rightsConfirmed: true, idempotencyKey: eventRequestKey() }, true);
+      if (result) { setAssetId(result.asset.id); setRequestKey(eventRequestKey()); }
+    })} />
+    <Txt muted>STARVNT reviews your report and supporting information. Files stay within the authorized service review.</Txt>
+    <ErrorNotice message={a.error} />
+    <Button title={caseId ? 'Send information' : 'Submit issue for review'} disabled={!description.trim()} busy={a.busy} onPress={() => a.run(async () => {
+      const body = { eventId: booking.eventId, expectedVersion: booking.version, idempotencyKey: requestKey, evidence: assetId ? [{ assetId, note: description }] : [] };
+      await external.call(`/customer/bookings/${booking.id}/issues${caseId ? `/${caseId}/evidence` : ''}`, 'POST', caseId ? { ...body, notes: description } : { ...body, issueType: type, description });
+      setDescription(''); setAssetId(''); setRequestKey(eventRequestKey()); await refresh();
+    })} />
+  </Card>;
+}
 
 export function CustomerBookingScreen({ route, navigation }: any) {
-  return (
-    <CustomerBookingBody
-      key={`${route.params.eventId}-${route.params.bookingId}`}
-      route={route}
-      navigation={navigation}
-    />
-  );
+  return <CustomerBookingBody key={`${route.params.eventId}:${route.params.bookingId}`} route={route} navigation={navigation} />;
 }
 function CustomerBookingBody({ route, navigation }: any) {
   const { eventId, bookingId } = route.params;
-  const r = useResource(
-    external,
-    `/customer/events/${encodeURIComponent(eventId)}/bookings`,
-  );
-  const booking: Data | undefined = (r.data.bookings || []).find(
-    (b: Data) => id(b) === bookingId,
-  );
-  const evidence = completionEvidence(
-    booking?.completionEvidence || booking?.evidence,
-  );
+  const r = useResource(external, `/customer/bookings/${encodeURIComponent(bookingId)}/workflow?eventId=${encodeURIComponent(eventId)}`, 20000);
   const a = useAction();
-  const c = usePalette();
-  const [acknowledged, setAcknowledged] = useState("no");
-  const [notes, setNotes] = useState("");
-  const canVerify =
-    booking?.executionStatus === "COMPLETION_SUBMITTED" &&
-    (evidence.notes.length > 0 ||
-      evidence.files.length > 0 ||
-      evidence.checklist.length > 0);
-  return (
-    <Page
-      {...r}
-      title={booking?.vendorName || "Booking evidence"}
-      subtitle={booking?.packageName}
-    >
-      <ErrorNotice message={a.error} />
-      {!booking && (
-        <Empty
-          title="Booking unavailable"
-          description="This booking was not found in your event."
-        />
-      )}
-      {booking && (
-        <>
-          <Pill>{human(booking.executionStatus || booking.status)}</Pill>
-          <Txt>
-            Paid: {money(booking.paidAmount)} · Balance:{" "}
-            {money(booking.balanceAmount)}
-          </Txt>
-          <Txt bold size={23}>
-            Proof of work
-          </Txt>
-          {evidence.notes.map((note, index) => (
-            <Card key={index}>
-              <Txt>{note}</Txt>
-            </Card>
-          ))}
-          {evidence.files.map((file) => (
-            <Card key={file.url}>
-              {file.image && (
-                <Image
-                  source={{ uri: file.url }}
-                  style={{ width: "100%", height: 230, borderRadius: 16 }}
-                  resizeMode="contain"
-                  accessibilityLabel={file.label}
-                />
-              )}
-              <Button
-                title={`Open ${file.label}`}
-                secondary
-                onPress={() =>
-                  a.run(async () => {
-                    await Linking.openURL(file.url);
-                  })
-                }
-              />
-            </Card>
-          ))}
-          {!!evidence.checklist.length && (
-            <Card>
-              <Txt bold>Vendor's checklist</Txt>
-              {evidence.checklist.map((check, index) => (
-                <View
-                  key={index}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-                >
-                  <Icon
-                    name={check.checked ? "checkmark-circle" : "ellipse-outline"}
-                    size={17}
-                    color={check.checked ? c.success : c.muted}
-                  />
-                  <Txt style={{ flex: 1 }}>
-                    {check.item || check.label || "Deliverable"}
-                  </Txt>
-                </View>
-              ))}
-            </Card>
-          )}
-          {!evidence.notes.length &&
-            !evidence.files.length &&
-            !evidence.checklist.length && (
-              <Empty
-                title="No completion evidence submitted"
-                description="The vendor must submit proof of work before completion can be reviewed."
-              />
-            )}
-          {canVerify && (
-            <Card>
-              <Txt bold>Review before approving</Txt>
-              <Txt>
-                Confirm only after you have inspected the submitted evidence and
-                received the booked service.
-              </Txt>
-              <Choice
-                label="I have reviewed the evidence and received the service"
-                values={["no", "yes"]}
-                value={acknowledged}
-                onChange={setAcknowledged}
-              />
-              <Field
-                label="Completion notes (optional)"
-                multiline
-                value={notes}
-                maxLength={2000}
-                onChangeText={setNotes}
-                editable={!a.busy}
-              />
-              <Button
-                title="Confirm service completion"
-                busy={a.busy}
-                disabled={acknowledged !== "yes"}
-                onPress={() =>
-                  confirm(
-                    "Confirm completion?",
-                    "This records your approval of the delivered service. Core remains responsible for settlement.",
-                    () =>
-                      a.run(async () => {
-                        await external.call(
-                          `/customer/bookings/${encodeURIComponent(bookingId)}/verify-completion`,
-                          "POST",
-                          { notes: notes.trim() },
-                        );
-                        setAcknowledged("no");
-                        await r.refresh();
-                      }),
-                  )
-                }
-              />
-            </Card>
-          )}
-          <Button
-            title="Ask the vendor about this booking"
-            secondary
-            onPress={() =>
-              navigation.navigate("Chat", {
-                kind: "circle",
-                eventId,
-                bookingId,
-                title: booking.vendorName,
-              })
-            }
-          />
-        </>
-      )}
-    </Page>
-  );
+  const [ackKey] = useState(eventRequestKey);
+  const booking = r.data.booking;
+  if (r.error) return <Page {...r} title="Booked service"><Txt>Service access is unavailable. Pull to refresh and try again.</Txt></Page>;
+  return <Page {...r} title={booking?.serviceName || 'Booked service'} subtitle={booking?.vendorName}>
+    <ErrorNotice message={a.error} />
+    {!booking && !r.loading && <Empty title="Service unavailable" description="Refresh to load your booked service." />}
+    {booking && <>
+      <Card>
+        <Txt bold>Booking</Txt><Pill>{human(booking.bookingStatus)}</Pill>
+        <Txt bold>Payment</Txt><Pill>{human(booking.paymentStatus)}</Pill>
+        <Txt>Verified payment {money(booking.payment.verifiedAmount)} · Recorded balance {booking.payment.balanceAmount == null ? 'awaiting confirmation' : money(booking.payment.balanceAmount)}</Txt>
+        <Txt>Booked final amount {money(booking.pricing.finalPayable)}</Txt>
+        <Txt muted>Travel {money(booking.pricing.travel)} · Setup {money(booking.pricing.setup)} · Equipment {money(booking.pricing.equipment)} · Additional {money(booking.pricing.additional)}</Txt>
+      </Card>
+      <Card>
+        <Txt bold size={22}>Service progress</Txt><Pill>{human(booking.executionStatus)}</Pill>
+        <Txt>Check-in · {booking.execution.checkedInAt ? new Date(booking.execution.checkedInAt).toLocaleString() : 'No recorded check-in'}</Txt>
+        <Txt>Started · {booking.execution.startedAt ? new Date(booking.execution.startedAt).toLocaleString() : 'No recorded start'}</Txt>
+        {(booking.execution.milestones || []).map((m: Data) => <Txt key={m.key}>{m.detail || human(m.key)} · {new Date(m.at).toLocaleString()}</Txt>)}
+        <Txt>Customer acknowledgement · {booking.execution.customerAcknowledgement?.at ? 'Received' : 'Awaiting acknowledgement'}</Txt>
+        <Txt>Completion review · {booking.executionStatus === 'COMPLETION_VERIFIED' ? 'Verified by STARVNT' : 'Awaiting STARVNT review'}</Txt>
+        {booking.execution.reviewNotes && <Txt>{booking.execution.reviewNotes}</Txt>}
+        {(booking.completionEvidence || []).map((e: Data, index: number) => <Card key={index}>
+          <Txt>{e.notes}</Txt>
+          {(e.files || []).map((file: Data, i: number) => file.assetId && <Button key={i} title={file.note || 'Open private completion evidence'} secondary busy={a.busy} onPress={() => a.run(() => openPrivateEventFile(file.assetId))} />)}
+          {(e.checklist || []).map((item: Data, i: number) => <Txt key={i}>{item.checked ? '✓' : '○'} {item.item}</Txt>)}
+        </Card>)}
+        {booking.allowedActions.acknowledge && <Button title="Acknowledge received service" busy={a.busy} onPress={() => confirm('Acknowledge received service?', 'Record that you reviewed the evidence and received this service. STARVNT separately reviews completion under the service policy.', () => a.run(async () => {
+          await external.call(`/customer/bookings/${booking.id}/acknowledge-completion`, 'POST', { eventId, expectedVersion: booking.version, idempotencyKey: ackKey });
+          await r.refresh();
+        }))} />}
+      </Card>
+      <Card>
+        <Txt bold size={22}>Refund progress</Txt>
+        <Txt>Confirmed refunded {money(booking.refund.confirmedAmount)}</Txt><Txt>Remaining paid amount {money(booking.refund.remainingPaidAmount)}</Txt>
+        {booking.refund.decisions.map((d: Data) => <Txt key={d.caseId}>Resolution decision · {human(d.decision)} · {money(d.amount)}</Txt>)}
+        {booking.refund.operations.map((op: Data) => <Txt key={op.id}>{human(op.status)} · {money(op.amount)} {op.failureReason}</Txt>)}
+        {!booking.refund.operations.length && <Txt muted>No refund transfer is recorded.</Txt>}
+      </Card>
+      {(booking.protection.cases || []).map((c: Data) => <Card key={c.id}>
+        <Txt bold>Service issue · {human(c.status)}</Txt><Txt>{c.description}</Txt>
+        {c.requests.map((item: Data, index: number) => <Txt key={index}>More information requested · {item.message}</Txt>)}
+        {c.response && <Txt>Vendor response · {c.response.notes}</Txt>}
+        {c.proposal && <Txt>Proposed resolution · {human(c.proposal.decision)} · {c.proposal.notes}</Txt>}
+        {c.resolution && <Txt>Confirmed resolution · {human(c.resolution.decision)} · {c.resolution.notes}</Txt>}
+        {c.evidence.flatMap((e: Data) => e.files).map((file: Data, index: number) => file.assetId && <Button key={index} title="Open private case evidence" secondary onPress={() => a.run(() => openPrivateEventFile(file.assetId))} />)}
+        {c.status !== 'RESOLVED' && <CustomerIssueForm booking={booking} caseId={c.id} refresh={r.refresh} />}
+      </Card>)}
+      <CustomerIssueForm booking={booking} refresh={r.refresh} />
+      {booking.allowedActions.reviewReplacement && <Button title="Review replacement options" onPress={() => navigation.navigate('CustomerReplacements', { eventId, bookingId: booking.id })} />}
+      <Button title="Ask about this service" secondary onPress={() => navigation.navigate('Chat', { kind: 'circle', eventId, bookingId: booking.id })} />
+    </>}
+  </Page>;
 }

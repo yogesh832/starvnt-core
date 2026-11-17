@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { syncBookingTruth, cancelOwnedBooking } from './bookingTruth.service.js';
 import { withVendorSchedule } from '../../external/services/scheduleLock.js';
@@ -20,7 +21,9 @@ import { Quote } from '../../external/models/Quote.js';
 import { ExternalUser } from '../../external/models/ExternalUser.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { Booking, LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
-import { validateCompletionFromCore } from '../../admin/services/executionSettlement.service.js';
+import { acknowledgeCustomerCompletion } from './bookingWorkflow.service.js';
+import { assertCommercialSnapshot } from '../../external/services/commercialSnapshot.service.js';
+import { originalBookingRequirement } from '../../admin/services/executionSettlement.service.js';
 import { recordLifecycleEventMessage } from './circle.service.js';
 import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
 import { publicCoupon, validateCouponForPayment, recordCouponUsageOnce, normalizeCouponCode } from './coupon.service.js';
@@ -29,8 +32,8 @@ import { publishOutboxEvent } from '../../automation/services/outbox.service.js'
 /**
  * Reserve → pay → verify → book (Blueprint §6, phases 9–10).
  * - Accepting a quote creates 48 h holds (reservations), never bookings.
- * - The browser callback only moves a payment to "processing".
- * - Only a signed webhook or an ops verification makes it "verified".
+ * - A signed callback starts server-side capture verification; pending capture remains processing.
+ * - Signed webhooks, authoritative provider lookup or ops verification establish payment truth.
  * - A booking is confirmed only if the payment is verified AND the hold is
  *   live AND the date isn't taken; otherwise it waits "under review".
  */
@@ -117,6 +120,7 @@ export function serializeBooking(b) {
 export async function acceptQuote(customerId, quoteId) {
   const quote = await quotesRepo.findOwned(customerId, quoteId).catch(() => null);
   if (!quote) throw notFound('Quote not found');
+  if (quote.items.some(item => !item.isDemo)) throw conflict('VENDOR_COST_CONFIRMATION_REQUIRED', 'Request a vendor-confirmed quote before reserving this service.');
   const ids = quote.items.map(item => String(item.optionId || '').replace(/^vs_/, '')).filter(id => mongoose.isValidObjectId(id));
   const vendors = [...new Set((await VendorService.find({ _id: { $in: ids } }).select('vendor').lean()).map(s => String(s.vendor)))].sort();
   const acquire = index => index === vendors.length ? acceptQuoteLocked(customerId, quoteId) : withVendorSchedule(vendors[index], () => acquire(index + 1));
@@ -320,7 +324,7 @@ export async function bookingsView(customerId, eventId) {
 
   return {
     event: serializeEvent(event),
-    paymentsConfigured: razorpay.isConfigured(),
+    paymentsConfigured: razorpay.checkoutConfigured(),
     reservations: serializedReservations,
     bookings: mappedBookings,
     payments: payments.map(serializePayment),
@@ -332,54 +336,7 @@ export async function cancelBooking(customerId, bookingId, body = {}) {
 }
 
 export async function verifyBookingCompletion(customerId, bookingId, body = {}) {
-  const isObjectId = mongoose.isValidObjectId(bookingId);
-  const links = [
-    ...(isObjectId ? [{ _id: bookingId }, { quoteId: bookingId }] : []),
-    { bookingReference: bookingId },
-  ];
-  let coreBooking = await CoreBooking.findOne({ customerId, $or: links });
-  if (!coreBooking) {
-    const customerBooking = await commerceRepo.getBooking(bookingId);
-    if (!customerBooking || String(customerBooking.customer) !== String(customerId)) throw notFound('Booking not found');
-    const linked = [
-      ...(customerBooking.coreBooking || customerBooking.coreBookingId ? [{ _id: customerBooking.coreBooking || customerBooking.coreBookingId }] : []),
-      { quoteId: customerBooking._id },
-      ...(customerBooking.reference ? [{ bookingReference: customerBooking.reference }] : []),
-    ];
-    coreBooking = await CoreBooking.findOne({ customerId, $or: linked });
-    if (!coreBooking) throw badRequest('CORE_BOOKING_REQUIRED', 'This booking must be linked to Core before completion can be verified.');
-  }
-  if (coreBooking.executionStatus !== 'COMPLETION_SUBMITTED') {
-    if (coreBooking.executionStatus === 'COMPLETION_VERIFIED') {
-      return { ok: true, booking: coreBooking };
-    }
-    throw badRequest('BOOKING_NOT_READY', 'The vendor must submit completion evidence before you can verify completion.');
-  }
-
-  const verified = await validateCompletionFromCore(
-    coreBooking._id,
-    { approved: true, notes: body?.notes || 'Customer verified completion' },
-    `CUSTOMER:${customerId}`
-  );
-
-  if (coreBooking.customerBookingId) {
-    await Booking.updateOne({ _id: coreBooking.customerBookingId, customer: customerId }, { $set: { executionStatus: 'completed', completedAt: new Date() } });
-  }
-
-  if (coreBooking.vendorId) {
-    await recordLifecycleEventMessage({
-      vendorId: coreBooking.vendorId,
-      customerId,
-      eventId: coreBooking.customerEvent,
-      bookingId: coreBooking._id,
-      sender: 'CLIENT',
-      senderName: 'Customer',
-      text: `✓ Completion Verified: Customer verified proof of work for ${coreBooking.serviceName || 'booking'}. Remaining balance is ready for payout/settlement.`,
-      type: 'completion',
-    }).catch(() => null);
-  }
-
-  return { ok: true, booking: verified };
+  return acknowledgeCustomerCompletion(customerId, bookingId, body);
 }
 
 export async function previewReservationCoupon(customerId, eventId, reservationId, code) {
@@ -396,6 +353,7 @@ export async function previewReservationCoupon(customerId, eventId, reservationI
     if (!reservation) {
       const cb = (await CoreBooking.findById(reservationId).catch(() => null)) || (await Booking.findById(reservationId).catch(() => null));
       if (cb) {
+        if (String(cb.customerId || cb.customer) !== String(customerId) || String(cb.customerEvent || cb.event) !== String(event._id)) throw notFound('Booking not found for this event');
         if (cb.reservation) reservation = await Reservation.findById(cb.reservation).catch(() => null);
         if (!reservation && cb.quoteId) reservation = await Reservation.findOne({ quote: cb.quoteId }).catch(() => null);
         if (!reservation) {
@@ -404,7 +362,7 @@ export async function previewReservationCoupon(customerId, eventId, reservationI
           const balAmt = cb.paymentSummary?.balanceAmount ?? cb.balanceAmount ?? Math.max(0, totalAmt - paidAmt);
           reservation = {
             _id: cb._id,
-            event: event._id,
+            event: event._id, customer: customerId,
             category: cb.category || 'venue',
             vendorName: cb.vendorName || 'Vendor Partner',
             packageName: cb.serviceName || cb.packageName || 'Service Package',
@@ -422,6 +380,12 @@ export async function previewReservationCoupon(customerId, eventId, reservationI
   if (!reservation) throw notFound('Reservation not found');
   const isBalancePayment = reservation.status === 'converted' || reservation.status === 'pending_balance';
   if (!isBalancePayment && reservation.status !== 'pending_payment') throw conflict('RESERVATION_NOT_PAYABLE', 'This reservation is not awaiting payment');
+  if (!isBalancePayment && !reservation.isDemo) {
+    const confirmed = await Quote.findOne({ _id: reservation.quote, customer: customerId, status: 'APPROVED' });
+    if (!confirmed || !reservation.commercialSnapshot) throw conflict('VENDOR_COST_CONFIRMATION_REQUIRED', 'Review a vendor-confirmed quote before paying.');
+    assertCommercialSnapshot(confirmed, reservation.commercialSnapshot.version, true);
+  }
+
   const baseAmount = isBalancePayment ? (reservation.balanceAmount ?? reservation.amount) : advanceAmountOf(reservation);
   const orderAmount = packageTotalOf(reservation);
   const { coupon, discountAmount } = await validateCouponForPayment(code, { orderAmount, baseAmount });
@@ -438,12 +402,14 @@ export async function payReservation(customer, eventId, reservationId, body = {}
     const { Reservation } = await import('../models/index.js');
     if (mongoose.isValidObjectId(reservationId)) {
       reservation = await Reservation.findOne({
+        event: event._id, customer: customerId,
         $or: [{ _id: reservationId }, { quoteItem: reservationId }, { quote: reservationId }],
       });
     }
     if (!reservation) {
       const cb = (await CoreBooking.findById(reservationId).catch(() => null)) || (await Booking.findById(reservationId).catch(() => null));
       if (cb) {
+        if (String(cb.customerId || cb.customer) !== String(customerId) || String(cb.customerEvent || cb.event) !== String(event._id)) throw notFound('Booking not found for this event');
         if (cb.reservation) reservation = await Reservation.findById(cb.reservation).catch(() => null);
         if (!reservation && cb.quoteId) reservation = await Reservation.findOne({ quote: cb.quoteId }).catch(() => null);
         if (!reservation) {
@@ -452,7 +418,7 @@ export async function payReservation(customer, eventId, reservationId, body = {}
           const balAmt = cb.paymentSummary?.balanceAmount ?? cb.balanceAmount ?? Math.max(0, totalAmt - paidAmt);
           reservation = {
             _id: cb._id,
-            event: event._id,
+            event: event._id, customer: customerId,
             category: cb.category || 'venue',
             vendorName: cb.vendorName || 'Vendor Partner',
             packageName: cb.serviceName || cb.packageName || 'Service Package',
@@ -468,101 +434,136 @@ export async function payReservation(customer, eventId, reservationId, body = {}
     }
   }
   if (!reservation) throw notFound('Reservation not found for this event');
-  if (reservation.status === 'expired') throw conflict('RESERVATION_EXPIRED', 'This hold has expired. Please get a new quote.');
+  if (String(reservation.event) !== String(event._id) || String(reservation.customer) !== String(customerId)) throw notFound('Reservation not found for this event');
+  return withVendorSchedule(`checkout:${reservation._id}`, async assertCheckoutLease => {
+    reservation = await commerceRepo.getReservation(reservation._id) || reservation;
+    if (reservation.status === 'expired' || reservation.status === 'pending_payment' && new Date(reservation.expiresAt) <= new Date()) throw conflict('RESERVATION_EXPIRED', 'This hold has expired. Please get a new quote.');
+    if (reservation.isDemo && razorpay.publicKeyId().startsWith('rzp_live_') && !options.skipRazorpay) throw conflict('DEMO_PAYMENT_DISABLED', 'Demo bookings cannot accept real-money payments.');
 
-  const isBalancePayment =
-    reservation.status === 'converted' ||
-    reservation.status === 'pending_balance' ||
-    body.isBalance === true ||
-    body.paymentType === 'balance';
+    const isBalancePayment =
+      reservation.status === 'converted' ||
+      reservation.status === 'pending_balance';
 
-  if (!isBalancePayment && reservation.status !== 'pending_payment') {
-    throw conflict('RESERVATION_NOT_PAYABLE', 'This reservation is not awaiting payment');
-  }
-
-  const baseAmount = isBalancePayment
-    ? (reservation.balanceAmount ?? reservation.amount)
-    : advanceAmountOf(reservation);
-
-  if (isBalancePayment && baseAmount <= 0) {
-    throw conflict('ALREADY_PAID', 'This booking is fully paid and settled.');
-  }
-
-  if (!razorpay.isConfigured() && !options.skipRazorpay) {
-    throw new HttpError(503, 'PAYMENT_NOT_CONFIGURED', 'Online payment is not set up yet. Please try again later.');
-  }
-
-  let payment = await commerceRepo.findOpenPaymentForReservation(reservation._id);
-  const orderAmount = packageTotalOf(reservation);
-  const { coupon, discountAmount } = await validateCouponForPayment(body.couponCode, { orderAmount, baseAmount });
-  const payableAmount = Math.max(1, baseAmount - discountAmount);
-  if (payment && payment.amount !== payableAmount && payment.status === 'pending') payment = null;
-  if (payment && payment.status === 'pending' && normalizeCouponCode(payment.coupon?.code) !== normalizeCouponCode(coupon?.code)) payment = null;
-  if (payment && ['paid', 'verified'].includes(payment.status)) throw conflict('ALREADY_PAID', 'This payment has already been verified.');
-  if (!payment || !payment.providerOrderId) {
-    let order;
-    if (options.skipRazorpay || !razorpay.isConfigured()) {
-      order = { id: `order_dev_${Date.now()}_${Math.random().toString(36).substring(2, 7)}` };
-    } else {
-      try {
-        order = await razorpay.createOrder({
-          amount: payableAmount,
-          receipt: `res_${reservation._id}`,
-          notes: {
-            eventId: String(event._id),
-            reservationId: String(reservation._id),
-            paymentType: isBalancePayment ? 'balance' : 'advance',
-            packageTotal: String(packageTotalOf(reservation)),
-            advancePercent: String(reservation.advancePercent ?? ''),
-            couponCode: coupon?.code || '',
-            couponDiscount: discountAmount ? String(discountAmount) : '',
-          },
-        });
-      } catch (err) {
-        console.error('[payments] order failed:', err.message);
-        throw new HttpError(502, 'PAYMENT_PROVIDER_ERROR', 'Could not start the payment. Please try again.');
-      }
+    if (!isBalancePayment && reservation.status !== 'pending_payment') {
+      throw conflict('RESERVATION_NOT_PAYABLE', 'This reservation is not awaiting payment');
     }
-    payment = await commerceRepo.createPayment({
-      event: event._id,
-      customer: customerId,
-      reservation: reservation._id,
-      amount: payableAmount,
-      currency: 'INR',
-      status: 'pending',
-      providerOrderId: order.id,
-      coupon: coupon ? {
-        code: coupon.code,
-        discountAmount,
-        originalAmount: baseAmount,
-        orderAmount,
-        usageRecorded: false,
-      } : undefined,
-    });
-  }
 
-  return {
-    payment: serializePayment(payment),
-    checkout: {
-      key: razorpay.publicKeyId(),
-      orderId: payment.providerOrderId,
-      amount: razorpay.toPaise(payment.amount),
-      currency: payment.currency,
-      name: 'STARVNT',
-      description: `${categoryLabel(reservation.category)} · ${reservation.vendorName}${payment.coupon?.code ? ` · ${payment.coupon.code}` : ''}`,
-      prefill: { name: customer.fullName || '', email: customer.email || '', contact: customer.phone || '' },
-    },
-  };
+    if (!isBalancePayment && !reservation.isDemo) {
+      const confirmed = await Quote.findOne({ _id: reservation.quote, customer: customerId, status: 'APPROVED' });
+      if (!confirmed || !reservation.commercialSnapshot) throw conflict('VENDOR_COST_CONFIRMATION_REQUIRED', 'Review a vendor-confirmed quote before paying.');
+      assertCommercialSnapshot(confirmed, reservation.commercialSnapshot.version, true);
+    }
+
+    let baseAmount = advanceAmountOf(reservation);
+    if (isBalancePayment) {
+      const existing = await commerceRepo.findBookingForReservation(reservation._id);
+      if (!existing || existing.status !== 'confirmed') throw conflict('BALANCE_BOOKING_REVIEW_REQUIRED', 'This booking needs finance review before its balance can be collected online.');
+      const current = existing.coreSync?.snapshot ? await syncBookingTruth(existing._id) : existing;
+      if (!current || current.status !== 'confirmed') throw conflict('BALANCE_BOOKING_REVIEW_REQUIRED', 'Refresh this booking before paying its balance.');
+      baseAmount = Math.max(0, Number(current.balanceAmount ?? current.amount - current.paidAmount));
+    }
+
+    if (isBalancePayment && baseAmount <= 0) {
+      throw conflict('ALREADY_PAID', 'The recorded remaining balance is already paid.');
+    }
+
+    if (!razorpay.checkoutConfigured() && !options.skipRazorpay) {
+      throw new HttpError(503, 'PAYMENT_NOT_CONFIGURED', 'Online payment is not set up yet. Please try again later.');
+    }
+
+    let payment = await commerceRepo.findOpenPaymentForReservation(reservation._id, { includeVerified: !isBalancePayment });
+    const orderAmount = packageTotalOf(reservation);
+    const { coupon, discountAmount } = await validateCouponForPayment(body.couponCode, { orderAmount, baseAmount });
+    const payableAmount = Math.max(1, baseAmount - discountAmount);
+    if (payment && (payment.amount !== payableAmount || normalizeCouponCode(payment.coupon?.code) !== normalizeCouponCode(coupon?.code))) throw conflict('PAYMENT_TERMS_CHANGED', 'A payment has already started with different terms. Check its status or resume with the original coupon.');
+    if (payment?.status === 'verified') throw conflict('ALREADY_PAID', 'This payment has already been verified.');
+    if (payment && ['processing', 'paid'].includes(payment.status)) throw conflict('PAYMENT_PROCESSING', 'This payment is still being verified. Check its status before trying again.');
+    if (!payment || !payment.providerOrderId) {
+      let order;
+      if (options.skipRazorpay || !razorpay.isConfigured()) {
+        order = { id: `order_dev_${Date.now()}_${Math.random().toString(36).substring(2, 7)}` };
+      } else {
+        try {
+          await assertCheckoutLease();
+          order = await razorpay.createOrder({
+            amount: payableAmount,
+            receipt: `res_${reservation._id}_${crypto.randomBytes(4).toString('hex')}`,
+            notes: {
+              eventId: String(event._id),
+              reservationId: String(reservation._id),
+              paymentType: isBalancePayment ? 'balance' : 'advance',
+              packageTotal: String(packageTotalOf(reservation)),
+              advancePercent: String(reservation.advancePercent ?? ''),
+              couponCode: coupon?.code || '',
+              couponDiscount: discountAmount ? String(discountAmount) : '',
+            },
+          });
+        } catch (err) {
+          console.error('[payments] order failed:', err.message);
+          throw new HttpError(502, 'PAYMENT_PROVIDER_ERROR', 'Could not start the payment. Please try again.');
+        }
+      }
+      await assertCheckoutLease();
+      payment = await commerceRepo.createPayment({
+        event: event._id,
+        customer: customerId,
+        reservation: reservation._id,
+        amount: payableAmount,
+        currency: 'INR',
+        status: 'pending',
+        providerOrderId: order.id,
+        coupon: coupon ? {
+          code: coupon.code,
+          discountAmount,
+          originalAmount: baseAmount,
+          orderAmount,
+          usageRecorded: false,
+        } : undefined,
+      });
+    }
+
+    return {
+      payment: serializePayment(payment),
+      checkout: {
+        key: razorpay.publicKeyId(),
+        orderId: payment.providerOrderId,
+        amount: razorpay.toPaise(payment.amount),
+        currency: payment.currency,
+        name: 'STARVNT',
+        description: `${categoryLabel(reservation.category)} · ${reservation.vendorName}${payment.coupon?.code ? ` · ${payment.coupon.code}` : ''}`,
+        prefill: { name: customer.fullName || '', email: customer.email || '', contact: customer.phone || '' },
+      },
+    };
+  });
 }
 
-/** The browser says checkout finished. Recorded, never trusted as proof. */
+/** Check the signed callback and independently confirm capture with Razorpay. */
 export async function checkoutComplete(customerId, eventId, paymentId, body = {}) {
   const event = await getOwnedEventOr404(customerId, eventId);
   const payment = await commerceRepo.getPayment(paymentId);
-  if (!payment || String(payment.event) !== String(event._id)) throw notFound('Payment not found');
-  const ref = typeof body.razorpay_payment_id === 'string' ? body.razorpay_payment_id.slice(0, 64) : null;
-  const moved = await commerceRepo.movePayment(payment._id, ['pending'], { status: 'processing', ...(ref ? { providerRef: ref } : {}) });
-  return { payment: serializePayment(moved || payment) };
+  if (!payment || String(payment.event) !== String(event._id) || String(payment.customer) !== String(customerId)) throw notFound('Payment not found');
+  const orderId = payment.providerOrderId;
+  if (body.razorpay_order_id !== orderId || !razorpay.verifyCheckoutSignature({ orderId, paymentId: body.razorpay_payment_id, signature: body.razorpay_signature })) {
+    throw badRequest('PAYMENT_SIGNATURE_INVALID', 'Payment could not be verified. Check its status from bookings.');
+  }
+  const moved = await commerceRepo.movePayment(payment._id, ['pending'], { status: 'processing', providerRef: body.razorpay_payment_id });
+  try { return await reconcileCustomerPayment(customerId, eventId, paymentId); }
+  catch (error) {
+    if (error.code !== 'PAYMENT_NOT_CAPTURED') throw error;
+    return { payment: serializePayment(moved || payment) };
+  }
+}
+
+/** Recover a captured payment even if the browser closed before its callback. */
+export async function reconcileCustomerPayment(customerId, eventId, paymentId) {
+  const event = await getOwnedEventOr404(customerId, eventId);
+  const payment = await commerceRepo.getPayment(paymentId);
+  if (!payment || String(payment.event) !== String(event._id) || String(payment.customer) !== String(customerId)) throw notFound('Payment not found');
+  const captured = await razorpay.findCapturedOrderPayment({ orderId: payment.providerOrderId, amount: payment.amount });
+  if (!captured) throw new HttpError(402, 'PAYMENT_NOT_CAPTURED', 'Razorpay has not confirmed this payment yet. Check again shortly.');
+  await commerceRepo.movePayment(payment._id, ['pending', 'processing', 'paid', 'failed'], { status: 'processing', providerRef: captured.id, failureReason: null });
+  const result = await verifyPayment(payment._id, { actorType: 'provider', actorId: 'razorpay-reconciliation' });
+  return { payment: serializePayment(result.payment), booking: result.booking ? serializeBooking(result.booking) : null };
 }
 
 export async function devVerifyReservationPayment(customer, eventId, reservationId) {
@@ -664,6 +665,15 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
       }
     }
   }
+  if (!reason && !reservation.isDemo) {
+    try {
+      if (!vq || !reservation.commercialSnapshot) throw new Error('Vendor-confirmed commercial terms need review');
+      const current = assertCommercialSnapshot(vq, reservation.commercialSnapshot.version, true);
+      if (current.hash !== reservation.commercialSnapshot.hash || Number(reservation.commercialSnapshot.pricing?.totalAmount) !== packageTotalOf(reservation)) {
+        throw new Error('The saved commercial terms changed before payment verification');
+      }
+    } catch (error) { reason = error.message; }
+  }
   if (!reason && event.eventDate && !vq) {
     const claimed = await commerceRepo.claimOptionDate(reservation.optionId, event.eventDate, event._id);
     if (!claimed) reason = 'The vendor was just booked by someone else for your date';
@@ -680,14 +690,22 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
   await assertLease();
   const customerUser = await ExternalUser.findById(event.customer);
   const totalAmount = packageTotalOf(reservation);
+  const requirementSnapshot = !reason && vendorId ? await originalBookingRequirement({
+    quoteId: vq ? String(vq._id) : null, customerId: event.customer, customerEvent: event._id,
+    requirementId: reservation.requirement,
+    category: reservation.category, eventDate: vq?.eventDate || event.eventDate,
+    serviceLocation: vq?.serviceLocation || event.location, commercialSnapshot: reservation.commercialSnapshot,
+  }) : null;
   const coreSnapshot = !reason && vendorId ? {
+    requirementSnapshot,
     ...(vq ? { quoteId: String(vq._id), opportunityId: vq.opportunity ? String(vq.opportunity) : undefined } : {}),
     vendorId, vendorService: vq?.vendorService || String(reservation.optionId).replace(/^vs_/, ''),
     vendorName: reservation.vendorName, customerName: customerUser?.fullName || 'Customer',
     serviceName: vq?.serviceName || reservation.packageName, category: reservation.category,
     eventDate: vq?.eventDate || event.eventDate, serviceLocation: vq?.serviceLocation || event.location || {},
-    pricing: vq?.pricingBreakdown || { totalAmount }, totalAmount,
+    pricing: reservation.commercialSnapshot?.pricing || vq?.pricingBreakdown || { totalAmount }, totalAmount,
     financialPolicySnapshot: reservation.financialPolicySnapshot,
+    commercialSnapshot: reservation.commercialSnapshot || vq?.commercialSnapshot || null,
     paymentStatus: 'PAYMENT_VERIFIED', executionStatus: 'SERVICE_SCHEDULED', settlementStatus: 'NOT_ELIGIBLE',
     paymentSummary: { advancePercentage: reservation.advancePercent, advanceAmount: payment.amount,
       paidAmount: payment.amount, balanceAmount: Math.max(0, totalAmount - payment.amount),
@@ -759,7 +777,7 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
   return booking;
 }
 
-/** Verify a payment (webhook or ops) and run booking confirmation. Idempotent. */
+/** Apply verified payment evidence from a webhook, provider lookup or ops. Idempotent. */
 export async function verifyPayment(paymentId, { actorType, actorId }) {
   const payment = await commerceRepo.getPayment(paymentId);
   if (!payment) return null;
@@ -815,11 +833,23 @@ export async function handleRazorpayWebhook(rawBody, headers) {
   }
 
   try {
+  if (['refund.created', 'refund.processed', 'refund.failed'].includes(eventType)) {
+    const refund = body.payload?.refund?.entity;
+    const { reconcileRefundWebhook } = await import('../../admin/services/financeOperations.service.js');
+    const matched = await reconcileRefundWebhook(refund);
+    await commerceRepo.finishWebhookEvent(delivery);
+    return { ok: true, ignored: !matched };
+  }
   const pay = body.payload?.payment?.entity || null;
   const order = body.payload?.order?.entity || null;
   const orderId = pay?.order_id || order?.id;
   const payment = orderId ? await commerceRepo.findPaymentByOrder(orderId) : null;
-  if (!payment) { await commerceRepo.finishWebhookEvent(delivery); return { ok: true, ignored: true }; }
+  if (!payment) {
+    const { reconcileVendorQuoteWebhook } = await import('../../external/services/vendorQuotePayment.service.js');
+    const matched = ['payment.captured', 'order.paid'].includes(eventType) ? await reconcileVendorQuoteWebhook(orderId) : false;
+    await commerceRepo.finishWebhookEvent(delivery);
+    return { ok: true, ignored: !matched };
+  }
 
   const actor = { actorType: 'webhook', actorId: 'razorpay' };
   switch (eventType) {
@@ -834,7 +864,7 @@ export async function handleRazorpayWebhook(rawBody, headers) {
         await markFailed(payment, 'Amount mismatch', actor);
         break;
       }
-      if (pay?.id) await commerceRepo.movePayment(payment._id, ['pending', 'processing', 'paid'], { providerRef: pay.id });
+      if (pay?.id) await commerceRepo.movePayment(payment._id, ['pending', 'processing', 'paid', 'failed'], { providerRef: pay.id, status: 'processing', failureReason: null });
       await verifyPayment(payment._id, actor);
       break;
     }

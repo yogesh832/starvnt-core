@@ -1,4 +1,4 @@
-import { partnerPixel } from '../../lib/metaPixel.js';
+import { loadAuthScript } from '../../lib/authScripts.js';
 import { portalLoginUrl, PORTAL_SURFACE, portalNextPath } from '../../lib/portalAccess.js';
 import VendorCategoryPicker from "../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useRef } from "react";
@@ -18,11 +18,6 @@ const MSG91_WIDGET_ID =
 const MSG91_WIDGET_TOKEN =
   import.meta.env.VITE_MSG91_WIDGET_TOKEN || "567508TgmtIu2qfrl6a9e4925P1";
 
-const authScripts = [
-  ['starvnt-google-signin', 'https://accounts.google.com/gsi/client'],
-  ['starvnt-phone-otp', 'https://verify.msg91.com/otp-provider.js'],
-];
-
 /**
  * Customer OS Authentication:
  * Supports customers with 3 independent authentication methods:
@@ -31,18 +26,6 @@ const authScripts = [
  * 3. Email & Password
  */
 export default function ExternalLogin() {
-  useEffect(() => {
-    for (const [id, src] of authScripts) {
-      if (document.getElementById(id)) continue;
-      const script = document.createElement('script');
-      script.id = id;
-      script.src = src;
-      script.async = true;
-      script.onerror = () => script.remove();
-      document.head.append(script);
-    }
-  }, []);
-
   const {
     login,
     register,
@@ -91,20 +74,6 @@ export default function ExternalLogin() {
     setAcceptedVersions('');
     setDocumentsRevision(revision => revision + 1);
   }
-  function trackRegistrationStart() {
-    if (mode !== 'register' || accountType !== 'VENDOR' || !partnerPixel?.getConsent().allowed) return;
-    let id;
-    try {
-      id = sessionStorage.getItem('starvnt-registration-intent');
-      if (!id) { id = crypto.randomUUID(); sessionStorage.setItem('starvnt-registration-intent', id); }
-    } catch { id = 'registration-start'; }
-    void partnerPixel.track('VendorRegistrationStarted', id);
-  }
-  useEffect(() => {
-    const start = event => { if (event.target.matches?.('input, select, textarea')) trackRegistrationStart(); };
-    document.addEventListener('input', start);
-    return () => document.removeEventListener('input', start);
-  }, [mode, accountType]);
 
   // Auth Method: 'GOOGLE' | 'PHONE' | 'EMAIL'
   const [authMethod, setAuthMethod] = useState("EMAIL");
@@ -163,7 +132,8 @@ export default function ExternalLogin() {
   const googleCredentialHandler = useRef(handleGoogleCredentialResponse);
   googleCredentialHandler.current = handleGoogleCredentialResponse;
   useEffect(() => {
-    if (authMethod !== "GOOGLE" && mode !== "login") return;
+    if (authMethod !== "GOOGLE") return;
+    let cancelled = false;
 
     function initGoogle() {
       if (window.google?.accounts?.id) {
@@ -185,24 +155,23 @@ export default function ExternalLogin() {
       }
     }
 
-    if (window.google?.accounts?.id) {
-      initGoogle();
-    } else {
-      const checkInterval = setInterval(() => {
-        if (window.google?.accounts?.id) {
-          initGoogle();
-          clearInterval(checkInterval);
-        }
-      }, 200);
-      return () => clearInterval(checkInterval);
-    }
+    loadAuthScript('google').then(() => {
+      if (!cancelled) initGoogle();
+    }).catch(error => { if (!cancelled) setError(error.message); });
+    return () => { cancelled = true; };
   }, [authMethod, mode, accountType]);
+
+  useEffect(() => {
+    if (authMethod !== 'PHONE') return;
+    let cancelled = false;
+    loadAuthScript('phone').catch(error => { if (!cancelled) setError(error.message); });
+    return () => { cancelled = true; };
+  }, [authMethod]);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   // ── Handler 1: Email & Password ───────────────────────────────────────────
   async function handleEmailSubmit(e) {
-    trackRegistrationStart();
     e.preventDefault();
     clearLoginError();
     setBusy(true);
@@ -331,7 +300,6 @@ export default function ExternalLogin() {
 
   // ── Handler 2: Google Authentication ──────────────────────────────────────
   async function handleGoogleCredentialResponse(response) {
-    trackRegistrationStart();
     if (!response?.credential) return;
     clearLoginError();
     setBusy(true);
@@ -372,7 +340,8 @@ export default function ExternalLogin() {
   }
 
   async function triggerGoogleDirect() {
-    trackRegistrationStart();
+    try { await loadAuthScript('google'); }
+    catch (error) { setError(error.message); return; }
     if (window.google?.accounts?.id) {
       window.google.accounts.id.prompt();
     } else {
@@ -381,7 +350,7 @@ export default function ExternalLogin() {
   }
 
   // ── Handler 3: MSG91 OTP Widget ───────────────────────────────────────────
-  function openMsg91Widget(phoneParam) {
+  async function openMsg91Widget(phoneParam) {
     clearLoginError();
     const targetPhone = phoneParam || form.phone;
     const cleanDigits = targetPhone
@@ -393,7 +362,11 @@ export default function ExternalLogin() {
         : `91${cleanDigits.slice(-10)}`
       : "";
 
+    setBusy(true);
+    try { await loadAuthScript('phone'); }
+    catch (error) { setError(error.message); setBusy(false); return; }
     if (!window.initSendOTP) {
+      setBusy(false);
       setError("MSG91 OTP widget is still loading. Please try again.");
       return;
     }
@@ -469,7 +442,6 @@ export default function ExternalLogin() {
   }
 
   async function handleSendOtp(e) {
-    trackRegistrationStart();
     if (e) e.preventDefault();
     if (!form.phone || form.phone.trim().length < 10) {
       setError("Please enter a valid 10-digit mobile number.");
@@ -542,9 +514,9 @@ export default function ExternalLogin() {
         <div className="w-full max-w-4xl lg:max-w-5xl bg-white rounded-3xl sm:rounded-[32px] border border-gray-100/90 shadow-2xl shadow-primary/10 overflow-hidden grid md:grid-cols-[42%_1fr]">
           {/* Left: Brand & Luxury Visual Panel */}
           <aside
-            className="relative p-7 sm:p-9 text-white flex flex-col justify-between overflow-hidden min-h-[300px] md:min-h-[620px] transition-all duration-700"
+            className="auth-photo-panel relative p-7 sm:p-9 text-white flex flex-col justify-between overflow-hidden min-h-[300px] md:min-h-[620px] transition-all duration-700"
             style={{
-              backgroundImage: `linear-gradient(to bottom, rgba(14, 19, 48, 0.92) 0%, rgba(14, 19, 48, 0.65) 45%, rgba(14, 19, 48, 0.40) 70%, rgba(14, 19, 48, 0.94) 100%), url('${
+              backgroundImage: `linear-gradient(to bottom, var(--auth-photo-top, rgba(14, 19, 48, 0.92)) 0%, var(--auth-photo-mid, rgba(14, 19, 48, 0.65)) 45%, var(--auth-photo-clear, rgba(14, 19, 48, 0.40)) 70%, var(--auth-photo-bottom, rgba(14, 19, 48, 0.94)) 100%), url('${
                 accountType === "VENDOR"
                   ? "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1600&q=85"
                   : "https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1600&q=85"

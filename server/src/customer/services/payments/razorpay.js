@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 /**
- * Razorpay (test mode) via REST + HMAC. Keys live only in .env.
+ * Razorpay via REST + HMAC. The configured key selects live or test mode.
  * Payment infrastructure owns money: we create orders and verify signed
  * webhooks; a browser callback is never proof of payment.
  */
@@ -13,6 +13,8 @@ const env = () => ({
 
 export const isConfigured = () => Boolean(env().keyId && env().keySecret);
 export const webhookConfigured = () => Boolean(env().webhookSecret);
+// Checkout verifies capture through the server REST API. Webhooks add asynchronous recovery.
+export const checkoutConfigured = () => isConfigured();
 export const publicKeyId = () => env().keyId;
 
 export const toPaise = (rupees) => Math.round(Number(rupees) * 100);
@@ -54,6 +56,25 @@ export async function listOrderPayments(orderId) {
   return Array.isArray(data.items) ? data.items : [];
 }
 
+async function refundRequest(path, body) {
+  const { keyId, keySecret } = env();
+  if (!keyId || !keySecret) throw new Error('REFUND_PROVIDER_NOT_CONFIGURED');
+  const response = await fetch(`https://api.razorpay.com/v1/${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}` },
+    ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error?.description || 'REFUND_PROVIDER_UNAVAILABLE');
+  return result;
+}
+export function createRefund(paymentId, { amount, receipt }) {
+  return refundRequest(`payments/${encodeURIComponent(paymentId)}/refund`, { amount: toPaise(amount), receipt });
+}
+export function listPaymentRefunds(paymentId, skip = 0) {
+  return refundRequest(`payments/${encodeURIComponent(paymentId)}/refunds?count=100&skip=${skip}`);
+}
+
 /** HMAC-SHA256 of the raw body with the webhook secret, compared in constant time. */
 export function verifyWebhookSignature(rawBody, signature) {
   const { webhookSecret } = env();
@@ -74,4 +95,15 @@ export function verifyCheckoutSignature({ orderId, paymentId, signature }) {
   const a = Buffer.from(expected);
   const b = Buffer.from(String(signature));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Capture, order, currency and exact amount must all match. An authorised
+// payment or a valid Checkout HMAC alone is not proof that money was captured.
+export async function findCapturedOrderPayment({ orderId, amount, paymentId }) {
+  if (!orderId || !Number.isFinite(Number(amount)) || Number(amount) <= 0) return null;
+  const payments = await listOrderPayments(orderId);
+  return payments.find(payment => payment.order_id === orderId
+    && (!paymentId || payment.id === paymentId)
+    && Number(payment.amount) === toPaise(amount) && payment.currency === 'INR'
+    && payment.status === 'captured' && payment.captured === true) || null;
 }

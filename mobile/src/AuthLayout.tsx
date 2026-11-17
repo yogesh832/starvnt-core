@@ -3,7 +3,7 @@ import { ImageBackground, KeyboardAvoidingView, Platform, Pressable, StatusBar, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LogoWord } from './BrandLogo';
 import { AuthGradient, AuthText } from './AuthUI';
-import { Icon } from './ui';
+import { Icon, usePalette } from './ui';
 import { KeyboardScrollView } from './KeyboardScrollView';
 export function AuthLayout({ children, navigation, vendor, register, admin, verify = false, phone = false, onBack }: React.PropsWithChildren<{
     navigation: any;
@@ -14,13 +14,14 @@ export function AuthLayout({ children, navigation, vendor, register, admin, veri
     phone?: boolean;
     onBack?: () => void;
 }>) {
-    return <SafeAreaView style={{ flex: 1, backgroundColor: '#080f1f' }}>
-    <StatusBar barStyle="light-content" backgroundColor="#080f1f"/>
+    const c = usePalette();
+    return <SafeAreaView style={{ flex: 1, backgroundColor: c.dark ? c.bg : '#080f1f' }}>
+    <StatusBar barStyle="light-content" backgroundColor={c.dark ? c.bg : '#080f1f'}/>
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <KeyboardScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
         <View style={{ width: '100%', maxWidth: 480, alignSelf: 'center', flexGrow: 1, paddingBottom: 28 }}>
           <ImageBackground source={verify && phone ? require('../assets/auth/concert.png') : require('../assets/auth/banquet.png')} style={{ height: verify ? 350 : register ? 270 : 350 }}>
-            <AuthGradient vertical colors={['#080f1f55', '#080f1f44', '#080f1f']}/>
+            <AuthGradient vertical colors={c.dark ? ['#00000055', '#00000088', c.bg] : ['#080f1f55', '#080f1f44', '#080f1f']}/>
             <View style={{ flex: 1, paddingHorizontal: 24 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20 }}>
                 <Pressable accessibilityRole="button" accessibilityLabel={verify ? 'Change sign-in details' : 'Back to homepage'} onPress={onBack || (() => navigation.navigate('Landing'))} hitSlop={12} style={{ padding: 4, marginRight: 12 }}><Icon name="chevron-back" color="#fff" size={23}/></Pressable>

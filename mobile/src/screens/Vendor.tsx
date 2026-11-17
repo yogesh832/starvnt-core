@@ -328,22 +328,7 @@ function VendorModuleBody({ route, navigation }: any) {
                 <Button
                   title="Decline enquiry"
                   secondary
-                  busy={a.busy}
-                  onPress={() =>
-                    confirm(
-                      "Decline this enquiry?",
-                      "The customer will no longer receive a quote from your business for this request.",
-                      () => {
-                        void a.run(async () => {
-                          await external.call(
-                            `/vendor/opportunities/${encodeURIComponent(id(row))}/decline`,
-                            "POST",
-                          );
-                          await r.refresh();
-                        });
-                      },
-                    )
-                  }
+                  onPress={() => navigation.navigate("VendorForm", { kind: "decline", item: row })}
                 />
               )}
             </>
@@ -556,6 +541,10 @@ function VendorFormBody({ route, navigation }: any) {
         allDay: true,
         reason: form.reason,
       });
+    } else if (kind === "decline") {
+      const reason = form.reason.trim();
+      if (!reason) throw new Error("Enter a reason for declining this enquiry.");
+      await external.call(`/vendor/opportunities/${encodeURIComponent(id(item))}/decline`, "POST", { reason });
     } else if (kind === "quote") {
       const pricingBreakdown = quotePricing({
         basePrice: form.price,
@@ -617,7 +606,9 @@ function VendorFormBody({ route, navigation }: any) {
           ? revise
             ? "Refine your offer"
             : "Make a great first offer"
-          : `Your ${kind === "availability" ? "unavailable date" : kind === "review" ? "review reply" : human(kind)}`
+          : kind === "decline"
+            ? "Decline enquiry"
+            : `Your ${kind === "availability" ? "unavailable date" : kind === "review" ? "review reply" : human(kind)}`
       }
     >
       {kind === "services" && (
@@ -655,6 +646,11 @@ function VendorFormBody({ route, navigation }: any) {
           {field("reason", "Reason")}
         </>
       )}
+      {kind === "decline" && <>
+        <Txt>The customer will no longer receive a quote from your business for this enquiry.</Txt>
+        <Field label="Reason for declining" value={form.reason} multiline maxLength={500} editable={!a.busy}
+          onChangeText={reason => setForm(current => ({ ...current, reason }))} />
+      </>}
       {kind === "quote" && (
         <>
           <Card>
@@ -731,7 +727,7 @@ function VendorFormBody({ route, navigation }: any) {
       )}
       <ErrorNotice message={a.error} />
       <Button
-        title={kind === "quote" ? "Send offer to customer" : "Save changes"}
+        title={kind === "quote" ? "Send offer to customer" : kind === "decline" ? "Decline enquiry" : "Save changes"}
         busy={a.busy}
         onPress={() => {
           void a.run(submit);

@@ -130,11 +130,7 @@ export const config = {
   panMockEnabled: process.env.PAN_MOCK_ENABLED === "true" || process.env.NODE_ENV === "test",
 
   // ── Bank account verification ──
-  bankVerificationProvider: process.env.BANK_VERIFICATION_PROVIDER || "CASHFREE",
-  bankVerificationMockEnabled: process.env.BANK_VERIFICATION_MOCK_ENABLED === "true" || process.env.NODE_ENV === "test",
-  cashfreeClientId: process.env.CASHFREE_CLIENT_ID || "",
-  cashfreeClientSecret: process.env.CASHFREE_CLIENT_SECRET || "",
-  cashfreeBavBaseUrl: process.env.CASHFREE_BAV_BASE_URL || "https://sandbox.cashfree.com",
+  bankVerificationProvider: process.env.BANK_VERIFICATION_PROVIDER || "RAZORPAY",
 
   // ── Gemini & Aura+ Dual-Path Architecture ──
   geminiApiKey: process.env.GEMINI_API_KEY || "",

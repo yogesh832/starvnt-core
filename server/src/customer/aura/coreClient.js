@@ -29,6 +29,10 @@ export const catalogLocationHint = (message) => catalog.catalogLocationHint(mess
 export const readBookings = (eventId) => commerceRepo.listBookings(eventId);
 export const readPayments = (eventId) => commerceRepo.listPayments(eventId);
 export const readReservations = (eventId) => commerceRepo.listReservations(eventId);
+export async function readExecution(customerId, eventId) {
+  const { eventWorkflows } = await import('../services/bookingWorkflow.service.js');
+  return eventWorkflows(customerId, eventId);
+}
 
 export const createDraftEvent = (customerId, facts) => events.createDraftEvent(customerId, facts, AURA);
 export const patchEventFacts = (customerId, eventId, facts) => events.patchEvent(customerId, eventId, facts, AURA);

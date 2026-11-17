@@ -201,7 +201,7 @@ export function VendorCalendar({ navigation }: any) {
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 4,
-                    backgroundColor: key === selected ? c.accent : c.card,
+                    backgroundColor: key === selected ? c.action : c.card,
                   }}
                 >
                   <Txt

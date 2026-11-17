@@ -67,6 +67,7 @@ export default function EventsPage() {
         </div>
       </div>
 
+      <Link className="customer-secondary-action" to="/customer/invitations">Invitations & shared events →</Link>
       {loading && <CardSkeleton count={2} />}
       {error && <div className="text-xs text-red-500">{errorText(error, "Couldn't load your events.")}</div>}
       <div className="space-y-2"><button className="customer-secondary-action" disabled={!data} onClick={() => setShowArchived(value => !value)}>{showArchived ? 'Show main event list' : `Show archived events (${archivedCount ?? '—'})`}</button><p className="text-xs text-muted">Archive is a view preference on this browser. Records and event status stay unchanged.</p>{archiveError && <p role="alert" className="text-sm text-red-600">{archiveError}</p>}</div>

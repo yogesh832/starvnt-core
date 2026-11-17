@@ -180,3 +180,37 @@ registerEventHandler('FOLLOW_UP_OVERDUE', async (payload) => {
     activity: result
   };
 });
+
+registerEventHandler('BOOKING_WORKFLOW_CHANGED', async ({ bookingId, action, key }) => {
+  const { notifyCustomer, notifyVendor } = await import('../../notifications/notification.service.js');
+  const booking = await CoreBooking.findById(bookingId).lean();
+  if (!booking) return { skipped: true };
+  const customerTitles = {
+    EXECUTION_CHECK_IN: 'Your service provider checked in', EXECUTION_START: 'Your service has started', EXECUTION_MILESTONE: 'Service progress updated',
+    COMPLETION_SUBMITTED: 'Completion evidence is ready to review', COMPLETION_REJECTED: 'Further service evidence requested', COMPLETION_VERIFIED: 'Core verified service completion',
+    ISSUE_REPORTED: 'Your service issue is under review', CASE_RESPOND: 'Your provider responded to the case', CASE_REQUEST_INFORMATION: 'More information is needed for your case',
+    CASE_PROPOSE: 'A resolution has been proposed', CASE_RESOLVED: 'Your case decision is recorded', CASE_REOPEN: 'Your case has been reopened',
+    CASE_ESCALATE: 'Your case has been escalated', VENDOR_FAILURE_REPORTED: 'Your service needs replacement review',
+    PROVIDER_REFUND_RECONCILED: 'Your refund status has been updated', FINANCE_RECONCILE: 'A financial transfer has been reconciled', FINANCE_RECONCILE_FAILED: 'A transfer failure has been confirmed',
+  };
+  const title = customerTitles[action] || 'Booking review updated';
+  if (customerTitles[action]) await notifyCustomer({ customerId: booking.customerId, eventId: booking.customerEvent, bookingId: booking.customerBookingId || booking._id,
+    type: 'booking', title, body: 'Review the latest recorded service status in your booking.', idempotencyKey: `${key}:customer`, payload: { coreBookingId: booking._id },
+    actionUrl: booking.customerEvent ? `/customer/events/${booking.customerEvent}/bookings/${booking._id}` : '/customer/bookings' });
+  await notifyVendor({ vendorId: booking.vendorId, type: 'BOOKING', title, message: 'The booking workflow has a recorded update.',
+    idempotencyKey: `${key}:vendor`, link: `/vendor/execution?booking=${booking._id}` });
+  if (action === 'COMPLETION_VERIFIED') {
+    const { config } = await import('../../config.js');
+    if (config.vendorQrEnabled) {
+      const { issueExperience } = await import('../../experience/feedback.service.js');
+      let issued;
+      try { issued = await issueExperience(booking.vendorId, 'CORE_WORKFLOW', { source: 'STARVNT', booking: booking._id, idempotencyKey: `auto-complete-exp:${booking._id}` }); }
+      catch (error) { if (!['FEEDBACK_NOT_ELIGIBLE', 'REQUEST_CHANGED'].includes(error.code)) throw error; }
+      if (issued?.token) await notifyCustomer({ customerId: booking.customerId, eventId: booking.customerEvent, type: 'EXPERIENCE_QR',
+        title: 'How was your experience?', body: 'Share feedback on your completed service.',
+        actionUrl: new URL(`/experience/${issued.token}`, config.customerPortalUrl).href,
+        idempotencyKey: `auto-complete-notify:${booking._id}` });
+    }
+  }
+  return { handled: true };
+});

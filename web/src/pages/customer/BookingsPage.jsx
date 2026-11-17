@@ -218,6 +218,7 @@ function BookingCard({ b, eventId, onVerify, verifying, onPay, onCancel, cancell
           : 'border-gray-100 dark:border-gray-800'
       }`}
     >
+      {!b.isDemo && <Link className="flex min-h-11 items-center px-4 pt-3 text-sm font-bold text-primary" to={`/customer/events/${eventId}/bookings/${b.coreBookingId || b.id}`}>Service status, evidence & report an issue →</Link>}
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50/50 dark:hover:bg-white/5 transition cursor-pointer"
@@ -253,7 +254,7 @@ function BookingCard({ b, eventId, onVerify, verifying, onPay, onCancel, cancell
               <span>Work Done & Evidence Uploaded by Vendor</span>
             </div>
             <div className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
-              Please inspect proof of work, verify completion, and pay remaining balance.
+              Review the evidence and acknowledge the service you received. STARVNT reviews completion separately.
             </div>
           </div>
           <button
@@ -264,7 +265,7 @@ function BookingCard({ b, eventId, onVerify, verifying, onPay, onCancel, cancell
             disabled={verifying === b.id}
             className="rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 transition cursor-pointer shadow-sm disabled:opacity-50"
           >
-            {verifying === b.id ? 'Verifying...' : 'Verify Completion & Proceed'}
+            {verifying === b.id ? 'Recording…' : 'Review & acknowledge service'}
           </button>
         </div>
       )}
@@ -402,7 +403,7 @@ function EvidenceInspectionModal({ booking, onClose, onConfirm, verifying }) {
           <div>
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-              <h3 className="text-base font-extrabold text-navy dark:text-white">Verify Completion Evidence</h3>
+              <h3 className="text-base font-extrabold text-navy dark:text-white">Review completion evidence</h3>
             </div>
             <p className="text-xs text-muted dark:text-slate-400 mt-0.5 font-medium">
               {booking.vendorName} · {booking.packageName || booking.label} (Booking #{booking.reference})
@@ -423,7 +424,7 @@ function EvidenceInspectionModal({ booking, onClose, onConfirm, verifying }) {
               <Icon name="star" size={24} className="mx-auto text-amber-500 mb-2" />
               <p className="text-sm font-bold text-navy dark:text-white">Service Marked Completed by Vendor</p>
               <p className="text-xs text-muted dark:text-slate-400 mt-1 max-w-md mx-auto">
-                The vendor has declared work complete for this booking. Confirming verification will approve completion and unlock final balance settlement.
+                Review the vendor’s evidence and acknowledge the service you received. STARVNT separately checks the service completion requirements.
               </p>
             </div>
           ) : (
@@ -581,7 +582,7 @@ function EvidenceInspectionModal({ booking, onClose, onConfirm, verifying }) {
             className="rounded-2xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold px-6 py-2.5 shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-2"
           >
             <Icon name="check" size={14} />
-            <span>{verifying ? 'Verifying Completion...' : 'Confirm & Approve Completion'}</span>
+            <span>{verifying ? 'Recording acknowledgement…' : 'Acknowledge received service'}</span>
           </button>
         </div>
       </div>

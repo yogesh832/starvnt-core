@@ -7,6 +7,7 @@ import { verifyPayment, serializeBooking, serializePayment } from './commerce.se
 import { categoryLabel } from './planCatalog.js';
 import { EXECUTION_STEPS } from '../models/index.js';
 import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
+import { assertEventCompletionReady } from '../../admin/services/executionSettlement.service.js';
 
 /**
  * Internal operations (x-internal-key). Every call names an operator, which
@@ -122,7 +123,16 @@ export async function updateExecution(bookingId, body) {
   return { booking: serializeBooking(updated) };
 }
 
-async function markEventCompleted(event, operator) {
+async function markEventCompleted(event, operator, { requireReady = false } = {}) {
+  const bookings = await commerceRepo.listBookings(event._id);
+  const demoOnly = process.env.NODE_ENV !== 'production' && bookings.length > 0 && bookings.every(booking => booking.isDemo);
+  if (!demoOnly) {
+    try { await assertEventCompletionReady(event._id, event.customer); }
+    catch (error) {
+      if (!requireReady && error.statusCode === 409) return false;
+      throw error;
+    }
+  }
   const done = await eventsRepo.setEventStatus(event._id, ['planning', 'booked', 'in_progress'], 'completed');
   if (!done) return false;
   await eventsRepo.appendHistory({ eventId: event._id, actorType: 'ops', actorId: operator, action: 'event_completed', details: {} });
@@ -141,7 +151,7 @@ export async function completeEvent(eventId, body) {
   if (incomplete.length) {
     throw conflict('INCOMPLETE_SERVICES', `Not completed yet: ${incomplete.map((b) => categoryLabel(b.category)).join(', ')}`);
   }
-  await markEventCompleted(event, operator);
+  await markEventCompleted(event, operator, { requireReady: true });
   return { status: 'completed' };
 }
 

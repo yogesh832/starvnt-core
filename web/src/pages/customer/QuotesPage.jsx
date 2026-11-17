@@ -17,7 +17,7 @@ function VendorOfferCard({ quote, event, onChanged }) {
   const money = value => value == null ? 'Not specified' : formatINR(value);
   const blocked = offerBlockReason(quote, event);
   const isAccepted = quote.status === 'APPROVED' || quote.status === 'accepted';
-  const canAct = ['SUBMITTED', 'APPROVED'].includes(quote.status) && !blocked;
+  const canAct = ['SUBMITTED', 'APPROVED'].includes(quote.status) && !blocked && (isAccepted || quote.commercialSnapshot?.source === 'VENDOR_CONFIRMED');
 
   async function negotiate() {
     if (!message.trim() && !counterBudget.trim()) return;
@@ -40,7 +40,7 @@ function VendorOfferCard({ quote, event, onChanged }) {
     setBusy('accept');
     setError('');
     try {
-      const res = await customerApi.acceptVendorQuote(quote.id, eventId);
+      const res = await customerApi.acceptVendorQuote(quote.id, eventId, quote.commercialSnapshot?.version);
       onChanged?.();
       const targetEventId = eventId || res?.eventId;
       if (targetEventId) {
@@ -70,6 +70,7 @@ function VendorOfferCard({ quote, event, onChanged }) {
           <div className="whitespace-pre-wrap text-ink/80">{quote.notes}</div>
         </div>
       )}
+      {quote.commercialSnapshot?.source === 'VENDOR_CONFIRMED' ? <div className="mt-3 rounded-xl bg-blue-50 p-3 text-xs"><p className="font-bold">Vendor-confirmed quote</p><p>Base {money(quote.pricingBreakdown?.basePrice)} · Travel {money(quote.pricingBreakdown?.travelFee)} · Equipment {money(quote.pricingBreakdown?.equipmentFee)} · Setup {money(quote.pricingBreakdown?.setupFee)} · Other {money(quote.pricingBreakdown?.additionalFee)}</p></div> : !isAccepted && <p role="status" className="mt-3 text-sm">Ask the vendor to confirm and itemize the full price before accepting this offer.</p>}
 
       <div className="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
         <div className="rounded-xl bg-gray-50 p-3">

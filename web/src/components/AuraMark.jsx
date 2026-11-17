@@ -1,3 +1,5 @@
+import orbSmall from '../assets/images/aura-orb-96.webp';
+import orbLarge from '../assets/images/aura-orb-384.webp';
 import { useEffect, useId, useRef, useState } from 'react';
 
 /** Compact marks stay legible in text; orbs belong to voice and navigation. */
@@ -30,7 +32,7 @@ export default function AuraMark({ variant = 'compact', size = 24, state = 'idle
   const energy = Math.max(0, Math.min(1, Number(level) || 0));
   const playing = canAnimate && ready && !failed;
   return <span ref={mark} aria-hidden="true" className={`aura-mark aura-mark--${variant} ${motion && variant === 'orb' ? 'aura-mark--motion' : ''} ${className}`} data-state={state} data-motion-ready={playing} style={{ width: size, height: size, '--aura-energy': energy }}>
-    {variant === 'orb' ? <img className="aura-mark-art" src={size > 64 ? '/images/aura/orb-384.png' : '/images/aura/orb-96.png'} width="384" height="379" alt="" draggable="false" /> :
+    {variant === 'orb' ? <img className="aura-mark-art" src={size > 64 ? orbLarge : orbSmall} width="384" height="379" alt="" draggable="false" /> :
       <svg className="aura-mark-art" width={size} height={size} viewBox="0 0 40 40" fill="none">
         <defs>
           <linearGradient id={`${id}-edge`} x1="5" y1="5" x2="35" y2="35" gradientUnits="userSpaceOnUse"><stop stopColor="#54edff"/><stop offset=".43" stopColor="#6d46ff"/><stop offset="1" stopColor="#e392ff"/></linearGradient>

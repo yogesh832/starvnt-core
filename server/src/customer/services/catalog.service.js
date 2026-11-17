@@ -152,6 +152,7 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage, portfol
   const images = [...(vendor.profilePicUrl ? [vendor.profilePicUrl] : []), ...portfolioImages];
   return {
     id: vsId(service._id),
+    commercialStatus: 'ESTIMATE_REQUIRES_VENDOR_CONFIRMATION',
     source: 'vendor',
     category: normalizeCategory(service.category),
     packageName: service.name,

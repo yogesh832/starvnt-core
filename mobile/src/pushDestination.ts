@@ -36,12 +36,16 @@ export function pushDestination(
       screen: "Chat",
       params: { kind: "thread", threadId: data.threadId, vendor: false },
     };
+  const bookingLink = path.match(/^\/customer\/events\/([a-zA-Z0-9_-]+)\/bookings\/([a-zA-Z0-9_-]+)(?:\?|$)/);
+  if (bookingLink) return { screen: 'CustomerBooking', params: { eventId: bookingLink[1], bookingId: bookingLink[2] } };
   const match = path.match(
     /^\/customer\/events\/([a-zA-Z0-9_-]+)(?:\/([a-z-]+))?(?:\?|$)/,
   );
   const eventId = match?.[1] || (validId(data.eventId) ? data.eventId : null);
   if (!eventId) return fallback;
   const section = match?.[2];
+  if (section === 'collaboration') return { screen: 'CustomerCollaboration', params: { eventId } };
+  if (section === 'media' || section === 'memory') return { screen: 'CustomerEventMedia', params: { eventId, memory: section === 'memory' } };
   if (section === "circle") {
     const bookingId = new URL(path, "https://app.starvnt.com").searchParams.get(
       "booking",

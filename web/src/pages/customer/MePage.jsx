@@ -1,4 +1,3 @@
-import NotificationPreferences from '../../components/NotificationPreferences.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,6 +14,7 @@ const LINKS = [
   ['quotes', 'Proposals', 'Review the details together', '/customer/proposals'],
   ['message', 'Messages & updates', 'Stay close to every conversation', '/customer/updates'],
   ['bell', 'Reminders', 'A little help staying on track', '/customer/reminders'],
+  ['settings', 'Settings', 'Privacy and notification preferences', '/customer/settings'],
   ['profile', 'Relationships & feedback', 'Your Customer 360', '/customer/customer-360'],
 ];
 
@@ -79,7 +79,6 @@ export default function MePage({ user, logout }) {
     </section>
     <section className="profile-event-totals" aria-label="Saved event counts">{[['Events', counts?.total], ['Active', counts?.active], ['Completed', counts?.completed], ['Cancelled', counts?.cancelled]].map(([label, value]) => <div key={label}><strong>{value ?? '—'}</strong><span>{label}</span></div>)}</section>
     <section aria-labelledby="profile-essentials-title"><div className="profile-section-heading"><div><h2 id="profile-essentials-title">Everything, in one place.</h2><p>Pick up wherever you left off.</p></div></div><div className="profile-links">{LINKS.map(([icon, label, detail, to]) => <Link key={to} to={to}><span className="profile-link-icon"><Icon name={icon} size={21} /></span><span><b>{label}</b><small>{detail}</small></span><Icon name="chevronRight" size={17} /></Link>)}</div></section>
-    <details className="profile-preferences"><summary><span className="profile-link-icon"><Icon name="settings" size={21} /></span><span><b>Make it feel like you</b><small>Notifications, quiet hours & communication</small></span><Icon name="chevronDown" size={18} /></summary><div className="profile-preferences-body"><NotificationPreferences /></div></details>
     <section className="profile-history">{events.loading && <p role="status">Loading your event history…</p>}{events.error && <p role="alert" className="profile-error">Event history could not be refreshed. <button onClick={events.reload}>Try again</button></p>}{events.data && <AccountEventHistory events={events.data.events || []} />}</section>
     <div className="profile-footer"><Link to="/customer/events/new">Plan something new <Icon name="arrowRight" size={16} /></Link><button type="button" onClick={logout}>Log out</button></div>
   </div>;

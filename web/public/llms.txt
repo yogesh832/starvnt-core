@@ -1,0 +1,13 @@
+# STARVNT — Plan Your Wedding & Events
+
+> Plan weddings, celebrations and corporate events with STARVNT. Discover event professionals, review quotations and manage your event journey.
+
+## Public pages
+
+- [Home](https://starvnt.com/): Public STARVNT introduction.
+- [Privacy](https://starvnt.com/privacy): Privacy information.
+- [Terms](https://starvnt.com/terms): Terms of service.
+
+## Account access
+
+Account workspaces require sign-in. Private customer, vendor and admin records are not public resources.

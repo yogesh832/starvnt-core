@@ -214,6 +214,10 @@ export function VendorFinancial() {
         <Pill>
           {human(profile.bankAccount?.verificationStatus || "NOT_VERIFIED")}
         </Pill>
+        <Txt muted>Razorpay verifies your account number, IFSC and account holder name.</Txt>
+        {r.data.bankVerification?.configured === false && (
+          <Txt muted>Bank verification is not available yet. Save your details and contact STARVNT support.</Txt>
+        )}
         {!!profile.bankAccount?.failureReason && (
           <ErrorNotice message={profile.bankAccount.failureReason} />
         )}
@@ -249,13 +253,14 @@ export function VendorFinancial() {
           onPress={() => a.run(async () => act("bank", bankBody()))}
         />
         <Button
-          title="Verify this bank account"
+          title={["PROCESSING", "PENDING"].includes(profile.bankAccount?.verificationStatus) ? "Check verification status" : "Verify with Razorpay"}
+          disabled={r.data.bankVerification?.configured === false}
           secondary
           busy={a.busy}
           onPress={() =>
             confirm(
               "Verify bank account?",
-              "Core will submit the displayed bank details to the configured verification provider.",
+              "STARVNT will submit the displayed account number, IFSC and holder name to Razorpay for verification.",
               () => a.run(async () => act("bank/verify", bankBody())),
             )
           }

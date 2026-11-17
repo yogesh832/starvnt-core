@@ -29,6 +29,7 @@ export async function matchVendorsForRequirement({
   durationHours = 8,
   requiredStyles = [],
   overrideRadiusKm = null,
+  excludeVendorIds = [],
 }) {
   const policy = await getCommercialPolicyForCategory(category);
   const effectivePolicyRadius = overrideRadiusKm || policy.defaultRadiusKm || 25;
@@ -46,6 +47,7 @@ export async function matchVendorsForRequirement({
   for (const svc of services) {
     const vendor = svc.vendor;
     if (!vendor) continue;
+    if (excludeVendorIds.map(String).includes(String(vendor._id))) continue;
 
     // Hard Gate 1: Vendor commercial eligibility.
     // Core readiness is authoritative; profile completion alone is not enough.

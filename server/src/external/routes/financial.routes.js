@@ -4,7 +4,9 @@ import { BankVerificationLog } from '../models/BankVerificationLog.js';
 import { VendorDocument } from '../models/VendorDocument.js';
 import { verifyPan, discoverGstinsByPan } from '../services/panVerification.service.js';
 import { verifyGstin } from '../services/gstinVerification.service.js';
-import { requestBankVerification } from '../services/bankVerification.service.js';
+import { requestBankVerification, validateBankDetails } from '../services/bankVerification.service.js';
+import { bankFingerprint, razorpayBankAvailability } from '../services/razorpayBankVerification.service.js';
+import { withVendorSchedule } from '../services/scheduleLock.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 
 const router = Router();
@@ -30,6 +32,7 @@ router.get('/', async (req, res, next) => {
       ok: true,
       profile,
       isSettlementEligible: Boolean(profile.isSettlementEligible),
+      bankVerification: razorpayBankAvailability(),
     });
   } catch (err) {
     next(err);
@@ -79,7 +82,7 @@ router.post('/pan', async (req, res, next) => {
 
     // Update settlement eligibility if bank account is already verified
     profile.isSettlementEligible =
-      profile.bankAccount?.verificationStatus === 'VERIFIED' && Boolean(normalizedPan);
+      profile.bankAccount?.verificationStatus === 'VERIFIED' && isVerified;
 
     await profile.save();
 
@@ -274,34 +277,35 @@ router.post('/gst', async (req, res, next) => {
  * Collects Account Holder Name, Account Number, IFSC, Bank Name, Account Type.
  * Can be added whether GST Registered is YES or NO!
  */
-router.post('/bank', async (req, res, next) => {
-  try {
-    const { accountHolderName, accountNumber, ifsc, bankName, accountType } = req.body || {};
+const bankWrite = handler => (req, res, next) => withVendorSchedule(`bank:${req.vendorId}`, () => handler(req, res, next)).catch(next);
 
-    if (!accountHolderName || !accountNumber || !ifsc || !bankName) {
-      return res.status(400).json({
-        error: 'BANK_DETAILS_INCOMPLETE',
-        message: 'Account Holder Name, Account Number, IFSC, and Bank Name are required.',
-      });
-    }
+router.post('/bank', bankWrite(async (req, res, next) => {
+  try {
+    const validated = validateBankDetails(req.body || {});
+    if (!validated.ok) return res.status(400).json(validated);
+    const { accountHolderName, accountNumber, ifsc, bankName, accountType } = validated.bankDetails;
 
     let profile = await VendorFinancialProfile.findOne({ vendor: req.vendorId });
     if (!profile) {
       profile = new VendorFinancialProfile({ vendor: req.vendorId });
     }
 
+    const unchanged = bankFingerprint(profile.bankAccount) === bankFingerprint({ accountHolderName, accountNumber, ifsc, accountType });
+    const pending = await BankVerificationLog.exists({ vendor: req.vendorId, provider: 'RAZORPAY', verificationStatus: 'PROCESSING' });
+    if (pending && !unchanged) return res.status(409).json({ error: 'BANK_VERIFICATION_IN_PROGRESS', message: 'Wait for the current bank verification to finish before changing these details.' });
     profile.bankAccount = {
       accountHolderName: String(accountHolderName).trim(),
       accountNumber: String(accountNumber).trim(),
       ifsc: String(ifsc).trim().toUpperCase(),
       bankName: String(bankName).trim(),
       accountType: String(accountType || 'SAVINGS').toUpperCase(),
-      verificationStatus: profile.bankAccount?.verificationStatus || 'NOT_VERIFIED',
-      nameMatchStatus: profile.bankAccount?.nameMatchStatus || 'NONE',
-      lastVerifiedAt: profile.bankAccount?.lastVerifiedAt || null,
-      failureReason: profile.bankAccount?.failureReason || '',
+      verificationStatus: unchanged ? profile.bankAccount?.verificationStatus || 'NOT_VERIFIED' : 'NOT_VERIFIED',
+      nameMatchStatus: unchanged ? profile.bankAccount?.nameMatchStatus || 'NONE' : 'NONE',
+      lastVerifiedAt: unchanged ? profile.bankAccount?.lastVerifiedAt || null : null,
+      failureReason: unchanged ? profile.bankAccount?.failureReason || '' : '',
     };
 
+    if (!unchanged) profile.isSettlementEligible = false;
     await profile.save();
 
     res.json({
@@ -312,16 +316,16 @@ router.post('/bank', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-});
+}));
 
 /**
  * POST /api/vendor/financial/bank/verify
  * Spec §6, §7, §8, §9, §10: Execute bank account verification.
  * Independent of GST Status!
  */
-router.post('/bank/verify', async (req, res, next) => {
+router.post('/bank/verify', bankWrite(async (req, res, next) => {
   try {
-    const { accountHolderName, accountNumber, ifsc, bankName, accountType, phone, forceRetry } =
+    const { accountHolderName, accountNumber, ifsc, bankName, accountType } =
       req.body || {};
 
     let profile = await VendorFinancialProfile.findOne({ vendor: req.vendorId });
@@ -333,14 +337,10 @@ router.post('/bank/verify', async (req, res, next) => {
       accountType: accountType || profile?.bankAccount?.accountType,
     };
 
-    const result = await requestBankVerification(req.vendorId, bankDetails, {
-      requestedBy: 'VENDOR',
-      forceRetry: Boolean(forceRetry),
-      phone,
-    });
+    const result = await requestBankVerification(req.vendorId, bankDetails);
 
     if (!result.ok && result.error) {
-      return res.status(400).json(result);
+      return res.status(['RAZORPAYX_NOT_CONFIGURED', 'BANK_PROVIDER_UNSUPPORTED'].includes(result.error) ? 503 : 400).json(result);
     }
 
     const activation = await evaluateVendorActivation(req.vendorId);
@@ -352,7 +352,7 @@ router.post('/bank/verify', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-});
+}));
 
 /**
  * GET /api/vendor/financial/bank/verifications

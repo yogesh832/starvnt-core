@@ -79,3 +79,13 @@ test("Core notification destinations recheck current permissions", () => {
     { screen: "AdminModule", params: { module: "audit" } },
   );
 });
+
+test('customer workflow notifications restore the exact booked service and permissioned event views', () => {
+  assert.deepEqual(pushDestination({ ...base, actionUrl: '/customer/events/event1/bookings/booking1' }, customer, 'external', () => false),
+    { screen: 'CustomerBooking', params: { eventId: 'event1', bookingId: 'booking1' } });
+  assert.deepEqual(pushDestination({ ...base, actionUrl: '/customer/events/event1/collaboration' }, customer, 'external', () => false),
+    { screen: 'CustomerCollaboration', params: { eventId: 'event1' } });
+  assert.deepEqual(pushDestination({ ...base, actionUrl: '/customer/events/event1/memory' }, customer, 'external', () => false),
+    { screen: 'CustomerEventMedia', params: { eventId: 'event1', memory: true } });
+  assert.equal(pushDestination({ ...base, ownerId: 'someone-else', actionUrl: '/customer/events/event1/bookings/booking1' }, customer, 'external', () => false), null);
+});

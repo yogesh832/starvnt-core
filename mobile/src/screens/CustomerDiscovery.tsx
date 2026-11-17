@@ -365,7 +365,8 @@ export function ServiceScreen({ route, navigation }: any) {
               {label}: {money(costs[key])}
             </Txt>
           ))}
-          <Txt bold>Total: {money(option.price)}</Txt>
+          <Txt bold>Advertised estimate: {money(option.price)}</Txt>
+          <Txt muted>The vendor will confirm the total, travel and logistics charges in a quote.</Txt>
         </Card>
       )}
       {!!option.cancellationPolicy && (

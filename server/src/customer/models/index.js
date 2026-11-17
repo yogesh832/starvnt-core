@@ -204,6 +204,7 @@ const reservationSchema = new Schema(
     packageTotal: { type: Number, default: null, min: 0 },
     advancePercent: { type: Number, default: null, min: 0, max: 100 },
     financialPolicySnapshot: { type: Schema.Types.Mixed, default: null },
+    commercialSnapshot: { type: Schema.Types.Mixed, default: null },
     amount: { type: Number, required: true, min: 0 }, // advance payable now
     balanceAmount: { type: Number, default: null, min: 0 },
     isDemo: { type: Boolean, default: false },
@@ -221,7 +222,7 @@ const paymentSchema = new Schema(
     reservation: { type: Schema.Types.ObjectId, ref: 'CustomerReservation', required: true, index: true },
     amount: { type: Number, required: true, min: 0 }, // rupees
     currency: { type: String, default: 'INR' },
-    // Only a webhook or an ops verification can make a payment "verified".
+    // Verification requires a signed webhook, authoritative provider lookup or ops verification.
     status: { type: String, enum: ['pending', 'processing', 'paid', 'failed', 'verified'], default: 'pending', index: true },
     provider: { type: String, default: 'razorpay' },
     providerOrderId: { type: String, default: undefined },
@@ -247,13 +248,14 @@ const webhookEventSchema = new Schema(
     providerEventId: { type: String, required: true },
     eventType: { type: String, required: true },
     payload: { type: Schema.Types.Mixed, default: {} },
+    payloadHash: { type: String },
     processingStatus: { type: String, enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'], default: 'PENDING', index: true },
     lockedUntil: Date,
     lease: String,
     completedAt: Date,
     lastError: String,
   },
-  { timestamps: { createdAt: true, updatedAt: false }, collection: 'customer_payment_webhook_events' }
+  { timestamps: { createdAt: true, updatedAt: false }, minimize: false, collection: 'customer_payment_webhook_events' }
 );
 webhookEventSchema.index({ provider: 1, providerEventId: 1 }, { unique: true });
 

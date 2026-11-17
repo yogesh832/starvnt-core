@@ -28,7 +28,7 @@ import { VendorBlockout } from '../models/VendorBlockout.js';
 import { VendorBookingSlot } from '../models/VendorBookingSlot.js';
 import { Notification } from '../models/Notification.js';
 import { Opportunity } from '../models/Opportunity.js';
-import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.js';
+import { maskOpportunityCustomer, projectVendorContext } from '../services/opportunityPrivacy.service.js';
 import { Quote } from '../models/Quote.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { VendorReview } from '../models/VendorReview.js';
@@ -1245,7 +1245,7 @@ router.get('/messages/threads', async (req, res, next) => {
       }
     }
 
-    res.json({ ok: true, threads });
+    res.json({ ok: true, threads: await Promise.all(threads.map(projectVendorContext)) });
   } catch (err) {
     next(err);
   }
@@ -1291,7 +1291,7 @@ router.get('/messages/threads/:id', async (req, res, next) => {
       { isRead: true, readAt: new Date(), status: 'READ' }
     );
 
-    res.json({ ok: true, thread });
+    res.json({ ok: true, thread: await projectVendorContext(thread) });
   } catch (err) {
     next(err);
   }
@@ -1300,7 +1300,7 @@ router.get('/messages/threads/:id', async (req, res, next) => {
 router.post('/bookings/:id/message-thread', async (req, res, next) => {
   try {
     const thread = await openBookingThread({ vendorId: req.vendorId, bookingId: req.params.id });
-    res.json({ ok: true, thread });
+    res.json({ ok: true, thread: await projectVendorContext(thread) });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.error });
     next(err);
@@ -1310,7 +1310,7 @@ router.post('/bookings/:id/message-thread', async (req, res, next) => {
 router.post('/messages/context/:type/:id', async (req, res, next) => {
   try {
     const thread = await openServiceThread({ vendorId: req.vendorId, type: req.params.type, id: req.params.id });
-    res.json({ ok: true, thread });
+    res.json({ ok: true, thread: await projectVendorContext(thread) });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.error });
     next(err);
@@ -1422,7 +1422,7 @@ router.post('/messages/threads/:id', async (req, res, next) => {
         idempotencyKey: `customer.vendor-reply.thread.${thread._id}.${thread.messages.length}`,
       });
     }
-    res.status(201).json({ ok: true, thread, message: newMsg });
+    res.status(201).json({ ok: true, thread: await projectVendorContext(thread), message: newMsg });
   } catch (err) {
     next(err);
   }

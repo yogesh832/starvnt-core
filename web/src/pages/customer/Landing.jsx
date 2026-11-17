@@ -1,3 +1,20 @@
+import weddingMobile768 from '../../assets/images/customer-wedding-card-mobile-768.webp';
+import celebrationsMobile768 from '../../assets/images/customer-celebrations-mobile-768.webp';
+import corporateMobile768 from '../../assets/images/customer-corporate-mobile-768.webp';
+import heroAvif960 from '../../assets/images/customer-hero-960.avif';
+import heroAvif1600 from '../../assets/images/customer-hero-1600.avif';
+import celebrationsAvif480 from '../../assets/images/customer-celebrations-480.avif';
+import celebrationsAvif960 from '../../assets/images/customer-celebrations-960.avif';
+import corporateAvif480 from '../../assets/images/customer-corporate-480.avif';
+import corporateAvif960 from '../../assets/images/customer-corporate-960.avif';
+import hero960 from '../../assets/images/customer-hero-960.webp';
+import hero1600 from '../../assets/images/customer-hero-1600.webp';
+import heroPortrait480 from '../../assets/images/customer-hero-portrait-mobile-480.webp';
+import heroPortrait768 from '../../assets/images/customer-hero-portrait-mobile-768.webp';
+import celebrations480 from '../../assets/images/customer-celebrations-480.webp';
+import celebrations960 from '../../assets/images/customer-celebrations-960.webp';
+import corporate480 from '../../assets/images/customer-corporate-480.webp';
+import corporate960 from '../../assets/images/customer-corporate-960.webp';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
@@ -10,9 +27,9 @@ import './landing.css';
 import { savePendingPrompt } from './pendingPrompt.js';
 
 const EXPERIENCES = [
-  { name: 'Weddings', eventType: 'Wedding', eyebrow: 'A celebration of your story', description: 'From intimate rituals to multi-day celebrations, shape an occasion that feels entirely yours.', icon: 'heart', image: '/images/customer-wedding-hero.jpg', position: 'center' },
-  { name: 'Celebrations', eventType: 'Celebration', eyebrow: 'Gather beautifully', description: 'Birthdays, anniversaries and meaningful moments with the people who matter.', icon: 'party', image: '/images/customer-celebrations.webp', position: 'center 35%' },
-  { name: 'Corporate events', eventType: 'Corporate event', eyebrow: 'Make an impression', description: 'Bring teams and audiences together with a considered, professional experience.', icon: 'events', image: '/images/customer-corporate.webp', position: 'center 35%' },
+  { name: 'Weddings', eventType: 'Wedding', eyebrow: 'A celebration of your story', description: 'From intimate rituals to multi-day celebrations, shape an occasion that feels entirely yours.', icon: 'heart', image: hero960, mobileSrcSet: `${weddingMobile768} 768w`, avifSrcSet: `${heroAvif960} 960w, ${heroAvif1600} 1600w`, srcSet: `${hero960} 960w, ${hero1600} 1600w`, position: 'center' },
+  { name: 'Celebrations', eventType: 'Celebration', eyebrow: 'Gather beautifully', description: 'Birthdays, anniversaries and meaningful moments with the people who matter.', icon: 'party', image: celebrations480, mobileSrcSet: `${celebrations480} 480w, ${celebrationsMobile768} 768w`, avifSrcSet: `${celebrationsAvif480} 480w, ${celebrationsAvif960} 960w`, srcSet: `${celebrations480} 480w, ${celebrations960} 960w`, position: 'center 35%' },
+  { name: 'Corporate events', eventType: 'Corporate event', eyebrow: 'Make an impression', description: 'Bring teams and audiences together with a considered, professional experience.', icon: 'events', image: corporate480, mobileSrcSet: `${corporate480} 480w, ${corporateMobile768} 768w`, avifSrcSet: `${corporateAvif480} 480w, ${corporateAvif960} 960w`, srcSet: `${corporate480} 480w, ${corporate960} 960w`, position: 'center 35%' },
 ];
 
 const JOURNEY = [
@@ -99,7 +116,7 @@ export default function Landing() {
 
     <main>
       <section className="relative isolate overflow-hidden bg-navy-deep text-white" aria-labelledby="landing-title">
-        <img src="/images/customer-wedding-hero.jpg" alt="Wedding setting with flowers, warm lights and a long table" className="absolute inset-0 -z-20 h-full w-full object-cover object-center" fetchPriority="high" />
+        <picture className="contents"><source type="image/avif" media="(min-width: 640px)" srcSet={`${heroAvif960} 960w, ${heroAvif1600} 1600w`} sizes="100vw" /><source media="(max-width: 639px)" srcSet={`${heroPortrait480} 480w, ${heroPortrait768} 768w`} sizes="100vw" /><img src={hero960} srcSet={`${hero960} 960w, ${hero1600} 1600w`} sizes="100vw" width="1600" height="900" alt="Wedding setting with flowers, warm lights and a long table" className="absolute inset-0 -z-20 h-full w-full object-cover object-center" fetchPriority="high" /></picture>
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#05142e]/95 via-[#0b2b53]/78 to-[#114675]/25" />
         <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#07152d]/85 via-transparent to-transparent" />
         <div className="mx-auto flex min-h-[590px] max-w-7xl flex-col justify-center px-5 py-20 sm:min-h-[660px] sm:px-8 lg:px-12">
@@ -122,7 +139,7 @@ export default function Landing() {
           </div>
           <div className="mt-9 grid gap-4 lg:grid-cols-3">
             {EXPERIENCES.map((item) => <article key={item.name} className="group relative flex min-h-[330px] flex-col justify-end overflow-hidden rounded-3xl bg-navy p-6 text-white shadow-lg sm:min-h-[370px] sm:p-8">
-              <img src={item.image} alt="" loading="lazy" decoding="async" style={{ objectPosition: item.position }} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <picture className="contents"><source media="(max-width: 639px)" srcSet={item.mobileSrcSet} sizes="100vw" /><source type="image/avif" media="(min-width: 640px)" srcSet={item.avifSrcSet} sizes="(min-width: 1024px) 33vw, 100vw" /><img src={item.image} srcSet={item.srcSet} sizes="(min-width: 1024px) 33vw, 100vw" width="960" height="1440" alt="" loading="lazy" decoding="async" style={{ objectPosition: item.position }} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /></picture>
               <div className="absolute inset-0 bg-gradient-to-t from-navy-deep via-navy-deep/40 to-transparent" />
               <div className="relative z-10"><div className="mb-5 grid h-11 w-11 place-items-center rounded-2xl border border-white/30 bg-white/15 backdrop-blur-sm"><Icon name={item.icon} size={21} /></div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-200">{item.eyebrow}</p><h3 className="mt-2 text-2xl font-extrabold">{item.name}</h3><p className="mt-2 max-w-sm text-sm leading-6 text-white/80">{item.description}</p><button type="button" onClick={() => {setEventType(item.eventType);document.getElementById('plan-event')?.scrollIntoView({ behavior: 'smooth' });}} className="mt-5 inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-sky-200 hover:text-white">Start planning <Icon name="arrowRight" size={15} /></button></div>
             </article>)}

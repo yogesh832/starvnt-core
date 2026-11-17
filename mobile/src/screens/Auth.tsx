@@ -3,6 +3,7 @@ import { VendorCategoryPicker } from "../VendorCategoryPicker";
 import React, { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from '@react-navigation/native';
 import { Linking, Modal, Platform, Pressable, TurboModuleRegistry, View } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { useSession } from "../auth/Session";
 import { AuthLayout } from "../AuthLayout";
@@ -203,7 +204,7 @@ export function AuthScreen({ route, navigation }: any) {
             }
         });
     };
-    const changeMode = () => { setMode(register ? 'login' : 'register'); reset(); };
+    const changeMode = () => { setMode(register ? 'login' : 'register'); setAcceptedVersions(''); reset(); };
     async function resend() {
         if (Date.now() < resendAt)
             return;
@@ -290,13 +291,15 @@ export function AuthScreen({ route, navigation }: any) {
       {TEST_AUTH_ENABLED && <AuthLink title="Dev · Quick Test Auth" onPress={() => navigation.navigate('TestAuth')}/>}
     </View>}
     <Modal visible={Boolean(displayedDocument)} onRequestClose={() => setOpenDocument(null)} animationType="slide">
-      {displayedDocument && <Page title={displayedDocument.kind === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
-        subtitle={`Version ${displayedDocument.version} · Effective ${displayedDocument.effectiveFrom.slice(0, 10)}`}>
-        <Pressable accessibilityRole="button" onPress={() => setOpenDocument(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
-          <Txt bold>Back to signup</Txt>
-        </Pressable>
-        <Txt>{displayedDocument.body}</Txt>
-      </Page>}
+      <SafeAreaView style={{ flex: 1 }}>
+        {displayedDocument && <Page title={displayedDocument.kind === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
+          subtitle={`Version ${displayedDocument.version} · Effective ${displayedDocument.effectiveFrom.slice(0, 10)}`}>
+          <Pressable accessibilityRole="button" onPress={() => setOpenDocument(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Txt bold>Back to signup</Txt>
+          </Pressable>
+          <Txt>{displayedDocument.body}</Txt>
+        </Page>}
+      </SafeAreaView>
     </Modal>
 
   </AuthLayout>;

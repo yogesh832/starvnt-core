@@ -2320,161 +2320,7 @@ export function AvailabilityPage() {
   );
 }
 
-const CASHFREE_BANK_TEST_CASES = [
-  {
-    label: "Valid YES Bank",
-    expected: "VALID",
-    accountHolderName: "JOHN DOE",
-    accountNumber: "026291800001191",
-    ifsc: "YESB0000262",
-    bankName: "YES BANK",
-    phone: "9999999999",
-  },
-  {
-    label: "Valid HDFC",
-    expected: "VALID",
-    accountHolderName: "JANE DOE",
-    accountNumber: "00011020001772",
-    ifsc: "HDFC0000001",
-    bankName: "HDFC Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "Invalid account / IFSC",
-    expected: "INVALID",
-    accountHolderName: "Test User",
-    accountNumber: "7766666585146",
-    ifsc: "YESB0000001",
-    bankName: "YES BANK",
-    phone: "9999999999",
-  },
-  {
-    label: "Invalid IFSC",
-    expected: "INVALID",
-    accountHolderName: "Test User",
-    accountNumber: "7766667287515",
-    ifsc: "ICIC0000001",
-    bankName: "ICICI Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "Blocked account",
-    expected: "INVALID",
-    accountHolderName: "Test User",
-    accountNumber: "7766667989884",
-    ifsc: "RATN0000070",
-    bankName: "RBL Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "NRE account",
-    expected: "INVALID",
-    accountHolderName: "Test User",
-    accountNumber: "7766667755761",
-    ifsc: "ICIC0000001",
-    bankName: "ICICI Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "Source bank declined",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "7766674831270",
-    ifsc: "SBIN0000003",
-    bankName: "State Bank of India",
-    phone: "9999999999",
-  },
-  {
-    label: "Failed at bank",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "7766671735852",
-    ifsc: "SBIN0000004",
-    bankName: "State Bank of India",
-    phone: "9999999999",
-  },
-  {
-    label: "Beneficiary bank offline",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "7766668692253",
-    ifsc: "INDB0000018",
-    bankName: "IndusInd Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "NPCI unavailable",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "7766668458130",
-    ifsc: "INDB0000018",
-    bankName: "IndusInd Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "IMPS mode fail",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "7766667521638",
-    ifsc: "ICIC0000001",
-    bankName: "ICICI Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "Verification failed",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "7766667053392",
-    ifsc: "ICIC0000001",
-    bankName: "ICICI Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "Temporary unavailable",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "007711000031",
-    ifsc: "HDFC0000077",
-    bankName: "HDFC Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "Could not verify",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "00224412311300",
-    ifsc: "YESB0000001",
-    bankName: "YES BANK",
-    phone: "9999999999",
-  },
-  {
-    label: "Insufficient balance",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "50101329442375",
-    ifsc: "HDFC0000001",
-    bankName: "HDFC Bank",
-    phone: "9999999999",
-  },
-  {
-    label: "Invalid name",
-    expected: "ERROR",
-    accountHolderName: "Test User @",
-    accountNumber: "026291800001191",
-    ifsc: "YESB0000262",
-    bankName: "YES BANK",
-    phone: "9999999999",
-  },
-  {
-    label: "Invalid phone",
-    expected: "ERROR",
-    accountHolderName: "Test User",
-    accountNumber: "026291800001191",
-    ifsc: "YESB0000262",
-    bankName: "YES BANK",
-    phone: "9999999999999",
-  },
-];
+
 
 /* ── STARVNT Financial, Verification & Document Hub ────────────────────── */
 function ModuleDocumentCard({ doc, onPreview, onDelete }) {
@@ -2522,6 +2368,7 @@ function ModuleDocumentCard({ doc, onPreview, onDelete }) {
 
 export function VendorFinancialOnboardingCard() {
   const [profile, setProfile] = useState(null);
+  const [bankVerification, setBankVerification] = useState(null);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
   const [feedbackType, setFeedbackType] = useState("info");
@@ -2573,6 +2420,7 @@ export function VendorFinancialOnboardingCard() {
       if (financialRes.status === "fulfilled" && financialRes.value?.ok) {
         const p = financialRes.value.profile || {};
         setProfile(p);
+        setBankVerification(financialRes.value.bankVerification || null);
         setPanInput(p.pan?.panNumber || "");
         setGstRegistered(Boolean(p.gst?.isRegistered));
         setGstinInput(p.gst?.gstin && p.gst.gstin !== "N/A" ? p.gst.gstin : "");
@@ -2813,13 +2661,17 @@ export function VendorFinancialOnboardingCard() {
 
       const res = await externalApi.call("/vendor/financial/bank/verify", {
         method: "POST",
-        body: { ...bankForm, forceRetry: true },
+        body: { ...bankForm },
       });
 
       if (res.ok && res.status === "VERIFIED") {
         setFeedbackType("success");
         setFeedback("✓ Bank Account Verified successfully!");
         setIsEditingBank(false);
+        await loadFinancialData();
+      } else if (res.ok && ["PROCESSING", "PENDING"].includes(res.status)) {
+        setFeedbackType("info");
+        setFeedback(res.failureReason || "Bank verification is processing. Check the status again shortly.");
         await loadFinancialData();
       } else {
         setFeedbackType("error");
@@ -3178,7 +3030,7 @@ export function VendorFinancialOnboardingCard() {
               </span>
             </div>
             <p className="text-xs text-muted dark:text-gray-400 mt-0.5">
-              Direct verification required via penny drop API. Payouts and customer matching unlock upon verification.
+              Razorpay verifies your bank account number, IFSC and holder name. Customer matching and settlements also require the other account checks.
             </p>
           </div>
 
@@ -3209,6 +3061,9 @@ export function VendorFinancialOnboardingCard() {
           </div>
         </div>
 
+        {bankVerification?.configured === false && (
+          <p role="status" className="text-xs text-amber-700 bg-amber-50 rounded-xl px-3 py-2">Razorpay bank verification is not available yet. You can save your bank details and contact STARVNT support.</p>
+        )}
         {(!isBankVerified || isEditingBank) ? (
           <form onSubmit={handleSaveBankDetails} className="grid sm:grid-cols-2 gap-3 pt-2">
             <div>
@@ -3295,11 +3150,11 @@ export function VendorFinancialOnboardingCard() {
               <button
                 type="button"
                 onClick={handleVerifyBank}
-                disabled={verifyingBank || !bankForm.accountNumber || !bankForm.ifsc}
+                disabled={verifyingBank || bankVerification?.configured === false || !bankForm.accountNumber || !bankForm.ifsc}
                 className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs disabled:opacity-50 transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Icon name="check" size={14} />
-                <span>{verifyingBank ? "Verifying Bank..." : "Verify Bank Account Now"}</span>
+                <span>{verifyingBank ? "Checking Bank..." : ["PROCESSING", "PENDING"].includes(bankStatus) ? "Check Verification Status" : "Verify Bank Account Now"}</span>
               </button>
               {isBankVerified && (
                 <button
@@ -3316,7 +3171,7 @@ export function VendorFinancialOnboardingCard() {
           <div className="p-3.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs space-y-1">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-navy dark:text-gray-100">{bankForm.bankName || "Bank Account"} ({bankForm.accountType})</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">✓ Penny Drop Verified</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">✓ Bank Account Verified</span>
             </div>
             <div className="text-muted dark:text-gray-400 font-mono flex items-center gap-3">
               <span>Holder: <strong>{bankForm.accountHolderName}</strong></span>
@@ -3352,7 +3207,7 @@ export function VendorFinancialOnboardingCard() {
                   <div key={log.verificationId} className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700/60 last:border-0 pb-1.5 last:pb-0">
                     <div>
                       <span className="font-mono font-bold text-navy dark:text-gray-200">{log.verificationId}</span>
-                      <span className="text-muted dark:text-gray-400 ml-2">₹{log.amount} Penny Drop</span>
+                      <span className="text-muted dark:text-gray-400 ml-2">Bank validation</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded font-bold ${log.verificationStatus === "VERIFIED" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"}`}>

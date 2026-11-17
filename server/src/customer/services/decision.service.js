@@ -30,11 +30,11 @@ function eventServiceLocation(event) {
   };
 }
 
-async function createVendorOpportunityForSelection({ customerId, event, requirement, option, optionId }) {
+export async function createVendorOpportunityForSelection({ customerId, event, requirement, option, optionId, requirementContext = null }) {
   if (!option?.vendorId || option.isDemo || typeof optionId !== 'string' || !optionId.startsWith('vs_')) return;
   const vendorServiceId = optionId.slice(3);
-  const eventDate = event.eventDate || new Date().toISOString().slice(0, 10);
-  const serviceLocation = eventServiceLocation(event);
+  const eventDate = requirementContext?.date || event.eventDate || new Date().toISOString().slice(0, 10);
+  const serviceLocation = requirementContext?.serviceLocation || eventServiceLocation(event);
   const existing = await Opportunity.findOne({
     customerEvent: event._id,
     vendor: option.vendorId,
@@ -50,8 +50,12 @@ async function createVendorOpportunityForSelection({ customerId, event, requirem
     serviceName: option.packageName || categoryLabel(option.category),
     eventDate,
     serviceLocation,
-    guestCount: event.guestCount || 100,
-    requiredCapability: serviceRequirementSummary(requirement, option, event),
+    guestCount: requirementContext?.guestCount ?? (event.guestCount || 100),
+    requiredCapability: requirementContext ? JSON.stringify({
+      category: requirementContext.category, date: requirementContext.date, guestCount: requirementContext.guestCount,
+      durationHours: requirementContext.durationHours, startTime: requirementContext.startTime, endTime: requirementContext.endTime,
+      requiredStyles: requirementContext.requiredStyles, deliverables: requirementContext.deliverables,
+    }) : serviceRequirementSummary(requirement, option, event),
     estimatedTravel: `${option.vendorLocation || 'Vendor base'} -> ${serviceLocation.locality || serviceLocation.city || 'Event location'}`,
     travelCost: Number(option.costBreakdown?.travel || 0),
     action: option.requiresVendorConfirmation ? 'Confirm Extended Service / Quote' : 'Respond / Quote',
@@ -63,7 +67,7 @@ async function createVendorOpportunityForSelection({ customerId, event, requirem
     Object.assign(existing, payload);
     if (existing.status === 'DECLINED') existing.status = 'NEW';
     await existing.save();
-    return;
+    return existing;
   }
 
   const opportunity = await Opportunity.create({
@@ -88,6 +92,7 @@ async function createVendorOpportunityForSelection({ customerId, event, requirem
       selectedOptionId: optionId,
     },
   });
+  return opportunity;
 }
 
 export function assertCommerceAllowed(event) {

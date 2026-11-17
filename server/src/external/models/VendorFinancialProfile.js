@@ -78,6 +78,7 @@ const vendorFinancialProfileSchema = new Schema(
     },
     isSettlementEligible: { type: Boolean, default: false, index: true },
     wallet: {
+      freezeSource: { type: String, default: '' },
       availableBalance: { type: Number, default: 0 },
       pendingBalance: { type: Number, default: 0 },
       frozenBalance: { type: Number, default: 0 },

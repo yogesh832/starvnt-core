@@ -28,6 +28,7 @@ export function Txt({
   size = 15,
   muted = false,
   bold = false,
+  color,
   style,
   numberOfLines,
   adjustsFontSizeToFit,
@@ -36,6 +37,7 @@ export function Txt({
   size?: number;
   muted?: boolean;
   bold?: boolean;
+  color?: string;
   style?: any;
   numberOfLines?: number;
   adjustsFontSizeToFit?: boolean;
@@ -51,7 +53,7 @@ export function Txt({
         {
           fontSize: size,
           lineHeight: size * 1.45,
-          color: muted ? c.muted : c.ink,
+          color: color ?? (muted ? c.muted : c.ink),
           fontWeight: bold ? "700" : "400",
           fontFamily: bold ? "Inter_700Bold" : "Inter_400Regular",
         },
@@ -115,8 +117,8 @@ export function Button({
             : danger
               ? c.danger
               : variant === "navy"
-                ? brand.light.navy
-                : c.accent,
+                ? c.dark ? c.panel : brand.light.navy
+                : c.action,
           opacity: disabled || busy ? 0.55 : pressed ? 0.75 : 1,
         },
       ]}
@@ -124,7 +126,7 @@ export function Button({
       {busy ? (
         <ActivityIndicator
           color={
-            secondary ? c.accent : variant === "navy" ? "#ffffff" : c.onAccent
+            secondary ? c.accent : danger && c.dark ? "#111111" : variant === "navy" ? "#ffffff" : c.onAccent
           }
         />
       ) : (
@@ -133,9 +135,11 @@ export function Button({
           style={{
             color: secondary
               ? c.accent
-              : variant === "navy"
-                ? "#ffffff"
-                : c.onAccent,
+              : danger && c.dark
+                ? "#111111"
+                : variant === "navy"
+                  ? "#ffffff"
+                  : c.onAccent,
             textAlign: 'center',
           }}
         >
@@ -257,10 +261,10 @@ export function Choice({
               backgroundColor:
                 value === v
                   ? variant === "navy"
-                    ? brand.light.navy
+                    ? c.dark ? c.panel : brand.light.navy
                     : variant === "tabs"
                       ? c.card
-                      : c.accent
+                      : c.action
                   : variant === "tabs"
                     ? c.soft
                     : c.card,

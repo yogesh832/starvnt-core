@@ -67,6 +67,7 @@ export const previewCoupon = async (req, res) =>
 export const pay = async (req, res) => res.json(await commerce.payReservation(req.externalUser, req.params.id, req.params.rid, req.body));
 export const devVerifyReservationPayment = async (req, res) =>
   res.json(await commerce.devVerifyReservationPayment(req.externalUser, req.params.id, req.params.rid));
+export const reconcilePayment = async (req, res) => res.json(await commerce.reconcileCustomerPayment(me(req), req.params.id, req.params.pid));
 export const checkoutComplete = async (req, res) =>
   res.json(await commerce.checkoutComplete(me(req), req.params.id, req.params.pid, req.body));
 export const eventDay = async (req, res) => res.json(await events.eventDay(me(req), req.params.id));

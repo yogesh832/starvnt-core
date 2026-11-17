@@ -24,7 +24,10 @@ if (-not ($devices -match '^emulator-5554\s')) {
 Write-Host 'Waiting for Android to finish booting...'
 $deadline = (Get-Date).AddMinutes(8)
 do {
-  $boot = & $adb -s $device shell getprop sys.boot_completed 2>$null
+    $state = & $adb devices
+    if ($state -match '^emulator-5554\s+device\s*$') {
+        $boot = & $adb -s $device shell getprop sys.boot_completed
+    }
   if ($boot -eq '1') { break }
   Start-Sleep -Seconds 3
 } while ((Get-Date) -lt $deadline)

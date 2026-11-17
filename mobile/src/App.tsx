@@ -6,6 +6,7 @@ import { acknowledgePush } from "./pushRuntime";
 import { NotificationSettings } from "./screens/NotificationSettings";
 import { CircleScreen } from "./screens/CustomerWorkspace";
 import { CustomerBookingScreen } from "./screens/CustomerBooking";
+import { CustomerInvitationsScreen, CustomerCollaborationScreen, CustomerEventMediaScreen, CustomerReplacementsScreen } from './screens/CustomerCollaboration';
 import { StatusBar, Pressable, Text, View, KeyboardAvoidingView, Platform, Linking } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -56,6 +57,7 @@ import {
 } from "./screens/Admin";
 import { AdminEntity } from "./screens/AdminEntity";
 import { AdminAccess, AdminFinance } from "./screens/AdminActions";
+import { AdminAcademy, AdminLesson, AdminMeeting, AdminMeetings } from './screens/AdminGrowth';
 import { AccountScreen, ProfileScreen, LibraryScreen } from "./screens/Account";
 import { LegalNoticeScreen } from "./screens/LegalNotice";
 import { ExperienceScreen } from "./screens/ExperiencePage";
@@ -64,10 +66,15 @@ import { TEST_AUTH_ENABLED } from "./testAuth";
 import { Button, ErrorNotice, Icon, Page, Txt, usePalette } from "./ui";
 
 const mobileLinking = {
-  prefixes: ["starvnt://", "https://customer.star20.com", "https://vendor.star20.com"],
+  prefixes: ["starvnt://", "https://starvnt.com", "https://www.starvnt.com", "https://customer.star20.com", "https://vendor.star20.com"],
   config: {
     screens: {
       Experience: "experience/:token",
+      CustomerBooking: 'customer/events/:eventId/bookings/:bookingId',
+      CustomerCollaboration: 'customer/events/:eventId/collaboration',
+      CustomerInvitations: 'customer/invitations',
+      CustomerEventMedia: 'customer/events/:eventId/media',
+      CustomerMemory: 'customer/events/:eventId/memory',
     },
   },
 };
@@ -351,8 +358,13 @@ function Navigation() {
             <Stack.Screen
               name="CustomerBooking"
               component={CustomerBookingScreen}
-              options={{ title: "Completion evidence" }}
+              options={{ title: "Your booked service" }}
             />
+            <Stack.Screen name="CustomerInvitations" component={CustomerInvitationsScreen} options={{ title: 'Invitations' }} />
+            <Stack.Screen name="CustomerCollaboration" component={CustomerCollaborationScreen} options={{ title: 'Event Circle' }} />
+            <Stack.Screen name="CustomerEventMedia" component={CustomerEventMediaScreen} options={{ title: 'Your event moments' }} />
+            <Stack.Screen name="CustomerMemory" component={CustomerEventMediaScreen} initialParams={{ memory: true }} options={{ title: 'Your Event Memory' }} />
+            <Stack.Screen name="CustomerReplacements" component={CustomerReplacementsScreen} options={{ title: 'Replacement options' }} />
             <Stack.Screen
               name="VendorOffers"
               component={VendorOffers}
@@ -363,6 +375,10 @@ function Navigation() {
               component={CheckoutScreen}
               options={{ title: "Payment" }}
             />
+            <Stack.Screen name="AdminAcademy" component={AdminAcademy} options={{ title: 'Partner Academy' }} />
+            <Stack.Screen name="AdminLesson" component={AdminLesson} options={{ title: 'Academy lesson' }} />
+            <Stack.Screen name="AdminMeetings" component={AdminMeetings} options={{ title: 'Growth Meetings' }} />
+            <Stack.Screen name="AdminMeeting" component={AdminMeeting} options={{ title: 'Growth Meeting' }} />
             <Stack.Screen
               name="AdminModule"
               component={AdminModule}

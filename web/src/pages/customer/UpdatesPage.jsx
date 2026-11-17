@@ -725,7 +725,7 @@ export default function UpdatesPage({ onRead }) {
 
       {actionError && <p role="alert" className="text-sm text-red-600">{actionError}</p>}
       <div className="grid sm:grid-cols-2 gap-3"><label className="block text-sm">Filter updates by event<select aria-label="Filter updates by event" className="block w-full rounded-xl border bg-white text-navy p-3 mt-1" value={eventId} onChange={event => { const next = new URLSearchParams(searchParams); event.target.value ? next.set('event', event.target.value) : next.delete('event'); next.delete('thread'); openedQueryThread.current = null; setSearchParams(next); }}><option value="">All events & account</option>{events.map(event => <option key={event.id} value={event.id}>{event.title || event.eventTypeLabel}</option>)}</select></label><label className="block text-sm">Activity category (All & Important)<select aria-label="Activity category (All & Important)" className="block w-full rounded-xl border bg-white text-navy p-3 mt-1" value={category} onChange={event => setCategory(event.target.value)}><option value="">All categories</option>{['Transactional', 'Operational', 'Aura+', 'Promotional'].map(value => <option key={value}>{value}</option>)}</select></label></div>
-      <Link className="customer-secondary-action" to="/customer/settings">Communication preferences</Link>
+      <Link className="customer-secondary-action" to="/customer/settings/notifications">Notification settings</Link>
       {/* Filter Tabs */}
       <Tabs
         value={tab}

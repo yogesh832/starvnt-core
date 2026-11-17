@@ -11,7 +11,7 @@ import { computeEventSummary } from '../services/summary.js';
  */
 export async function buildContext({ customer, event, catalogScope = event }) {
   const confirmed = event && event.status !== 'draft';
-  const [requirements, contextRows, allEvents, stats, bookingRows, paymentRows, reservationRows, financialTruth] = await Promise.all([
+  const [requirements, contextRows, allEvents, stats, bookingRows, paymentRows, reservationRows, financialTruth, execution] = await Promise.all([
     event ? core.listRequirements(event._id) : [],
     event ? core.listContext(event._id) : [],
     core.listEvents(customer._id),
@@ -20,6 +20,7 @@ export async function buildContext({ customer, event, catalogScope = event }) {
     confirmed ? core.readPayments(event._id) : [],
     confirmed ? core.readReservations(event._id) : [],
     confirmed ? core.readFinancialTruth(customer._id, event._id) : null,
+    confirmed ? core.readExecution(customer._id, event._id).catch(() => ({ unavailable: true })) : null,
   ]);
   const budgetSummary = financialTruth ? core.financialBudgetSummary(financialTruth) : null;
   const bookings = bookingRows.map((b) => ({
@@ -57,6 +58,18 @@ export async function buildContext({ customer, event, catalogScope = event }) {
     raw: { requirements, contextRows },
     prompt: {
       today: todayISO(),
+      execution: execution ? {
+        unavailable: execution.unavailable === true, observedAt: execution.observedAt || null,
+        services: (execution.services || []).map(service => ({
+          bookingId: service.id, service: service.serviceName, vendor: service.vendorName,
+          state: service.executionStatus, checkedInAt: service.execution.checkedInAt,
+          startedAt: service.execution.startedAt, milestones: service.execution.milestones,
+          completionSubmittedAt: service.execution.submittedAt, completionVerifiedAt: service.execution.verifiedAt,
+          issueUnderReview: service.protection.underReview,
+          serviceHelpUrl: `/customer/events/${event._id}/bookings/${service.id}`,
+        })),
+        rule: 'Use only recorded activity. A planned time is not a check-in. Missing timestamps mean not confirmed. Help the customer review the booked service page to report an issue, with their explicit confirmation before submission.',
+      } : null,
       activity: await core.readActivity(customer._id, event?._id),
       customerFirstName: (customer.fullName || '').split(' ')[0] || null,
       event: event

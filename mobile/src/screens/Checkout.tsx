@@ -64,7 +64,7 @@ function VendorOffer({
   const [budget, setBudget] = useState("");
   const expired = q.validUntil && Date.parse(q.validUntil) <= Date.now();
   const actionable =
-    q.status === "SUBMITTED" && !expired && q.advanceStatus !== "VERIFIED";
+    q.status === "SUBMITTED" && !expired && q.advanceStatus !== "VERIFIED" && q.commercialSnapshot?.source === 'VENDOR_CONFIRMED';
   return (
     <Card key={id(q)}>
       <ErrorNotice message={a.error} />
@@ -77,6 +77,8 @@ function VendorOffer({
         {money(q.pricingBreakdown?.totalAmount)}
       </Txt>
       {q.notes && <Txt muted>{q.notes}</Txt>}
+      <Txt>{q.commercialSnapshot?.source === 'VENDOR_CONFIRMED' ? 'Vendor-confirmed quote' : 'Vendor cost confirmation required'}</Txt>
+      <Txt muted>Base {money(q.pricingBreakdown?.basePrice)} · Travel {money(q.pricingBreakdown?.travelFee)} · Equipment {money(q.pricingBreakdown?.equipmentFee)} · Setup {money(q.pricingBreakdown?.setupFee)} · Additional {money(q.pricingBreakdown?.additionalFee)}</Txt>
       <Txt muted>
         {date(q.eventDate)} ·{" "}
         {q.serviceLocation?.address || q.serviceLocation?.city}
@@ -105,7 +107,7 @@ function VendorOffer({
                 const result = await external.call(
                   `/customer/vendor-quotes/${id(q)}/accept`,
                   "POST",
-                  { eventId },
+                  { eventId, expectedCommercialVersion: q.commercialSnapshot?.version },
                 );
                 refresh();
                 if (result.eventId)
@@ -129,7 +131,7 @@ function VendorOffer({
           Online payments are not configured. Your quote remains available here.
         </Txt>
       )}
-      {["CREATED", "PROCESSING", "PAID", "FAILED"].includes(
+      {["ORDER_CREATED", "PROCESSING", "PAID", "FAILED"].includes(
         q.advanceStatus,
       ) && (
         <Button
@@ -211,7 +213,7 @@ function CheckoutBody({ route, navigation }: any) {
     const result = await external.call(
       `${endpoint}/${quote ? "pay-advance" : "pay"}`,
       "POST",
-      { couponCode: coupon.trim() },
+      { couponCode: coupon.trim(), ...(quote ? { expectedCommercialVersion: quote.commercialSnapshot?.version } : {}) },
     );
     const checkout = result.checkout;
     if (!checkout?.orderId || !checkout.key)

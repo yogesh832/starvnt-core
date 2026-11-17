@@ -260,7 +260,7 @@ export function PriceText({ option, large = false }) {
     return (
       <div>
         <div className={`${large ? 'text-2xl' : 'text-base'} font-extrabold text-navy dark:text-white`}>{inr(option.price)}</div>
-        <div className="text-[10px] text-muted dark:text-slate-400">validated total{option.pricingType === 'PER_PERSON' ? ` · ${inr(option.basePrice)} per ${option.unit || 'guest'}` : ''}</div>
+        <div className="text-[10px] text-muted dark:text-slate-400">{option.isDemo ? 'Demo price' : 'Advertised estimate · vendor quote required'}{option.pricingType === 'PER_PERSON' ? ` · ${inr(option.basePrice)} per ${option.unit || 'guest'}` : ''}</div>
       </div>
     );
   }

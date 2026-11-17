@@ -145,6 +145,8 @@ export function CircleScreen({ route, navigation }: any) {
   const contexts: Data[] = r.data.contexts || [];
   return (
     <Page {...r} title="Event Circle" subtitle={r.data.event?.title}>
+      <Button title="Private Circle & participants" onPress={() => navigation.navigate('CustomerCollaboration', { eventId })} />
+      <Button title="Photos, videos & Event Memory" secondary onPress={() => navigation.navigate('CustomerEventMedia', { eventId, memory: true })} />
       <Txt muted>
         Keep whole-event, service and booking conversations in their own
         threads.
@@ -238,7 +240,7 @@ export function BudgetScreen({ route, navigation }: any) {
                     style={{
                       width: `${percentage}%`,
                       height: 9,
-                      backgroundColor: c.accent,
+                      backgroundColor: c.action,
                     }}
                   />
                 </View>

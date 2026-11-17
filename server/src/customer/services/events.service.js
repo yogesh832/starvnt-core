@@ -19,6 +19,7 @@ import {
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
   CATEGORY_LABELS,
+  categoryLabel,
   normalizeEventType,
   normalizeCategory,
   templateFor,
@@ -628,12 +629,20 @@ export async function home(customerId) {
 /** Event day: only what was recorded (check-in / start / complete), nothing assumed. */
 export async function eventDay(customerId, eventId) {
   const event = await getOwnedEventOr404(customerId, eventId);
-  const bookings = (await commerceRepo.listBookings(event._id)).filter((b) => b.status === 'confirmed');
+  const { eventWorkflows } = await import('./bookingWorkflow.service.js');
+  const workflow = await eventWorkflows(customerId, eventId);
+  const services = workflow.services.map(booking => ({
+    ...booking, label: categoryLabel(booking.category), vendorName: booking.vendorName, workflow: true,
+    checkedInAt: booking.execution.checkedInAt, startedAt: booking.execution.startedAt,
+    submittedAt: booking.execution.submittedAt, completedAt: booking.execution.verifiedAt,
+  }));
+  const demoBookings = (await commerceRepo.listBookings(event._id)).filter(b => b.isDemo && b.status === 'confirmed');
   return {
     event: serializeEvent(event),
     live: event.status === 'in_progress',
-    services: bookings.map(serializeBooking),
-    allCompleted: bookings.length > 0 && bookings.every((b) => b.executionStatus === 'completed'),
+    observedAt: workflow.observedAt,
+    services: [...services, ...demoBookings.map(serializeBooking)],
+    allCompleted: services.length > 0 && services.every(b => b.executionStatus === 'COMPLETION_VERIFIED' && !b.protection.underReview),
   };
 }
 

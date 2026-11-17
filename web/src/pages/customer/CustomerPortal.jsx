@@ -1,39 +1,51 @@
-import Customer360 from './Customer360.jsx';
-import Discovery from './Discovery.jsx';
+
+
 import { CustomerProposals } from '../ProposalWorkspace.jsx';
 import AuraMark from '../../components/AuraMark.jsx';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { useTheme } from '../../lib/ThemeContext.jsx';
 import Icon from '../../components/Icon.jsx';
 import './customerDesign.css';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
-import AuraChat from './AuraChat.jsx';
-import HomePage from './HomePage.jsx';
+
 import EventSwitcher from './EventSwitcher.jsx';
-import EventsPage from './EventsPage.jsx';
-import EventPage from './EventPage.jsx';
-import EventPlanPage from './EventPlanPage.jsx';
-import EventHistoryPage from './EventHistoryPage.jsx';
-import ServicesPage from './ServicesPage.jsx';
-import ServiceDetailPage from './ServiceDetailPage.jsx';
-import ComparePage from './ComparePage.jsx';
-import QuotesPage from './QuotesPage.jsx';
-import BookingsPage from './BookingsPage.jsx';
-import EventDayPage from './EventDayPage.jsx';
-import CirclePage from './CirclePage.jsx';
-import BudgetPage from './BudgetPage.jsx';
-import ManualPlanPage from './ManualPlanPage.jsx';
-import UpdatesPage from './UpdatesPage.jsx';
-import MePage from './MePage.jsx';
-import RemindersPage from './RemindersPage.jsx';
-import VendorsPage from './VendorsPage.jsx';
-import { DocumentsPage, FavoritesPage, SettingsPage } from './PlaceholderPages.jsx';
+
 import { CurrentEventProvider, GoToSection, useCurrentEvent } from './currentEvent.jsx';
 import { customerApi } from './customerApi.js';
 import { CustomerErrorScreen } from './customerUi.jsx';
 import { takePendingPrompt } from './pendingPrompt.js';
+
+const Customer360 = lazy(() => import('./Customer360.jsx'));
+const Discovery = lazy(() => import('./Discovery.jsx'));
+const AuraChat = lazy(() => import('./AuraChat.jsx'));
+const HomePage = lazy(() => import('./HomePage.jsx'));
+const EventsPage = lazy(() => import('./EventsPage.jsx'));
+const EventPage = lazy(() => import('./EventPage.jsx'));
+const EventPlanPage = lazy(() => import('./EventPlanPage.jsx'));
+const EventHistoryPage = lazy(() => import('./EventHistoryPage.jsx'));
+const ServicesPage = lazy(() => import('./ServicesPage.jsx'));
+const ServiceDetailPage = lazy(() => import('./ServiceDetailPage.jsx'));
+const ComparePage = lazy(() => import('./ComparePage.jsx'));
+const QuotesPage = lazy(() => import('./QuotesPage.jsx'));
+const BookingsPage = lazy(() => import('./BookingsPage.jsx'));
+const EventDayPage = lazy(() => import('./EventDayPage.jsx'));
+const CirclePage = lazy(() => import('./CirclePage.jsx'));
+const BudgetPage = lazy(() => import('./BudgetPage.jsx'));
+const ManualPlanPage = lazy(() => import('./ManualPlanPage.jsx'));
+const UpdatesPage = lazy(() => import('./UpdatesPage.jsx'));
+const MePage = lazy(() => import('./MePage.jsx'));
+const RemindersPage = lazy(() => import('./RemindersPage.jsx'));
+const VendorsPage = lazy(() => import('./VendorsPage.jsx'));
+const NotificationSettingsPage = lazy(() => import('./NotificationSettingsPage.jsx'));
+const EventMediaPage = lazy(() => import('./EventMediaPage.jsx'));
+const BookingWorkflowPage = lazy(() => import('./BookingWorkflowPage.jsx'));
+const DocumentsPage = lazy(() => import('./PlaceholderPages.jsx').then(module => ({ default: module.DocumentsPage })));
+const FavoritesPage = lazy(() => import('./PlaceholderPages.jsx').then(module => ({ default: module.FavoritesPage })));
+const SettingsPage = lazy(() => import('./PlaceholderPages.jsx').then(module => ({ default: module.SettingsPage })));
+const EventCollaborationPage = lazy(() => import('./EventCollaborationPage.jsx').then(module => ({ default: module.default })));
+const CircleInvitationsPage = lazy(() => import('./EventCollaborationPage.jsx').then(module => ({ default: module.CircleInvitationsPage })));
 
 /* Sidebar (reference screen set 4). Per-event sections open the current event. */
 const SIDEBAR = [
@@ -321,7 +333,7 @@ function Shell() {
 
         {tab === 'aura' ? (
           <main className="flex-1 min-h-0 flex flex-col pb-28 md:pb-0">
-            <AuraChat firstName={firstName} />
+            <Suspense fallback={<div role="status" className="p-6 text-muted">Loading Aura+…</div>}><AuraChat firstName={firstName} /></Suspense>
           </main>
         ) : eventLoadError && !canOpenWithoutEventList ? (
           <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-28 md:pb-6">
@@ -333,7 +345,7 @@ function Shell() {
           </main>
         ) : (
           <main className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 pb-28 md:pb-6">
-            <Routes>
+            <Suspense fallback={<div role="status" className="p-6 text-muted">Loading your workspace…</div>}><Routes>
               <Route index element={<HomePage firstName={firstName} />} />
               <Route path="events" element={<EventsPage />} />
               <Route path="events/new" element={<ManualPlanPage />} />
@@ -345,23 +357,29 @@ function Shell() {
               <Route path="events/:id/compare" element={<ComparePage />} />
               <Route path="events/:id/quotes" element={<QuotesPage />} />
               <Route path="events/:id/bookings" element={<BookingsPage />} />
+              <Route path="events/:id/bookings/:bookingId" element={<BookingWorkflowPage />} />
               <Route path="events/:id/payments" element={<BookingsPage />} />
               <Route path="events/:id/vendors" element={<VendorsPage />} />
               <Route path="events/:id/event-day" element={<EventDayPage />} />
               <Route path="events/:id/circle" element={<CirclePage />} />
+              <Route path="events/:id/collaboration" element={<EventCollaborationPage />} />
+              <Route path="events/:id/media" element={<EventMediaPage />} />
+              <Route path="events/:id/memory" element={<EventMediaPage memoryView />} />
+              <Route path="invitations" element={<CircleInvitationsPage />} />
               <Route path="events/:id/budget" element={<BudgetPage />} />
               <Route path="go/:section" element={<GoToSection />} />
               <Route path="updates" element={<UpdatesPage onRead={refreshUnread} />} />
               <Route path="documents" element={<DocumentsPage />} />
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="settings/notifications" element={<NotificationSettingsPage />} />
               <Route path="me" element={<MePage user={user} logout={logout} />} />
               <Route path="reminders" element={<RemindersPage />} />
               <Route path="customer-360" element={<Customer360 />} />
               <Route path="discovery" element={<Discovery />} />
               <Route path="proposals" element={<CustomerProposals />} />
               <Route path="*" element={<Navigate to="/customer" replace />} />
-            </Routes>
+            </Routes></Suspense>
           </main>
         )}
 

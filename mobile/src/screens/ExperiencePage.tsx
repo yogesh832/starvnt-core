@@ -101,7 +101,7 @@ export function ExperienceScreen({ route, navigation }: any) {
   return (
     <Page title="Event Experience" subtitle="Share honest feedback directly with STARVNT">
       <View style={{ gap: 14 }}>
-        {!!a.error && <ErrorNotice error={a.error} />}
+        <ErrorNotice message={a.error} />
 
         {/* Token input if not provided */}
         {!token && (
@@ -218,7 +218,7 @@ export function ExperienceScreen({ route, navigation }: any) {
                         paddingVertical: 8,
                         paddingHorizontal: 14,
                         borderRadius: 12,
-                        backgroundColor: rating >= star ? c.accent : c.card,
+                        backgroundColor: rating >= star ? c.action : c.card,
                         borderWidth: 1,
                         borderColor: c.line,
                       }}
@@ -246,7 +246,7 @@ export function ExperienceScreen({ route, navigation }: any) {
                             paddingHorizontal: 8,
                             paddingVertical: 4,
                             borderRadius: 6,
-                            backgroundColor: val >= n ? c.accent : c.card,
+                            backgroundColor: val >= n ? c.action : c.card,
                           }}
                         >
                           <Txt size={11} bold color={val >= n ? '#fff' : c.muted}>
@@ -289,7 +289,7 @@ export function ExperienceScreen({ route, navigation }: any) {
                     borderRadius: 6,
                     borderWidth: 2,
                     borderColor: eventConfirmed ? c.accent : c.muted,
-                    backgroundColor: eventConfirmed ? c.accent : 'transparent',
+                    backgroundColor: eventConfirmed ? c.action : 'transparent',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
