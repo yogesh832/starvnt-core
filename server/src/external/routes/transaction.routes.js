@@ -953,6 +953,7 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       pricingBreakdown,
       notes,
       status = 'SUBMITTED',
+      requestKey,
     } = req.body || {};
 
     const resolvedVendorId =
@@ -995,9 +996,10 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       notes: String(notes || '').trim(),
       status,
       actor: req.externalUser.fullName || req.externalUser.email,
+      creationCommand: requestKey === undefined ? undefined : { key: requestKey, actorId: req.externalUser._id, intent: { kind: 'VENDOR_API_QUOTE', opportunityId: opportunityId || null, customerId: String(scope.customerId), vendorServiceId: String(scope.vendorServiceId), serviceName: serviceName || 'Event Service', eventDate, serviceLocation: serviceLocation || {}, pricingBreakdown: normalizedPricing, notes: String(notes || '').trim(), status } },
     });
 
-    if (opportunityId && quote.status === 'SUBMITTED') {
+    if (!quote.$locals.creationRequestReplayed && opportunityId && quote.status === 'SUBMITTED') {
       await Opportunity.findOneAndUpdate(
         { _id: opportunityId, vendor: resolvedVendorId },
         { status: 'RESPONDED', action: 'Quote Sent' }
@@ -1009,7 +1011,7 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
     const totalAmount = Number(quote.pricingBreakdown?.totalAmount || 0);
     const advanceAmount = Number(quote.advanceAmount || quoteAdvanceAmount(quote, totalAmount));
 
-    if (quote.status === 'SUBMITTED') await recordLifecycleEventMessage({
+    if (!quote.$locals.creationRequestReplayed && quote.status === 'SUBMITTED') await recordLifecycleEventMessage({
       vendorId: resolvedVendorId,
       customerId: quote.customer,
       eventId: quote.event,
@@ -1022,7 +1024,7 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       type: 'quote',
     }).catch(() => null);
 
-    res.status(201).json({ ok: true, quote: await projectVendorContext(quote) });
+    res.status(201).json({ ok: true, quote: await projectVendorContext(quote), replayed: Boolean(quote.$locals.creationRequestReplayed) });
   } catch (err) {
     next(err);
   }

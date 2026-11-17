@@ -339,6 +339,16 @@ test('normal Vendor revise API confirms itemized costs and blocks revision durin
   await assert.rejects(executeAction(f.vendor, { ...pending, quote: { ...pending.quote, expectedCommercialVersion: current.commercialSnapshot.version, expectedRecordVersion: current.__v } }), error => error.code === 'QUOTE_PAYMENT_IN_PROGRESS');
   const denied = await request(app).post(`/api/vendor/quotes/${quote._id}/revise`).set(headers).send({ pricingBreakdown: { basePrice: 1200, totalAmount: 1200 } }).expect(409);
   assert.equal(denied.body.error, 'QUOTE_PAYMENT_IN_PROGRESS');
+  const enquiry = await Opportunity.create({ vendor: f.vendor._id, customer: f.customer._id, vendorService: service._id, serviceName: service.name, eventDate: '2028-01-01', serviceLocation: { city: 'Kolkata' }, status: 'NEW' });
+  const creation = { kind: 'create_quote', idempotencyKey: key(), quote: { opportunityId: String(enquiry._id), expectedEnquiryUpdatedAt: enquiry.updatedAt.toISOString(), customerId: String(f.customer._id), vendorServiceId: String(service._id), serviceName: service.name, eventDate: enquiry.eventDate, basePrice: 1100.25, travelFee: 0, totalAmount: 1100.25, notes: 'Synthetic confirmed creation' } };
+  const sent = await executeAction(f.vendor, creation);
+  assert.equal((await Opportunity.findById(enquiry._id)).status, 'RESPONDED');
+  await Opportunity.updateOne({ _id: enquiry._id }, { $set: { status: 'EXPIRED', slaExpiresAt: new Date(0) } });
+  const recovered = await executeAction(f.vendor, creation);
+  assert.equal(String(recovered.quoteId), String(sent.quoteId)); assert.equal(recovered.replayed, true);
+  assert.equal(await Quote.countDocuments({ opportunity: enquiry._id }), 1);
+  assert.equal((await Opportunity.findById(enquiry._id)).status, 'EXPIRED');
+  await assert.rejects(executeAction(f.vendor, { ...creation, quote: { ...creation.quote, notes: 'Changed request' } }), error => error.code === 'QUOTE_REQUEST_CHANGED');
 });
 
 test('Aura cannot guess quote/enquiry recipients or accept model-supplied record versions', () => {

@@ -12,7 +12,7 @@ import { VendorBlockout } from '../models/VendorBlockout.js';
 import { Quote } from '../models/Quote.js';
 import { Opportunity } from '../models/Opportunity.js';
 import { VendorMessageThread } from '../models/VendorMessageThread.js';
-import { createQuote, assertQuoteSubmission } from '../services/quoteStateMachine.service.js';
+import { createQuote, assertQuoteSubmission, recoverQuoteCreation } from '../services/quoteStateMachine.service.js';
 import { notifyCustomer } from '../../notifications/notification.service.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
@@ -847,6 +847,9 @@ export async function executeAction(vendor, a) {
 
   if (a.kind === 'create_quote') {
     const q = a.quote;
+    const creationCommand = a.idempotencyKey ? { key: a.idempotencyKey, actorId: vendor.owner || vendorId, intent: { kind: 'AURA_QUOTE', quote: q } } : undefined;
+    const recovered = await recoverQuoteCreation(vendorId, creationCommand);
+    if (recovered) return { kind: 'create_quote', quoteId: recovered._id, quoteRef: recovered.quoteReference, total: recovered.pricingBreakdown.totalAmount, replayed: true };
     const opportunity = q.opportunityId && await Opportunity.findOne({ _id: q.opportunityId, vendor: vendorId, status: { $in: ['NEW', 'VIEWED'] }, $or: [{ slaExpiresAt: null }, { slaExpiresAt: { $gt: new Date() } }] });
     if (!opportunity) throw Object.assign(new Error('Choose an open enquiry owned by your vendor account.'), { code: 'OWNED_ENQUIRY_REQUIRED' });
     if (q.expectedEnquiryUpdatedAt !== opportunity.updatedAt?.toISOString() || String(q.customerId) !== String(opportunity.customer) || String(q.vendorServiceId) !== String(opportunity.vendorService) || q.eventDate !== opportunity.eventDate) throw Object.assign(new Error('The enquiry changed after review. Refresh it and confirm the current scope.'), { code: 'ENQUIRY_VERSION_CONFLICT' });
@@ -856,6 +859,7 @@ export async function executeAction(vendor, a) {
 
     const advancePolicy = await getCommercialPolicyForCategory(vendor.category);
     const quote = await createQuote({
+      creationCommand,
       opportunityId: opportunityId || null,
       vendorId,
       customerId,
@@ -878,6 +882,7 @@ export async function executeAction(vendor, a) {
       actor: vendor.businessName || 'Vendor',
     });
 
+    if (quote.$locals.creationRequestReplayed) return { kind: 'create_quote', quoteId: quote._id, quoteRef: quote.quoteReference, total: quote.pricingBreakdown.totalAmount, replayed: true };
     if (opportunityId) {
       await Opportunity.findOneAndUpdate(
         { _id: opportunityId, vendor: vendorId },

@@ -6,6 +6,17 @@ import { evaluateVendorActivation } from './vendorActivation.service.js';
 import { checkTrueAvailability } from './availability.service.js';
 import { schedulingError } from '../../common/scheduleRules.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
+import { quoteCreationCommand, quoteCreationConflict } from '../../common/quoteCreationCommand.js';
+
+export async function recoverQuoteCreation(vendorId, command) {
+  const identity = quoteCreationCommand(vendorId, command);
+  if (!identity) return null;
+  const row = await Quote.findOne({ vendor: vendorId, creationRequestKey: identity.key }).select('+creationRequestHash +creationRequestActor');
+  if (!row) return null;
+  if (row.creationRequestHash !== identity.hash || row.creationRequestActor !== identity.actor) throw quoteCreationConflict();
+  row.$locals.creationRequestReplayed = true;
+  return row;
+}
 
 export async function assertQuoteSubmission({ vendor, vendorService, eventDate, serviceLocation, category, advancePolicy }) {
   const status = await evaluateVendorActivation(vendor?._id || vendor);
@@ -49,11 +60,16 @@ export async function createQuote({
   actor = 'VENDOR',
   advancePolicy,
   category = '',
+  creationCommand,
 }) {
+  const command = quoteCreationCommand(vendorId, creationCommand);
+  const prior = await recoverQuoteCreation(vendorId, creationCommand);
+  if (prior) return prior;
   const initialStatus = ['DRAFT', 'SUBMITTED'].includes(status) ? status : 'DRAFT';
   if (initialStatus === 'SUBMITTED') advancePolicy = await assertQuoteSubmission({ vendor: vendorId, vendorService: vendorServiceId, eventDate, serviceLocation, category, advancePolicy });
 
   const quote = new Quote({
+    ...(command ? { creationRequestKey: command.key, creationRequestHash: command.hash, creationRequestActor: command.actor } : {}),
     opportunity: opportunityId || null,
     vendor: vendorId,
     customer: customerId,
@@ -103,7 +119,11 @@ export async function createQuote({
   if (initialStatus === 'SUBMITTED') {
     quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown);
   }
-  await quote.save();
+  try { await quote.save(); }
+  catch (error) {
+    if (command && error.code === 11000) { const prior = await recoverQuoteCreation(vendorId, creationCommand); if (prior) return prior; }
+    throw error;
+  }
   return quote;
 }
 

@@ -333,6 +333,7 @@ function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
  * Quote Builder Dialog
  */
 function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
+  const [requestKey] = useState(() => crypto.randomUUID());
   const initialBase = enquiry?.budgetNumber || enquiry?.basePrice || 0;
   const [basePrice, setBasePrice] = useState(initialBase);
   const [quoteMessage, setQuoteMessage] = useState('');
@@ -345,7 +346,7 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
     const amounts = [Number(basePrice), Number(travelFee)];
     if (amounts.some(value => !Number.isFinite(value) || value < 0) || total <= 0) { setError('Enter a positive total with valid nonnegative charges.'); return; }
     setSubmitting(true); setError('');
-    try { await onSubmitQuote({ base: amounts[0], travel: amounts[1], total, notes: quoteMessage, status }); onClose(); }
+    try { await onSubmitQuote({ base: amounts[0], travel: amounts[1], total, notes: quoteMessage, status, requestKey }); onClose(); }
     catch (error) { setError(error.message || 'The quote could not be confirmed. Review it before retrying.'); }
     finally { setSubmitting(false); }
   }
@@ -754,6 +755,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           method: 'POST',
           body: {
             opportunityId: enquiry.opportunityId,
+            requestKey: q.requestKey,
             customerId: enquiry.customerId,
             vendorServiceId: enquiry.serviceId,
             serviceName: enquiry.title,

@@ -275,7 +275,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
           reply = `✅ Revised offer sent for quote ${session.pending.quote.quoteRef || ''} (${session.pending.quote.customerName || 'customer'}) — Total ₹${Number(session.pending.quote.totalAmount).toLocaleString('en-IN')}.`;
           actions = [{ label: 'View Quotes', to: '/vendor/quotes' }];
         } else if (session.pending.kind === 'create_quote') {
-          reply = `✅ Quotation sent to ${session.pending.quote.customerName || 'customer'} for ${session.pending.quote.serviceName} — Total ₹${Number(session.pending.quote.totalAmount).toLocaleString('en-IN')}.`;
+          reply = result?.replayed ? vendorCopy(language, 'recoveredQuote') : `✅ Quotation sent to ${session.pending.quote.customerName || 'customer'} for ${session.pending.quote.serviceName} — Total ₹${Number(session.pending.quote.totalAmount).toLocaleString('en-IN')}.`;
           actions = [{ label: 'View Quotes', to: '/vendor/quotes' }];
         } else {
           const activation = result;
@@ -284,7 +284,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
           reply = `✅ ${vendorCopy(language, 'saved')} — ${describeAction(session.pending, language)}.${next.text}`;
           actions = next.actions;
         }
-        if (language !== 'en' && ['block_date','revise_quote','create_quote'].includes(session.pending.kind)) reply = `✅ ${vendorCopy(language,'saved')} — ${describeAction(session.pending,language)}.`;
+        if (language !== 'en' && !result?.replayed && ['block_date','revise_quote','create_quote'].includes(session.pending.kind)) reply = `✅ ${vendorCopy(language,'saved')} — ${describeAction(session.pending,language)}.`;
         actionSucceeded = true;
       } catch (err) {
         vendorAuraDiagnostic('ACTION_FAILED', { actionKind: session.pending.kind });

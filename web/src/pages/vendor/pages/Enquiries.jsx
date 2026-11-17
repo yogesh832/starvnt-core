@@ -30,6 +30,7 @@ export default function Enquiries() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [quoteModalOpp, setQuoteModalOpp] = useState(null);
+  const [quoteRequestKey, setQuoteRequestKey] = useState('');
   const [basePrice, setBasePrice] = useState(0);
   const [travelFee, setTravelFee] = useState(0);
   const [equipmentFee, setEquipmentFee] = useState(0);
@@ -92,6 +93,7 @@ export default function Enquiries() {
   }, []);
 
   function handleOpenQuoteModal(opp) {
+    setQuoteRequestKey(crypto.randomUUID());
     setQuoteModalOpp(opp);
     setBasePrice(opp.basePrice || 0);
     setTravelFee(Number(opp.travelCost?.replace(/[^0-9.]/g, '')) || 0);
@@ -137,12 +139,14 @@ export default function Enquiries() {
     }
     setSubmitting(true);
     try {
+      let replayed = false;
       const totalAmount = Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee);
       if (quoteModalOpp.dbId) {
         const result = await externalApi.call('/quotes', {
           method: 'POST',
           body: {
             opportunityId: quoteModalOpp.dbId,
+            requestKey: quoteRequestKey,
             customerId: quoteModalOpp.customerId,
             vendorServiceId: quoteModalOpp.serviceId,
             serviceName: quoteModalOpp.service,
@@ -161,11 +165,12 @@ export default function Enquiries() {
           },
         });
         if (!result?.ok || !result.quote?._id) throw new Error('The server did not confirm the saved quote. Review Quotes before trying again.');
+        replayed = result.replayed === true;
       }
       setOpportunities((prev) =>
         prev.map((o) => (o.id === quoteModalOpp.id ? { ...o, status: 'Responded' } : o))
       );
-      setFeedback(`Offer of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. The customer can review the saved offer and its approved payment terms.`);
+      setFeedback(replayed ? 'The existing quote was recovered. Open Quotes to review its current version and payment terms.' : `Offer of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. The customer can review the saved offer and its approved payment terms.`);
       setQuoteModalOpp(null);
     } catch (err) {
       setFeedback(`Notice: ${err.message}`);

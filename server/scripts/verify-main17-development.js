@@ -125,7 +125,20 @@ try {
   await PortfolioItem.create({ vendor: vendor._id, mediaType: 'IMAGE', url: 'https://example.test/synthetic-public.jpg', status: 'PUBLISHED', visibility: 'PUBLIC' });
   const syntheticReadiness = await evaluateVendorActivation(vendor._id);
   assert.equal(syntheticReadiness.matchingEligible, true, JSON.stringify(syntheticReadiness.reasonCodes));
-  await page.route('**/api/quotes', route => route.request().method() === 'POST' ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_QUOTE_UNAVAILABLE', message: 'Synthetic quote submission unavailable' }) }) : route.continue());
+  let committedDraft = null, draftKey = null;
+  await page.route('**/api/quotes', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const payload = route.request().postDataJSON();
+    if (payload.status === 'DRAFT') {
+      if (committedDraft) return route.continue();
+      const response = await route.fetch();
+      assert.equal(response.status(), 201);
+      committedDraft = (await response.json()).quote._id;
+      draftKey = payload.requestKey;
+      return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_RECEIPT_LOST', message: 'Synthetic draft receipt lost after save' }) });
+    }
+    return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_QUOTE_UNAVAILABLE', message: 'Synthetic quote submission unavailable' }) });
+  });
   await page.goto('http://127.0.0.1:5199/vendor/dashboard');
   await page.getByRole('button', { name: 'Respond →', exact: true }).first().click();
   await page.getByRole('button', { name: /^Prepare Official Quote/ }).click();
@@ -135,7 +148,17 @@ try {
   await page.getByRole('heading', { name: 'Prepare Official Quote', exact: true }).waitFor();
   assert.equal(await page.getByPlaceholder('Enter base service pricing').inputValue(), '1234');
   assert.equal(await Quote.countDocuments({ vendor: vendor._id }), 1);
-  await page.getByRole('button', { name: 'Close quote modal', exact: true }).click();
+  await page.getByRole('button', { name: 'Save Draft', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Synthetic draft receipt lost after save' }).waitFor();
+  assert.equal(await Quote.countDocuments({ vendor: vendor._id }), 2);
+  const recoveredDraft = page.waitForResponse(response => response.url().endsWith('/api/quotes') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Save Draft', exact: true }).click();
+  const receipt = await (await recoveredDraft).json();
+  assert.equal(receipt.replayed, true); assert.equal(receipt.quote._id, committedDraft);
+  await page.getByRole('heading', { name: 'Prepare Official Quote', exact: true }).waitFor({ state: 'hidden' });
+  assert.equal(await Quote.countDocuments({ vendor: vendor._id, creationRequestKey: draftKey }), 1);
+  checks.push('A draft saved before a lost receipt is recovered by the same dashboard request key without a second quote');
+  await Opportunity.create({ vendor: vendor._id, customer: owner._id, vendorService: service._id, serviceName: service.name, eventDate: '2027-01-02', serviceLocation: { city: 'Pune' } });
   await page.goto('http://127.0.0.1:5199/vendor/enquiries');
   await page.getByRole('button', { name: 'Respond & Quote', exact: true }).first().click();
   await page.getByText('Reservation payment terms follow the approved policy saved with the submitted offer. Review that offer before collecting payment.', { exact: true }).waitFor();
