@@ -11,14 +11,16 @@ function eventDestination(value, eventPath) {
 
 export function nextHomeAction(event, attention = []) {
   const eventPath = `/customer/events/${encodeURIComponent(event.id)}`;
+  const draftPath = '/customer/events/new?draft=' + encodeURIComponent(event.id);
   const item = attention[0];
   if (item) {
+    if (event.status === 'draft' && item.type === 'draft_to_confirm') return { title: item.title, detail: item.detail, to: draftPath, label: 'Continue planning' };
     const fallback = item.type === 'quote_awaiting_decision' ? `${eventPath}/quotes`
       : ['reservation_awaiting_payment', 'payment_failed'].includes(item.type) ? `${eventPath}/bookings` : eventPath;
     return { title: item.title, detail: item.detail, to: eventDestination(item.actionUrl, eventPath) || fallback, label: 'Review next step' };
   }
   if (event.status === 'draft') {
-    return { title: 'Continue your event plan.', detail: 'Review the details you have saved and fill in what is still missing.', to: eventPath, label: 'Continue planning' };
+    return { title: 'Continue your event plan.', detail: 'Review the details you have saved and fill in what is still missing.', to: draftPath, label: 'Continue planning' };
   }
   return { title: 'Review your event.', detail: 'Check your requirements, bookings and important records before making your next decision.', to: eventPath, label: 'Review event' };
 }

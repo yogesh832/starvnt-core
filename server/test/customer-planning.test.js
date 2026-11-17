@@ -96,7 +96,7 @@ test('venue name is a location fact; arranging it requires an explicit service d
   assert.equal((await EventRequirement.findOne({ event: a.event.id, category: 'venue' })).providedValue, 'Personally arranged hall');
 });
 test('legacy manual creation no longer infers arrangement from a venue name', async () => {
-  const response = await request(app).post('/api/customer/events').set(auth(owner)).send({ eventType: 'wedding', eventDate: '2028-10-20', city: 'Kolkata', location: { venueName: 'Considering this hall' }, services: [] }).expect(201);
+  const response = await request(app).post('/api/customer/events').set(auth(owner)).send({ eventType: 'wedding', eventDate: '2028-10-20', city: 'Kolkata', location: { venueName: 'Considering this hall', coordinates: { lat: 22.5726, lng: 88.3639 } }, services: [] }).expect(201);
   assert.equal(response.body.requirements.find(r => r.category === 'venue').status, 'missing');
 });
 test('saving facts alone never confirms inferred services', async () => {

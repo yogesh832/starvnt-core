@@ -25,6 +25,7 @@ import { adminMeetingRoutes } from './learning/meetingRoutes.js';
 import aiRoutes from './external/routes/ai.routes.js';
 import { requireExternalAuth, requireAccountType } from './external/middleware/requireExternalAuth.js';
 import { customerRouter, auraRouter, internalRouter, webhookRouter } from './customer/routes/index.js';
+import { publicEventMediaRoutes } from './customer/routes/eventMedia.routes.js';
 
 import adminAuthRoutes from './admin/routes/auth.routes.js';
 import adminAvailabilityRoutes from './admin/routes/availability.routes.js';
@@ -118,6 +119,7 @@ export function createApp() {
   });
   // Customer App + Aura+ (events, plan, chat)
   app.use('/api/customer', customerRouter);
+  app.use('/api/event-publications', publicEventMediaRoutes);
   app.use('/api/customer', foundationCustomerRoutes);
   app.use('/api/customer', experienceCustomerRoutes);
   app.use('/api/customer', customerDiscovery);

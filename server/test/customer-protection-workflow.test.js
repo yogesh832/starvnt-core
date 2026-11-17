@@ -118,11 +118,12 @@ test('information requests and proposed resolutions remain distinct from a recon
     storage: { publicId: 'private-bank-statement', resourceType: 'raw', mime: 'application/pdf', bytes: 200 },
   });
   const financialEvidence = [{ assetId: String(privateFinance._id) }];
+  const independentStatement = await EventMedia.create({ event: event._id, booking: core._id, uploader: reconciler.id, uploaderType: 'ADMIN', purpose: 'FINANCE_EVIDENCE', kind: 'DOCUMENT', rightsConfirmed: true, requestKey: key(), requestHash: key(), storage: { publicId: 'independent-statement-fixture', resourceType: 'raw', mime: 'application/pdf', bytes: 201 } });
   await updateFinanceOperation(core._id, opId, { action: 'RECORD_TRANSFER', reference: 'PRIVATE-BANK-REFERENCE', evidence: financialEvidence, idempotencyKey: key() }, admin);
   const processing = (await workflow()).body.booking;
   assert.equal(processing.refund.operations[0].status, 'PROCESSING');
   assert.equal(processing.refund.confirmedAmount, 0);
-  await updateFinanceOperation(core._id, opId, { action: 'RECONCILE', reference: 'PRIVATE-BANK-REFERENCE', notes: 'Independent bank reconciliation', evidence: financialEvidence, idempotencyKey: key() }, reconciler);
+  await updateFinanceOperation(core._id, opId, { action: 'RECONCILE', reference: 'PRIVATE-BANK-REFERENCE', notes: 'Independent bank reconciliation', evidence: [{ assetId: String(independentStatement._id) }], idempotencyKey: key() }, reconciler);
   const confirmed = (await workflow()).body.booking;
   assert.equal(confirmed.refund.confirmedAmount, 100);
   assert.equal(confirmed.refund.remainingPaidAmount, 200);

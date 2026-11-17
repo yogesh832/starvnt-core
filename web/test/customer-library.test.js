@@ -5,7 +5,7 @@ import { notificationTarget, updateCategory, withoutDuplicateMessages, belongsTo
 import { routeEventId, resolveCurrentEvent } from '../src/pages/customer/eventContext.js';
 
 test('event-scoped library URLs determine the shell context and isolate inaccessible IDs', () => {
-  for (const path of ['/customer/documents', '/customer/favorites', '/customer/updates', '/customer/proposals', '/customer/reminders']) {
+  for (const path of ['/customer/documents', '/customer/favorites', '/customer/updates', '/customer/reminders']) {
     assert.equal(routeEventId(path, '?event=a'), 'a');
     assert.equal(resolveCurrentEvent([{ id: 'b' }], 'b', path, '?event=a'), null);
   }

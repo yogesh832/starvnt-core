@@ -29,3 +29,16 @@ export async function acceptPortalSession(data, api, isCurrent = () => true, exp
   if (data.accessToken) api.setToken(data.accessToken);
   return data.user;
 }
+
+export function portalNextPath(path, surface = PORTAL_SURFACE) {
+  const base = surface === 'VENDOR' ? '/vendor' : '/customer';
+  if (typeof path !== 'string' || !path.startsWith('/') || path.includes('\\') || /[\u0000-\u001f]/.test(path)) return base;
+  try { const url = new URL(path, 'https://portal.invalid'); return url.origin === 'https://portal.invalid' && (url.pathname === base || url.pathname.startsWith(`${base}/`)) ? `${url.pathname}${url.search}${url.hash}` : base; } catch { return base; }
+}
+
+export function portalSignupUrl(type, settings = configured()) {
+  const url = new URL(portalLoginUrl(type, settings));
+  url.pathname = '/signup';
+  url.search = `?as=${type === 'VENDOR' ? 'vendor' : 'customer'}`;
+  return url.href;
+}
