@@ -1,4 +1,3 @@
-import { assertEventCompletionReady } from '../../admin/services/executionSettlement.service.js';
 import * as eventsRepo from '../repositories/events.repo.js';
 import { cancelOwnedBooking } from './bookingTruth.service.js';
 import * as reqRepo from '../repositories/requirements.repo.js';
@@ -8,6 +7,7 @@ import { verifyPayment, serializeBooking, serializePayment } from './commerce.se
 import { categoryLabel } from './planCatalog.js';
 import { EXECUTION_STEPS } from '../models/index.js';
 import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
+import { assertEventCompletionReady } from '../../admin/services/executionSettlement.service.js';
 
 /**
  * Internal operations (x-internal-key). Every call names an operator, which
@@ -128,7 +128,10 @@ async function markEventCompleted(event, operator, { requireReady = false } = {}
   const demoOnly = process.env.NODE_ENV !== 'production' && bookings.length > 0 && bookings.every(booking => booking.isDemo);
   if (!demoOnly) {
     try { await assertEventCompletionReady(event._id, event.customer); }
-    catch (error) { if (!requireReady && error.statusCode === 409) return false; throw error; }
+    catch (error) {
+      if (!requireReady && error.statusCode === 409) return false;
+      throw error;
+    }
   }
   const done = await eventsRepo.setEventStatus(event._id, ['planning', 'booked', 'in_progress'], 'completed');
   if (!done) return false;

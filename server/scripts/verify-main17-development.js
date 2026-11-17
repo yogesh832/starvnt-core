@@ -14,6 +14,9 @@ const { createApp } = await import('../src/app.js');
 const { ExternalUser } = await import('../src/external/models/ExternalUser.js');
 const { VendorOrganization } = await import('../src/external/models/VendorOrganization.js');
 const { LearningLesson, LearningFeedback } = await import('../src/learning/models.js');
+const { VendorService } = await import('../src/external/models/VendorService.js');
+const { Quote } = await import('../src/external/models/Quote.js');
+const { commercialSnapshot } = await import('../src/external/services/commercialSnapshot.service.js');
 const bcrypt = (await import('bcryptjs')).default;
 const express = (await import('express')).default;
 const checks = [];
@@ -26,6 +29,11 @@ try {
   const owner = await ExternalUser.create({ fullName: 'Synthetic QA Owner', email: 'main17-fixture@example.test', accountType: 'VENDOR', passwordHash: await bcrypt.hash(password, 4) });
   const vendor = await VendorOrganization.create({ owner: owner._id, businessName: 'Synthetic QA Vendor', category: 'Photography', location: 'Pune' });
   owner.vendorOrganization = vendor._id; await owner.save();
+  const service = await VendorService.create({ vendor: vendor._id, name: 'Synthetic QA service', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 100 } });
+  const quote = new Quote({ vendor: vendor._id, customer: owner._id, vendorService: service._id, serviceName: service.name, eventDate: '2027-01-01', status: 'SUBMITTED', pricingBreakdown: { basePrice: 100, totalAmount: 100 }, notes: 'Original synthetic scope' });
+  quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown, 1); await quote.save();
+  quote.pricingBreakdown = { basePrice: 200, totalAmount: 200 }; quote.notes = 'Revised synthetic scope';
+  quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown, 2); await quote.save();
   const lesson = await LearningLesson.create({ title: 'Synthetic QA Lesson', category: 'Getting Started', objective: 'Test the existing lesson screen', content: 'Synthetic QA content only.', state: 'PUBLISHED', createdBy: 'fixture-only', requestKey: crypto.randomUUID(), requestHash: 'fixture', rightsReference: 'synthetic-fixture-rights', publishAt: new Date(Date.now() - 1000) });
   api = createApp().listen(4119, '127.0.0.1');
   await new Promise((done, reject) => { api.once('listening', done); api.once('error', reject); });
@@ -69,6 +77,13 @@ try {
   await page.getByText('No agreements have been assigned. No legal acceptance is implied by this empty state.', { exact: true }).waitFor();
   checks.push('Signed-in agreement wallet renders genuine empty state without implied legal acceptance');
   await page.screenshot({ path: resolve(output, 'agreements-empty-desktop.png'), fullPage: true });
+  await page.goto(`http://127.0.0.1:5199/vendor/quotes?record=${quote._id}`);
+  await page.getByRole('heading', { name: 'Submitted commercial versions', exact: true }).waitFor();
+  await page.getByText('Version 1 · INR 100', { exact: true }).click();
+  await page.getByText('Archived private scope details require a verified active service booking.', { exact: true }).first().waitFor();
+  await page.getByText('Approved policy required', { exact: true }).waitFor();
+  checks.push('Existing quote drawer renders prior version amount with private scope protected and no invented advance percentage');
+  await page.screenshot({ path: resolve(output, 'quote-versions-desktop.png'), fullPage: true });
   writeFileSync(resolve(output, 'report.json'), JSON.stringify({ environment: 'Synthetic isolated MongoMemoryServer + local Express + production Vite bundle + headless Chrome. Responsive web, not native-device acceptance.', checks, screenshotsContain: 'Synthetic fixtures only', passed: true }, null, 2));
   console.log(JSON.stringify({ passed: true, checks: checks.length, report: resolve(output, 'report.json') }));
 } finally {

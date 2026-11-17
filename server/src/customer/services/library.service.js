@@ -1,9 +1,13 @@
 import mongoose from 'mongoose';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { Booking, CustomerContractDocument, CustomerEvent, CustomerFavorite, EventRequirement, Payment } from '../models/index.js';
-import { badRequest, notFound } from '../utils/http.js';
+import { badRequest, conflict, notFound } from '../utils/http.js';
+import crypto from 'node:crypto';
 
 const isObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+function secureFileUrl(value) {
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : null; } catch { return null; }
+}
 const asId = (doc) => String(doc?._id || '');
 const money = (n) => (Number.isFinite(Number(n)) ? `INR ${Number(n).toLocaleString('en-IN')}` : 'Not recorded');
 const ymd = (value) => {
@@ -36,19 +40,19 @@ function paymentReceipt(payment, event, booking) {
     amount: payment.amount,
     currency: payment.currency || 'INR',
     status: payment.status,
-    issuedAt: payment.verifiedAt || payment.createdAt,
-    canDownload: ['paid', 'verified'].includes(payment.status),
+    issuedAt: payment.status === 'verified' ? payment.verifiedAt || null : null,
+    canDownload: payment.status === 'verified',
     downloadUrl: `/api/customer/documents/payment_receipt_${asId(payment)}/download`,
   };
 }
 
-function coreInvoice(core) {
+function coreInvoice(core, event) {
   const invoiceNumber = core.taxSummary?.invoiceNumber || '';
   return {
     id: `core_invoice_${asId(core)}`,
     type: 'invoice',
     title: invoiceNumber ? `Invoice ${invoiceNumber}` : `Invoice for ${core.bookingReference}`,
-    event: {
+    event: serializeEvent(event) || {
       id: null,
       title: core.serviceName || core.category || 'Booked service',
       eventDate: core.eventDate,
@@ -61,7 +65,7 @@ function coreInvoice(core) {
     amount: core.totalAmount,
     currency: 'INR',
     status: core.paymentStatus,
-    issuedAt: core.taxSummary?.invoiceIssuedAt || core.paymentSummary?.paidAt || core.createdAt,
+    issuedAt: core.taxSummary?.invoiceIssuedAt || null,
     canDownload: Boolean(invoiceNumber) || core.paymentStatus === 'PAYMENT_VERIFIED',
     downloadUrl: `/api/customer/documents/core_invoice_${asId(core)}/download`,
   };
@@ -86,13 +90,15 @@ function contractDocument(contract, event, booking, coreBooking) {
     currency: 'INR',
     status: contract.status,
     issuedAt: contract.createdAt,
-    canDownload: true,
+    canDownload: Boolean(secureFileUrl(contract.fileUrl)),
     fileName: contract.fileName,
     downloadUrl: `/api/customer/documents/contract_${asId(contract)}/download`,
   };
 }
 
-export async function listDocuments(customerId) {
+export async function listDocuments(customerId, filters = {}) {
+  if (filters.eventId && (!isObjectId(filters.eventId) || !await CustomerEvent.exists({ _id: filters.eventId, customer: customerId }))) throw notFound('Event not found');
+  if (filters.type && !['receipt', 'invoice', 'contract'].includes(filters.type)) throw badRequest('INVALID_DOCUMENT_TYPE', 'Choose a supported document type.');
   const [events, bookings, payments, coreBookings, contracts] = await Promise.all([
     CustomerEvent.find({ customer: customerId }).lean(),
     Booking.find({ customer: customerId }).lean(),
@@ -106,19 +112,19 @@ export async function listDocuments(customerId) {
   const coreBookingById = new Map(coreBookings.map((booking) => [asId(booking), booking]));
 
   const documents = [
-    ...contracts.map((contract) => contractDocument(contract, eventById.get(asId(contract.event)), bookingById.get(asId(contract.booking)), coreBookingById.get(asId(contract.coreBooking)))),
-    ...coreBookings.map(coreInvoice),
+    ...contracts.map((contract) => contractDocument(contract, eventById.get(asId(contract.event)) || eventById.get(asId(coreBookingById.get(asId(contract.coreBooking))?.customerEvent)), bookingById.get(asId(contract.booking)), coreBookingById.get(asId(contract.coreBooking)))),
+    ...coreBookings.map(core => coreInvoice(core, eventById.get(asId(core.customerEvent)))),
     ...payments.map((payment) => paymentReceipt(payment, eventById.get(asId(payment.event)), bookingByPayment.get(asId(payment)))),
   ];
   documents.sort((a, b) => new Date(b.issuedAt || 0) - new Date(a.issuedAt || 0));
-  return { documents };
+  return { documents: documents.filter(doc => (!filters.eventId || doc.event?.id === String(filters.eventId)) && (!filters.type || doc.type === filters.type)).map(doc => ({ source: doc.type === 'contract' ? 'customer_link' : 'saved_record', immutable: false, version: null, ...doc })) };
 }
 
 export async function createContract(customerId, body = {}) {
   const title = String(body.title || '').trim();
   const fileUrl = String(body.fileUrl || '').trim();
   if (!title) throw badRequest('TITLE_REQUIRED', 'Contract title is required.');
-  if (!fileUrl || !/^https?:\/\//i.test(fileUrl)) throw badRequest('FILE_URL_REQUIRED', 'A secure uploaded contract URL is required.');
+  if (!secureFileUrl(fileUrl)) throw badRequest('FILE_URL_REQUIRED', 'A secure HTTPS contract URL without credentials is required.');
 
   let event = null;
   let booking = null;
@@ -195,10 +201,8 @@ export async function listFavorites(customerId) {
   ]);
 
   const savedRows = saved.map((favorite) => savedFavorite(favorite, favorite.event ? eventById.get(asId(favorite.event)) : null));
-  const savedOptionIds = new Set(savedRows.map((favorite) => favorite.optionId).filter(Boolean));
   const selectedRows = selected
-    .map((requirement) => selectedFavorite(requirement, eventById.get(asId(requirement.event))))
-    .filter((favorite) => !favorite.optionId || !savedOptionIds.has(favorite.optionId));
+    .map((requirement) => selectedFavorite(requirement, eventById.get(asId(requirement.event))));
   const favorites = [...savedRows, ...selectedRows];
   favorites.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   return { favorites };
@@ -226,12 +230,17 @@ export async function saveFavorite(customerId, body = {}) {
   };
   if (payload.price != null && !Number.isFinite(payload.price)) throw badRequest('INVALID_PRICE', 'Price must be a number.');
 
+  // The existing unique key is customer + option. Keep its event scope stable;
+  // independent per-event collections need the separately reviewed migration.
+  const existing = payload.optionId ? await CustomerFavorite.findOne({ customer: customerId, optionId: payload.optionId }).lean() : null;
+  if (existing && String(existing.event || '') !== String(payload.event || '')) throw conflict('SAVED_SCOPE_CONFLICT', 'This option is already saved in another scope. Open Saved items to manage it.');
+
   const favorite = payload.optionId
     ? await CustomerFavorite.findOneAndUpdate(
-        { customer: customerId, optionId: payload.optionId },
+        { customer: customerId, optionId: payload.optionId, event: payload.event },
         { $set: payload },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      ).lean()
+        { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+      ).lean().catch(error => { if (error.code === 11000) throw conflict('SAVED_SCOPE_CONFLICT', 'This option is already saved in another scope. Open Saved items to manage it.'); throw error; })
     : await CustomerFavorite.create(payload).then((doc) => doc.toObject());
   return { favorite: savedFavorite(favorite, event) };
 }
@@ -287,6 +296,7 @@ export async function documentPdf(customerId, documentId) {
     if (!isObjectId(id)) throw notFound('Document not found');
     const contract = await CustomerContractDocument.findOne({ _id: id, customer: customerId, status: { $ne: 'ARCHIVED' } }).lean();
     if (!contract) throw notFound('Document not found');
+    if (!secureFileUrl(contract.fileUrl)) throw conflict('DOCUMENT_LINK_UNAVAILABLE', 'Ask the file owner for a secure replacement link.');
     return {
       filename: contract.fileName || `${contract.title}.pdf`,
       redirectUrl: contract.fileUrl,
@@ -299,6 +309,7 @@ export async function documentPdf(customerId, documentId) {
     if (!isObjectId(id)) throw notFound('Document not found');
     const core = await CoreBooking.findOne({ _id: id, customerId }).lean();
     if (!core) throw notFound('Document not found');
+    if (!coreInvoice(core).canDownload) throw conflict('DOCUMENT_NOT_ISSUED', 'This invoice is not available for download yet.');
     return {
       filename: `${core.taxSummary?.invoiceNumber || core.bookingReference || 'starvnt-invoice'}.pdf`,
       buffer: buildSimplePdf([
@@ -320,7 +331,7 @@ export async function documentPdf(customerId, documentId) {
   if (documentId.startsWith('payment_receipt_')) {
     const id = documentId.replace('payment_receipt_', '');
     if (!isObjectId(id)) throw notFound('Document not found');
-    const payment = await Payment.findOne({ _id: id, customer: customerId, status: { $in: ['paid', 'verified'] } }).lean();
+    const payment = await Payment.findOne({ _id: id, customer: customerId, status: 'verified' }).lean();
     if (!payment) throw notFound('Document not found');
     const [event, booking] = await Promise.all([
       CustomerEvent.findOne({ _id: payment.event, customer: customerId }).lean(),

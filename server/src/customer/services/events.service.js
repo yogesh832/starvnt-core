@@ -19,6 +19,7 @@ import {
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
   CATEGORY_LABELS,
+  categoryLabel,
   normalizeEventType,
   normalizeCategory,
   templateFor,
@@ -193,15 +194,19 @@ export function validateFacts(input = {}) {
 
   // A range in the customer's own numbers ("10 to 15 lakh").
   if (input.budgetMin !== undefined || input.budgetMax !== undefined) {
-    const lo = Number(input.budgetMin);
-    const hi = input.budgetMax == null ? null : Number(input.budgetMax);
-    if (out.budget != null || input.budgetRange) errors.budgetMin = 'Give either an exact budget or a range, not both';
-    else if (!Number.isFinite(lo) || lo < 0 || (hi != null && (!Number.isFinite(hi) || hi <= lo || hi > 1e10))) {
-      errors.budgetMin = 'Budget range must go from a lower to a higher amount';
+    if (input.budgetMin === null && input.budgetMax === null) {
+      out.budgetMin = null; out.budgetMax = null;
     } else {
-      out.budget = null;
-      out.budgetMin = Math.round(lo);
-      out.budgetMax = hi == null ? null : Math.round(hi);
+      const lo = Number(input.budgetMin);
+      const hi = input.budgetMax == null ? null : Number(input.budgetMax);
+      if (out.budget != null || input.budgetRange) errors.budgetMin = 'Give either an exact budget or a range, not both';
+      else if (!Number.isFinite(lo) || lo < 0 || (hi != null && (!Number.isFinite(hi) || hi <= lo || hi > 1e10))) {
+        errors.budgetMin = 'Budget range must go from a lower to a higher amount';
+      } else {
+        out.budget = null;
+        out.budgetMin = Math.round(lo);
+        out.budgetMax = hi == null ? null : Math.round(hi);
+      }
     }
   }
   if (input.customType !== undefined) {
@@ -221,27 +226,7 @@ export function validateFacts(input = {}) {
   return out;
 }
 
-/**
- * The venue is one fact in two places: the event location's venue name and
- * the "venue" plan item (arranged by the customer). Keep them in step so the
- * manual form and Aura+ always converge on the same data.
- */
-async function syncVenueRequirement(event, venueName, actor) {
-  if (!venueName) return;
-  const existing = await reqRepo.findRequirement(event._id, 'venue');
-  if (existing && LOCKED_REQUIREMENT_STATUSES.includes(existing.status)) return;
-  if (existing?.status === 'customer_provided' && existing.providedValue === venueName) return;
-  const { changed } = await reqRepo.upsertRequirement(
-    event._id,
-    'venue',
-    { status: 'customer_provided', source: 'customer', providedValue: venueName, ...NO_SELECTION },
-    { onlyIfStatusIn: ['missing', 'pending', 'customer_provided'] }
-  );
-  if (changed) {
-    await eventsRepo.appendHistory({ eventId: event._id, ...actor, action: 'requirement_updated', details: { category: 'venue', status: 'customer_provided' } });
-  }
-}
-
+// Venue names are location facts, never evidence of an arranged service.
 async function syncLocationVenue(event, venueName) {
   if (!venueName || event.location?.venueName === venueName) return;
   if (!EDITABLE_STATUSES.includes(event.status)) return;
@@ -328,7 +313,6 @@ export async function patchEvent(customerId, eventId, input, { actorType = 'cust
   if ('eventDate' in clean && actorType === 'customer') {
     await auraRepo.setContext(event._id, 'event.date', { value: { date: clean.eventDate }, state: 'KNOWN', source: 'customer' });
   }
-  if (clean['location.venueName']) await syncVenueRequirement(updated, clean['location.venueName'], { actorType, actorId });
   const changeHistory = await eventsRepo.appendHistory({
     eventId: event._id,
     actorType,
@@ -645,12 +629,20 @@ export async function home(customerId) {
 /** Event day: only what was recorded (check-in / start / complete), nothing assumed. */
 export async function eventDay(customerId, eventId) {
   const event = await getOwnedEventOr404(customerId, eventId);
-  const bookings = (await commerceRepo.listBookings(event._id)).filter((b) => b.status === 'confirmed');
+  const { eventWorkflows } = await import('./bookingWorkflow.service.js');
+  const workflow = await eventWorkflows(customerId, eventId);
+  const services = workflow.services.map(booking => ({
+    ...booking, label: categoryLabel(booking.category), vendorName: booking.vendorName, workflow: true,
+    checkedInAt: booking.execution.checkedInAt, startedAt: booking.execution.startedAt,
+    submittedAt: booking.execution.submittedAt, completedAt: booking.execution.verifiedAt,
+  }));
+  const demoBookings = (await commerceRepo.listBookings(event._id)).filter(b => b.isDemo && b.status === 'confirmed');
   return {
     event: serializeEvent(event),
     live: event.status === 'in_progress',
-    services: bookings.map(serializeBooking),
-    allCompleted: bookings.length > 0 && bookings.every((b) => b.executionStatus === 'completed'),
+    observedAt: workflow.observedAt,
+    services: [...services, ...demoBookings.map(serializeBooking)],
+    allCompleted: services.length > 0 && services.every(b => b.executionStatus === 'COMPLETION_VERIFIED' && !b.protection.underReview),
   };
 }
 
@@ -668,11 +660,7 @@ export async function createManualEvent(customerId, body = {}, { idempotencyKey:
   if (!facts.eventDate) missing.push({ field: 'eventDate', label: 'Date' });
   if (!facts.city) missing.push({ field: 'city', label: 'Location' });
   const coordinates = facts['location.coordinates'];
-  const hasVerifiedMapPoint = Number.isFinite(Number(coordinates?.lat)) &&
-    Number.isFinite(Number(coordinates?.lng)) &&
-    Math.abs(Number(coordinates.lat)) <= 90 &&
-    Math.abs(Number(coordinates.lng)) <= 180 &&
-    (Number(coordinates.lat) !== 0 || Number(coordinates.lng) !== 0);
+  const hasVerifiedMapPoint = Number.isFinite(Number(coordinates?.lat)) && Number.isFinite(Number(coordinates?.lng)) && Math.abs(Number(coordinates.lat)) <= 90 && Math.abs(Number(coordinates.lng)) <= 180 && (Number(coordinates.lat) !== 0 || Number(coordinates.lng) !== 0);
   if (facts.city && !hasVerifiedMapPoint) missing.push({ field: 'location.coordinates', label: 'Select a location from search' });
   if (missing.length) throw badRequest('MISSING_DETAILS', `Please add: ${missing.map((m) => m.label).join(', ')}`, { missing });
   if (idempotencyKey) {
@@ -734,8 +722,7 @@ export async function createManualEvent(customerId, body = {}, { idempotencyKey:
   }
   const actor = { actorType: 'customer', actorId: customerId };
   const venueStatement = statements.find((s) => s.category === 'venue' && s.status === 'customer_provided' && s.providedValue);
-  if (facts['location.venueName']) await syncVenueRequirement(event, facts['location.venueName'], actor);
-  else if (venueStatement) await syncLocationVenue(event, venueStatement.providedValue);
+  if (venueStatement) await syncLocationVenue(event, venueStatement.providedValue);
   await eventsRepo.appendHistory({ eventId: event._id, ...actor, action: 'event_created_manually', details: { eventType: event.eventType } });
   return eventDetail(customerId, event._id);
 }

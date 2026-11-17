@@ -1,5 +1,4 @@
 import crypto from 'node:crypto';
-import { assertCommercialSnapshot } from '../../external/services/commercialSnapshot.service.js';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { syncBookingTruth, cancelOwnedBooking } from './bookingTruth.service.js';
 import { withVendorSchedule } from '../../external/services/scheduleLock.js';
@@ -22,7 +21,9 @@ import { Quote } from '../../external/models/Quote.js';
 import { ExternalUser } from '../../external/models/ExternalUser.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { Booking, LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
-import { acknowledgeCompletion } from '../../admin/services/executionSettlement.service.js';
+import { acknowledgeCustomerCompletion } from './bookingWorkflow.service.js';
+import { assertCommercialSnapshot } from '../../external/services/commercialSnapshot.service.js';
+import { originalBookingRequirement } from '../../admin/services/executionSettlement.service.js';
 import { recordLifecycleEventMessage } from './circle.service.js';
 import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
 import { publicCoupon, validateCouponForPayment, recordCouponUsageOnce, normalizeCouponCode } from './coupon.service.js';
@@ -188,8 +189,6 @@ async function acceptQuoteLocked(customerId, quoteId) {
             advancePercent, vendorCancellationPenaltyPercent: policy.vendorCancellationPenaltyPercent,
             customerCancellationRefunds: policy.customerCancellationRefunds,
             settlementCondition: policy.settlementCondition, settlementDelayDays: policy.settlementDelayDays,
-            completionRequirements: policy.completionRequirements, manualFinanceAllowed: policy.manualFinanceAllowed,
-            partialRefundAllowed: policy.partialRefundAllowed, partialSettlementAllowed: policy.partialSettlementAllowed,
           },
           amount: advance,
           balanceAmount: Math.max(0, i.price - advance),
@@ -337,36 +336,7 @@ export async function cancelBooking(customerId, bookingId, body = {}) {
 }
 
 export async function verifyBookingCompletion(customerId, bookingId, body = {}) {
-  const isObjectId = mongoose.isValidObjectId(bookingId);
-  const links = [
-    ...(isObjectId ? [{ _id: bookingId }, { quoteId: bookingId }] : []),
-    { bookingReference: bookingId },
-  ];
-  let coreBooking = await CoreBooking.findOne({ customerId, $or: links });
-  if (!coreBooking) {
-    const customerBooking = await commerceRepo.getBooking(bookingId);
-    if (!customerBooking || String(customerBooking.customer) !== String(customerId)) throw notFound('Booking not found');
-    const linked = [
-      ...(customerBooking.coreBooking || customerBooking.coreBookingId ? [{ _id: customerBooking.coreBooking || customerBooking.coreBookingId }] : []),
-      { quoteId: customerBooking._id },
-      ...(customerBooking.reference ? [{ bookingReference: customerBooking.reference }] : []),
-    ];
-    coreBooking = await CoreBooking.findOne({ customerId, $or: linked });
-    if (!coreBooking) throw badRequest('CORE_BOOKING_REQUIRED', 'This booking must be linked to Core before completion can be verified.');
-  }
-  if (coreBooking.executionStatus !== 'COMPLETION_SUBMITTED') {
-    if (coreBooking.executionStatus === 'COMPLETION_VERIFIED') {
-      return { ok: true, booking: coreBooking };
-    }
-    throw badRequest('BOOKING_NOT_READY', 'The vendor must submit completion evidence before you can verify completion.');
-  }
-
-  const verified = await acknowledgeCompletion(coreBooking._id, customerId, {
-    notes: body?.notes || 'Customer acknowledged submitted completion evidence',
-    idempotencyKey: body?.idempotencyKey || `customer-ack-${coreBooking._id}`,
-  });
-
-  return { ok: true, booking: verified };
+  return acknowledgeCustomerCompletion(customerId, bookingId, body);
 }
 
 export async function previewReservationCoupon(customerId, eventId, reservationId, code) {
@@ -377,7 +347,6 @@ export async function previewReservationCoupon(customerId, eventId, reservationI
     if (mongoose.isValidObjectId(reservationId)) {
       reservation = await Reservation.findOne({
         event: event._id,
-        event: event._id, customer: customerId,
         $or: [{ _id: reservationId }, { quoteItem: reservationId }, { quote: reservationId }],
       });
     }
@@ -411,12 +380,12 @@ export async function previewReservationCoupon(customerId, eventId, reservationI
   if (!reservation) throw notFound('Reservation not found');
   const isBalancePayment = reservation.status === 'converted' || reservation.status === 'pending_balance';
   if (!isBalancePayment && reservation.status !== 'pending_payment') throw conflict('RESERVATION_NOT_PAYABLE', 'This reservation is not awaiting payment');
-  if (String(reservation.event) !== String(event._id) || String(reservation.customer) !== String(customerId)) throw notFound('Reservation not found for this event');
   if (!isBalancePayment && !reservation.isDemo) {
     const confirmed = await Quote.findOne({ _id: reservation.quote, customer: customerId, status: 'APPROVED' });
     if (!confirmed || !reservation.commercialSnapshot) throw conflict('VENDOR_COST_CONFIRMATION_REQUIRED', 'Review a vendor-confirmed quote before paying.');
     assertCommercialSnapshot(confirmed, reservation.commercialSnapshot.version, true);
   }
+
   const baseAmount = isBalancePayment ? (reservation.balanceAmount ?? reservation.amount) : advanceAmountOf(reservation);
   const orderAmount = packageTotalOf(reservation);
   const { coupon, discountAmount } = await validateCouponForPayment(code, { orderAmount, baseAmount });
@@ -465,6 +434,7 @@ export async function payReservation(customer, eventId, reservationId, body = {}
     }
   }
   if (!reservation) throw notFound('Reservation not found for this event');
+  if (String(reservation.event) !== String(event._id) || String(reservation.customer) !== String(customerId)) throw notFound('Reservation not found for this event');
   return withVendorSchedule(`checkout:${reservation._id}`, async assertCheckoutLease => {
     reservation = await commerceRepo.getReservation(reservation._id) || reservation;
     if (reservation.status === 'expired' || reservation.status === 'pending_payment' && new Date(reservation.expiresAt) <= new Date()) throw conflict('RESERVATION_EXPIRED', 'This hold has expired. Please get a new quote.');
@@ -478,12 +448,12 @@ export async function payReservation(customer, eventId, reservationId, body = {}
       throw conflict('RESERVATION_NOT_PAYABLE', 'This reservation is not awaiting payment');
     }
 
-    if (String(reservation.event) !== String(event._id) || String(reservation.customer) !== String(customerId)) throw notFound('Reservation not found for this event');
     if (!isBalancePayment && !reservation.isDemo) {
       const confirmed = await Quote.findOne({ _id: reservation.quote, customer: customerId, status: 'APPROVED' });
       if (!confirmed || !reservation.commercialSnapshot) throw conflict('VENDOR_COST_CONFIRMATION_REQUIRED', 'Review a vendor-confirmed quote before paying.');
       assertCommercialSnapshot(confirmed, reservation.commercialSnapshot.version, true);
     }
+
     let baseAmount = advanceAmountOf(reservation);
     if (isBalancePayment) {
       const existing = await commerceRepo.findBookingForReservation(reservation._id);
@@ -695,17 +665,18 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
       }
     }
   }
+  if (!reason && !reservation.isDemo) {
+    try {
+      if (!vq || !reservation.commercialSnapshot) throw new Error('Vendor-confirmed commercial terms need review');
+      const current = assertCommercialSnapshot(vq, reservation.commercialSnapshot.version, true);
+      if (current.hash !== reservation.commercialSnapshot.hash || Number(reservation.commercialSnapshot.pricing?.totalAmount) !== packageTotalOf(reservation)) {
+        throw new Error('The saved commercial terms changed before payment verification');
+      }
+    } catch (error) { reason = error.message; }
+  }
   if (!reason && event.eventDate && !vq) {
     const claimed = await commerceRepo.claimOptionDate(reservation.optionId, event.eventDate, event._id);
     if (!claimed) reason = 'The vendor was just booked by someone else for your date';
-  }
-
-  if (!reason && !reservation.isDemo) {
-    try {
-      if (!vq || !reservation.commercialSnapshot) throw new Error('Accepted vendor-confirmed terms are missing');
-      assertCommercialSnapshot(vq, reservation.commercialSnapshot.version, true);
-      if (vq.commercialSnapshot.hash !== reservation.commercialSnapshot.hash || Number(packageTotalOf(reservation)) !== Number(reservation.commercialSnapshot.pricing.totalAmount)) throw new Error('The confirmed commercial terms changed');
-    } catch (error) { reason = error.message; }
   }
 
   if (!reason && vendorId) {
@@ -719,9 +690,14 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
   await assertLease();
   const customerUser = await ExternalUser.findById(event.customer);
   const totalAmount = packageTotalOf(reservation);
-  const { originalBookingRequirement } = await import('../../admin/services/executionSettlement.service.js');
-  const requirementSnapshot = !reason && vendorId ? await originalBookingRequirement({ requirementId: reservation.requirement, quoteId: vq ? String(vq._id) : null, customerId: event.customer, customerEvent: event._id, category: reservation.category, eventDate: vq?.eventDate || event.eventDate, serviceLocation: vq?.serviceLocation || event.location, commercialSnapshot: reservation.commercialSnapshot }) : null;
+  const requirementSnapshot = !reason && vendorId ? await originalBookingRequirement({
+    quoteId: vq ? String(vq._id) : null, customerId: event.customer, customerEvent: event._id,
+    requirementId: reservation.requirement,
+    category: reservation.category, eventDate: vq?.eventDate || event.eventDate,
+    serviceLocation: vq?.serviceLocation || event.location, commercialSnapshot: reservation.commercialSnapshot,
+  }) : null;
   const coreSnapshot = !reason && vendorId ? {
+    requirementSnapshot,
     ...(vq ? { quoteId: String(vq._id), opportunityId: vq.opportunity ? String(vq.opportunity) : undefined } : {}),
     vendorId, vendorService: vq?.vendorService || String(reservation.optionId).replace(/^vs_/, ''),
     vendorName: reservation.vendorName, customerName: customerUser?.fullName || 'Customer',
@@ -730,7 +706,6 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
     pricing: reservation.commercialSnapshot?.pricing || vq?.pricingBreakdown || { totalAmount }, totalAmount,
     financialPolicySnapshot: reservation.financialPolicySnapshot,
     commercialSnapshot: reservation.commercialSnapshot || vq?.commercialSnapshot || null,
-    requirementSnapshot,
     paymentStatus: 'PAYMENT_VERIFIED', executionStatus: 'SERVICE_SCHEDULED', settlementStatus: 'NOT_ELIGIBLE',
     paymentSummary: { advancePercentage: reservation.advancePercent, advanceAmount: payment.amount,
       paidAmount: payment.amount, balanceAmount: Math.max(0, totalAmount - payment.amount),

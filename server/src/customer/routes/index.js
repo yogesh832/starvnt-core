@@ -1,12 +1,15 @@
+import rateLimit from 'express-rate-limit';
 import { handleRazorpayBankWebhook } from '../../external/services/razorpayBankVerification.service.js';
-import { CustomerFeedback } from '../../common/productObservability.js';
-import { CustomerEvent, CustomerNotification } from '../models/index.js';
+import { readCustomerFeedback, saveCustomerFeedback } from '../../common/customerFeedback.service.js';
+import { profilePictureRoutes } from './profilePicture.routes.js';
+import { eventCircleRoutes } from './eventCircle.routes.js';
+import { eventMediaRoutes } from './eventMedia.routes.js';
+import { bookingWorkflowRoutes } from './bookingWorkflow.routes.js';
 import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
 import express, { Router } from 'express';
 import { requireCustomer } from '../middleware/requireCustomer.js';
 import { requireInternal, requireInternalPermission as ip } from '../middleware/requireInternal.js';
 import { asyncHandler as h, jsonErrorHandler } from '../utils/http.js';
-import rateLimit from 'express-rate-limit';
 import * as c from '../controllers/customer.controller.js';
 import * as a from '../controllers/aura.controller.js';
 import * as i from '../controllers/internal.controller.js';
@@ -14,16 +17,18 @@ import * as i from '../controllers/internal.controller.js';
 /** /api/customer/* — Customer App API. Every route is customer-authenticated. */
 export const customerRouter = Router();
 customerRouter.use(requireCustomer);
-customerRouter.use(notificationPreferencesRoutes('CUSTOMER'));
 const locationSearchLimiter = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: 'draft-7', legacyHeaders: false });
 customerRouter.get('/locations/search', locationSearchLimiter, h(c.searchLocations));
+customerRouter.use(eventCircleRoutes);
+customerRouter.use(eventMediaRoutes);
+customerRouter.use(bookingWorkflowRoutes);
+customerRouter.use(profilePictureRoutes);
+customerRouter.use(notificationPreferencesRoutes('CUSTOMER'));
+customerRouter.get('/feedback', h(async (req, res) => {
+  res.json({ ok: true, feedback: await readCustomerFeedback(req.externalUser._id, req.query) });
+}));
 customerRouter.post('/feedback', h(async (req, res) => {
-  const { kind, reference, score } = req.body || {};
-  if (!['EVENT', 'NOTIFICATION'].includes(kind) || !Number.isInteger(score) || score < 1 || score > 5) return res.status(400).json({ error: 'INVALID_FEEDBACK' });
-  const Model = kind === 'EVENT' ? CustomerEvent : CustomerNotification;
-  if (!await Model.exists({ _id: reference, customer: req.externalUser._id })) return res.status(404).json({ error: 'RECORD_NOT_FOUND' });
-  await CustomerFeedback.findOneAndUpdate({ customer: req.externalUser._id, kind, reference }, { $set: { score } }, { upsert: true, runValidators: true });
-  res.json({ ok: true });
+  res.json({ ok: true, feedback: await saveCustomerFeedback(req.externalUser._id, req.body || {}) });
 }));
 customerRouter.get('/profile', h(c.getProfile));
 customerRouter.patch('/profile', h(c.patchProfile));
@@ -43,6 +48,9 @@ customerRouter.post('/favorites', h(c.saveFavorite));
 customerRouter.delete('/favorites/:favoriteId', h(c.removeFavorite));
 
 customerRouter.get('/events', h(c.listEvents));
+customerRouter.post('/event-drafts', h(c.createPlanningDraft));
+customerRouter.get('/events/:id/planning-draft', h(c.getPlanningDraft));
+customerRouter.put('/events/:id/planning-draft', h(c.savePlanningDraft));
 customerRouter.post('/events', h(c.createEvent));
 customerRouter.get('/events/:id', h(c.getEvent));
 customerRouter.patch('/events/:id', h(c.patchEvent));
