@@ -349,15 +349,22 @@ router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VEN
 
     // Cross-check with existing quotes to ensure accurate RESPONDED status
     const oppIds = opportunities.map((o) => o._id);
-    const existingQuotes = await Quote.find({ vendor: vendorId, opportunity: { $in: oppIds } }).select('opportunity status').lean().catch(() => []);
-    const quotedOppMap = new Map(existingQuotes.map((q) => [String(q.opportunity), q.status]));
+    const existingQuotes = await Quote.find({ vendor: vendorId, opportunity: { $in: oppIds } }).select('opportunity status commercialSnapshot.version').lean();
+    const quotedOppMap = new Map();
+    for (const quote of existingQuotes) {
+      const sourceId = String(quote.opportunity);
+      quotedOppMap.set(sourceId, [...(quotedOppMap.get(sourceId) || []), quote]);
+    }
 
     const enrichedOpps = await Promise.all(opportunities.map(async (o) => {
-      const quoteStatus = quotedOppMap.get(String(o._id));
+      const quotes = quotedOppMap.get(String(o._id)) || [];
       const plain = await projectVendorContext(o);
-      if (quoteStatus || plain.status === 'RESPONDED') {
+      plain.hasQuote = quotes.length > 0;
+      plain.quoteCount = quotes.length;
+      plain.quoteStatus = quotes.length === 1 ? quotes[0].status : null;
+      const submitted = quotes.some(quote => ['SUBMITTED', 'APPROVED'].includes(quote.status) || Boolean(quote.commercialSnapshot?.version));
+      if (submitted && !['DECLINED', 'EXPIRED'].includes(plain.status)) {
         plain.status = 'RESPONDED';
-        plain.quoteStatus = quoteStatus || 'SUBMITTED';
       }
       return plain;
     }));

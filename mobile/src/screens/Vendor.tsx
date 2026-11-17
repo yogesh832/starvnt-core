@@ -298,7 +298,8 @@ function VendorModuleBody({ route, navigation }: any) {
           {key === "enquiries" && (
             <>
               <Txt muted>{row.customer?.fullName || row.clientName}</Txt>
-              {["NEW", "VIEWED"].includes(row.status) && (
+              {row.hasQuote !== false && <Button title="Review existing quotes" secondary onPress={() => navigation.navigate("VendorModule", { module: "quotes" })} />}
+              {row.hasQuote === false && ["NEW", "VIEWED", "RESPONDED"].includes(row.status) && (
                 <Button
                   title="Prepare a quote"
                   onPress={() =>

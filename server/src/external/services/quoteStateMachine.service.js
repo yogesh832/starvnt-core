@@ -1,6 +1,8 @@
 import { commercialSnapshot, assertCommercialSnapshot } from './commercialSnapshot.service.js';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { Quote } from '../models/Quote.js';
+import { Opportunity } from '../models/Opportunity.js';
+import { isObjectIdOrHexString } from 'mongoose';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
 import { evaluateVendorActivation } from './vendorActivation.service.js';
 import { checkTrueAvailability } from './availability.service.js';
@@ -16,6 +18,19 @@ export async function recoverQuoteCreation(vendorId, command) {
   if (row.creationRequestHash !== identity.hash || row.creationRequestActor !== identity.actor) throw quoteCreationConflict();
   row.$locals.creationRequestReplayed = true;
   return row;
+}
+
+export async function assertInitialQuoteSource({ opportunityId, vendorId, customerId, vendorServiceId }) {
+  if (!isObjectIdOrHexString(opportunityId)) throw schedulingError('OWNED_ENQUIRY_REQUIRED', 'Choose an enquiry assigned to this vendor before creating a quotation.', 400);
+  const source = await Opportunity.findOne({ _id: opportunityId, vendor: vendorId }).select('customer vendorService status slaExpiresAt').lean();
+  if (!source) throw schedulingError('OPPORTUNITY_NOT_FOUND', 'This enquiry is unavailable.', 404);
+  if (String(source.customer) !== String(customerId)) throw schedulingError('QUOTE_CUSTOMER_MISMATCH', 'The quotation recipient must match its enquiry.', 400);
+  if (String(source.vendorService) !== String(vendorServiceId)) throw schedulingError('QUOTE_SERVICE_MISMATCH', 'The quotation service must match its enquiry.', 400);
+  if (!['NEW', 'VIEWED', 'RESPONDED'].includes(source.status)) throw schedulingError('ENQUIRY_NOT_OPEN', 'This enquiry cannot accept a new quotation. Review its current state or existing quote.', 409);
+  if (source.slaExpiresAt != null) {
+    const deadline = new Date(source.slaExpiresAt).getTime();
+    if (!Number.isFinite(deadline) || deadline <= Date.now()) throw schedulingError('ENQUIRY_DEADLINE_PASSED', 'The enquiry deadline is over or requires review. Existing quotes remain available.', 409);
+  }
 }
 
 export async function assertQuoteSubmission({ vendor, vendorService, eventDate, serviceLocation, category, advancePolicy }) {
@@ -65,6 +80,7 @@ export async function createQuote({
   const command = quoteCreationCommand(vendorId, creationCommand);
   const prior = await recoverQuoteCreation(vendorId, creationCommand);
   if (prior) return prior;
+  await assertInitialQuoteSource({ opportunityId, vendorId, customerId, vendorServiceId });
   const initialStatus = ['DRAFT', 'SUBMITTED'].includes(status) ? status : 'DRAFT';
   if (initialStatus === 'SUBMITTED') advancePolicy = await assertQuoteSubmission({ vendor: vendorId, vendorService: vendorServiceId, eventDate, serviceLocation, category, advancePolicy });
 

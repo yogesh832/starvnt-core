@@ -73,3 +73,24 @@ test('quote command fingerprints normalize object order and bind actor, vendor a
   assert.notEqual(quoteCreationCommand('vendor', original).hash, quoteCreationCommand('other', original).hash);
   assert.notEqual(quoteCreationCommand('vendor', original).hash, quoteCreationCommand('vendor', { ...original, actorId: 'other' }).hash);
 });
+
+test('new quotes require an owned enquiry and its service while committed requests recover after expiry', async () => {
+  const f = await fixture();
+  const send = payload => request(app).post('/api/quotes').set(f.auth).send(payload);
+  const { opportunityId: _opportunityId, ...noSource } = f.payload;
+  assert.equal((await send(noSource).expect(400)).body.error, 'OWNED_ENQUIRY_REQUIRED');
+  const otherService = await VendorService.create({ vendor: f.vendor._id, name: 'Different service', category: 'Photography', pricing: { basePrice: 100 } });
+  assert.equal((await send({ ...f.payload, vendorServiceId: String(otherService._id) }).expect(400)).body.error, 'QUOTE_SERVICE_MISMATCH');
+  await Opportunity.updateOne({ _id: f.opportunity._id }, { $set: { status: 'DECLINED' } });
+  assert.equal((await send(f.payload).expect(409)).body.error, 'ENQUIRY_NOT_OPEN');
+  await Opportunity.updateOne({ _id: f.opportunity._id }, { $set: { status: 'NEW', slaExpiresAt: new Date(0) } });
+  assert.equal((await send(f.payload).expect(409)).body.error, 'ENQUIRY_DEADLINE_PASSED');
+  assert.equal(await Quote.countDocuments({ vendor: f.vendor._id }), 0);
+  await Opportunity.updateOne({ _id: f.opportunity._id }, { $set: { slaExpiresAt: new Date(Date.now() + 3600000) } });
+  const first = (await send(f.payload).expect(201)).body.quote;
+  await Opportunity.updateOne({ _id: f.opportunity._id }, { $set: { status: 'EXPIRED', slaExpiresAt: new Date(0) } });
+  const replay = (await send(f.payload).expect(201)).body;
+  assert.equal(replay.replayed, true); assert.equal(replay.quote._id, first._id);
+  await send({ ...f.payload, requestKey: key() }).expect(409);
+  assert.equal(await Quote.countDocuments({ vendor: f.vendor._id }), 1);
+});

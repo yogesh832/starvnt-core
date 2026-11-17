@@ -314,7 +314,7 @@ function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
           >
             Dismiss
           </button>
-          <button
+          {enquiry?.hasQuote === false ? <button
             onClick={() => {
               onClose();
               onPrepareQuote(enquiry);
@@ -322,7 +322,7 @@ function EnquiryModal({ enquiry, onClose, onPrepareQuote }) {
             className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark shadow-md shadow-primary/25 transition"
           >
             Prepare Official Quote →
-          </button>
+          </button> : <Link to="/vendor/quotes" onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-primary text-white text-center text-xs font-bold">Review existing quotes</Link>}
         </div>
       </div>
     </div>
@@ -652,6 +652,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           return {
             id: o._id,
             opportunityId: o._id,
+            hasQuote: typeof o.hasQuote === 'boolean' ? o.hasQuote : null,
             customerId: o.customer?._id || o.customer,
             customerName,
             eventType,

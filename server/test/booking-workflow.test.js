@@ -348,6 +348,22 @@ test('normal Vendor revise API confirms itemized costs and blocks revision durin
   assert.equal(String(recovered.quoteId), String(sent.quoteId)); assert.equal(recovered.replayed, true);
   assert.equal(await Quote.countDocuments({ opportunity: enquiry._id }), 1);
   assert.equal((await Opportunity.findById(enquiry._id)).status, 'EXPIRED');
+  const responseOnly = await Opportunity.create({ vendor: f.vendor._id, customer: f.customer._id, vendorService: service._id, serviceName: service.name, eventDate: '2028-01-02', status: 'RESPONDED' });
+  const draftSource = await Opportunity.create({ vendor: f.vendor._id, customer: f.customer._id, vendorService: service._id, serviceName: service.name, eventDate: '2028-01-03', status: 'NEW' });
+  await request(app).post('/api/quotes').set(headers).send({ opportunityId: draftSource._id, customerId: f.customer._id, vendorServiceId: service._id, serviceName: service.name, eventDate: draftSource.eventDate, pricingBreakdown: { basePrice: 100, totalAmount: 100 }, status: 'DRAFT', requestKey: key() }).expect(201);
+  const sourceRows = (await request(app).get('/api/vendor/opportunities').set(headers).expect(200)).body.opportunities;
+  const expiredRow = sourceRows.find(row => row._id === String(enquiry._id));
+  assert.equal(expiredRow.status, 'EXPIRED'); assert.equal(expiredRow.hasQuote, true); assert.equal(expiredRow.quoteCount, 1);
+  const responseRow = sourceRows.find(row => row._id === String(responseOnly._id));
+  assert.equal(responseRow.hasQuote, false); assert.equal(responseRow.quoteStatus, null);
+  const draftRow = sourceRows.find(row => row._id === String(draftSource._id));
+  assert.equal(draftRow.status, 'NEW'); assert.equal(draftRow.hasQuote, true); assert.equal(draftRow.quoteStatus, 'DRAFT');
+  const originalFind = Quote.find;
+  Quote.find = () => ({ select: () => ({ lean: async () => { throw new Error('Synthetic quote source unavailable'); } }) });
+  try {
+    const unavailable = await request(app).get('/api/vendor/opportunities').set(headers).expect(500);
+    assert.equal(unavailable.body.opportunities, undefined);
+  } finally { Quote.find = originalFind; }
   await assert.rejects(executeAction(f.vendor, { ...creation, quote: { ...creation.quote, notes: 'Changed request' } }), error => error.code === 'QUOTE_REQUEST_CHANGED');
 });
 

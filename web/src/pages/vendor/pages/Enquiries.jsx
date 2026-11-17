@@ -21,13 +21,15 @@ export default function Enquiries() {
       if (!result.ok || !result.thread?._id) throw new Error('Could not open this enquiry’s conversation.');
       navigate(`/vendor/updates?tab=messages&thread=${result.thread._id}`);
     } catch (error) {
-      setFeedback(`Notice: ${error.message}`);
+      setFeedback({ message: error.message, error: true });
     } finally {
       setOpeningChat(false);
     }
   }
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [retry, setRetry] = useState(0);
   const [expanded, setExpanded] = useState(null);
   const [quoteModalOpp, setQuoteModalOpp] = useState(null);
   const [quoteRequestKey, setQuoteRequestKey] = useState('');
@@ -44,17 +46,21 @@ export default function Enquiries() {
   const [declining, setDeclining] = useState(false);
 
   useEffect(() => {
-    if (!requestedRecord || loading) return;
+    if (!requestedRecord || loading || loadError) return;
     const record = opportunities.find(row => row.dbId === requestedRecord);
     if (record) setExpanded(record.id);
-    else setFeedback('This enquiry is unavailable or is not authorized for your account.');
-  }, [requestedRecord, opportunities, loading]);
+    else setFeedback({ message: 'This enquiry is unavailable or is not authorized for your account.', error: true });
+  }, [requestedRecord, opportunities, loading, loadError]);
 
   useEffect(() => {
+    let active = true;
     async function loadLiveOpportunities() {
       try {
         setLoading(true);
+        setLoadError('');
         const res = await externalApi.call('/vendor/opportunities');
+        if (!active) return;
+        if (!res.ok || !Array.isArray(res.opportunities)) throw new Error('Enquiry records could not be confirmed.');
         if (res.ok && Array.isArray(res.opportunities)) {
           const mapped = res.opportunities.map((o) => ({
             id: o._id,
@@ -65,6 +71,8 @@ export default function Enquiries() {
             serviceId: o.vendorService,
             service: o.serviceName,
             status: o.status === 'NEW' ? 'New' : o.status,
+            hasQuote: typeof o.hasQuote === 'boolean' ? o.hasQuote : null,
+            quoteStatus: o.quoteStatus || null,
             ago: 'Matched opportunity',
             date: o.eventDate,
             location: `${o.serviceLocation?.address || ''} ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Venue'}`.trim(),
@@ -83,16 +91,17 @@ export default function Enquiries() {
           if (mapped[0]) setExpanded(mapped[0].id);
         }
       } catch (err) {
-        console.warn('[Enquiries] Load error:', err.message);
-        setFeedback(`Notice: ${err.message}`);
+        if (active) setLoadError(err.message || 'Enquiry records are unavailable.');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
     loadLiveOpportunities();
-  }, []);
+    return () => { active = false; };
+  }, [retry]);
 
   function handleOpenQuoteModal(opp) {
+    setFeedback(null);
     setQuoteRequestKey(crypto.randomUUID());
     setQuoteModalOpp(opp);
     setBasePrice(opp.basePrice || 0);
@@ -121,7 +130,7 @@ export default function Enquiries() {
       await externalApi.call(`/vendor/opportunities/${opportunity.dbId}/decline`, { method: 'POST', body: { reason } });
       setOpportunities((rows) => rows.map((row) => row.id === opportunity.id ? { ...row, status: 'DECLINED' } : row));
       setDeclineDraft(null);
-      setFeedback('Enquiry declined. This status is saved.');
+      setFeedback({ message: 'Enquiry declined. This status is saved.', error: false });
     } catch (error) {
       setDeclineDraft({ ...declineDraft, error: error.message });
     } finally {
@@ -131,10 +140,10 @@ export default function Enquiries() {
 
   async function handleSendQuote() {
     if (!quoteModalOpp) return;
-    if (!quoteModalOpp.dbId) { setFeedback('This enquiry is unavailable. Reload Enquiries before submitting an offer.'); return; }
+    if (!quoteModalOpp.dbId) { setFeedback({ message: 'This enquiry is unavailable. Reload Enquiries before submitting an offer.', error: true }); return; }
     const amounts = [basePrice, travelFee, equipmentFee, setupFee, additionalFee].map(Number);
     if (amounts.some((amount) => !Number.isFinite(amount) || amount < 0) || amounts.reduce((sum, amount) => sum + amount, 0) <= 0) {
-      setFeedback('Notice: Add a valid positive quote total. Fees cannot be negative.');
+      setFeedback({ message: 'Add a valid positive quote total. Fees cannot be negative.', error: true });
       return;
     }
     setSubmitting(true);
@@ -170,10 +179,10 @@ export default function Enquiries() {
       setOpportunities((prev) =>
         prev.map((o) => (o.id === quoteModalOpp.id ? { ...o, status: 'Responded' } : o))
       );
-      setFeedback(replayed ? 'The existing quote was recovered. Open Quotes to review its current version and payment terms.' : `Offer of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. The customer can review the saved offer and its approved payment terms.`);
+      setFeedback({ message: replayed ? 'The existing quote was recovered. Open Quotes to review its current version and payment terms.' : `Offer of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. The customer can review the saved offer and its approved payment terms.`, error: false });
       setQuoteModalOpp(null);
     } catch (err) {
-      setFeedback(`Notice: ${err.message}`);
+      setFeedback({ message: err.message, error: true });
     } finally {
       setSubmitting(false);
     }
@@ -192,15 +201,16 @@ export default function Enquiries() {
         </select>
       }
     >
-      {feedback && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-xs font-semibold mb-4 inline-flex items-center gap-2 w-full">
-          <Icon name="check" size={16} className="text-emerald-600 shrink-0" />
-          <span>{feedback}</span>
+      {feedback && (!quoteModalOpp || !feedback.error) && (
+        <div role={feedback.error ? 'alert' : 'status'} className={`${feedback.error ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'} border rounded-2xl p-4 text-xs font-semibold mb-4 inline-flex items-center gap-2 w-full`}>
+          {!feedback.error && <Icon name="check" size={16} className="text-emerald-600 shrink-0" />}
+          <span>{feedback.message}</span>
         </div>
       )}
+      {loadError && <div role="alert" className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{loadError} {opportunities.length > 0 && 'Previously loaded records may be stale.'} <button type="button" className="min-h-11 underline font-semibold" disabled={loading} onClick={() => setRetry(value => value + 1)}>Retry enquiry records</button></div>}
 
       <div className="space-y-4">
-        {!loading && opportunities.length > 0 && !opportunities.some((o) => statusFilter === 'ALL' || o.status.toUpperCase() === statusFilter) && <Card><p className="text-sm text-muted">No enquiries match this status.</p></Card>}
+        {!loading && !loadError && opportunities.length > 0 && !opportunities.some((o) => statusFilter === 'ALL' || o.status.toUpperCase() === statusFilter) && <Card><p className="text-sm text-muted">No enquiries match this status.</p></Card>}
         {opportunities.filter((o) => statusFilter === 'ALL' || o.status.toUpperCase() === statusFilter).map((o) => (
           <Card key={o.id} className="!p-0 overflow-hidden border border-gray-100 hover:border-gray-200 transition">
             <button
@@ -269,17 +279,17 @@ export default function Enquiries() {
                   ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-gray-100">
-                  {['DECLINED', 'EXPIRED'].includes(o.status) ? <span className="text-xs text-muted">This enquiry is {o.status.toLowerCase()}.</span> : ['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED', 'Quote Sent'].includes(o.status) ? (
+                  {['DECLINED', 'EXPIRED'].includes(o.status) ? <><span className="text-xs text-muted">This enquiry is {o.status.toLowerCase()}.</span>{o.hasQuote && <button type="button" onClick={() => navigate('/vendor/quotes')} className="min-h-11 text-xs font-semibold text-primary underline">Review existing quotes</button>}</> : o.hasQuote !== false || ['Responded', 'RESPONDED', 'Submitted', 'SUBMITTED', 'APPROVED', 'Quote Sent'].includes(o.status) ? (
                     <>
                       <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-extrabold px-4 py-2.5 shadow-2xs">
                         <Icon name="check" size={14} className="text-emerald-600" />
-                        <span>✓ Offer Submitted</span>
+                        <span>{o.hasQuote ? o.quoteStatus === 'DRAFT' ? 'Draft saved' : 'Quote on record' : o.hasQuote === false ? 'Response recorded' : 'Quote records need refresh'}</span>
                       </span>
                       <button
-                        onClick={() => handleOpenQuoteModal(o)}
+                        onClick={() => o.hasQuote === false ? handleOpenQuoteModal(o) : navigate('/vendor/quotes')}
                         className="rounded-xl border border-primary/30 text-primary bg-primary-soft hover:bg-primary-soft/80 text-xs font-bold px-4 py-2.5 transition cursor-pointer"
                       >
-                        Revise / Update Offer
+                        {o.hasQuote === false ? 'Prepare quote' : 'Review existing quotes'}
                       </button>
                       <button
                         type="button" onClick={() => openEnquiryChat(o)} disabled={openingChat}
@@ -370,7 +380,7 @@ export default function Enquiries() {
           ))
         )}
 
-        {opportunities.length === 0 && !loading && (
+        {opportunities.length === 0 && !loading && !loadError && (
           <Card className="text-center py-12 px-6">
             <div className="w-14 h-14 rounded-2xl bg-primary-soft text-primary grid place-items-center mx-auto mb-3 shadow-xs">
               <Icon name="message" size={26} />
@@ -387,6 +397,7 @@ export default function Enquiries() {
       {quoteModalOpp && (
         <div className="vendor-modal-backdrop animate-fade">
           <div className="vendor-modal-panel max-w-md p-4 sm:p-6 space-y-4">
+            {feedback?.error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{feedback.message}</p>}
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
                 <h2 className="text-base font-extrabold text-navy">Send Customer Offer</h2>
@@ -396,6 +407,7 @@ export default function Enquiries() {
                 onClick={() => setQuoteModalOpp(null)}
                 className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
                 aria-label="Close"
+                disabled={submitting}
               >
                 <Icon name="close" size={14} />
               </button>
@@ -407,6 +419,7 @@ export default function Enquiries() {
                 <input
                   type="number"
                   value={basePrice}
+                  disabled={submitting}
                   onChange={(e) => setBasePrice(e.target.value)}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:border-primary"
                 />
@@ -417,6 +430,7 @@ export default function Enquiries() {
                 <input
                   type="number"
                   value={travelFee}
+                  disabled={submitting}
                   onChange={(e) => setTravelFee(e.target.value)}
                   className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3.5 py-2.5 font-bold text-navy outline-none focus:border-primary"
                 />
@@ -433,6 +447,7 @@ export default function Enquiries() {
                     <input
                       type="number"
                       value={value}
+                      disabled={submitting}
                       onChange={(e) => setter(e.target.value)}
                       className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3 py-2.5 font-bold text-navy outline-none focus:border-primary"
                     />
@@ -456,6 +471,7 @@ export default function Enquiries() {
             <div className="vendor-modal-actions pt-2 flex gap-3">
               <button
                 onClick={() => setQuoteModalOpp(null)}
+                disabled={submitting}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted"
               >
                 Cancel
