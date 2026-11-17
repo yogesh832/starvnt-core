@@ -26,6 +26,8 @@ import { evaluateVendorActivation } from '../src/external/services/vendorActivat
 import { listBookableServices, findBookableService } from '../src/customer/repositories/catalog.repo.js';
 import { serviceMatchingEligible } from '../src/common/vendorReadiness.js';
 import { validateExternalAttachment } from '../src/external/routes/externalBookings.routes.js';
+import { externalDocumentKinds } from '../../shared/externalDocuments.js';
+import { BusinessAuditLog } from '../src/admin/models/BusinessAuditLog.js';
 import { checkTrueAvailability } from '../src/external/services/availability.service.js';
 import { distanceEvidence } from '../src/external/utils/geo.js';
 import { calculateValidatedTotalCost } from '../src/external/services/totalCost.service.js';
@@ -273,6 +275,7 @@ test('full enquiry-to-completion lifecycle persists and completed work does not 
 });
 
 test('attachment validation rejects executable/mismatched content and private uploads return only account-bound download metadata', async t => {
+  for (const kind of externalDocumentKinds) assert.doesNotThrow(() => validateExternalAttachment({ mimetype: 'application/pdf', buffer: Buffer.from('%PDF-1.7\nSynthetic fixture') }, kind));
   assert.throws(() => validateExternalAttachment({ mimetype: 'application/pdf', buffer: Buffer.from('not a PDF') }, 'INVOICE'));
   const f = await fixture(), other = await fixture(), row = await create(f);
   const old = Object.fromEntries(['CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'].map(k => [k, process.env[k]]));
@@ -283,9 +286,37 @@ test('attachment validation rejects executable/mismatched content and private up
   const upload = () => request(app).post(`/api/vendor/external-bookings/${row._id}/attachments`).set(auth(f.token)).field('kind', 'INVOICE').field('idempotencyKey', 'attachment-test-key').attach('file', Buffer.from('%PDF-1.7\nTest'), { filename: 'invoice.pdf', contentType: 'application/pdf' });
   const first = await upload().expect(201); await upload().expect(201); assert.equal(calls, 1);
   const attachment = first.body.booking.externalBooking.attachments[0]; assert.equal(attachment.publicId, undefined);
+  assert.equal(attachment.source, 'VENDOR_PRIVATE'); assert.equal(attachment.bookingId, String(row._id)); assert.ok(attachment.uploaderId);
   await request(app).get(`/api/vendor/external-bookings/${row._id}/attachments/${attachment._id}/download`).set(auth(other.token)).expect(404);
   const download = await request(app).get(`/api/vendor/external-bookings/${row._id}/attachments/${attachment._id}/download`).set(auth(f.token)).expect(200);
+  assert.equal(download.headers['cache-control'], 'private, no-store');
+  assert.equal(await BusinessAuditLog.countDocuments({ resourceId: attachment._id, action: 'EXTERNAL_BOOKING_DOCUMENT_ACCESS_GRANTED', organizationId: String(f.vendor._id) }), 1);
   assert.ok(download.body.url.includes('signature=')); assert.ok(new Date(download.body.expiresAt) > new Date());
+});
+
+test('external lost and fully refunded states retain reported provenance, money history and tenant isolation', async () => {
+  const f = await fixture(), other = await fixture();
+  const initial = body(f);
+  initial.externalBooking = { ...initial.externalBooking, lifecycle: 'ENQUIRY', acquisitionChannel: 'OTHER_AGENCY', totalAmount: 100 };
+  const lead = await create(f, initial);
+  const leadPath = `/api/vendor/external-bookings/${lead._id}`;
+  const lostInput = { revision: lead.revision, lifecycle: 'LOST', reason: 'Synthetic customer chose another supplier', idempotencyKey: key() };
+  await request(app).post(`${leadPath}/lifecycle`).set(auth(other.token)).send(lostInput).expect(404);
+  const lost = (await request(app).post(`${leadPath}/lifecycle`).set(auth(f.token)).send(lostInput).expect(200)).body.booking;
+  assert.equal(lost.externalBooking.lifecycle, 'LOST'); assert.equal(lost.source, 'VENDOR_PRIVATE');
+  assert.equal(lost.externalBooking.acquisitionChannel, 'OTHER_AGENCY'); assert.equal(lost.financials.outstandingAmount, 0);
+  assert.equal((await request(app).post(`${leadPath}/lifecycle`).set(auth(f.token)).send(lostInput).expect(200)).body.booking.revision, lost.revision);
+  const initial2 = body(f); initial2.externalBooking = { ...initial2.externalBooking, totalAmount: 100 };
+  const booking = await create(f, initial2), path = `/api/vendor/external-bookings/${booking._id}`;
+  const receipt = (await request(app).post(`${path}/receipts`).set(auth(f.token)).send({ amount: 50, method: 'CASH', receivedAt: new Date().toISOString(), idempotencyKey: key() }).expect(200)).body.booking;
+  const cancelled = (await request(app).post(`${path}/lifecycle`).set(auth(f.token)).send({ revision: receipt.revision, lifecycle: 'CANCELLED', reason: 'Synthetic cancellation', idempotencyKey: key() }).expect(200)).body.booking;
+  await request(app).post(`${path}/lifecycle`).set(auth(f.token)).send({ revision: cancelled.revision, lifecycle: 'REFUNDED', reason: 'No refund yet', idempotencyKey: key() }).expect(409);
+  const refunded = (await request(app).post(`${path}/refunds`).set(auth(f.token)).send({ amount: 50, method: 'CASH', receivedAt: new Date().toISOString(), reason: 'Synthetic reported cash refund', idempotencyKey: key() }).expect(200)).body.booking;
+  const closed = (await request(app).post(`${path}/lifecycle`).set(auth(f.token)).send({ revision: refunded.revision, lifecycle: 'REFUNDED', reason: 'Full reported refund recorded', idempotencyKey: key() }).expect(200)).body.booking;
+  assert.equal(closed.financials.receivedAmount, 50); assert.equal(closed.financials.refundedAmount, 50);
+  assert.equal(closed.financials.netReceivedAmount, 0); assert.equal(closed.financials.outstandingAmount, 0);
+  assert.equal(closed.financials.verification, 'VENDOR_REPORTED');
+  assert.equal(await CoreBooking.countDocuments({ vendorId: f.vendor._id }), 0);
 });
 
 test('readiness keeps profile, verification, operations, activation and marketing separate', async () => {

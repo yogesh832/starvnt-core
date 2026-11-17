@@ -1,11 +1,6 @@
 import { schedulingError } from './scheduleRules.js';
-export const EXTERNAL_CHANNELS = ['DIRECT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'WEBSITE', 'JUSTDIAL', 'REFERRAL', 'REPEAT', 'OTHER', 'LEGACY_UNKNOWN'];
-export const EXTERNAL_TRANSITIONS = {
-  ENQUIRY: ['NEGOTIATION', 'QUOTE_SENT', 'ON_HOLD', 'CONFIRMED', 'CANCELLED'],
-  NEGOTIATION: ['QUOTE_SENT', 'ON_HOLD', 'CONFIRMED', 'CANCELLED'], QUOTE_SENT: ['NEGOTIATION', 'ON_HOLD', 'CONFIRMED', 'CANCELLED'],
-  ON_HOLD: ['CONFIRMED', 'ENQUIRY', 'NEGOTIATION', 'CANCELLED'],
-  CONFIRMED: ['IN_PROGRESS', 'ON_HOLD', 'CANCELLED'], IN_PROGRESS: ['COMPLETED', 'CANCELLED'], COMPLETED: [], CANCELLED: [],
-};
+export { externalAcquisitionChannels as EXTERNAL_CHANNELS, externalLifecycleTransitions as EXTERNAL_TRANSITIONS } from '../../../shared/externalBookingLifecycle.js';
+import { externalAcquisitionChannels as EXTERNAL_CHANNELS, externalLifecycleTransitions as EXTERNAL_TRANSITIONS } from '../../../shared/externalBookingLifecycle.js';
 export function externalMoney(value, label = 'amount') {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1e10 || Math.abs(value * 100 - Math.round(value * 100)) > 0.0001) throw schedulingError('INVALID_EXTERNAL_AMOUNT', `Use a valid ${label} with at most two decimal places.`);
   return Math.round(value * 100) / 100;

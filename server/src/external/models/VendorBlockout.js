@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import { externalConn } from '../../db/index.js';
+import { externalDocumentKinds } from '../../../../shared/externalDocuments.js';
+import { externalLifecycleTransitions } from '../../../../shared/externalBookingLifecycle.js';
 
 const { Schema } = mongoose;
 
@@ -21,13 +23,13 @@ const vendorBlockoutSchema = new Schema(
     source: { type: String, enum: ['VENDOR_PRIVATE'], default: 'VENDOR_PRIVATE', immutable: true },
     externalBooking: {
       acquisitionChannel: { type: String, immutable: true },
-      lifecycle: { type: String, enum: ['ENQUIRY', 'NEGOTIATION', 'QUOTE_SENT', 'ON_HOLD', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] },
+      lifecycle: { type: String, enum: Object.keys(externalLifecycleTransitions) },
       holdExpiresAt: Date, totalAmount: { type: Number, min: 0 },
       eventName: String, guestCount: { type: Number, min: 1 }, nextPaymentDueAt: Date,
       lineItems: [{ service: Schema.Types.ObjectId, name: String, quantity: Number, unitPrice: Number }],
       allocations: [{ resource: Schema.Types.ObjectId, units: Number }],
       buffers: { setupMinutes: Number, teardownMinutes: Number, travelBeforeMinutes: Number, travelAfterMinutes: Number },
-      attachments: [{ key: String, name: String, kind: { type: String, enum: ['INVOICE', 'RECEIPT', 'OTHER'] }, publicId: String, resourceType: String, format: String, actor: String, at: Date }],
+      attachments: [{ key: String, name: String, kind: { type: String, enum: externalDocumentKinds }, publicId: String, resourceType: String, format: String, actor: String, at: Date }],
       refunds: [{ key: String, amount: Number, receivedAt: Date, method: String, reference: String, reason: String, attachmentId: Schema.Types.ObjectId, actor: String, recordedAt: Date }],
       // Vendor-reported receipts stay outside Core payments/revenue.
       receipts: [{ key: String, amount: Number, receivedAt: Date, method: String, reference: String, attachmentUrl: String, attachmentId: Schema.Types.ObjectId, actor: String, recordedAt: Date }],

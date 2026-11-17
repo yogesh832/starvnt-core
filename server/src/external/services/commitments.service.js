@@ -14,6 +14,7 @@ import { checkTrueAvailability } from './availability.service.js';
 export async function saveCommitment(vendorId, input, actor, id = null, options = {}) {
   const data = normaliseCommitment(input);
   const commercial = data.recordType === 'EXTERNAL_COMMITMENT' && !id ? externalCommercialInput(input.externalBooking) : null;
+  if (commercial && ['LOST', 'REFUNDED'].includes(commercial.lifecycle)) throw schedulingError('INVALID_INITIAL_STATE', 'Record an enquiry or booking before its closing transition.');
   if (commercial) data.externalBooking = commercial;
   if (data.vendorService && (!mongoose.isValidObjectId(data.vendorService) || !await VendorService.exists({ _id: data.vendorService, vendor: vendorId }))) throw schedulingError('SERVICE_NOT_OWNED', 'The service does not belong to this vendor.', 403);
   if (data.resourceIds.some(id => !mongoose.isValidObjectId(id)) || (data.resourceIds.length && await VendorResource.countDocuments({ _id: { $in: data.resourceIds }, vendor: vendorId, status: { $ne: 'RETIRED' } }) !== data.resourceIds.length)) throw schedulingError('RESOURCE_NOT_OWNED', 'The resource does not belong to this vendor.', 403);
@@ -78,7 +79,10 @@ export async function transitionExternalBooking(vendorId, id, actor, input = {})
     const hash = crypto.createHash('sha256').update(JSON.stringify({ lifecycle: input.lifecycle, reason, holdExpiresAt: input.holdExpiresAt || null })).digest('hex');
     const previous = row.history.find(h => h.idempotencyKey === key);
     if (previous) { if (previous.requestHash !== hash) throw schedulingError('IDEMPOTENCY_CONFLICT', 'Request key reused.', 409); return row; }
-    if (row.status === 'CANCELLED' || !EXTERNAL_TRANSITIONS[from]?.includes(input.lifecycle)) throw schedulingError('INVALID_TRANSITION', 'This lifecycle transition is not allowed.', 409);
+    if ((row.status === 'CANCELLED' && !(from === 'CANCELLED' && input.lifecycle === 'REFUNDED')) || !EXTERNAL_TRANSITIONS[from]?.includes(input.lifecycle)) throw schedulingError('INVALID_TRANSITION', 'This lifecycle transition is not allowed.', 409);
+    const financials = externalFinancials(row);
+    if (input.lifecycle === 'LOST' && financials.receivedAmount > 0) throw schedulingError('REPORTED_RECEIPTS_REQUIRE_REVIEW', 'An enquiry with reported receipts must use cancellation and refund review instead of being marked lost.', 409);
+    if (input.lifecycle === 'REFUNDED' && !(financials.receivedAmount > 0 && financials.refundedAmount === financials.receivedAmount && financials.netReceivedAmount === 0)) throw schedulingError('FULL_REPORTED_REFUND_REQUIRED', 'Record the complete refund of reported receipts before selecting refunded. This does not verify provider payment.', 409);
     const commercial = externalCommercialInput({ ...(row.externalBooking?.toObject?.() || {}), lifecycle: input.lifecycle, holdExpiresAt: input.holdExpiresAt });
     if (input.revision !== undefined && Number(input.revision) !== row.revision) throw schedulingError('STALE_REVISION', 'Refresh the external booking before changing its lifecycle.', 409);
     const schedule = row.toObject();
@@ -87,7 +91,7 @@ export async function transitionExternalBooking(vendorId, id, actor, input = {})
       await validateExternalFeasibility(vendorId, schedule, commercial, row._id);
     }
     await assertLease();
-    return VendorBlockout.findOneAndUpdate({ _id: row._id, vendor: vendorId, revision: row.revision }, { $set: { 'externalBooking.lifecycle': input.lifecycle, 'externalBooking.holdExpiresAt': commercial.holdExpiresAt, ...(input.lifecycle === 'CANCELLED' ? { status: 'CANCELLED' } : {}) }, $inc: { revision: 1 }, $push: { history: { actor: String(actor.id), role: actor.role, action: 'LIFECYCLE_CHANGED', at: new Date(), reason, before: { lifecycle: from }, after: { lifecycle: input.lifecycle }, idempotencyKey: key, requestHash: hash } } }, { new: true, runValidators: true });
+    return VendorBlockout.findOneAndUpdate({ _id: row._id, vendor: vendorId, revision: row.revision }, { $set: { 'externalBooking.lifecycle': input.lifecycle, 'externalBooking.holdExpiresAt': commercial.holdExpiresAt, ...(['CANCELLED', 'LOST', 'REFUNDED'].includes(input.lifecycle) ? { status: 'CANCELLED' } : {}) }, $inc: { revision: 1 }, $push: { history: { actor: String(actor.id), role: actor.role, action: 'LIFECYCLE_CHANGED', at: new Date(), reason, before: { lifecycle: from }, after: { lifecycle: input.lifecycle }, idempotencyKey: key, requestHash: hash } } }, { new: true, runValidators: true });
   });
 }
 
