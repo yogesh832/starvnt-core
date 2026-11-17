@@ -5,6 +5,7 @@ export function confirmedPricing(input) {
   const values = Object.fromEntries(FIELDS.map(key => [key, Number(input[key] ?? 0)]));
   if (Object.values(values).some(value => !Number.isFinite(value) || value < 0 || Math.round(value * 100) / 100 !== value)) throw workflowError('INVALID_QUOTE_AMOUNT', 'Confirm each charge as a nonnegative amount with two decimal places.');
   const totalPaise = Object.values(values).reduce((sum, value) => sum + Math.round(value * 100), 0);
+  if (!Number.isSafeInteger(totalPaise) || Object.values(values).some(value => !Number.isSafeInteger(Math.round(value * 100)))) throw workflowError('INVALID_QUOTE_AMOUNT', 'The itemized amounts exceed the supported exact-currency range.');
   if (!totalPaise || Math.round(Number(input.totalAmount) * 100) !== totalPaise) throw workflowError('QUOTE_TOTAL_MISMATCH', 'The confirmed total must equal the itemized charges.');
   return { ...values, totalAmount: totalPaise / 100 };
 }

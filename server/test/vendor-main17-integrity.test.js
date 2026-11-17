@@ -22,6 +22,7 @@ import { LearningLesson, LearningFeedback } from '../src/learning/models.js';
 import { Quote } from '../src/external/models/Quote.js';
 import { commercialSnapshot } from '../src/external/services/commercialSnapshot.service.js';
 import { maskOpportunityCustomer } from '../src/external/services/opportunityPrivacy.service.js';
+import { buildVendorContext } from '../src/external/aura/vendorContext.js';
 
 const pan = 'AABPS1234D', legalName = 'Fixture Legal Business', oid = () => new mongoose.Types.ObjectId();
 let mongo, app, originalConfig;
@@ -230,4 +231,17 @@ test('submitted commercial revisions retain exact prior amounts and scope withou
   const winner = await Quote.findById(quote._id).lean();
   assert.equal(winner.commercialVersions.length, 3);
   assert.equal(winner.commercialVersions[0].contentHash, original.contentHash);
+});
+
+test('Aura quote context uses current contact permissions and distinct readiness denominators', async () => {
+  const v = await vendor();
+  const customer = await ExternalUser.create({ fullName: 'Synthetic Private Recipient', email: `${crypto.randomUUID()}@example.test`, accountType: 'CUSTOMER' });
+  await Quote.create({ vendor: v.organization._id, customer: customer._id, vendorService: oid(), serviceName: 'Synthetic service', eventDate: '2027-01-01', pricingBreakdown: { basePrice: 100, totalAmount: 100 } });
+  const context = await buildVendorContext(v.organization);
+  assert.equal(context.quotes.latest[0].customer, 'Customer');
+  assert.equal(JSON.stringify(context.quotes).includes('Synthetic Private Recipient'), false);
+  assert.equal(context.quotes.latest[0].commercialVersion, 0);
+  const readiness = await evaluateVendorActivation(v.organization._id);
+  assert.equal(context.business.profileCompletePercent, readiness.profileCompletion);
+  assert.equal(context.business.onboardingCompletionPercent, readiness.completionPercentage);
 });

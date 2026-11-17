@@ -14,6 +14,7 @@ import { createQuote, assertQuoteSubmission } from '../services/quoteStateMachin
 import { notifyCustomer } from '../../notifications/notification.service.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
+import { commercialSnapshot, confirmedPricing } from '../services/commercialSnapshot.service.js';
 import { explicitTeamSize, isCapabilityDetail, namedCapabilityServices } from './capabilityIntake.js';
 
 /**
@@ -29,6 +30,7 @@ import { explicitTeamSize, isCapabilityDetail, namedCapabilityServices } from '.
 const PRICING_TYPES = ['FIXED', 'HOURLY', 'PER_PERSON', 'TIERED', 'CUSTOM'];
 const UNITS = { FIXED: 'event', HOURLY: 'hour', PER_PERSON: 'guest', TIERED: 'event', CUSTOM: 'event' };
 const LOCATION_TYPES = ['STUDIO', 'HEAD_OFFICE', 'BRANCH', 'WAREHOUSE', 'KITCHEN', 'EQUIPMENT_HUB', 'STORAGE'];
+const invalidQuoteMoney = quote => ['basePrice', 'travelFee', 'totalAmount'].some(field => quote[field] != null && (!Number.isFinite(Number(quote[field])) || Number(quote[field]) < 0 || Math.round(Number(quote[field]) * 100) / 100 !== Number(quote[field])));
 
 const MONTH_MAP = {
   jan: 1, january: 1,
@@ -330,32 +332,32 @@ function normalizePricingType(v) {
 function findQuote(quotesList = [], { quoteId, quoteRef, customerName }) {
   if (quoteId) {
     const byId = quotesList.find((q) => String(q.id || q._id) === String(quoteId));
-    if (byId) return byId;
+    return byId || null;
   }
   if (quoteRef) {
     const refClean = String(quoteRef).trim().toLowerCase();
     const byRef = quotesList.find((q) => String(q.ref || q.quoteReference || '').toLowerCase() === refClean);
-    if (byRef) return byRef;
+    return byRef || null;
   }
   if (customerName) {
     const custClean = String(customerName).trim().toLowerCase();
-    const byCust = quotesList.find((q) => String(q.customer || q.customerName || '').toLowerCase().includes(custClean));
-    if (byCust) return byCust;
+    const matches = quotesList.filter((q) => String(q.customer || q.customerName || '').trim().toLowerCase() === custClean);
+    return matches.length === 1 ? matches[0] : null;
   }
-  return quotesList[0] || null;
+  return null;
 }
 
 function findEnquiry(enquiriesList = [], { opportunityId, customerName }) {
   if (opportunityId) {
     const byId = enquiriesList.find((e) => String(e.id || e._id) === String(opportunityId));
-    if (byId) return byId;
+    return byId || null;
   }
   if (customerName) {
     const custClean = String(customerName).trim().toLowerCase();
-    const byCust = enquiriesList.find((e) => String(e.customer || e.customerName || '').toLowerCase().includes(custClean));
-    if (byCust) return byCust;
+    const matches = enquiriesList.filter((e) => String(e.customer || e.customerName || '').trim().toLowerCase() === custClean);
+    return matches.length === 1 ? matches[0] : null;
   }
-  return enquiriesList[0] || null;
+  return null;
 }
 
 function pickService(services, name) {
@@ -476,11 +478,13 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
 
   if (kind === 'revise_quote') {
     const q = raw.quote || {};
+    if (invalidQuoteMoney(q)) return { error: 'nonnegative quote amounts with at most two decimal places' };
     const quotesList = context?.quotes?.latest || [];
     const matched = findQuote(quotesList, q);
-    const quoteRef = str(q.quoteRef, 60) || matched?.ref || null;
-    const quoteId = str(q.quoteId, 60) || matched?.id || null;
-    const customerName = str(q.customerName, 80) || matched?.customer || null;
+    if (!matched) return { error: 'the exact owned quotation reference; open Quotes if it is outside the current context' };
+    const quoteRef = matched.ref || null;
+    const quoteId = matched.id || null;
+    const customerName = matched.customer || null;
 
     if (!quoteRef && !quoteId && !customerName) {
       return { error: 'which quote to revise (quote reference or customer name)' };
@@ -509,6 +513,8 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
     if (!(totalAmount > 0)) {
       return { error: `the revised amount for quote ${quoteRef || customerName || ''}` };
     }
+    try { confirmedPricing({ basePrice, travelFee, totalAmount }); }
+    catch { return { error: 'a matching itemized total with nonnegative amounts and at most two decimal places' }; }
 
     const notes = str(q.notes, 500) || '';
 
@@ -517,12 +523,14 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
         kind,
         quote: {
           quoteId,
+          expectedCommercialVersion: matched.commercialVersion ?? 0,
+          expectedRecordVersion: matched.recordVersion ?? 0,
           quoteRef: quoteRef || matched?.ref || 'QT-REVISION',
           customerName: customerName || 'Customer',
-          serviceName: str(q.serviceName, 120) || matched?.service || 'Event Service',
-          basePrice: Math.round(basePrice),
-          travelFee: Math.round(travelFee),
-          totalAmount: Math.round(totalAmount),
+          serviceName: matched.service || 'Event Service',
+          basePrice,
+          travelFee,
+          totalAmount,
           notes,
         },
       },
@@ -531,19 +539,21 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
 
   if (kind === 'create_quote') {
     const q = raw.quote || {};
+    if (invalidQuoteMoney(q)) return { error: 'nonnegative quote amounts with at most two decimal places' };
     const enquiriesList = context?.enquiries?.open || [];
     const matched = findEnquiry(enquiriesList, q);
+    if (!matched) return { error: 'the exact owned enquiry reference; open Enquiries to choose the recipient and service' };
 
-    const opportunityId = str(q.opportunityId, 60) || matched?.id || null;
-    const customerId = str(q.customerId, 60) || matched?.customerId || null;
-    const customerName = str(q.customerName, 80) || matched?.customer || null;
+    const opportunityId = matched.id;
+    const customerId = matched.customerId;
+    const customerName = matched.customer || null;
     if (!customerName && !customerId && !opportunityId) {
       return { error: 'the customer name or enquiry for the quotation' };
     }
 
-    const activeService = pickService(services, q.serviceName || matched?.service);
-    const serviceName = str(q.serviceName, 120) || matched?.service || activeService?.name;
-    if (!serviceName) {
+    const activeService = services.find(service => String(service._id || service.id) === String(matched.vendorServiceId));
+    const serviceName = matched.service;
+    if (!serviceName || !activeService) {
       return { error: 'the service for this quote' };
     }
 
@@ -551,6 +561,7 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
     if (!eventDate) {
       return { error: `the event date for ${customerName || 'customer'}` };
     }
+    if (eventDate !== matched.eventDate) return { error: 'the current enquiry event date; update the enquiry before proposing another date' };
 
     const statedPrices = amountsIn(said);
     let basePrice = Number(q.basePrice) > 0 ? Number(q.basePrice) : null;
@@ -575,6 +586,8 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
     if (!(totalAmount > 0)) {
       return { error: `the quote amount for ${customerName || 'customer'}` };
     }
+    try { confirmedPricing({ basePrice, travelFee, totalAmount }); }
+    catch { return { error: 'a matching itemized total with nonnegative amounts and at most two decimal places' }; }
 
     const notes = str(q.notes, 500) || '';
 
@@ -583,21 +596,22 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
         kind,
         quote: {
           opportunityId,
+          expectedEnquiryUpdatedAt: matched.updatedAt,
           customerId,
           customerName: customerName || 'Customer',
           vendorServiceId: activeService ? String(activeService._id) : null,
           serviceName,
           eventDate,
-          basePrice: Math.round(basePrice),
-          travelFee: Math.round(travelFee),
-          totalAmount: Math.round(totalAmount),
+          basePrice,
+          travelFee,
+          totalAmount,
           notes,
         },
       },
     };
   }
 
-  return { error: null };
+  return { error: 'a supported operating action; money movement, identity verification, legal acceptance and publication require their dedicated reviewed workflows' };
 }
 
 /** One-line summary the vendor confirms. */
@@ -720,30 +734,29 @@ export async function executeAction(vendor, a) {
     if (q.quoteId) {
       quote = await Quote.findOne({ _id: q.quoteId, vendor: vendorId });
     }
-    if (!quote && q.quoteRef) {
+    if (!q.quoteId && q.quoteRef) {
       quote = await Quote.findOne({ quoteReference: q.quoteRef, vendor: vendorId });
-    }
-    if (!quote && q.customerName) {
-      const quotes = await Quote.find({ vendor: vendorId, status: { $in: ['DRAFT', 'SUBMITTED'] } }).populate('customer');
-      quote = quotes.find((x) => x.customer?.fullName?.toLowerCase().includes(q.customerName.toLowerCase()));
     }
     if (!quote) throw new Error('QUOTE_NOT_FOUND');
     if (!['DRAFT', 'SUBMITTED'].includes(quote.status)) {
       throw new Error('QUOTE_NOT_EDITABLE');
     }
+    if (['ORDER_CREATED', 'PROCESSING', 'VERIFIED'].includes(quote.advancePayment?.status)) throw Object.assign(new Error('Reconcile the existing payment before changing this offer.'), { code: 'QUOTE_PAYMENT_IN_PROGRESS' });
+    if (q.expectedCommercialVersion !== (quote.commercialSnapshot?.version || 0) || q.expectedRecordVersion !== (quote.__v || 0)) throw Object.assign(new Error('The quote changed after your review. Open the current quote and confirm the revised action again.'), { code: 'COMMERCIAL_VERSION_CONFLICT' });
+    if (['equipmentFee', 'setupFee', 'additionalFee'].some(field => Number(quote.pricingBreakdown?.[field] || 0) !== 0)) throw Object.assign(new Error('Use the quote editor to review all itemized charges before changing this offer.'), { code: 'FULL_QUOTE_EDITOR_REQUIRED' });
 
-    const basePrice = Math.round(Number(q.basePrice) || 0);
-    const travelFee = Math.round(Number(q.travelFee) || 0);
-    const totalAmount = Math.round(Number(q.totalAmount) || (basePrice + travelFee));
+    const basePrice = Number(q.basePrice) || 0;
+    const travelFee = Number(q.travelFee) || 0;
+    const totalAmount = Number(q.totalAmount) || (Math.round(basePrice * 100) + Math.round(travelFee * 100)) / 100;
 
-    const pricing = {
+    const pricing = confirmedPricing({
       basePrice,
       travelFee,
       equipmentFee: 0,
       setupFee: 0,
       additionalFee: 0,
       totalAmount,
-    };
+    });
 
     const rawNotes = String(q.notes || '').trim();
     const reasonText = rawNotes ? `Vendor revised offer: ${rawNotes}` : `Vendor revised offer to ₹${totalAmount.toLocaleString('en-IN')}`;
@@ -759,6 +772,7 @@ export async function executeAction(vendor, a) {
     quote.status = 'SUBMITTED';
     quote.validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     quote.category = vendor.category || quote.category || '';
+    quote.commercialSnapshot = commercialSnapshot(quote, pricing, (quote.commercialSnapshot?.version || 0) + 1);
     quote.advancePayment = {
       percentage: currentPolicy.minimumReservationPercent,
       policySnapshot: {
@@ -828,35 +842,12 @@ export async function executeAction(vendor, a) {
 
   if (a.kind === 'create_quote') {
     const q = a.quote;
-    let customerId = q.customerId;
-    let opportunityId = q.opportunityId;
-    let vendorServiceId = q.vendorServiceId;
-
-    if (!customerId && opportunityId) {
-      const opp = await Opportunity.findById(opportunityId);
-      if (opp) customerId = opp.customer;
-    }
-    if (!customerId && q.customerName) {
-      const opp = await Opportunity.findOne({
-        vendor: vendorId,
-        $or: [{ customerName: new RegExp(q.customerName, 'i') }],
-      }).populate('customer');
-      if (opp) {
-        opportunityId = opp._id;
-        customerId = opp.customer?._id || opp.customer;
-      }
-    }
-    if (!vendorServiceId) {
-      const svc = await VendorService.findOne({ vendor: vendorId, status: 'ACTIVE' });
-      if (svc) vendorServiceId = svc._id;
-    }
-    if (!customerId) {
-      throw new Error('CUSTOMER_REQUIRED');
-    }
-
-    const basePrice = Math.round(Number(q.basePrice) || 0);
-    const travelFee = Math.round(Number(q.travelFee) || 0);
-    const totalAmount = Math.round(Number(q.totalAmount) || (basePrice + travelFee));
+    const opportunity = q.opportunityId && await Opportunity.findOne({ _id: q.opportunityId, vendor: vendorId, status: { $in: ['NEW', 'VIEWED'] }, $or: [{ slaExpiresAt: null }, { slaExpiresAt: { $gt: new Date() } }] });
+    if (!opportunity) throw Object.assign(new Error('Choose an open enquiry owned by your vendor account.'), { code: 'OWNED_ENQUIRY_REQUIRED' });
+    if (q.expectedEnquiryUpdatedAt !== opportunity.updatedAt?.toISOString() || String(q.customerId) !== String(opportunity.customer) || String(q.vendorServiceId) !== String(opportunity.vendorService) || q.eventDate !== opportunity.eventDate) throw Object.assign(new Error('The enquiry changed after review. Refresh it and confirm the current scope.'), { code: 'ENQUIRY_VERSION_CONFLICT' });
+    const customerId = opportunity.customer, opportunityId = opportunity._id, vendorServiceId = opportunity.vendorService;
+    const pricing = confirmedPricing({ basePrice: Number(q.basePrice), travelFee: Number(q.travelFee || 0), totalAmount: Number(q.totalAmount) });
+    const { basePrice, travelFee, totalAmount } = pricing;
 
     const advancePolicy = await getCommercialPolicyForCategory(vendor.category);
     const quote = await createQuote({
@@ -864,8 +855,9 @@ export async function executeAction(vendor, a) {
       vendorId,
       customerId,
       vendorServiceId,
-      serviceName: q.serviceName || 'Event Service',
+      serviceName: opportunity.serviceName,
       eventDate: q.eventDate,
+      serviceLocation: opportunity.serviceLocation,
       pricingBreakdown: {
         basePrice,
         travelFee,
