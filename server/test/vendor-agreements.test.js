@@ -34,6 +34,10 @@ test('pre-metadata Academy creation receipts and version-one archives remain rec
   await request(app).post(`${path}/publication`).set(reviewer.auth).send({ revision: 2, action: 'PUBLISH', reason: 'Approve legacy content', rightsReference: 'synthetic-rights' }).expect(200);
   assert.equal((await LearningLesson.findById(row._id)).history.at(-1).contentHash, learningContentHash(fields, 1));
   await request(app).get(`${path}/versions`).set(reviewer.auth).expect(200);
+  await request(app).post(`${path}/publication`).set(reviewer.auth).send({ revision: 3, action: 'WITHDRAW', reason: 'Update legacy metadata' }).expect(200);
+  await request(app).put(path).set(author.auth).send({ ...fields, featured: true, revision: 4 }).expect(200);
+  const recoveredAfterEdit = (await request(app).post('/api/admin/academy').set(author.auth).send({ ...fields, requestKey }).expect(201)).body.lesson;
+  assert.equal(recoveredAfterEdit.id, String(row._id)); assert.equal(recoveredAfterEdit.featured, true); assert.equal(recoveredAfterEdit.contentVersion, 2);
 });
 test('Academy metadata needs independent publication, survives old-client edits, and isolates readiness failure', async () => {
   const author = await admin(), reviewer = await admin(), v = await vendor();

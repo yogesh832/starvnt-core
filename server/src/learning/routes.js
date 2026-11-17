@@ -120,7 +120,7 @@ adminLearningRoutes.post('/', requirePermission('academy.edit'), h(async (req, r
   }
   const { description, difficulty, featured, needsTags, ...legacyFields } = fields;
   const legacyHash = createHash('sha256').update(JSON.stringify(legacyFields)).digest('hex');
-  const legacyReplay = row && row.requestHash === legacyHash && !description && !difficulty && !featured && !needsTags.length && !row.description && !row.difficulty && !row.featured && !row.needsTags?.length;
+  const legacyReplay = row && row.requestHash === legacyHash && !description && !difficulty && !featured && !needsTags.length;
   if (!row || (row.requestHash !== requestHash && !legacyReplay)) throw fail('REQUEST_CHANGED', 'This draft request already used different content.', 409);
   res.status(201).json({ lesson: adminView(row) });
 }));
