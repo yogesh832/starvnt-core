@@ -129,6 +129,7 @@ export default function Enquiries() {
 
   async function handleSendQuote() {
     if (!quoteModalOpp) return;
+    if (!quoteModalOpp.dbId) { setFeedback('This enquiry is unavailable. Reload Enquiries before submitting an offer.'); return; }
     const amounts = [basePrice, travelFee, equipmentFee, setupFee, additionalFee].map(Number);
     if (amounts.some((amount) => !Number.isFinite(amount) || amount < 0) || amounts.reduce((sum, amount) => sum + amount, 0) <= 0) {
       setFeedback('Notice: Add a valid positive quote total. Fees cannot be negative.');
@@ -138,7 +139,7 @@ export default function Enquiries() {
     try {
       const totalAmount = Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee);
       if (quoteModalOpp.dbId) {
-        await externalApi.call('/quotes', {
+        const result = await externalApi.call('/quotes', {
           method: 'POST',
           body: {
             opportunityId: quoteModalOpp.dbId,
@@ -159,11 +160,12 @@ export default function Enquiries() {
             notes,
           },
         });
+        if (!result?.ok || !result.quote?._id) throw new Error('The server did not confirm the saved quote. Review Quotes before trying again.');
       }
       setOpportunities((prev) =>
         prev.map((o) => (o.id === quoteModalOpp.id ? { ...o, status: 'Responded' } : o))
       );
-      setFeedback(`Offer of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. Customer can now negotiate or pay 30% advance.`);
+      setFeedback(`Offer of ₹${totalAmount.toLocaleString()} submitted for ${quoteModalOpp.service}. The customer can review the saved offer and its approved payment terms.`);
       setQuoteModalOpp(null);
     } catch (err) {
       setFeedback(`Notice: ${err.message}`);
@@ -439,12 +441,7 @@ export default function Enquiries() {
                   ₹{(Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee)).toLocaleString()}
                 </span>
               </div>
-              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 flex justify-between text-xs">
-                <span className="font-bold text-emerald-800">Customer pays 30% advance</span>
-                <span className="font-extrabold text-emerald-700">
-                  ₹{Math.ceil((Number(basePrice) + Number(travelFee) + Number(equipmentFee) + Number(setupFee) + Number(additionalFee)) * 0.3).toLocaleString()}
-                </span>
-              </div>
+              <p className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs text-emerald-800">Reservation payment terms follow the approved policy saved with the submitted offer. Review that offer before collecting payment.</p>
 
               <div>
                 <VendorMessageField value={notes} onChange={setNotes} context={{ type: 'opportunity', id: quoteModalOpp.dbId }} label="Message with this quote (optional)" placeholder={`e.g. Offer includes ${quoteModalOpp.service}. Add your inclusions, timing and any conditions.`} disabled={submitting} />

@@ -16,10 +16,17 @@ const { VendorOrganization } = await import('../src/external/models/VendorOrgani
 const { LearningLesson, LearningFeedback } = await import('../src/learning/models.js');
 const { VendorService } = await import('../src/external/models/VendorService.js');
 const { Quote } = await import('../src/external/models/Quote.js');
+const { Opportunity } = await import('../src/external/models/Opportunity.js');
 const { commercialSnapshot } = await import('../src/external/services/commercialSnapshot.service.js');
 const { VendorDocument } = await import('../src/external/models/VendorDocument.js');
 const { AdminUser } = await import('../src/admin/models/AdminUser.js');
 const { GrowthMeeting } = await import('../src/learning/meetingModels.js');
+const { VendorCapability } = await import('../src/external/models/VendorCapability.js');
+const { OperatingLocation } = await import('../src/external/models/OperatingLocation.js');
+const { ServiceCoverage } = await import('../src/external/models/ServiceCoverage.js');
+const { VendorFinancialProfile } = await import('../src/external/models/VendorFinancialProfile.js');
+const { PortfolioItem } = await import('../src/external/models/PortfolioItem.js');
+const { evaluateVendorActivation } = await import('../src/external/services/vendorActivation.service.js');
 const bcrypt = (await import('bcryptjs')).default;
 const express = (await import('express')).default;
 const checks = [];
@@ -33,6 +40,7 @@ try {
   const vendor = await VendorOrganization.create({ owner: owner._id, businessName: 'Synthetic QA Vendor', category: 'Photography', location: 'Pune' });
   owner.vendorOrganization = vendor._id; await owner.save();
   const service = await VendorService.create({ vendor: vendor._id, name: 'Synthetic QA service', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 100 } });
+  await Opportunity.create({ vendor: vendor._id, customer: owner._id, vendorService: service._id, serviceName: service.name, eventDate: '2027-01-01', serviceLocation: { city: 'Pune' } });
   const quote = new Quote({ vendor: vendor._id, customer: owner._id, vendorService: service._id, serviceName: service.name, eventDate: '2027-01-01', status: 'SUBMITTED', pricingBreakdown: { basePrice: 100, totalAmount: 100 }, notes: 'Original synthetic scope' });
   quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown, 1); await quote.save();
   quote.pricingBreakdown = { basePrice: 200, totalAmount: 200 }; quote.notes = 'Revised synthetic scope';
@@ -107,6 +115,32 @@ try {
   await page.getByRole('link', { name: 'Download private copy', exact: true }).waitFor();
   checks.push('PDF upload stores actual private bytes and owner preview retrieves an audited authenticated copy');
   await page.screenshot({ path: resolve(output, 'private-document-owner-desktop.png'), fullPage: true });
+  // Synthetic stored readiness evidence only, in the temporary test database.
+  // This does not call a verification provider or mark the uploaded file verified.
+  await VendorOrganization.updateOne({ _id: vendor._id }, { $set: { status: 'ACTIVE', isProfileCompleted: true, isCommerciallyActive: true, 'activationReview.status': 'APPROVED' } });
+  await VendorCapability.create({ vendor: vendor._id, vendorService: service._id, teamSize: 3, simultaneousEventLimit: 2 });
+  await OperatingLocation.create({ vendor: vendor._id, label: 'Synthetic test base', city: 'Pune', coordinates: { lat: 18.52, lng: 73.85 }, isPrimary: true });
+  await ServiceCoverage.create({ vendor: vendor._id, vendorService: service._id, coverageType: 'CITY', city: 'Pune' });
+  await VendorFinancialProfile.findOneAndUpdate({ vendor: vendor._id }, { $set: { identityReviewRequired: false, 'pan.verificationStatus': 'VERIFIED', 'pan.legalName': 'Synthetic fixture identity', 'bankAccount.verificationStatus': 'VERIFIED' } }, { upsert: true });
+  await PortfolioItem.create({ vendor: vendor._id, mediaType: 'IMAGE', url: 'https://example.test/synthetic-public.jpg', status: 'PUBLISHED', visibility: 'PUBLIC' });
+  const syntheticReadiness = await evaluateVendorActivation(vendor._id);
+  assert.equal(syntheticReadiness.matchingEligible, true, JSON.stringify(syntheticReadiness.reasonCodes));
+  await page.route('**/api/quotes', route => route.request().method() === 'POST' ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_QUOTE_UNAVAILABLE', message: 'Synthetic quote submission unavailable' }) }) : route.continue());
+  await page.goto('http://127.0.0.1:5199/vendor/dashboard');
+  await page.getByRole('button', { name: 'Respond →', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Prepare Official Quote/ }).click();
+  await page.getByPlaceholder('Enter base service pricing').fill('1234');
+  await page.getByRole('button', { name: 'Submit Quote', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Synthetic quote submission unavailable' }).waitFor();
+  await page.getByRole('heading', { name: 'Prepare Official Quote', exact: true }).waitFor();
+  assert.equal(await page.getByPlaceholder('Enter base service pricing').inputValue(), '1234');
+  assert.equal(await Quote.countDocuments({ vendor: vendor._id }), 1);
+  await page.getByRole('button', { name: 'Close quote modal', exact: true }).click();
+  await page.goto('http://127.0.0.1:5199/vendor/enquiries');
+  await page.getByRole('button', { name: 'Respond & Quote', exact: true }).first().click();
+  await page.getByText('Reservation payment terms follow the approved policy saved with the submitted offer. Review that offer before collecting payment.', { exact: true }).waitFor();
+  assert.equal(await page.getByText('Customer pays 30% advance', { exact: true }).count(), 0);
+  checks.push('Rejected dashboard quote stays open with entered amount and no saved quote; Enquiries uses recorded payment policy without a fixed advance promise');
   const editor = await AdminUser.create({ fullName: 'Synthetic Academy Editor', email: 'main17-editor@example.test', role: 'ADMIN', permissions: ['academy.read', 'academy.edit', 'growthMeetings.read', 'growthMeetings.run'], passwordHash: await bcrypt.hash(password, 4) });
   const editorLogin = await fetch('http://127.0.0.1:4119/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: editor.email, password }) });
   assert.equal(editorLogin.status, 200);

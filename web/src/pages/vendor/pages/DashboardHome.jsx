@@ -337,7 +337,18 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
   const [basePrice, setBasePrice] = useState(initialBase);
   const [quoteMessage, setQuoteMessage] = useState('');
   const [travelFee, setTravelFee] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const total = (Number(basePrice) || 0) + (Number(travelFee) || 0);
+  async function submit(status) {
+    if (submitting) return;
+    const amounts = [Number(basePrice), Number(travelFee)];
+    if (amounts.some(value => !Number.isFinite(value) || value < 0) || total <= 0) { setError('Enter a positive total with valid nonnegative charges.'); return; }
+    setSubmitting(true); setError('');
+    try { await onSubmitQuote({ base: amounts[0], travel: amounts[1], total, notes: quoteMessage, status }); onClose(); }
+    catch (error) { setError(error.message || 'The quote could not be confirmed. Review it before retrying.'); }
+    finally { setSubmitting(false); }
+  }
 
   return (
     <div className="vendor-modal-backdrop">
@@ -351,16 +362,20 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-lavender text-ink/70 hover:text-ink grid place-items-center transition"
             aria-label="Close quote modal"
+            disabled={submitting}
           >
             <Icon name="close" size={16} />
           </button>
         </div>
+
+        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
 
         <div className="space-y-3 text-xs">
           <div>
             <label className="block text-muted font-semibold mb-1">Base Service Price (₹)</label>
             <input
               type="number"
+              disabled={submitting}
               value={basePrice || ''}
               placeholder="Enter base service pricing"
               onChange={(e) => setBasePrice(e.target.value)}
@@ -372,6 +387,7 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
             <label className="block text-muted font-semibold mb-1">Travel & Transit Allowance (₹)</label>
             <input
               type="number"
+              disabled={submitting}
               value={travelFee || ''}
               placeholder="0 (Included or custom allowance)"
               onChange={(e) => setTravelFee(e.target.value)}
@@ -388,22 +404,18 @@ function QuoteModal({ enquiry, vendorCity, onClose, onSubmitQuote }) {
           </div>
         </div>
 
-        <VendorMessageField value={quoteMessage} onChange={setQuoteMessage} context={{ type: 'opportunity', id: enquiry?.opportunityId }} label="Message with quote (optional)" placeholder="e.g. Describe package inclusions, timing or any conditions for this offer." />
+        <VendorMessageField value={quoteMessage} onChange={setQuoteMessage} context={{ type: 'opportunity', id: enquiry?.opportunityId }} label="Message with quote (optional)" placeholder="e.g. Describe package inclusions, timing or any conditions for this offer." disabled={submitting} />
         <div className="vendor-modal-actions pt-2 flex gap-3">
           <button
-            onClick={() => {
-              onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, notes: quoteMessage, status: 'DRAFT' });
-              onClose();
-            }}
+            onClick={() => submit('DRAFT')}
+            disabled={submitting}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-muted hover:text-navy transition"
           >
             Save Draft
           </button>
           <button
-            onClick={() => {
-              onSubmitQuote({ base: Number(basePrice), travel: Number(travelFee), total, notes: quoteMessage, status: 'SUBMITTED' });
-              onClose();
-            }}
+            onClick={() => submit('SUBMITTED')}
+            disabled={submitting}
             className="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-dark shadow-md shadow-primary/25 transition"
           >
             Submit Quote
@@ -736,8 +748,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
   async function handleSendQuote(q, enquiry) {
     try {
+      if (!enquiry?.opportunityId) throw new Error('This enquiry is unavailable. Refresh the dashboard before submitting an offer.');
       if (enquiry?.opportunityId) {
-        await externalApi.call('/quotes', {
+        const result = await externalApi.call('/quotes', {
           method: 'POST',
           body: {
             opportunityId: enquiry.opportunityId,
@@ -755,10 +768,11 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             notes: q.notes?.trim() || '',
           },
         });
+        if (!result?.ok || !result.quote?._id) throw new Error('The server did not confirm the saved quote. Review Quotes before trying again.');
       }
       await loadLiveDashboard();
     } catch (err) {
-      console.error('[DashboardHome] Quote submit error:', err);
+      throw err;
     }
   }
 
@@ -1558,9 +1572,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           enquiry={quoteEnquiry}
           vendorCity={vendorProfile?.city}
           onClose={() => setQuoteEnquiry(null)}
-          onSubmitQuote={(q) => {
-            handleSendQuote(q, quoteEnquiry);
-          }}
+          onSubmitQuote={(q) => handleSendQuote(q, quoteEnquiry)}
         />
       )}
     </div>
