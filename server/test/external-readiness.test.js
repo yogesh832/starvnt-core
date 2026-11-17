@@ -739,6 +739,10 @@ test('Growth Meetings protect invite-only access, RSVP revisions, join links and
     meetUrl: 'https://meet.google.com/jkl-mnop-qrs', hostName: 'Synthetic replacement host', revision: 1, scheduleVersion: 1,
   }).expect(200)).body.meeting;
   assert.equal(revised.scheduleVersion, 2);
+  const replaySchedule = (await request(app).put(`${admin}/schedule`).set(scheduler).send({
+    ...schedule, startsAt: new Date(newStart).toISOString(), endsAt: new Date(newStart + 3600000).toISOString(), meetUrl: 'https://meet.google.com/jkl-mnop-qrs', hostName: 'Synthetic replacement host', revision: 1, scheduleVersion: 1,
+  }).expect(200)).body.meeting;
+  assert.equal(replaySchedule.revision, revised.revision); assert.equal(replaySchedule.history.length, revised.history.length);
   assert.equal(revised.hostName, 'Synthetic replacement host');
   assert.deepEqual(revised.history.map(row => row.hostName), [schedule.hostName, 'Synthetic replacement host']);
   const { hostName: _legacyHost, ...legacySchedule } = schedule;
@@ -760,6 +764,9 @@ test('Growth Meetings protect invite-only access, RSVP revisions, join links and
 
   const second = (await create({ ...schedule, requestKey: key() }).expect(201)).body.meeting;
   await request(app).post(`${adminPath}/${second.id}/cancel`).set(scheduler).send({ revision: 1, reason: 'Facilitator unavailable' }).expect(200);
+  const cancellationReplay = (await request(app).post(`${adminPath}/${second.id}/cancel`).set(scheduler).send({ revision: 1, reason: 'Facilitator unavailable' }).expect(200)).body.meeting;
+  assert.equal(cancellationReplay.revision, 2); assert.equal(cancellationReplay.history.length, 2);
+  await request(app).post(`${adminPath}/${second.id}/cancel`).set(scheduler).send({ revision: 1, reason: 'Different decision' }).expect(409);
   await request(app).post(`${vendorPath}/${second.id}/join`).set(auth(invited.token)).send({ scheduleVersion: 1 }).expect(409);
   assert.equal((await list(invited.token).expect(200)).body.meetings.find(row => row.id === second.id).status, 'CANCELLED');
 
@@ -771,14 +778,33 @@ test('Growth Meetings protect invite-only access, RSVP revisions, join links and
   await attendance(outside.vendor._id).expect(403);
   await attendance(invited.vendor._id).expect(200);
   await feedback().expect(200);
-  await request(app).put(`${admin}/summary`).set(operator).send({
+  const summaryPayload = {
     revision: revised.revision, summary: 'We discussed quote inclusions.', resources: 'Use a scope checklist.', reason: 'Reviewed after the session',
-  }).expect(200);
+  };
+  const [firstSummaryResponse, concurrentSummaryResponse] = await Promise.all([
+    request(app).put(`${admin}/summary`).set(operator).send(summaryPayload).expect(200),
+    request(app).put(`${admin}/summary`).set(operator).send(summaryPayload).expect(200),
+  ]);
+  const firstSummary = firstSummaryResponse.body.meeting;
+  assert.equal(concurrentSummaryResponse.body.meeting.revision, firstSummary.revision);
+  assert.equal(firstSummary.history.filter(row => row.action === 'SUMMARY_SAVED').length, 1);
+  const summaryReplay = (await request(app).put(`${admin}/summary`).set(operator).send(summaryPayload).expect(200)).body.meeting;
+  assert.equal(summaryReplay.revision, firstSummary.revision); assert.equal(summaryReplay.history.length, firstSummary.history.length);
+  await request(app).put(`${admin}/summary`).set(operator).send({ ...summaryPayload, resources: 'Changed retry' }).expect(409);
+  const corrected = (await request(app).put(`${admin}/summary`).set(operator).send({ ...summaryPayload, revision: firstSummary.revision, summary: 'Corrected scope discussion.', resources: 'Corrected resource notes', reason: 'Corrected a resource reference' }).expect(200)).body.meeting;
+  const summaryHistory = corrected.history.filter(row => row.action === 'SUMMARY_SAVED');
+  assert.equal(summaryHistory.length, 2);
+  assert.equal(summaryHistory[1].summaryBefore.summary, summaryPayload.summary);
+  assert.equal(summaryHistory[1].summaryBefore.resources, summaryPayload.resources);
+  assert.equal(summaryHistory[1].summaryAfter.resources, 'Corrected resource notes');
+  assert.match(summaryHistory[1].summaryAfter.hash, /^[a-f0-9]{64}$/);
   await request(app).get(`${admin}/participation`).set(scheduler).expect(403);
   const records = (await request(app).get(`${admin}/participation`).set(operator).expect(200)).body.participants;
   assert.deepEqual(records.map(row => [row.vendorId, row.rsvp, row.attended, row.feedback]), [[String(invited.vendor._id), 'GOING', true, 'Useful examples.']]);
   const after = (await list(invited.token).expect(200)).body.meetings.find(row => row.id === meeting.id);
-  assert.equal(after.summary, 'We discussed quote inclusions.');
+  assert.equal(after.summary, 'Corrected scope discussion.');
+  assert.equal(after.resources, 'Corrected resource notes');
+  assert.equal(after.history, undefined);
   assert.equal(after.attended, true);
 
   const open = (await create({ ...schedule, audience: 'ACTIVE', invitees: [], requestKey: key() }).expect(201)).body.meeting;

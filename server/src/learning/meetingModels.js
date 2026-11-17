@@ -5,6 +5,9 @@ const change = new Schema({
   actor: String, action: String, reason: String, at: Date, revision: Number,
   startsAt: Date, endsAt: Date, timezone: String, scheduleVersion: Number,
   hostName: String,
+  requestHash: String,
+  summaryBefore: { summary: String, resources: String, known: Boolean },
+  summaryAfter: { summary: String, resources: String, hash: String },
 }, { _id: false });
 const meeting = new Schema({
   title: { type: String, required: true },

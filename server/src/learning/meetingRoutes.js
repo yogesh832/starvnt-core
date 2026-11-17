@@ -174,12 +174,22 @@ async function updateMeeting(req, constraints, set, action, scheduleChange = fal
   const revision = req.body?.revision;
   if (!Number.isSafeInteger(revision) || revision < 1) throw changed();
   const audit = { actor: String(req.admin._id), action, reason: text(req.body.reason, 500), at: new Date(), revision: revision + 1 };
+  audit.requestHash = createHash('sha256').update(JSON.stringify({ actor: audit.actor, action, revision, set, reason: audit.reason })).digest('hex');
+  const recover = () => GrowthMeeting.findOne({ _id: getId(req.params.id), revision: revision + 1, history: { $elemMatch: { revision: revision + 1, requestHash: audit.requestHash } } });
+  const replay = await recover();
+  if (replay) return replay;
   if (scheduleChange) Object.assign(audit, { startsAt: set.startsAt, endsAt: set.endsAt, timezone: set.timezone, hostName: set.hostName, scheduleVersion: req.body.scheduleVersion + 1 });
   const filter = { _id: getId(req.params.id), revision, status: 'SCHEDULED', ...constraints };
+  if (action === 'SUMMARY_SAVED') {
+    const before = await GrowthMeeting.findOne(filter).select('summary resources scheduleVersion').lean();
+    if (!before) { const replay = await recover(); if (replay) return replay; throw changed(); }
+    audit.summaryBefore = { summary: before.summary || '', resources: before.resources || '', known: typeof before.summary === 'string' };
+    audit.summaryAfter = { summary: set.summary, resources: set.resources || '', hash: createHash('sha256').update(JSON.stringify({ scheduleVersion: before.scheduleVersion, summary: set.summary, resources: set.resources || '' })).digest('hex') };
+  }
   const row = await GrowthMeeting.findOneAndUpdate(filter, {
     $set: set, $inc: { revision: 1, ...(scheduleChange ? { scheduleVersion: 1 } : {}) }, $push: { history: audit },
   }, { new: true, runValidators: true });
-  if (!row) throw changed();
+  if (!row) { const replay = await recover(); if (replay) return replay; throw changed(); }
   return row;
 }
 

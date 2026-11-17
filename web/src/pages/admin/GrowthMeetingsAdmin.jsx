@@ -158,6 +158,21 @@ export default function GrowthMeetingsAdmin() {
           value={reason} onChange={event => setReason(event.target.value)} /></label>
         <button className={button} type="submit" disabled={busy}>{meeting ? 'Save revised schedule' : 'Schedule meeting'}</button>
       </form>}
+      {meeting && <section className="space-y-2 rounded-2xl bg-white p-4">
+        <h2 className="font-bold">Meeting decision history</h2>
+        {(meeting.history || []).map((event, index) => <details key={`${event.revision}:${index}`} className="rounded-xl border p-3">
+          <summary className="cursor-pointer text-sm font-semibold">Revision {event.revision} · {event.action} · {new Date(event.at).toLocaleString()}</summary>
+          <p className="mt-2 break-words text-sm">{event.reason} · Actor {event.actor}</p>
+          {event.hostName && <p className="text-sm">Host: {event.hostName}</p>}
+          {event.summaryAfter?.hash && <>
+            <h3 className="mt-2 font-semibold">Summary and resources saved</h3>
+            <p className="whitespace-pre-wrap break-words text-sm">{event.summaryAfter.summary}</p>
+            <p className="whitespace-pre-wrap break-words text-sm">{event.summaryAfter.resources || 'No resource notes in this revision.'}</p>
+            <p className="break-all text-xs text-muted">Hash: {event.summaryAfter.hash}</p>
+            {event.summaryBefore?.known && <details className="mt-2"><summary>Content before this change</summary><p className="whitespace-pre-wrap break-words text-sm">{event.summaryBefore.summary}</p><p className="whitespace-pre-wrap break-words text-sm">{event.summaryBefore.resources}</p></details>}
+          </>}
+        </details>)}
+      </section>}
       {meeting && canSchedule && !ended && !cancelled && <section className="space-y-3 rounded-2xl bg-white p-4">
         <h2 className="font-bold">Cancellation</h2>
         <label className="block">Cancellation reason shown to vendors<input className={field} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} /></label>

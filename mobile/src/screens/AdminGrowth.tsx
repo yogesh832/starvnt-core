@@ -194,8 +194,9 @@ export function AdminMeeting({ navigation, route }: any) {
       {canRun && <>
         <GrowthFields fields={[[ 'summary', 'Meeting summary', 6000, true ], [ 'resources', 'Resources', 6000, true ]]}
           form={form} busy={action.busy} change={change} />
-        <Button title="Publish meeting summary" busy={action.busy} onPress={() => submit(`${path}/summary`, 'PUT', {
-          summary: form.summary, resources: form.resources, revision: meeting.revision,
+        <Field label="Summary decision reason" value={form.reason} editable={!action.busy} maxLength={500} onChangeText={value => change('reason', value)} />
+        <Button title="Publish meeting summary" busy={action.busy} disabled={!form.reason.trim()} onPress={() => submit(`${path}/summary`, 'PUT', {
+          summary: form.summary, resources: form.resources, reason: form.reason, revision: meeting.revision,
         })} />
         <Txt bold>Attendance and private feedback</Txt>
         <ErrorNotice message={participants.error} retry={participants.refresh} />
@@ -209,6 +210,15 @@ export function AdminMeeting({ navigation, route }: any) {
         <Field label="Vendor ID for a walk-in attendee" value={attendanceId} maxLength={24} onChangeText={setAttendanceId} autoCapitalize="none" />
         <Button title="Record walk-in attendance" secondary disabled={action.busy || !/^[a-f0-9]{24}$/i.test(attendanceId)}
           onPress={() => saveAttendance(attendanceId, true)} />
+      </>}
+      {meeting?.history?.length > 0 && <>
+        <Txt bold>Meeting decision history</Txt>
+        {meeting.history.map((event: Data, index: number) => <Card key={`${event.revision}:${index}`}>
+          <Txt bold>Revision {event.revision} · {event.action}</Txt><Txt muted>{new Date(event.at).toLocaleString()}</Txt>
+          <Txt>{event.reason}</Txt>
+          {event.hostName && <Txt>Host: {event.hostName}</Txt>}
+          {event.summaryAfter?.hash && <><Txt>{event.summaryAfter.summary}</Txt><Txt>{event.summaryAfter.resources || 'No resource notes in this revision.'}</Txt></>}
+        </Card>)}
       </>}
       <ErrorNotice message={action.error} />
     </Card>
