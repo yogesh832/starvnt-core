@@ -209,8 +209,11 @@ try {
   report.checks.push({ name: 'Quote action opens existing quote detail', passed: true });
   await page.goto(`http://127.0.0.1:5197/vendor/bookings?record=${contract._id}`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: new RegExp(contract.bookingReference) }).waitFor();
-  await page.getByRole('button', { name: 'Start Service (Check-in)', exact: true }).waitFor();
-  report.checks.push({ name: 'Booking action opens existing booking module', passed: true });
+  await page.getByRole('button', { name: 'Open service execution and private evidence', exact: true }).click();
+  await page.waitForURL(`**/vendor/execution?booking=${contract._id}`);
+  await page.getByRole('heading', { name: 'Service execution and review', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Check in', exact: true }).waitFor();
+  check('Booking action opens the owned Core execution workspace', await page.getByLabel('Booking', { exact: true }).inputValue(), String(contract._id));
   await page.goto('http://127.0.0.1:5197/vendor/dashboard', { waitUntil: 'domcontentloaded' });
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
