@@ -7,6 +7,7 @@ import { expireExternalHolds } from '../external/services/commitments.service.js
 import { config } from '../config.js';
 import { OutboxEvent } from '../admin/models/OutboxEvent.js';
 import { processOutboxBatch } from '../automation/services/outbox.service.js';
+import { queuePendingQuoteCreationEffects } from '../external/services/quoteCreationEffects.service.js';
 import { expireStaleReservations } from '../customer/repositories/commerce.repo.js';
 import { expireStaleOpportunities } from '../external/services/opportunitySla.service.js';
 import { incrementMetric } from '../metrics.js';
@@ -81,7 +82,11 @@ export function startCoreWorkers() {
       markWorkerStarted('outbox');
       try {
         await releaseStaleOutboxLocks();
+        let quoteScanFailed = false;
+        try { quoteScanFailed = (await queuePendingQuoteCreationEffects()).failures.length > 0; }
+        catch { quoteScanFailed = true; }
         await processOutboxBatch({ batchSize: 10 });
+        if (quoteScanFailed) throw new Error('QUOTE_CREATION_SCAN_INCOMPLETE');
         markWorkerSuccess('outbox', Date.now() - startedAt);
       } catch (err) {
         markWorkerError('outbox', err, Date.now() - startedAt);

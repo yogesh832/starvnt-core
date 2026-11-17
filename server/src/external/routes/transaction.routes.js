@@ -1,4 +1,5 @@
 import { reconcileVendorQuotePayment } from '../services/vendorQuotePayment.service.js';
+import { reconcileQuoteCreationEffects } from '../services/quoteCreationEffects.service.js';
 import { commercialSnapshot, assertCommercialSnapshot, confirmedPricing } from '../services/commercialSnapshot.service.js';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import crypto from 'node:crypto';
@@ -999,7 +1000,8 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       creationCommand: requestKey === undefined ? undefined : { key: requestKey, actorId: req.externalUser._id, intent: { kind: 'VENDOR_API_QUOTE', opportunityId: opportunityId || null, customerId: String(scope.customerId), vendorServiceId: String(scope.vendorServiceId), serviceName: serviceName || 'Event Service', eventDate, serviceLocation: serviceLocation || {}, pricingBreakdown: normalizedPricing, notes: String(notes || '').trim(), status } },
     });
 
-    if (!quote.$locals.creationRequestReplayed && opportunityId && quote.status === 'SUBMITTED') {
+    const managedCreationEffects = await reconcileQuoteCreationEffects(quote);
+    if (!managedCreationEffects && !quote.$locals.creationRequestReplayed && opportunityId && quote.status === 'SUBMITTED') {
       await Opportunity.findOneAndUpdate(
         { _id: opportunityId, vendor: resolvedVendorId },
         { status: 'RESPONDED', action: 'Quote Sent' }
@@ -1011,7 +1013,7 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
     const totalAmount = Number(quote.pricingBreakdown?.totalAmount || 0);
     const advanceAmount = Number(quote.advanceAmount || quoteAdvanceAmount(quote, totalAmount));
 
-    if (!quote.$locals.creationRequestReplayed && quote.status === 'SUBMITTED') await recordLifecycleEventMessage({
+    if (!managedCreationEffects && !quote.$locals.creationRequestReplayed && quote.status === 'SUBMITTED') await recordLifecycleEventMessage({
       vendorId: resolvedVendorId,
       customerId: quote.customer,
       eventId: quote.event,

@@ -6,12 +6,12 @@ import { evaluateVendorActivation } from './vendorActivation.service.js';
 import { checkTrueAvailability } from './availability.service.js';
 import { schedulingError } from '../../common/scheduleRules.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
-import { quoteCreationCommand, quoteCreationConflict } from '../../common/quoteCreationCommand.js';
+import { quoteCreationCommand, quoteCreationConflict, prepareQuoteCreationEffects } from '../../common/quoteCreationCommand.js';
 
 export async function recoverQuoteCreation(vendorId, command) {
   const identity = quoteCreationCommand(vendorId, command);
   if (!identity) return null;
-  const row = await Quote.findOne({ vendor: vendorId, creationRequestKey: identity.key }).select('+creationRequestHash +creationRequestActor');
+  const row = await Quote.findOne({ vendor: vendorId, creationRequestKey: identity.key }).select('+creationRequestHash +creationRequestActor +creationEffects');
   if (!row) return null;
   if (row.creationRequestHash !== identity.hash || row.creationRequestActor !== identity.actor) throw quoteCreationConflict();
   row.$locals.creationRequestReplayed = true;
@@ -118,6 +118,7 @@ export async function createQuote({
 
   if (initialStatus === 'SUBMITTED') {
     quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown);
+    if (command) quote.creationEffects = prepareQuoteCreationEffects(quote);
   }
   try { await quote.save(); }
   catch (error) {

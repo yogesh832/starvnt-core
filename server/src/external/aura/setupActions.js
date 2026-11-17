@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { reconcileQuoteCreationEffects } from '../services/quoteCreationEffects.service.js';
 import { vendorAuraDiagnostic } from '../../common/vendorAuraDiagnostics.js';
 import { validDate } from '../../common/scheduleRules.js';
 import { saveCommitment } from '../services/commitments.service.js';
@@ -849,7 +850,7 @@ export async function executeAction(vendor, a) {
     const q = a.quote;
     const creationCommand = a.idempotencyKey ? { key: a.idempotencyKey, actorId: vendor.owner || vendorId, intent: { kind: 'AURA_QUOTE', quote: q } } : undefined;
     const recovered = await recoverQuoteCreation(vendorId, creationCommand);
-    if (recovered) return { kind: 'create_quote', quoteId: recovered._id, quoteRef: recovered.quoteReference, total: recovered.pricingBreakdown.totalAmount, replayed: true };
+    if (recovered) { await reconcileQuoteCreationEffects(recovered); return { kind: 'create_quote', quoteId: recovered._id, quoteRef: recovered.quoteReference, total: recovered.pricingBreakdown.totalAmount, replayed: true }; }
     const opportunity = q.opportunityId && await Opportunity.findOne({ _id: q.opportunityId, vendor: vendorId, status: { $in: ['NEW', 'VIEWED'] }, $or: [{ slaExpiresAt: null }, { slaExpiresAt: { $gt: new Date() } }] });
     if (!opportunity) throw Object.assign(new Error('Choose an open enquiry owned by your vendor account.'), { code: 'OWNED_ENQUIRY_REQUIRED' });
     if (q.expectedEnquiryUpdatedAt !== opportunity.updatedAt?.toISOString() || String(q.customerId) !== String(opportunity.customer) || String(q.vendorServiceId) !== String(opportunity.vendorService) || q.eventDate !== opportunity.eventDate) throw Object.assign(new Error('The enquiry changed after review. Refresh it and confirm the current scope.'), { code: 'ENQUIRY_VERSION_CONFLICT' });
@@ -882,7 +883,8 @@ export async function executeAction(vendor, a) {
       actor: vendor.businessName || 'Vendor',
     });
 
-    if (quote.$locals.creationRequestReplayed) return { kind: 'create_quote', quoteId: quote._id, quoteRef: quote.quoteReference, total: quote.pricingBreakdown.totalAmount, replayed: true };
+    const managedCreationEffects = await reconcileQuoteCreationEffects(quote);
+    if (managedCreationEffects || quote.$locals.creationRequestReplayed) return { kind: 'create_quote', quoteId: quote._id, quoteRef: quote.quoteReference, total: quote.pricingBreakdown.totalAmount, replayed: Boolean(quote.$locals.creationRequestReplayed) };
     if (opportunityId) {
       await Opportunity.findOneAndUpdate(
         { _id: opportunityId, vendor: vendorId },

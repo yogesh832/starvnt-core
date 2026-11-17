@@ -63,6 +63,12 @@ registerEventHandler('PAYMENT_CONFIRMED', async (payload) => {
   });
 });
 
+registerEventHandler('QUOTE_CREATION_RECORDED', async payload => {
+  if (!mongoose.isObjectIdOrHexString(payload?.quoteId)) throw new Error('INVALID_QUOTE_ID');
+  const { applyQuoteCreationEffects } = await import('../../external/services/quoteCreationEffects.service.js');
+  return applyQuoteCreationEffects(payload);
+});
+
 /**
  * QUOTE_APPROVED Handler:
  * Transforms an approved quote into an authoritative booking request.

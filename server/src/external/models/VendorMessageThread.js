@@ -135,4 +135,7 @@ const vendorMessageThreadSchema = new Schema(
   { timestamps: true }
 );
 
+vendorMessageThreadSchema.add({ lifecycleContextKey: { type: String, select: false } });
+vendorMessageThreadSchema.index({ vendor: 1, lifecycleContextKey: 1 }, { unique: true, partialFilterExpression: { lifecycleContextKey: { $type: 'string' } } });
+vendorMessageThreadSchema.set('toJSON', { transform: (_doc, value) => { delete value.lifecycleContextKey; return value; } });
 export const VendorMessageThread = externalConn.model('VendorMessageThread', vendorMessageThreadSchema);
