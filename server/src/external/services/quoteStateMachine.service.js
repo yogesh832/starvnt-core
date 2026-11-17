@@ -6,7 +6,7 @@ import { isObjectIdOrHexString } from 'mongoose';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
 import { evaluateVendorActivation } from './vendorActivation.service.js';
 import { checkTrueAvailability } from './availability.service.js';
-import { schedulingError } from '../../common/scheduleRules.js';
+import { schedulingError, validDate } from '../../common/scheduleRules.js';
 import { getCommercialPolicyForCategory } from '../../common/policyResolver.js';
 import { quoteCreationCommand, quoteCreationConflict, prepareQuoteCreationEffects } from '../../common/quoteCreationCommand.js';
 
@@ -20,17 +20,22 @@ export async function recoverQuoteCreation(vendorId, command) {
   return row;
 }
 
-export async function assertInitialQuoteSource({ opportunityId, vendorId, customerId, vendorServiceId }) {
+export async function assertInitialQuoteSource({ opportunityId, vendorId, customerId, vendorServiceId, eventDate, expectedEnquiryUpdatedAt }) {
   if (!isObjectIdOrHexString(opportunityId)) throw schedulingError('OWNED_ENQUIRY_REQUIRED', 'Choose an enquiry assigned to this vendor before creating a quotation.', 400);
-  const source = await Opportunity.findOne({ _id: opportunityId, vendor: vendorId }).select('customer vendorService status slaExpiresAt').lean();
+  const source = await Opportunity.findOne({ _id: opportunityId, vendor: vendorId }).select('customer vendorService status slaExpiresAt eventDate serviceLocation updatedAt').lean();
   if (!source) throw schedulingError('OPPORTUNITY_NOT_FOUND', 'This enquiry is unavailable.', 404);
   if (String(source.customer) !== String(customerId)) throw schedulingError('QUOTE_CUSTOMER_MISMATCH', 'The quotation recipient must match its enquiry.', 400);
   if (String(source.vendorService) !== String(vendorServiceId)) throw schedulingError('QUOTE_SERVICE_MISMATCH', 'The quotation service must match its enquiry.', 400);
+  const sourceTime = source.updatedAt == null ? null : new Date(source.updatedAt);
+  if ((sourceTime && !Number.isFinite(sourceTime.getTime())) || !validDate(source.eventDate)) throw schedulingError('ENQUIRY_SOURCE_INCOMPLETE', 'The enquiry date or source version requires review.', 409);
+  if (expectedEnquiryUpdatedAt !== undefined && (typeof expectedEnquiryUpdatedAt !== 'string' || expectedEnquiryUpdatedAt !== sourceTime?.toISOString())) throw schedulingError('ENQUIRY_VERSION_CONFLICT', 'The enquiry changed after review. Refresh it and confirm the current scope.', 409);
+  if (eventDate !== undefined && eventDate !== source.eventDate) throw schedulingError('ENQUIRY_SCOPE_CHANGED', 'The quotation date must match the current enquiry. Review the changed scope before submitting.', 409);
   if (!['NEW', 'VIEWED', 'RESPONDED'].includes(source.status)) throw schedulingError('ENQUIRY_NOT_OPEN', 'This enquiry cannot accept a new quotation. Review its current state or existing quote.', 409);
   if (source.slaExpiresAt != null) {
     const deadline = new Date(source.slaExpiresAt).getTime();
     if (!Number.isFinite(deadline) || deadline <= Date.now()) throw schedulingError('ENQUIRY_DEADLINE_PASSED', 'The enquiry deadline is over or requires review. Existing quotes remain available.', 409);
   }
+  return source;
 }
 
 export async function assertQuoteSubmission({ vendor, vendorService, eventDate, serviceLocation, category, advancePolicy }) {
@@ -76,15 +81,23 @@ export async function createQuote({
   advancePolicy,
   category = '',
   creationCommand,
+  expectedEnquiryUpdatedAt,
 }) {
   const command = quoteCreationCommand(vendorId, creationCommand);
   const prior = await recoverQuoteCreation(vendorId, creationCommand);
   if (prior) return prior;
-  await assertInitialQuoteSource({ opportunityId, vendorId, customerId, vendorServiceId });
+  const source = await assertInitialQuoteSource({ opportunityId, vendorId, customerId, vendorServiceId, eventDate, expectedEnquiryUpdatedAt });
+  eventDate = source.eventDate;
+  // Exact source location stays on the server and in immutable quote evidence.
+  // A client's masked/coarse display is not an authoritative venue update.
+  serviceLocation = { address: source.serviceLocation?.address || '', locality: source.serviceLocation?.locality || '', city: source.serviceLocation?.city || '' };
+  const point = source.serviceLocation?.coordinates;
+  if (Number.isFinite(point?.lat) && Number.isFinite(point?.lng) && Math.abs(point.lat) <= 90 && Math.abs(point.lng) <= 180) serviceLocation.coordinates = { lat: point.lat, lng: point.lng };
   const initialStatus = ['DRAFT', 'SUBMITTED'].includes(status) ? status : 'DRAFT';
   if (initialStatus === 'SUBMITTED') advancePolicy = await assertQuoteSubmission({ vendor: vendorId, vendorService: vendorServiceId, eventDate, serviceLocation, category, advancePolicy });
 
   const quote = new Quote({
+    creationEnquiryUpdatedAt: source.updatedAt == null ? undefined : new Date(source.updatedAt),
     ...(command ? { creationRequestKey: command.key, creationRequestHash: command.hash, creationRequestActor: command.actor } : {}),
     opportunity: opportunityId || null,
     vendor: vendorId,

@@ -861,6 +861,7 @@ export async function executeAction(vendor, a) {
     const advancePolicy = await getCommercialPolicyForCategory(vendor.category);
     const quote = await createQuote({
       creationCommand,
+      expectedEnquiryUpdatedAt: q.expectedEnquiryUpdatedAt,
       opportunityId: opportunityId || null,
       vendorId,
       customerId,

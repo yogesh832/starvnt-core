@@ -653,6 +653,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             id: o._id,
             opportunityId: o._id,
             hasQuote: typeof o.hasQuote === 'boolean' ? o.hasQuote : null,
+            updatedAt: o.updatedAt || undefined,
             customerId: o.customer?._id || o.customer,
             customerName,
             eventType,
@@ -757,6 +758,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           body: {
             opportunityId: enquiry.opportunityId,
             requestKey: q.requestKey,
+            expectedEnquiryUpdatedAt: enquiry.updatedAt,
             customerId: enquiry.customerId,
             vendorServiceId: enquiry.serviceId,
             serviceName: enquiry.title,

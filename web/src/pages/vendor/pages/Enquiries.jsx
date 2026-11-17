@@ -73,6 +73,7 @@ export default function Enquiries() {
             status: o.status === 'NEW' ? 'New' : o.status,
             hasQuote: typeof o.hasQuote === 'boolean' ? o.hasQuote : null,
             quoteStatus: o.quoteStatus || null,
+            updatedAt: o.updatedAt || undefined,
             ago: 'Matched opportunity',
             date: o.eventDate,
             location: `${o.serviceLocation?.address || ''} ${o.serviceLocation?.locality || o.serviceLocation?.city || 'Venue'}`.trim(),
@@ -156,6 +157,7 @@ export default function Enquiries() {
           body: {
             opportunityId: quoteModalOpp.dbId,
             requestKey: quoteRequestKey,
+            expectedEnquiryUpdatedAt: quoteModalOpp.updatedAt,
             customerId: quoteModalOpp.customerId,
             vendorServiceId: quoteModalOpp.serviceId,
             serviceName: quoteModalOpp.service,

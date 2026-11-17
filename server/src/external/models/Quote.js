@@ -17,6 +17,7 @@ const quoteSchema = new Schema(
     creationRequestKey: { type: String, select: false, immutable: true },
     creationRequestHash: { type: String, select: false, immutable: true },
     creationRequestActor: { type: String, select: false, immutable: true },
+    creationEnquiryUpdatedAt: { type: Date, immutable: true },
     creationEffects: { type: new Schema({
       state: { type: String, enum: ['PENDING', 'ENQUEUED', 'COMPLETED', 'SUPERSEDED'] },
       snapshot: { type: Schema.Types.Mixed, immutable: true }, hash: { type: String, immutable: true }, completedAt: Date, lastQueueAttemptAt: Date,

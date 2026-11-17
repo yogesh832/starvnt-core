@@ -565,6 +565,7 @@ function VendorFormBody({ route, navigation }: any) {
         {
           opportunityId: revise ? undefined : id(item),
           requestKey: revise ? undefined : form.idempotencyKey,
+          expectedEnquiryUpdatedAt: revise ? undefined : item.updatedAt,
           expectedCommercialVersion: revise ? item.commercialSnapshot?.version ?? 0 : undefined,
           customerId: item.customer?._id || item.customer,
           vendorServiceId: item.vendorService,

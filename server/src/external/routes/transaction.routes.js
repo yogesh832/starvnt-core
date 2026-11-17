@@ -962,6 +962,7 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       notes,
       status = 'SUBMITTED',
       requestKey,
+      expectedEnquiryUpdatedAt,
     } = req.body || {};
 
     const resolvedVendorId =
@@ -1004,7 +1005,8 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       notes: String(notes || '').trim(),
       status,
       actor: req.externalUser.fullName || req.externalUser.email,
-      creationCommand: requestKey === undefined ? undefined : { key: requestKey, actorId: req.externalUser._id, intent: { kind: 'VENDOR_API_QUOTE', opportunityId: opportunityId || null, customerId: String(scope.customerId), vendorServiceId: String(scope.vendorServiceId), serviceName: serviceName || 'Event Service', eventDate, serviceLocation: serviceLocation || {}, pricingBreakdown: normalizedPricing, notes: String(notes || '').trim(), status } },
+      expectedEnquiryUpdatedAt,
+      creationCommand: requestKey === undefined ? undefined : { key: requestKey, actorId: req.externalUser._id, intent: { kind: 'VENDOR_API_QUOTE', opportunityId: opportunityId || null, expectedEnquiryUpdatedAt, customerId: String(scope.customerId), vendorServiceId: String(scope.vendorServiceId), serviceName: serviceName || 'Event Service', eventDate, serviceLocation: serviceLocation || {}, pricingBreakdown: normalizedPricing, notes: String(notes || '').trim(), status } },
     });
 
     const managedCreationEffects = await reconcileQuoteCreationEffects(quote);

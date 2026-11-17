@@ -94,3 +94,33 @@ test('new quotes require an owned enquiry and its service while committed reques
   await send({ ...f.payload, requestKey: key() }).expect(409);
   assert.equal(await Quote.countDocuments({ vendor: f.vendor._id }), 1);
 });
+
+test('quote creation captures private source location instead of a client override and retains creation provenance', async () => {
+  const f = await fixture();
+  const location = { address: 'Synthetic private venue street', locality: 'West fixture locality', city: 'Pune', coordinates: { lat: 18.52, lng: 73.85 } };
+  await Opportunity.updateOne({ _id: f.opportunity._id }, { $set: { serviceLocation: location } });
+  const source = await Opportunity.findById(f.opportunity._id);
+  const intent = { ...f.payload, expectedEnquiryUpdatedAt: source.updatedAt.toISOString(), serviceLocation: { address: 'Untrusted client venue', city: 'Different city' } };
+  const response = await request(app).post('/api/quotes').set(f.auth).send(intent).expect(201);
+  const quote = await Quote.findById(response.body.quote._id);
+  assert.equal(quote.serviceLocation.address, location.address); assert.equal(quote.serviceLocation.city, location.city);
+  assert.deepEqual(quote.toObject().serviceLocation.coordinates, location.coordinates);
+  assert.equal(quote.creationEnquiryUpdatedAt.toISOString(), source.updatedAt.toISOString());
+  assert.equal(response.text.includes(location.address), false); assert.equal(response.text.includes('Untrusted client venue'), false);
+  assert.equal(response.body.quote.serviceLocation.address, undefined); assert.equal(response.body.quote.serviceLocation.city, 'Pune');
+  await Opportunity.updateOne({ _id: source._id }, { $set: { 'serviceLocation.address': 'Changed synthetic venue' } });
+  const recovered = await request(app).post('/api/quotes').set(f.auth).send(intent).expect(201);
+  assert.equal(recovered.body.replayed, true); assert.equal(recovered.body.quote._id, quote.id);
+  assert.equal((await Quote.findById(quote._id)).serviceLocation.address, location.address);
+});
+
+test('new quote scope changes require a fresh enquiry review and cannot silently select another event date', async () => {
+  const f = await fixture();
+  const expected = f.opportunity.updatedAt.toISOString();
+  await Opportunity.updateOne({ _id: f.opportunity._id }, { $set: { updatedAt: new Date(f.opportunity.updatedAt.getTime() + 1000) } }, { timestamps: false });
+  const stale = await request(app).post('/api/quotes').set(f.auth).send({ ...f.payload, expectedEnquiryUpdatedAt: expected }).expect(409);
+  assert.equal(stale.body.error, 'ENQUIRY_VERSION_CONFLICT');
+  const changed = await request(app).post('/api/quotes').set(f.auth).send({ ...f.payload, eventDate: '2027-03-02' }).expect(409);
+  assert.equal(changed.body.error, 'ENQUIRY_SCOPE_CHANGED');
+  assert.equal(await Quote.countDocuments({ vendor: f.vendor._id }), 0);
+});
