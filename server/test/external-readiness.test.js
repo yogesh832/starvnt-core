@@ -696,13 +696,15 @@ test('Growth Meetings protect invite-only access, RSVP revisions, join links and
   const vendorPath = '/api/vendor/growth-meetings';
   const start = Date.now() + 3600000;
   const schedule = {
-    title: 'Better event scopes', agenda: 'Review quote examples', startsAt: new Date(start).toISOString(),
+    title: 'Better event scopes', agenda: 'Review quote examples', hostName: 'Synthetic session host', startsAt: new Date(start).toISOString(),
     endsAt: new Date(start + 3600000).toISOString(), timezone: 'Asia/Kolkata',
     meetUrl: 'https://meet.google.com/abc-defg-hij', audience: 'INVITED', invitees: [String(invited.vendor._id)],
     requestKey: key(), reason: 'Schedule learning session',
   };
   const create = (body, actor = scheduler) => request(app).post(adminPath).set(actor).send(body);
   await create(schedule, operator).expect(403);
+  await create({ ...schedule, hostName: '' }).expect(400);
+  await create({ ...schedule, hostName: schedule.meetUrl }).expect(400);
   await create({ ...schedule, startsAt: '2028-02-31T09:00:00+05:30' }).expect(400);
   await create({ ...schedule, meetUrl: 'https://meet.google.com.evil.test/abc-defg-hij' }).expect(400);
   await create({ ...schedule, agenda: schedule.meetUrl }).expect(400);
@@ -720,11 +722,13 @@ test('Growth Meetings protect invite-only access, RSVP revisions, join links and
   assert.equal(operatorView.meetUrl, undefined);
   const listed = (await list(invited.token).expect(200)).body.meetings.find(row => row.id === meeting.id);
   assert.equal(listed.meetUrl, undefined);
+  assert.equal(listed.hostName, schedule.hostName);
   assert.equal(listed.invitees, undefined);
   assert.equal((await list(outside.token).expect(200)).body.meetings.some(row => row.id === meeting.id), false);
   assert.equal((await request(app).get(`${vendorPath}/next`).set(auth(outside.token)).expect(200)).body.meeting, null);
   const next = (await request(app).get(`${vendorPath}/next`).set(auth(invited.token)).expect(200)).body.meeting;
   assert.equal(next.id, meeting.id);
+  assert.equal(next.hostName, schedule.hostName);
   assert.equal(next.meetUrl, undefined);
   await join(outside.token, 1).expect(404);
   await join(invited.token, 1).expect(409);
@@ -732,9 +736,17 @@ test('Growth Meetings protect invite-only access, RSVP revisions, join links and
   const newStart = Date.now() + 5 * 60000;
   const revised = (await request(app).put(`${admin}/schedule`).set(scheduler).send({
     ...schedule, startsAt: new Date(newStart).toISOString(), endsAt: new Date(newStart + 3600000).toISOString(),
-    meetUrl: 'https://meet.google.com/jkl-mnop-qrs', revision: 1, scheduleVersion: 1,
+    meetUrl: 'https://meet.google.com/jkl-mnop-qrs', hostName: 'Synthetic replacement host', revision: 1, scheduleVersion: 1,
   }).expect(200)).body.meeting;
   assert.equal(revised.scheduleVersion, 2);
+  assert.equal(revised.hostName, 'Synthetic replacement host');
+  assert.deepEqual(revised.history.map(row => row.hostName), [schedule.hostName, 'Synthetic replacement host']);
+  const { hostName: _legacyHost, ...legacySchedule } = schedule;
+  const legacy = (await create({ ...legacySchedule, requestKey: key() }).expect(201)).body.meeting;
+  assert.equal(legacy.hostName, null);
+  const oldClientReschedule = (await request(app).put(`${adminPath}/${legacy.id}/schedule`).set(scheduler).send({ ...legacySchedule, hostName: 'Host added for legacy record', revision: 1, scheduleVersion: 1 }).expect(200)).body.meeting;
+  const oldClientRetry = (await request(app).put(`${adminPath}/${legacy.id}/schedule`).set(scheduler).send({ ...legacySchedule, revision: oldClientReschedule.revision, scheduleVersion: oldClientReschedule.scheduleVersion }).expect(200)).body.meeting;
+  assert.equal(oldClientRetry.hostName, 'Host added for legacy record');
   await rsvp(invited.token, 1).expect(409);
   await join(invited.token, 1).expect(409);
   const reloaded = (await list(invited.token).expect(200)).body.meetings.find(row => row.id === meeting.id);

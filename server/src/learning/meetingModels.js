@@ -4,10 +4,12 @@ import { adminConn, externalConn } from '../db/index.js';
 const change = new Schema({
   actor: String, action: String, reason: String, at: Date, revision: Number,
   startsAt: Date, endsAt: Date, timezone: String, scheduleVersion: Number,
+  hostName: String,
 }, { _id: false });
 const meeting = new Schema({
   title: { type: String, required: true },
   agenda: { type: String, required: true },
+  hostName: { type: String, maxlength: 160 },
   startsAt: { type: Date, required: true },
   endsAt: { type: Date, required: true },
   timezone: { type: String, required: true },

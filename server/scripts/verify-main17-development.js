@@ -66,6 +66,15 @@ try {
   await page.screenshot({ path: resolve(output, 'academy-feedback-mobile-web.png'), fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   checks.push('Responsive lesson feedback has no document horizontal overflow at 390px');
+  await page.route('**/api/vendor/growth-meetings**', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'SYNTHETIC_MEETING_SOURCE_UNAVAILABLE', message: 'Synthetic meeting schedule unavailable' }) }));
+  await page.goto('http://127.0.0.1:5199/vendor/learning/meetings');
+  await page.getByRole('alert').filter({ hasText: 'Synthetic meeting schedule unavailable' }).waitFor();
+  assert.equal(await page.getByText('No upcoming meetings for your account.', { exact: true }).count(), 0);
+  await page.getByRole('link', { name: 'Back to Partner Academy', exact: true }).click();
+  await page.getByRole('button', { name: lesson.title, exact: true }).click();
+  await page.getByRole('heading', { name: 'Private lesson feedback', exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Comment (optional)').inputValue(), 'Synthetic useful lesson feedback');
+  checks.push('Meeting API 503 shows an unavailable state while Academy catalogue, lesson and saved feedback remain usable');
   await page.goto('http://127.0.0.1:5199/vendor/launchpad');
   await page.getByRole('heading', { name: '30-Day Partner Launchpad', exact: true }).waitFor();
   await page.getByText('Evidence history', { exact: true }).first().waitFor();

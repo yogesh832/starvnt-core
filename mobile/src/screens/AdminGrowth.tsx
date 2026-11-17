@@ -120,6 +120,7 @@ export function AdminMeetings({ navigation }: any) {
 
 const scheduleFields: [string, string, number, boolean?][] = [
   ['title', 'Meeting title', 160], ['agenda', 'Agenda', 4000, true],
+  ['hostName', 'Host display name', 160],
   ['startsAt', 'Starts at (ISO date with timezone)', 32], ['endsAt', 'Ends at (ISO date with timezone)', 32],
   ['timezone', 'Timezone (for example, Asia/Kolkata)', 64], ['meetUrl', 'Google Meet link', 100],
 ];
@@ -127,7 +128,7 @@ const scheduleFields: [string, string, number, boolean?][] = [
 export function AdminMeeting({ navigation, route }: any) {
   const { can } = useSession();
   const { meeting } = route.params;
-  const [form, setForm] = useState<Data>(() => ({ timezone: 'Asia/Kolkata', audience: 'ACTIVE', invitees: [], ...meeting, reason: '' }));
+  const [form, setForm] = useState<Data>(() => ({ timezone: 'Asia/Kolkata', audience: 'ACTIVE', invitees: [], hostName: '', ...meeting, reason: '' }));
   const [requestKey] = useState(() => Crypto.randomUUID());
   const [vendorQuery, setVendorQuery] = useState('');
   const [vendors, setVendors] = useState<Data[]>([]);
@@ -159,7 +160,7 @@ export function AdminMeeting({ navigation, route }: any) {
   }
   return <Page title={meeting?.title || 'Schedule a Growth Meeting'}>
     <Card>
-      {meeting && <><Txt muted>{meetingTime(meeting)}</Txt><Txt>{meeting.agenda}</Txt>
+      {meeting && <><Txt muted>{meetingTime(meeting)}</Txt><Txt>Host: {meeting.hostName || 'Not recorded'}</Txt><Txt>{meeting.agenda}</Txt>
         {!active && <Txt>Cancelled · {meeting.cancellationReason}</Txt>}</>}
       {schedule && <>
         <GrowthFields fields={scheduleFields} form={form} busy={action.busy} change={change} />
@@ -182,9 +183,9 @@ export function AdminMeeting({ navigation, route }: any) {
       {(schedule || (canSchedule && active && !past)) && <Field label="Schedule or cancellation reason"
         value={form.reason} editable={!action.busy} maxLength={500} onChangeText={value => change('reason', value)} />}
       {schedule && <Button title={meeting ? 'Reschedule' : 'Schedule meeting'} busy={action.busy} onPress={() => {
-        const { title, agenda, startsAt, endsAt, timezone, meetUrl, audience, reason } = form;
+        const { title, agenda, hostName, startsAt, endsAt, timezone, meetUrl, audience, reason } = form;
         submit(meeting ? `${path}/schedule` : path, meeting ? 'PUT' : 'POST', {
-          title, agenda, startsAt, endsAt, timezone, meetUrl, audience, invitees: audience === 'INVITED' ? invitees : [],
+          title, agenda, hostName, startsAt, endsAt, timezone, meetUrl, audience, invitees: audience === 'INVITED' ? invitees : [],
           reason, requestKey, revision: meeting?.revision, scheduleVersion: meeting?.scheduleVersion,
         });
       }} />}

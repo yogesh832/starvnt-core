@@ -232,6 +232,7 @@ function MeetingCard({ meeting, refresh }: { meeting: Data; refresh: () => Promi
   return <Card>
     <Txt bold size={20}>{meeting.title}</Txt>
     <Txt muted>{meetingTime(meeting)}</Txt>
+    <Txt>Host: {meeting.hostName || 'Not recorded'}</Txt>
     <Txt>{meeting.agenda}</Txt>
     {cancelled && <Txt>Cancelled · {meeting.cancellationReason}</Txt>}
     {!cancelled && !past && <>

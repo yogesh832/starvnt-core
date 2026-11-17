@@ -77,12 +77,15 @@ async function scheduleFields(body) {
   if (unique.length && await VendorOrganization.countDocuments({ _id: { $in: unique }, ...activeVendor }) !== unique.length) {
     throw fail('INVALID_INVITEES', 'Every invitee must be an approved active vendor.');
   }
-  return { title: vendorText(body.title, 160), agenda: vendorText(body.agenda, 4000), startsAt, endsAt, timezone, meetUrl, audience, invitees: unique };
+  // Older admin clients omit host metadata. Preserve that explicit unknown and
+  // do not clear an existing host on their schedule updates.
+  const host = body.hostName === undefined ? {} : { hostName: vendorText(body.hostName, 160) };
+  return { title: vendorText(body.title, 160), agenda: vendorText(body.agenda, 4000), ...host, startsAt, endsAt, timezone, meetUrl, audience, invitees: unique };
 }
 
 function view(row) {
   return {
-    id: String(row._id), title: row.title, agenda: row.agenda, startsAt: row.startsAt, endsAt: row.endsAt,
+    id: String(row._id), title: row.title, agenda: row.agenda, hostName: row.hostName || null, startsAt: row.startsAt, endsAt: row.endsAt,
     timezone: row.timezone, status: row.status, revision: row.revision, scheduleVersion: row.scheduleVersion,
     cancellationReason: row.cancellationReason,
     summary: row.summary, resources: row.resources,
@@ -156,7 +159,7 @@ adminMeetingRoutes.post('/', schedulePermission, h(async (req, res) => {
     row = await GrowthMeeting.findOneAndUpdate(filter, { $setOnInsert: {
       ...fields, requestHash, history: [{
         actor: createdBy, action: 'SCHEDULED', reason, at: new Date(), revision: 1, scheduleVersion: 1,
-        startsAt: fields.startsAt, endsAt: fields.endsAt, timezone: fields.timezone,
+        startsAt: fields.startsAt, endsAt: fields.endsAt, timezone: fields.timezone, hostName: fields.hostName,
       }],
     } }, { new: true, upsert: true });
   } catch (error) {
@@ -171,7 +174,7 @@ async function updateMeeting(req, constraints, set, action, scheduleChange = fal
   const revision = req.body?.revision;
   if (!Number.isSafeInteger(revision) || revision < 1) throw changed();
   const audit = { actor: String(req.admin._id), action, reason: text(req.body.reason, 500), at: new Date(), revision: revision + 1 };
-  if (scheduleChange) Object.assign(audit, { startsAt: set.startsAt, endsAt: set.endsAt, timezone: set.timezone, scheduleVersion: req.body.scheduleVersion + 1 });
+  if (scheduleChange) Object.assign(audit, { startsAt: set.startsAt, endsAt: set.endsAt, timezone: set.timezone, hostName: set.hostName, scheduleVersion: req.body.scheduleVersion + 1 });
   const filter = { _id: getId(req.params.id), revision, status: 'SCHEDULED', ...constraints };
   const row = await GrowthMeeting.findOneAndUpdate(filter, {
     $set: set, $inc: { revision: 1, ...(scheduleChange ? { scheduleVersion: 1 } : {}) }, $push: { history: audit },
@@ -242,9 +245,9 @@ vendorMeetingRoutes.use(noStore);
 vendorMeetingRoutes.get('/next', h(async (req, res) => {
   const row = await GrowthMeeting.findOne({
     ...vendorAudience(req), status: 'SCHEDULED', endsAt: { $gt: new Date() },
-  }).select('title startsAt endsAt timezone').sort({ startsAt: 1, _id: 1 }).lean();
+  }).select('title hostName startsAt endsAt timezone').sort({ startsAt: 1, _id: 1 }).lean();
   res.json({
-    meeting: row ? { id: String(row._id), title: row.title, startsAt: row.startsAt, endsAt: row.endsAt, timezone: row.timezone } : null,
+    meeting: row ? { id: String(row._id), title: row.title, hostName: row.hostName || null, startsAt: row.startsAt, endsAt: row.endsAt, timezone: row.timezone } : null,
   });
 }));
 

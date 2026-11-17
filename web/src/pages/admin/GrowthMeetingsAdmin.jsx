@@ -6,7 +6,7 @@ const endpoint = '/growth-meetings';
 const field = 'mt-1 block min-h-11 w-full rounded-lg border p-2';
 const button = 'min-h-11 rounded-xl border px-4 text-sm font-semibold disabled:opacity-50';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-const empty = { title: '', agenda: '', startsAt: '', endsAt: '', timezone: deviceZone, meetUrl: '', audience: 'ACTIVE', invitees: '' };
+const empty = { title: '', agenda: '', hostName: '', startsAt: '', endsAt: '', timezone: deviceZone, meetUrl: '', audience: 'ACTIVE', invitees: '' };
 const localTime = value => {
   const time = new Date(value);
   return new Date(time.getTime() - time.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -70,7 +70,7 @@ export default function GrowthMeetingsAdmin() {
     event.preventDefault();
     act(async () => {
       const fields = {
-        title: draft.title, agenda: draft.agenda, timezone: draft.timezone,
+        title: draft.title, agenda: draft.agenda, hostName: draft.hostName, timezone: draft.timezone,
         startsAt: new Date(draft.startsAt).toISOString(), endsAt: new Date(draft.endsAt).toISOString(),
         meetUrl: draft.meetUrl, audience: draft.audience,
         invitees: draft.audience === 'INVITED' ? draft.invitees.split(/[,\s]+/).filter(Boolean) : [],
@@ -115,12 +115,14 @@ export default function GrowthMeetingsAdmin() {
       {data.truncated && <p className="text-sm text-muted">Showing the 100 most recent scheduled dates.</p>}
       {meeting && <p className="rounded-xl bg-white p-4 text-sm">
         {meeting.title} · {meeting.status} · Schedule version {meeting.scheduleVersion}
+        <br />Host: {meeting.hostName || 'Not recorded'}
         <br />{new Date(meeting.startsAt).toLocaleString(undefined, { timeZone: meeting.timezone })} · {meeting.timezone}
       </p>}
       {canEditSchedule && <form className="space-y-3 rounded-2xl bg-white p-4" onSubmit={saveSchedule}>
         <h2 className="font-bold">{meeting ? 'Change schedule' : 'Schedule a meeting'}</h2>
         {meeting && <p className="text-sm text-muted">A schedule change clears responses for the current time. Vendors respond again for the revised meeting.</p>}
         <label className="block">Topic<input className={field} required maxLength={160} {...bind('title')} /></label>
+        <label className="block">Host display name<input className={field} required maxLength={160} value={draft.hostName || ''} onChange={event => setDraft({ ...draft, hostName: event.target.value })} /></label>
         <label className="block">Agenda<textarea className={field} required maxLength={4000} {...bind('agenda')} /></label>
         <p className="text-sm text-muted">Enter the start and end in your device timezone ({deviceZone}). The display timezone is shown to vendors.</p>
         <div className="grid gap-3 sm:grid-cols-2">
