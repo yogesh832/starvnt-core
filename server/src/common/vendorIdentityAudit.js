@@ -53,6 +53,11 @@ export async function auditVendorIdentity(db, { maxRecords = 10000, includeIds =
     const result = { status: 'COMPLETE', scanned: 0, candidateRecords: 0, reasons: {}, ...(includeIds ? { candidates: [] } : {}) };
     let cursor;
     try {
+      // MongoDB treats a missing collection as an empty successful read. A wrong
+      // target must never masquerade as an audited source with zero findings.
+      const catalogue = db.listCollections({ name }, { nameOnly: true });
+      try { if (!await catalogue.hasNext()) throw new Error('AUDIT_COLLECTION_UNAVAILABLE'); }
+      finally { await catalogue.close(); }
       cursor = db.collection(name).aggregate([{ $sort: { _id: 1 } }, { $limit: maxRecords + 1 }, { $project: projection }], { maxTimeMS: 30000, allowDiskUse: false, batchSize: 100 });
       for await (const row of cursor) {
         if (result.scanned === maxRecords) { result.status = 'PARTIAL_LIMIT'; break; }

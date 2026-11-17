@@ -11,6 +11,9 @@ test('audit inspects evidence without exposing identity, file bytes or changing 
   try {
     await client.connect();
     const db = client.db('identity_audit');
+    const missing = await auditVendorIdentity(client.db('wrong_or_empty_target'));
+    assert.equal(missing.complete, false);
+    assert.equal(missing.collections.vendordocuments.status, 'UNAVAILABLE_OR_INTERRUPTED');
     const proof = { ok: true, providerVerified: true, matched: true, confidence: 'EXACT' };
     await db.collection('vendorfinancialprofiles').insertMany([
       { vendor: new mongoose.Types.ObjectId(), pan: { verificationStatus: 'VERIFIED', panNumber: 'AABPS1234D', legalName: 'Sensitive Name', raw: { ...proof, confidence: 'HIGH', secret: 'PROVIDER_SECRET' } }, bankAccount: { verificationStatus: 'FAILED', accountNumber: '987654321098' }, isSettlementEligible: true },
@@ -37,6 +40,12 @@ test('audit inspects evidence without exposing identity, file bytes or changing 
     assert.equal(bounded.collections.vendorfinancialprofiles.status, 'PARTIAL_LIMIT');
     assert.equal(bounded.collections.vendordocuments.scanned, 1);
     assert.equal(bounded.collections.vendordocuments.candidates[0].recordId, String(before[1][0]._id));
+    const empty = client.db('explicit_empty_sources');
+    await empty.createCollection('vendorfinancialprofiles');
+    await empty.createCollection('vendordocuments');
+    const clean = await auditVendorIdentity(empty);
+    assert.equal(clean.complete, true);
+    assert.equal(clean.collections.vendorfinancialprofiles.scanned, 0);
   } finally { await client.close(); await mongo.stop(); }
 });
 
