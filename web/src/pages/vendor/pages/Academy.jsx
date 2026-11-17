@@ -117,6 +117,7 @@ export default function Academy() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [filter, setFilter] = useState('');
+  const [collection, setCollection] = useState('');
   const [params, setParams] = useSearchParams();
   const selected = params.get('lesson');
   useEffect(() => {
@@ -129,7 +130,8 @@ export default function Academy() {
   const lessons = data?.lessons || [];
   const chosen = lessons.find(row => row.id === selected);
   const shown = lessons.filter(row => (!category || row.category === category) &&
-    `${row.title} ${row.objective}`.toLowerCase().includes(search.trim().toLowerCase()) &&
+    `${row.title} ${row.objective} ${row.description || ''} ${row.difficulty || ''}`.toLowerCase().includes(search.trim().toLowerCase()) &&
+    (collection === 'featured' ? row.featured : collection === 'recommended' && data.recommendations?.status === 'AVAILABLE' ? !row.completedAt && row.recommendationReasons?.length : true) &&
     (filter === 'complete' ? row.completedAt : filter === 'continue' ? canResume(row) : filter === 'new' ? !row.completedAt && !row.positionSeconds : true));
 
   function selectLesson(id) {
@@ -155,7 +157,10 @@ export default function Academy() {
     {data && selected && !chosen && <p role="status" className="text-sm text-muted">This lesson is unavailable.</p>}
     {chosen ? <Lesson key={chosen.id} lesson={chosen} onProgress={onProgress} onClose={() => selectLesson(null)} /> :
       data && <Card title="Partner Academy">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <p className="text-sm text-muted">Suggestions match lesson topics to recorded readiness gaps. Learning does not change verification or eligibility.</p>
+        {data.recommendations?.status !== 'AVAILABLE' && <p role="status" className="text-sm">Readiness suggestions are unavailable. You can still browse published lessons.</p>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="text-sm"><label htmlFor="academy-collection">Collection</label><select id="academy-collection" className="block min-h-11 w-full rounded-lg border px-2" value={collection} onChange={event => setCollection(event.target.value)}><option value="">All published lessons</option><option value="featured">Featured</option><option value="recommended">Suggested for your readiness</option></select></div>
           <label className="text-sm">Search lessons<input className="block min-h-11 w-full rounded-lg border px-2" value={search} onChange={event => setSearch(event.target.value)} /></label>
           <label className="text-sm">Category<select className="block min-h-11 w-full rounded-lg border px-2" value={category} onChange={event => setCategory(event.target.value)}>
             <option value="">All categories</option>{data.categories.map(value => <option key={value}>{value}</option>)}
@@ -168,6 +173,9 @@ export default function Academy() {
           {shown.map(lesson => <li key={lesson.id} className="rounded-xl border p-3">
             <button type="button" className="min-h-11 text-left font-bold text-primary" onClick={() => selectLesson(lesson.id)}>{lesson.title}</button>
             <p className="text-sm">{lesson.objective}</p>
+            {lesson.description && <p className="text-sm">{lesson.description}</p>}
+            <p className="text-sm">{[lesson.difficulty, lesson.featured && 'Featured', lesson.hasVideo && `${Math.ceil(lesson.durationSeconds / 60)} min video`].filter(Boolean).join(' · ')}</p>
+            {!lesson.completedAt && lesson.recommendationReasons?.length > 0 && <p className="text-sm">Suggested topics: {lesson.recommendationReasons.map(reason => reason.label).join(', ')}</p>}
             <p className="mt-1 text-sm text-muted">{lesson.category}{lesson.completedAt ? ' · Completed' : lesson.positionSeconds ? ' · In progress' : ''}</p>
           </li>)}
         </ul>

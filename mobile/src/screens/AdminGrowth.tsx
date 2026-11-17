@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Switch } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { internal } from '../api/runtime';
 import type { Data } from '../api/client';
@@ -26,12 +27,13 @@ export function AdminAcademy({ navigation }: any) {
   const { can } = useSession();
   const resource = useResource(internal, '/academy');
   const categories: string[] = resource.data.categories || [];
+  const needsTagOptions: string[] = resource.data.needsTagOptions || [];
   const lessons: Data[] = resource.data.lessons || [];
   return <Page {...resource} title="Partner Academy" subtitle="Manage drafts and rights-approved publication.">
-    {can('academy.edit') && <Button title="New lesson" onPress={() => navigation.navigate('AdminLesson', { categories })} />}
+    {can('academy.edit') && <Button title="New lesson" onPress={() => navigation.navigate('AdminLesson', { categories, needsTagOptions })} />}
     {lessons.map(lesson => <MenuRow key={lesson.id} title={lesson.title}
       subtitle={`${lesson.category} · ${lesson.state}`}
-      onPress={() => navigation.navigate('AdminLesson', { lesson, categories })} />)}
+      onPress={() => navigation.navigate('AdminLesson', { lesson, categories, needsTagOptions })} />)}
     {!resource.loading && !resource.error && !lessons.length && <Empty title="No lessons created yet" />}
     {resource.data.truncated && <Txt muted>Showing the 100 most recent lessons.</Txt>}
   </Page>;
@@ -39,6 +41,7 @@ export function AdminAcademy({ navigation }: any) {
 
 const lessonFields: [string, string, number, boolean?][] = [
   ['title', 'Title', 160], ['objective', 'Objective', 400, true],
+  ['description', 'Catalogue description', 1000, true], ['difficulty', 'Difficulty (optional)', 80],
   ['content', 'Lesson content', 20000, true], ['resources', 'Resources', 10000, true],
   ['videoId', 'Private Academy video asset ID', 200], ['durationSeconds', 'Video duration in seconds', 4],
   ['captions', 'WebVTT captions', 45000, true],
@@ -46,8 +49,8 @@ const lessonFields: [string, string, number, boolean?][] = [
 
 export function AdminLesson({ navigation, route }: any) {
   const { can } = useSession();
-  const { lesson, categories } = route.params;
-  const [form, setForm] = useState<Data>(() => ({ category: categories[0], ...lesson }));
+  const { lesson, categories, needsTagOptions = [] } = route.params;
+  const [form, setForm] = useState<Data>(() => ({ category: categories[0], description: '', difficulty: '', featured: false, needsTags: [], ...lesson }));
   const [requestKey] = useState(() => Crypto.randomUUID());
   const [publication, setPublication] = useState<Data>({});
   const action = useAction();
@@ -74,15 +77,19 @@ export function AdminLesson({ navigation, route }: any) {
         <Choice label="Category" value={form.category} values={categories} onChange={category => setForm(current => ({ ...current, category }))} />
         <GrowthFields fields={lessonFields} form={form} busy={action.busy}
           change={(name, value) => setForm(current => ({ ...current, [name]: value }))} />
+        <Txt>Feature this lesson after publication</Txt><Switch accessibilityLabel="Feature this lesson after publication" value={form.featured === true} disabled={action.busy} onValueChange={featured => setForm(current => ({ ...current, featured }))} />
+        <Txt>Readiness topics addressed by this lesson. Learning does not change verification or eligibility.</Txt>
+        {needsTagOptions.map((topic: string) => <Button key={topic} title={`${(form.needsTags || []).includes(topic) ? 'Remove' : 'Add'} topic: ${topic.replaceAll('_', ' ')}`} secondary disabled={action.busy} onPress={() => setForm(current => ({ ...current, needsTags: (current.needsTags || []).includes(topic) ? current.needsTags.filter((key: string) => key !== topic) : [...(current.needsTags || []), topic] }))} />)}
         <Button title="Save draft" busy={action.busy} onPress={() => void action.run(async () => {
-          const { title, category, objective, content, resources, videoId, captions, durationSeconds } = form;
+          const { title, category, objective, content, resources, videoId, captions, durationSeconds, description, difficulty, featured, needsTags } = form;
           await internal.call(path, lesson ? 'PUT' : 'POST', {
             title, category, objective, content, resources, videoId, captions, durationSeconds: Number(durationSeconds || 0),
+            description, difficulty, featured, needsTags,
             requestKey, revision: lesson?.revision,
           });
           navigation.goBack();
         })} />
-      </> : <><Txt muted>{lesson?.category}</Txt><Txt>{lesson?.objective}</Txt><Txt>{lesson?.content}</Txt>
+      </> : <><Txt muted>{lesson?.category}</Txt><Txt>{lesson?.objective}</Txt><Txt>{lesson?.description}</Txt><Txt>{lesson?.difficulty}{lesson?.featured ? ' · Featured' : ''}</Txt><Txt>{(lesson?.needsTags || []).join(', ')}</Txt><Txt>{lesson?.content}</Txt>
         {!!lesson?.resources && <Txt>{lesson.resources}</Txt>}</>}
       {publishable && <>
         <Txt bold>{lesson.publishAt ? 'Withdraw lesson' : 'Approve the saved lesson for publication'}</Txt>

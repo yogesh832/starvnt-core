@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
 import { adminApi } from '../../lib/api.js';
 
-const empty = { title: '', category: '', objective: '', content: '', resources: '', videoId: '', captions: '', durationSeconds: 0 };
+const empty = { title: '', category: '', objective: '', content: '', resources: '', videoId: '', captions: '', durationSeconds: 0, description: '', difficulty: '', featured: false, needsTags: [] };
 const field = 'mt-1 block min-h-11 w-full rounded-lg border p-2';
 const button = 'min-h-11 rounded-xl border px-4 text-sm font-semibold disabled:opacity-50';
 
@@ -29,6 +29,7 @@ function LessonVersions({ lessonId, revision }) {
         <p className="mt-2 break-all text-xs text-muted">Hash: {version.hash}</p>
         <p className="text-xs text-muted">{version.provenance === 'RECOVERED_CURRENT_ON_EDIT' ? 'Existing content captured before editing' : 'Captured on save'} · {new Date(version.capturedAt).toLocaleString()}</p>
         <p className="mt-2 text-sm">{version.content.objective}</p>
+        {version.hashVersion === 2 && <p className="text-sm">{version.content.description} · {version.content.difficulty || 'Difficulty not recorded'}{version.content.featured ? ' · Featured' : ''} · Topics: {version.content.needsTags.join(', ') || 'None'}</p>}
         <h3 className="mt-3 font-semibold">Lesson text</h3><p className="whitespace-pre-wrap break-words text-sm">{version.content.content}</p>
         <h3 className="mt-3 font-semibold">Resource notes</h3><p className="whitespace-pre-wrap break-words text-sm">{version.content.resources || 'No resources saved in this version.'}</p>
         {version.content.videoId && <p className="mt-2 text-sm">Video reference: <span className="break-all">{version.content.videoId}</span>. Historical media is not playable from this archive.</p>}
@@ -124,6 +125,10 @@ export default function AcademyAdmin() {
         <fieldset className="space-y-3" disabled={!editable || busy}>
           <legend className="mb-3 font-bold">Lesson content</legend>
           <label className="block">Title<input className={field} required maxLength={160} {...bind('title')} /></label>
+          <div><label htmlFor="academy-description" className="block">Catalogue description</label><textarea id="academy-description" className={field} maxLength={1000} {...bind('description')} /></div>
+          <label className="block">Difficulty (optional)<input className={field} maxLength={80} {...bind('difficulty')} /></label>
+          <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={draft.featured === true} onChange={event => setDraft({ ...draft, featured: event.target.checked })} />Feature this lesson after publication</label>
+          <fieldset><legend>Readiness topics for suggestions</legend><p className="text-sm">Select topics addressed by this lesson. Learning does not change verification or eligibility.</p>{(data.needsTagOptions || []).map(topic => <label key={topic} className="inline-flex min-h-11 items-center gap-2 mr-4"><input type="checkbox" checked={(draft.needsTags || []).includes(topic)} onChange={event => setDraft({ ...draft, needsTags: event.target.checked ? [...(draft.needsTags || []), topic] : draft.needsTags.filter(value => value !== topic) })} />{topic.replaceAll('_', ' ')}</label>)}</fieldset>
           <div><label htmlFor="academy-category" className="block">Category</label><select id="academy-category" className={field} required {...bind('category')}>
             <option value="">Choose a category</option>{data.categories.map(value => <option key={value}>{value}</option>)}
           </select></div>

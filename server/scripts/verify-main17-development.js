@@ -45,7 +45,7 @@ try {
   quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown, 1); await quote.save();
   quote.pricingBreakdown = { basePrice: 200, totalAmount: 200 }; quote.notes = 'Revised synthetic scope';
   quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown, 2); await quote.save();
-  const lesson = await LearningLesson.create({ title: 'Synthetic QA Lesson', category: 'Getting Started', objective: 'Test the existing lesson screen', content: 'Synthetic QA content only.', state: 'PUBLISHED', createdBy: 'fixture-only', requestKey: crypto.randomUUID(), requestHash: 'fixture', rightsReference: 'synthetic-fixture-rights', publishAt: new Date(Date.now() - 1000) });
+  const lesson = await LearningLesson.create({ title: 'Synthetic QA Lesson', category: 'Getting Started', objective: 'Test the existing lesson screen', content: 'Synthetic QA content only.', description: 'Synthetic bank setup guide', difficulty: 'Introductory', featured: true, needsTags: ['BANK'], state: 'PUBLISHED', createdBy: 'fixture-only', requestKey: crypto.randomUUID(), requestHash: 'fixture', rightsReference: 'synthetic-fixture-rights', publishAt: new Date(Date.now() - 1000) });
   api = createApp().listen(4119, '127.0.0.1');
   await new Promise((done, reject) => { api.once('listening', done); api.once('error', reject); });
   const login = await fetch('http://127.0.0.1:4119/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: owner.email, password, accountType: 'VENDOR' }) });
@@ -60,6 +60,24 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.addInitScript(token => localStorage.setItem('starvnt_external_access_token', token), session.accessToken);
   const page = await context.newPage();
+  await page.goto('http://127.0.0.1:5199/vendor/learning');
+  await page.getByLabel('Collection', { exact: true }).selectOption('recommended');
+  await page.getByText('Suggested topics: Bank Verification', { exact: true }).waitFor();
+  await page.getByText('Synthetic bank setup guide', { exact: true }).waitFor();
+  await page.getByLabel('Collection', { exact: true }).selectOption('featured');
+  await page.getByRole('button', { name: lesson.title, exact: true }).waitFor();
+  await page.route('**/api/vendor/academy', async route => {
+    const response = await route.fetch(); const data = await response.json();
+    data.recommendations = { status: 'UNAVAILABLE', source: 'VendorActivation.readiness', needs: [] };
+    data.lessons = data.lessons.map(row => ({ ...row, recommendationReasons: [] }));
+    await route.fulfill({ response, json: data });
+  });
+  await page.reload();
+  await page.getByLabel('Collection', { exact: true }).selectOption('recommended');
+  await page.getByText('Readiness suggestions are unavailable. You can still browse published lessons.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: lesson.title, exact: true }).waitFor();
+  await page.unroute('**/api/vendor/academy');
+  checks.push('Catalogue metadata, featured/readiness collections and unavailable-suggestion fallback preserve published lessons');
   await page.goto(`http://127.0.0.1:5199/vendor/learning?lesson=${lesson._id}`);
   await page.getByRole('heading', { name: 'Private lesson feedback' }).waitFor();
   await page.getByLabel('Usefulness (1–5)').selectOption('4');
@@ -188,6 +206,10 @@ try {
   await adminPage.goto('http://127.0.0.1:5199/admin/academy');
   await adminPage.getByRole('heading', { name: 'Partner Academy', exact: true }).waitFor();
   await adminPage.getByLabel('Title', { exact: true }).fill('Synthetic archived resource lesson');
+  await adminPage.getByLabel('Catalogue description', { exact: true }).fill('Synthetic original catalogue description');
+  await adminPage.getByLabel('Difficulty (optional)', { exact: true }).fill('Introductory');
+  await adminPage.getByLabel('Feature this lesson after publication', { exact: true }).check();
+  await adminPage.getByLabel('BANK', { exact: true }).check();
   await adminPage.getByLabel('Category', { exact: true }).selectOption('Getting Started');
   await adminPage.getByLabel('Learning objective', { exact: true }).fill('Synthetic archive review');
   await adminPage.getByLabel('Lesson text', { exact: true }).fill('Synthetic original lesson');
@@ -195,6 +217,8 @@ try {
   await adminPage.getByRole('button', { name: 'Save draft', exact: true }).click();
   await adminPage.getByRole('button', { name: 'View versions', exact: true }).waitFor();
   await adminPage.getByLabel('Resource notes', { exact: true }).fill('Synthetic revised resources');
+  assert.equal(await adminPage.getByLabel('Catalogue description', { exact: true }).inputValue(), 'Synthetic original catalogue description');
+  await adminPage.getByLabel('Catalogue description', { exact: true }).fill('Synthetic revised catalogue description');
   await adminPage.getByRole('button', { name: 'Save draft', exact: true }).click();
   await adminPage.getByText('Content version 2', { exact: false }).waitFor();
   await adminPage.getByRole('button', { name: 'View versions', exact: true }).click();

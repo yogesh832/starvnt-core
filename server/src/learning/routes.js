@@ -5,6 +5,9 @@ import { v2 as cloudinary } from 'cloudinary';
 import { requireAdminAuth, requireAnyPermission, requirePermission } from '../admin/middleware/requireAdminAuth.js';
 import { LearningLesson, LearningProgress, LearningFeedback, learningCategories } from './models.js';
 import { learningContentSnapshot, learningContentHash, appendLearningContentVersions, assertLearningContentHistory } from '../common/learningContentVersions.js';
+import { readinessMetricKeys } from '../common/readinessMetrics.js';
+import { evaluateVendorActivation } from '../external/services/vendorActivation.service.js';
+import { lessonRecommendationEvidence, lessonRecommendationReasons } from './recommendations.js';
 
 export const adminLearningRoutes = Router();
 export const vendorLearningRoutes = Router();
@@ -18,7 +21,7 @@ const text = (value, max, required = false) => {
   return value.trim();
 };
 
-function lessonFields(input) {
+function lessonFields(input, previous = {}) {
   const category = input?.category;
   if (!learningCategories.includes(category)) throw fail('INVALID_CATEGORY', 'Choose an Academy category.');
   const videoId = text(input.videoId, 200);
@@ -29,7 +32,11 @@ function lessonFields(input) {
     throw fail('INVALID_VIDEO', 'Use a private Academy asset ID, a duration up to 60 minutes, and WebVTT captions.');
   }
   if (!videoId && (captions || durationSeconds !== 0)) throw fail('INVALID_VIDEO', 'Enter a video asset ID or clear the video details.');
+  const needsTags = input.needsTags === undefined ? previous.needsTags || [] : input.needsTags;
+  const featured = input.featured === undefined ? previous.featured || false : input.featured;
+  if (!Array.isArray(needsTags) || needsTags.length > readinessMetricKeys.length || needsTags.some(key => !readinessMetricKeys.includes(key)) || typeof featured !== 'boolean') throw fail('INVALID_LESSON', 'Choose valid readiness topics and featured status.');
   return {
+    description: text(input.description ?? previous.description, 1000), difficulty: text(input.difficulty ?? previous.difficulty, 80), featured, needsTags: [...new Set(needsTags)].sort(),
     title: text(input.title, 160, true), category, objective: text(input.objective, 400, true),
     content: text(input.content, 20000, true), resources: text(input.resources, 10000),
     videoId, captions, durationSeconds,
@@ -52,6 +59,7 @@ function metadata(lesson) {
     id: String(lesson._id), title: lesson.title, category: lesson.category,
     objective: lesson.objective, hasVideo: Boolean(lesson.videoId), durationSeconds: lesson.durationSeconds,
     contentVersion: lesson.contentVersion, publishAt: lesson.publishAt,
+    description: lesson.description || '', difficulty: lesson.difficulty || '', featured: lesson.featured === true, needsTags: lesson.needsTags || [],
   };
 }
 
@@ -93,7 +101,7 @@ async function currentLesson(req) {
 adminLearningRoutes.use(requireAdminAuth, (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 adminLearningRoutes.get('/', requireAnyPermission('academy.read', 'academy.edit', 'academy.publish'), h(async (_req, res) => {
   const rows = await LearningLesson.find().select('-requestKey -requestHash -createdBy').sort({ updatedAt: -1 }).limit(101).lean();
-  res.json({ categories: learningCategories, lessons: rows.slice(0, 100).map(adminView), truncated: rows.length > 100 });
+  res.json({ categories: learningCategories, needsTagOptions: readinessMetricKeys, lessons: rows.slice(0, 100).map(adminView), truncated: rows.length > 100 });
 }));
 adminLearningRoutes.post('/', requirePermission('academy.edit'), h(async (req, res) => {
   const fields = lessonFields(req.body);
@@ -110,7 +118,10 @@ adminLearningRoutes.post('/', requirePermission('academy.edit'), h(async (req, r
     if (error.code !== 11000) throw error;
     row = await LearningLesson.findOne(filter);
   }
-  if (!row || row.requestHash !== requestHash) throw fail('REQUEST_CHANGED', 'This draft request already used different content.', 409);
+  const { description, difficulty, featured, needsTags, ...legacyFields } = fields;
+  const legacyHash = createHash('sha256').update(JSON.stringify(legacyFields)).digest('hex');
+  const legacyReplay = row && row.requestHash === legacyHash && !description && !difficulty && !featured && !needsTags.length && !row.description && !row.difficulty && !row.featured && !row.needsTags?.length;
+  if (!row || (row.requestHash !== requestHash && !legacyReplay)) throw fail('REQUEST_CHANGED', 'This draft request already used different content.', 409);
   res.status(201).json({ lesson: adminView(row) });
 }));
 
@@ -146,11 +157,11 @@ async function updateLesson(req, filter, update, action, reason, evidence = {}) 
 }
 
 adminLearningRoutes.put('/:id', requirePermission('academy.edit'), h(async (req, res) => {
-  const fields = lessonFields(req.body);
   const replay = await replayLessonAction(req, 'DRAFT_EDITED');
   if (replay) return res.json({ lesson: adminView(replay) });
   const previous = await LearningLesson.findOne({ _id: lessonId(req), revision: expectedRevision(req) }).select('+contentVersions').lean();
   if (!previous) throw fail('LESSON_CHANGED', 'The lesson changed. Reload it before trying again.', 409);
+  const fields = lessonFields(req.body, previous);
   const versions = appendLearningContentVersions(previous, fields, req.admin._id);
   const row = await updateLesson(req, { publishAt: null, state: { $in: ['DRAFT', 'UNPUBLISHED', null] } }, {
     $set: { ...fields, state: 'DRAFT', lastEditedBy: String(req.admin._id), rightsReference: '' }, $unset: { rightsExpiresAt: 1 }, $inc: { contentVersion: 1 },
@@ -194,14 +205,15 @@ adminLearningRoutes.post('/:id/publication', requirePermission('academy.publish'
   if (rightsExpiresAt && rightsExpiresAt <= Math.max(Date.now(), publishAt.getTime())) {
     throw fail('RIGHTS_EXPIRED', 'The rights must be valid when the lesson is available.');
   }
-  const draft = await LearningLesson.findOne({ _id: lessonId(req), revision, publishAt: null, state: 'REVIEW' }).lean();
+  const draft = await LearningLesson.findOne({ _id: lessonId(req), revision, publishAt: null, state: 'REVIEW' }).select('+contentVersions').lean();
   if (!draft) throw fail('LESSON_CHANGED', 'The draft changed. Reload it before publishing.', 409);
+  const archived = assertLearningContentHistory(draft);
   if ([draft.createdBy, draft.lastEditedBy].includes(String(req.admin._id))) throw fail('INDEPENDENT_REVIEW_REQUIRED', 'A different authorized publisher must review and publish this lesson.', 403);
   if (draft.videoId) await requirePrivateVideo(draft.videoId);
   const row = await updateLesson(req, { publishAt: null, state: 'REVIEW' }, {
     $set: { state: 'PUBLISHED', publishAt, rightsReference, rightsExpiresAt },
   }, 'PUBLICATION_APPROVED', reason, {
-    rightsReference, rightsExpiresAt, publishAt, contentVersion: draft.contentVersion, contentHash: learningContentHash(draft), videoId: draft.videoId,
+    rightsReference, rightsExpiresAt, publishAt, contentVersion: draft.contentVersion, contentHash: learningContentHash(draft, archived?.hashVersion || (archived ? 1 : 2)), videoId: draft.videoId,
   });
   res.json({ lesson: adminView(row) });
 }));
@@ -214,17 +226,20 @@ vendorLearningRoutes.use((req, res, next) => {
   return next();
 });
 vendorLearningRoutes.get('/', h(async (req, res) => {
-  const rows = await LearningLesson.find(visibility()).select('title objective category publishAt videoId durationSeconds contentVersion')
+  const evidencePromise = evaluateVendorActivation(req.vendorId).then(lessonRecommendationEvidence).catch(() => lessonRecommendationEvidence(null));
+  const rows = await LearningLesson.find(visibility()).select('title objective category publishAt videoId durationSeconds contentVersion description difficulty featured needsTags')
     .sort({ publishAt: -1, _id: -1 }).limit(101).lean();
   const lessons = rows.slice(0, 100);
   const progress = await LearningProgress.find({ vendor: req.vendorId, lesson: { $in: lessons.map(row => row._id) } })
     .select('lesson contentVersion positionSeconds completedAt').lean();
   const byVersion = new Map(progress.map(row => [`${row.lesson}:${row.contentVersion}`, row]));
+  const recommendations = await evidencePromise;
   res.json({
+    recommendations,
     categories: learningCategories, truncated: rows.length > 100,
     lessons: lessons.map(row => {
       const current = byVersion.get(`${row._id}:${row.contentVersion}`);
-      return { ...metadata(row), positionSeconds: current?.positionSeconds ?? 0, completedAt: current?.completedAt ?? null };
+      return { ...metadata(row), recommendationReasons: lessonRecommendationReasons(row, current, recommendations), positionSeconds: current?.positionSeconds ?? 0, completedAt: current?.completedAt ?? null };
     }),
   });
 }));

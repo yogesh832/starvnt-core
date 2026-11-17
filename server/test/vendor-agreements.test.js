@@ -14,11 +14,61 @@ import { VendorOrganization } from '../src/external/models/VendorOrganization.js
 import { CoreBooking } from '../src/admin/models/CoreBooking.js';
 import { AgreementVersion, VendorAgreement } from '../src/foundation/agreement.models.js';
 import { LearningLesson, LearningProgress } from '../src/learning/models.js';
+import { VendorService } from '../src/external/models/VendorService.js';
+import { learningContent, learningContentHash } from '../src/common/learningContentVersions.js';
 import { BusinessAuditLog } from '../src/admin/models/BusinessAuditLog.js';
 import { signAdminAccessToken } from '../src/admin/utils/tokens.js';
 import { signExternalAccessToken } from '../src/external/utils/tokens.js';
 
 let mongo, app;
+test('pre-metadata Academy creation receipts and version-one archives remain recoverable and publishable', async () => {
+  const author = await admin(), reviewer = await admin();
+  const fields = { title: 'Legacy receipt lesson', category: 'Getting Started', objective: 'Legacy fixture', content: 'Original', resources: '', videoId: '', captions: '', durationSeconds: 0 };
+  const requestKey = crypto.randomUUID();
+  const row = await LearningLesson.create({ ...fields, createdBy: String(author.actor._id), lastEditedBy: String(author.actor._id), state: 'DRAFT', requestKey, requestHash: crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex'), contentVersions: [{ version: 1, content: learningContent(fields, 1), hash: learningContentHash(fields, 1), actor: String(author.actor._id), capturedAt: new Date(), provenance: 'CAPTURED_ON_SAVE' }] });
+  const receipt = (await request(app).post('/api/admin/academy').set(author.auth).send({ ...fields, requestKey }).expect(201)).body.lesson;
+  assert.equal(receipt.id, String(row._id));
+  await request(app).post('/api/admin/academy').set(author.auth).send({ ...fields, requestKey, featured: true }).expect(409);
+  const path = `/api/admin/academy/${row._id}`;
+  await request(app).post(`${path}/submit-review`).set(author.auth).send({ revision: 1, reason: 'Review legacy content' }).expect(200);
+  await request(app).post(`${path}/publication`).set(reviewer.auth).send({ revision: 2, action: 'PUBLISH', reason: 'Approve legacy content', rightsReference: 'synthetic-rights' }).expect(200);
+  assert.equal((await LearningLesson.findById(row._id)).history.at(-1).contentHash, learningContentHash(fields, 1));
+  await request(app).get(`${path}/versions`).set(reviewer.auth).expect(200);
+});
+test('Academy metadata needs independent publication, survives old-client edits, and isolates readiness failure', async () => {
+  const author = await admin(), reviewer = await admin(), v = await vendor();
+  const fields = { title: 'Readiness lesson', category: 'Getting Started', objective: 'Explain bank setup', content: 'Synthetic educational text', description: 'Bank setup guidance', difficulty: 'Introductory', featured: true, needsTags: ['BANK'], requestKey: crypto.randomUUID() };
+  const created = (await request(app).post('/api/admin/academy').set(author.auth).send(fields).expect(201)).body.lesson;
+  const path = `/api/admin/academy/${created.id}`;
+  assert.equal(created.featured, true);
+  assert.equal((await request(app).get('/api/vendor/academy').set(v.auth).expect(200)).body.lessons.some(row => row.id === created.id), false);
+  const { description, difficulty, featured, needsTags, ...oldFields } = fields;
+  const edited = (await request(app).put(path).set(author.auth).send({ ...oldFields, revision: 1 }).expect(200)).body.lesson;
+  assert.equal(edited.description, description); assert.equal(edited.difficulty, difficulty); assert.equal(edited.featured, featured); assert.deepEqual(edited.needsTags, needsTags);
+  await request(app).post(`${path}/submit-review`).set(author.auth).send({ revision: 2, reason: 'Review metadata' }).expect(200);
+  const approval = { revision: 3, action: 'PUBLISH', reason: 'Approve metadata', rightsReference: 'synthetic-rights' };
+  await request(app).post(`${path}/publication`).set(author.auth).send(approval).expect(403);
+  await request(app).post(`${path}/publication`).set(reviewer.auth).send(approval).expect(200);
+  const catalogue = (await request(app).get('/api/vendor/academy').set(v.auth).expect(200)).body;
+  assert.equal(catalogue.recommendations.status, 'AVAILABLE');
+  const lesson = catalogue.lessons.find(row => row.id === created.id);
+  assert.equal(lesson.featured, true); assert.equal(lesson.description, description);
+  assert.deepEqual(lesson.recommendationReasons.map(row => row.key), ['BANK']);
+  const find = VendorService.find;
+  try {
+    VendorService.find = () => { throw new Error('Synthetic readiness storage failure'); };
+    const degraded = (await request(app).get('/api/vendor/academy').set(v.auth).expect(200)).body;
+    assert.equal(degraded.recommendations.status, 'UNAVAILABLE');
+    assert.deepEqual(degraded.lessons.find(row => row.id === created.id).recommendationReasons, []);
+    assert.equal(degraded.lessons.find(row => row.id === created.id).description, description);
+    assert.equal(JSON.stringify(degraded).includes('Synthetic readiness storage failure'), false);
+  } finally { VendorService.find = find; }
+  await request(app).put(`/api/vendor/academy/${created.id}/progress`).set(v.auth).send({ contentVersion: 2, positionSeconds: 0, complete: true }).expect(200);
+  const completed = (await request(app).get('/api/vendor/academy').set(v.auth).expect(200)).body.lessons.find(row => row.id === created.id);
+  assert.deepEqual(completed.recommendationReasons, []);
+  await request(app).post(`${path}/publication`).set(reviewer.auth).send({ revision: 4, action: 'WITHDRAW', reason: 'Withdraw featured lesson' }).expect(200);
+  assert.equal((await request(app).get('/api/vendor/academy').set(v.auth).expect(200)).body.lessons.some(row => row.id === created.id), false);
+});
 test('Academy content and resource archives survive withdrawal/edit/retry without reviving vendor access', async () => {
   const author = await admin(), reviewer = await admin(), reader = await admin('ADMIN', ['academy.read']), v = await vendor();
   const initial = { title: 'Archived content fixture', category: 'Getting Started', objective: 'Fixture', content: 'Original text', resources: 'Original resource notes', requestKey: crypto.randomUUID() };

@@ -1,4 +1,5 @@
 export const readinessCalculationVersion = 'vendor-readiness/2026-11-16.1';
+export const readinessMetricKeys = ['BUSINESS_PROFILE', 'ONBOARDING', 'PAN', 'GST', 'BANK', 'PORTFOLIO', 'OPERATIONS', 'ACTIVATION', 'MATCHING', 'MARKETING'];
 
 // Additive explanations of the existing activation evaluator, never a second
 // source of eligibility or a substitute for source/provider verification.
