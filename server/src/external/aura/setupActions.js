@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { vendorAuraDiagnostic } from '../../common/vendorAuraDiagnostics.js';
 import { validDate } from '../../common/scheduleRules.js';
 import { saveCommitment } from '../services/commitments.service.js';
 import { describeVendorAction } from '../../common/vendorAuraUi.js';
@@ -817,7 +818,7 @@ export async function executeAction(vendor, a) {
         payload: { quoteId: quote._id },
       });
     } catch (err) {
-      console.warn('[vendor-aura] notifyCustomer on revise_quote skipped:', err?.message || err);
+      vendorAuraDiagnostic('NOTIFICATION_DEFERRED', { actionKind: 'revise_quote' });
     }
 
     try {
@@ -838,7 +839,7 @@ export async function executeAction(vendor, a) {
         await thread.save();
       }
     } catch (err) {
-      console.warn('[vendor-aura] thread sync skipped:', err?.message || err);
+      vendorAuraDiagnostic('THREAD_SYNC_DEFERRED', { actionKind: 'revise_quote' });
     }
 
     return { kind: 'revise_quote', quoteId: quote._id, quoteRef: quote.quoteReference, total: totalAmount };
@@ -896,7 +897,7 @@ export async function executeAction(vendor, a) {
         payload: { quoteId: quote._id },
       });
     } catch (err) {
-      console.warn('[vendor-aura] notifyCustomer on create_quote skipped:', err?.message || err);
+      vendorAuraDiagnostic('NOTIFICATION_DEFERRED', { actionKind: 'create_quote' });
     }
 
     return { kind: 'create_quote', quoteId: quote._id, quoteRef: quote.quoteReference, total: totalAmount };

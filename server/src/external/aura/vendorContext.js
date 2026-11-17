@@ -1,3 +1,4 @@
+import { vendorAuraDiagnostic } from '../../common/vendorAuraDiagnostics.js';
 import { Opportunity } from '../models/Opportunity.js';
 import { Quote } from '../models/Quote.js';
 import { VendorBlockout } from '../models/VendorBlockout.js';
@@ -57,7 +58,7 @@ async function safe(fn, fallback) {
   try {
     return await fn();
   } catch (err) {
-    console.warn('[vendor-aura] context part failed:', err?.message || err);
+    vendorAuraDiagnostic('CONTEXT_SOURCE_UNAVAILABLE');
     return fallback;
   }
 }
@@ -88,7 +89,7 @@ async function fetchGoogleRating(googlePlaceId, businessName) {
       }
     }
   } catch (err) {
-    console.warn('[vendorContext] Google Places fetch failed:', err?.message || err);
+    vendorAuraDiagnostic('GOOGLE_SOURCE_UNAVAILABLE');
   }
   return null;
 }

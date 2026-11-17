@@ -24,6 +24,22 @@ import { signExternalAccessToken } from '../src/external/utils/tokens.js';
 
 let app, mongo;
 const key = () => crypto.randomUUID();
+test('signed-in Aura chat diagnostics omit conversation, vendor profile and provider error details', async t => {
+  const f = await fixture();
+  const sensitive = 'AABPS1234D PRIVATE_CONTACT_9876543210';
+  await VendorOrganization.updateOne({ _id: f.vendor._id }, { $set: { businessName: sensitive } });
+  registerLlmAdapter({ async chat() { throw new Error(`provider error with ${sensitive}`); } });
+  const lines = [];
+  const original = { info: console.info, log: console.log, warn: console.warn };
+  for (const method of Object.keys(original)) console[method] = (...args) => lines.push(args.map(String).join(' '));
+  t.after(() => { Object.assign(console, original); registerLlmAdapter(null); });
+  const response = await request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId: key(), message: `Please explain this ${sensitive}` }).expect(200);
+  assert.equal(response.body.fallback, true);
+  assert.equal(lines.some(line => line.includes('MODEL_FALLBACK')), true);
+  assert.equal(lines.some(line => line.includes('TURN')), true);
+  assert.equal(lines.join('\n').includes(sensitive), false);
+  assert.equal(lines.join('\n').includes('provider error with'), false);
+});
 test('Aura calendar updates bind the reviewed revision and preserve the partial-day interval', async () => {
   const { vendor } = await fixture();
   const actor = { id: vendor.owner, role: 'VENDOR' };
