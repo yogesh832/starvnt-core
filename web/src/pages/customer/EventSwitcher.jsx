@@ -8,13 +8,13 @@ export default function EventSwitcher() {
   if (error) return <span className="customer-event-context" role="status">Event list unavailable</span>;
   if (!events.length) return <span className="customer-event-context">No event yet</span>;
   return <label className="customer-event-context">
-    <span>Current event</span>
-    <select aria-label="Current event" value={current?.id || ''} onChange={event => {
+    <span>Selected event</span>
+    <select aria-label="Selected event" value={current?.id || ''} onChange={event => {
       setCurrent(event.target.value);
       navigate('/customer');
     }}>
       {!current && <option value="" disabled>Select your event</option>}
-      {events.map(event => <option key={event.id} value={event.id}>{event.title || event.eventTypeLabel || 'Untitled event'}</option>)}
+      {events.map(event => <option key={event.id} value={event.id}>{event.title || event.eventTypeLabel || 'Untitled event'}{event.status === 'completed' ? ' (completed)' : event.status === 'cancelled' ? ' (cancelled)' : ''}</option>)}
     </select>
   </label>;
 }

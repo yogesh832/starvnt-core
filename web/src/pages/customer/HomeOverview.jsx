@@ -16,7 +16,6 @@ export function WelcomeHome({ firstName }) {
       <button className="customer-secondary-action" onClick={() => setChoosing(false)}>Back</button>
     </div>}
     <p className="customer-home-note">No enquiry, booking or payment is created until you take the relevant action.</p>
-    <Link className="customer-secondary-action" to="/customer/discovery">Explore ideas & inspiration →</Link>
   </section>;
 }
 
@@ -28,7 +27,7 @@ export function PastEventHome({ event, events }) {
       <p>{event.status === 'cancelled' ? 'Cancelled event' : 'Completed event'}{event.eventDate ? ` · ${formatDate(event.eventDate)}` : ''}. Your history and important records are still here.</p>
       <div className="customer-create-options">
         <Link className="customer-primary-action" to={`/customer/events/${event.id}/history`}>Review event history</Link>
-        <Link className="customer-secondary-action" to={`/customer/documents?event=${encodeURIComponent(event.id)}`}>Find documents</Link>
+        <Link className="customer-secondary-action" to="/customer/documents">Find documents</Link>
         <Link className="customer-secondary-action" to="/customer/events/new">Plan another event</Link>
       </div>
     </section>
@@ -36,8 +35,8 @@ export function PastEventHome({ event, events }) {
   </div>;
 }
 
-export function EventHomeHeader({ firstName, event, attention, proposals, proposalsLoading, proposalsError }) {
-  const next = nextHomeAction(event, attention, proposals);
+export function EventHomeHeader({ firstName, event, attention }) {
+  const next = nextHomeAction(event, attention);
   return <section className="customer-home-intro">
     <p className="customer-eyebrow">WELCOME BACK, {firstName}</p>
     <h1>Your next step, made clear.</h1>
@@ -46,9 +45,8 @@ export function EventHomeHeader({ firstName, event, attention, proposals, propos
     <div className="customer-record-shortcuts">
       <Link to={`/customer/events/${event.id}/requirements`}>Event plan</Link>
       <Link to={`/customer/events/${event.id}/bookings`}>Bookings & payments</Link>
-      <Link to={`/customer/documents?event=${encodeURIComponent(event.id)}`}>Documents</Link>
+      <Link to="/customer/documents">Documents</Link>
       <Link to={`/customer/events/${event.id}/circle`}>Conversations</Link>
     </div>
-    {proposalsLoading ? <p className="customer-home-note" role="status">Checking proposals…</p> : proposalsError ? <p className="customer-home-note" role="status">Proposals could not be refreshed. <Link to={`/customer/proposals?event=${encodeURIComponent(event.id)}`}>Open proposals</Link></p> : proposals.length > 0 && <p className="customer-home-note"><Link to={`/customer/proposals?event=${encodeURIComponent(event.id)}`}>{proposals.length} proposal version{proposals.length === 1 ? '' : 's'} awaiting your response</Link></p>}
   </section>;
 }

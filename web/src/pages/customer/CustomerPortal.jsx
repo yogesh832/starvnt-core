@@ -1,6 +1,5 @@
 
 
-import { CustomerProposals } from '../ProposalWorkspace.jsx';
 import AuraMark from '../../components/AuraMark.jsx';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
@@ -62,7 +61,6 @@ const SIDEBAR = [
   { key: 'vendors', label: 'My Vendors', icon: 'vendors', to: '/customer/go/vendors' },
   { key: 'timeline', label: 'Event Timeline', icon: 'calendar', to: '/customer/go/timeline' },
   { key: 'documents', label: 'Documents', icon: 'documents', to: '/customer/documents' },
-  { key: 'proposals', label: 'My proposals', icon: 'documents', to: '/customer/proposals' },
   { key: 'favorites', label: 'Saved items', icon: 'star', to: '/customer/favorites' },
   { key: 'settings', label: 'Settings', icon: 'settings', to: '/customer/settings' },
 ];
@@ -71,7 +69,7 @@ const SIDEBAR_GROUPS = [
   { label: 'Workspace', keys: ['home', 'events', 'aura', 'messages', 'me'] },
   { label: 'Explore & plan', keys: ['new', 'discovery'] },
   { label: 'Current Event', keys: ['quotes', 'bookings', 'payments', 'vendors', 'timeline'] },
-  { label: 'Library', keys: ['proposals', 'documents', 'favorites', 'settings'] },
+  { label: 'Library', keys: ['documents', 'favorites', 'settings'] },
 ];
 const SIDEBAR_BY_KEY = Object.fromEntries(SIDEBAR.map((item) => [item.key, item]));
 
@@ -377,7 +375,6 @@ function Shell() {
               <Route path="reminders" element={<RemindersPage />} />
               <Route path="customer-360" element={<Customer360 />} />
               <Route path="discovery" element={<Discovery />} />
-              <Route path="proposals" element={<CustomerProposals />} />
               <Route path="*" element={<Navigate to="/customer" replace />} />
             </Routes></Suspense>
           </main>

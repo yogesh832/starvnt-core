@@ -1,8 +1,8 @@
+import { remindStaffFollowUps } from '../admin/services/revenueCrm.service.js';
+import { reconcileWorkflowBatch } from '../admin/services/bookingWorkflowEffects.service.js';
 import { runReminderBatch, runEventDeadlineBatch } from '../notifications/reminders.worker.js';
 import { runDiscoveryNotificationBatch } from '../experience/discoveryNotifications.worker.js';
-import { runDiscoveryRetentionBatch } from '../experience/discoveryRetention.worker.js';
 import { reconcileBookingBatch } from '../customer/services/bookingTruth.service.js';
-import { reconcileWorkflowBatch } from '../admin/services/bookingWorkflowEffects.service.js';
 import { expireExternalHolds } from '../external/services/commitments.service.js';
 import { config } from '../config.js';
 import { OutboxEvent } from '../admin/models/OutboxEvent.js';
@@ -34,10 +34,6 @@ export function startCoreWorkers() {
   let discoveryBusy = false;
   const discovery = async () => { if (discoveryBusy) return; discoveryBusy = true; try { await runDiscoveryNotificationBatch(); } catch (err) { console.warn('[discovery-notifications]', err.message); } finally { discoveryBusy = false; } };
   setInterval(discovery, 300000).unref();
-  let retentionBusy = false;
-  const retention = async () => { if (retentionBusy) return; retentionBusy = true; try { await runDiscoveryRetentionBatch(); } catch (err) { console.warn('[discovery-retention]', err.message); } finally { retentionBusy = false; } };
-  setInterval(retention, 86400000).unref();
-  setTimeout(retention, 60000).unref();
   let foundationBusy = false;
   const foundation = async () => {
     if (foundationBusy) return;
@@ -45,8 +41,9 @@ export function startCoreWorkers() {
     markWorkerStarted('booking-reconciliation');
     try {
       const results = await reconcileBookingBatch();
-      await reconcileWorkflowBatch();
       await expireExternalHolds();
+      await reconcileWorkflowBatch();
+      await remindStaffFollowUps();
       if (results.some(r => !r.ok)) throw new Error('Booking reconciliation has pending failures');
       markWorkerSuccess('booking-reconciliation', 0);
     } catch (err) { markWorkerError('booking-reconciliation', err, 0); }

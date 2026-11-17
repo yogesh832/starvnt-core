@@ -35,6 +35,11 @@ export function maskOpportunityCustomer(opportunity, verifiedBooking = false) {
   plain.customerName = 'Customer'; plain.clientName = 'Customer';
   delete plain.originalRequirement;
   delete plain.requirementSnapshot;
+  if (plain.commercialVersions) plain.commercialVersions = plain.commercialVersions.map(version => ({
+    version: version.version, contentHash: version.contentHash, recordedAt: version.recordedAt, provenance: version.provenance,
+    content: { serviceName: version.content?.serviceName, eventDate: version.content?.eventDate, pricingBreakdown: version.content?.pricingBreakdown, validUntil: version.content?.validUntil,
+      notes: 'Archived private scope details require a verified active service booking.' },
+  }));
   plain.customer = {
     _id: plain.customer?._id || plain.customer || null,
     fullName: 'Customer',

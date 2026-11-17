@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { eventStorageKey, latestRequestGate, resolveCurrentEvent, routeEventId } from '../src/pages/customer/eventContext.js';
-import { nextHomeAction, pendingEventProposals } from '../src/pages/customer/homeActions.js';
-import { portalSignupUrl } from '../src/lib/portalAccess.js';
+import { nextHomeAction } from '../src/pages/customer/homeActions.js';
 
 const events = [{ id: 'a', status: 'completed' }, { id: 'b', status: 'planning' }, { id: 'c', status: 'draft' }];
 test('an owned event URL overrides the browser preference on every nested event page', () => {
@@ -36,29 +35,13 @@ test('a later refresh and unmount both invalidate pending event responses', asyn
   gate.invalidate();
   assert.equal(gate.current(newer), false);
 });
-test('pending proposals belong to the selected event and exclude recorded responses', () => {
-  assert.deepEqual(pendingEventProposals([
-    { event: 'b', version: 1 }, { event: 'c', version: 2 },
-    { event: 'b', version: 3, response: { decision: 'APPROVED' } },
-  ], 'b').map(p => p.version), [1]);
-});
 test('payment and quote decisions take precedence over general planning suggestions', () => {
-  assert.equal(nextHomeAction(events[1], [{ type: 'payment_failed', title: 'Payment failed' }], [{}]).to, '/customer/events/b/bookings');
+  assert.equal(nextHomeAction(events[1], [{ type: 'payment_failed', title: 'Payment failed' }]).to, '/customer/events/b/bookings');
   assert.equal(nextHomeAction(events[1], [{ type: 'quote_awaiting_decision' }]).to, '/customer/events/b/quotes');
 });
 test('home action URLs cannot redirect to an unrelated event or external site', () => {
-  for (const actionUrl of ['https://untrusted.example', '/customer/events/c/bookings', '/customer/events/bad/bookings']) {
+  for (const actionUrl of ['https://untrusted.example', '/customer/events/c/bookings', '/customer/events/bad/bookings', '/customer/events/b/../c/bookings', '/customer/events/b/%2e%2e/c/bookings']) {
     assert.equal(nextHomeAction(events[1], [{ type: 'payment_failed', actionUrl }]).to, '/customer/events/b/bookings');
   }
   assert.equal(nextHomeAction(events[1], [{ actionUrl: '/customer/events/b/quotes?review=1' }]).to, '/customer/events/b/quotes?review=1');
-});
-test('proposal approval never substitutes a booking destination in the Home decision', () => {
-  const action = nextHomeAction(events[1], [], [{}]);
-  assert.equal(action.to, '/customer/proposals?event=b');
-  assert.match(action.detail, /does not confirm a booking/);
-  assert.equal(nextHomeAction(events[2]).to, '/customer/events/new?draft=c');
-});
-test('partner signup preserves the configured deployment host until controlled migration', () => {
-  assert.equal(portalSignupUrl('VENDOR', { VENDOR: 'https://partners.example/old?tracking=1' }), 'https://partners.example/signup?as=vendor');
-  assert.equal(portalSignupUrl('CUSTOMER', { CUSTOMER: 'javascript:alert(1)' }), 'https://starvnt-core.vercel.app/signup?as=customer');
 });

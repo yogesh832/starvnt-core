@@ -16,6 +16,7 @@ const opportunitySchema = new Schema(
     vendorService: { type: Schema.Types.ObjectId, ref: 'VendorService', required: true },
     customerEvent: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null, index: true },
     customerRequirement: { type: Schema.Types.ObjectId, ref: 'EventRequirement', default: null },
+    crmSourceKey: { type: String },
     serviceName: { type: String, required: true },
     eventDate: { type: String, required: true, index: true }, // Format: YYYY-MM-DD
     serviceLocation: {
@@ -64,5 +65,6 @@ const opportunitySchema = new Schema(
   },
   { timestamps: true }
 );
+opportunitySchema.index({ crmSourceKey: 1 }, { unique: true, partialFilterExpression: { crmSourceKey: { $type: 'string' } } });
 
 export const Opportunity = externalConn.model('Opportunity', opportunitySchema);

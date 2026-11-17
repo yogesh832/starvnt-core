@@ -15,7 +15,8 @@ import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { signExternalAccessToken } from '../src/external/utils/tokens.js';
 import { Quote } from '../src/external/models/Quote.js';
 import { CoreBooking } from '../src/admin/models/CoreBooking.js';
-import { CustomerEvent, Payment, Booking, Reservation, EventRequirement } from '../src/customer/models/index.js';
+import { CustomerEvent, Payment, Booking, Reservation, EventRequirement, PaymentWebhookEvent } from '../src/customer/models/index.js';
+import { recordWebhookEvent } from '../src/customer/repositories/commerce.repo.js';
 import { requestBankVerification } from '../src/external/services/bankVerification.service.js';
 import { requestRazorpayBankVerification, normalizeRazorpayBankResult } from '../src/external/services/razorpayBankVerification.service.js';
 import { findCapturedOrderPayment, checkoutConfigured } from '../src/customer/services/payments/razorpay.js';
@@ -313,4 +314,22 @@ test('customer payment reconciliation checks customer and event ownership before
   const fetchMock = t.mock.method(globalThis, 'fetch', () => { throw new Error('Must not call provider'); });
   await assert.rejects(reconcileCustomerPayment(stranger.user._id, event._id, payment._id));
   assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test('webhook delivery preserves empty objects, ignores key ordering and rejects changed content', async () => {
+  const eventId = key();
+  const send = body => request(app).post('/api/webhooks/razorpay').set('Content-Type', 'application/json').set('x-razorpay-event-id', eventId).set('x-razorpay-signature', crypto.createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET).update(body).digest('hex')).send(body);
+  const first = await send(JSON.stringify({ event: 'integration.readiness_check', payload: {} })).expect(200);
+  assert.equal(first.body.ignored, true);
+  const retry = await send(JSON.stringify({ payload: {}, event: 'integration.readiness_check' })).expect(200);
+  assert.equal(retry.body.duplicate, true);
+  await send(JSON.stringify({ event: 'integration.readiness_check', payload: { changed: true } })).expect(409);
+});
+
+test('legacy webhook records without a hash tolerate Mongoose empty-object minimization', async () => {
+  const providerEventId = key();
+  await PaymentWebhookEvent.collection.insertOne({ provider: 'razorpay', providerEventId, eventType: 'legacy', payload: { event: 'legacy' }, processingStatus: 'COMPLETED' });
+  assert.equal(await recordWebhookEvent('razorpay', providerEventId, 'legacy', { event: 'legacy', payload: {} }), false);
+  const row = await PaymentWebhookEvent.findOne({ providerEventId }).lean();
+  assert.equal(row.payloadHash.length, 64);
 });

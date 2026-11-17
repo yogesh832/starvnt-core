@@ -12,6 +12,7 @@
     "seed": "node scripts/seed-super-admin.js",
     "seed:vendor": "node scripts/seed-vendor.js",
     "seed:vendors": "node scripts/seed-real-vendors.js",
+    "qa:activate-vendor-fixtures": "node scripts/activate-qa-vendor-fixtures.js",
     "seed:customer-demo": "node scripts/seed-customer-demo.js",
     "seed:app-review": "node scripts/create-app-review-account.js",
     "backup:db": "node scripts/backup-db.js"
@@ -31,7 +32,6 @@
     "multer": "^2.4.0",
     "nodemailer": "^10.0.10",
     "openai": "^7.21.0",
-    "pdfkit": "^0.20.2",
     "qrcode": "^1.5.4",
     "resend": "^6.28.1",
     "sharp": "^0.35.5"

@@ -51,9 +51,9 @@ export async function createQuote({
   category = '',
 }) {
   const initialStatus = ['DRAFT', 'SUBMITTED'].includes(status) ? status : 'DRAFT';
-  if (initialStatus === 'SUBMITTED') await assertQuoteSubmission({ vendor: vendorId, vendorService: vendorServiceId, eventDate, serviceLocation, category, advancePolicy });
+  if (initialStatus === 'SUBMITTED') advancePolicy = await assertQuoteSubmission({ vendor: vendorId, vendorService: vendorServiceId, eventDate, serviceLocation, category, advancePolicy });
 
-  const quote = await Quote.create({
+  const quote = new Quote({
     opportunity: opportunityId || null,
     vendor: vendorId,
     customer: customerId,
@@ -102,8 +102,8 @@ export async function createQuote({
 
   if (initialStatus === 'SUBMITTED') {
     quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown);
-    await quote.save();
   }
+  await quote.save();
   return quote;
 }
 

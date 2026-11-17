@@ -1,3 +1,4 @@
+import { commercialSnapshot } from '../src/external/services/commercialSnapshot.service.js';
 import { before, after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -41,7 +42,6 @@ import { PortfolioItem } from '../src/external/models/PortfolioItem.js';
 import { VendorResource } from '../src/external/models/VendorResource.js';
 import { Quote } from '../src/external/models/Quote.js';
 import { transitionQuote } from '../src/external/services/quoteStateMachine.service.js';
-import { commercialSnapshot } from '../src/external/services/commercialSnapshot.service.js';
 import { EventRequirement } from '../src/customer/models/index.js';
 import { applyServiceStatement } from '../src/customer/services/events.service.js';
 import { AdminAuditLog } from '../src/admin/models/AdminAuditLog.js';
@@ -54,7 +54,7 @@ import { createQuote as createVendorQuote } from '../src/external/services/quote
 import { recordLifecycleEventMessage } from '../src/customer/services/circle.service.js';
 import { EventMessage } from '../src/customer/models/index.js';
 import { withVendorSchedule } from '../src/external/services/scheduleLock.js';
-import { devToolsAllowed } from '../src/config.js';
+import { config, devToolsAllowed } from '../src/config.js';
 import { CorePolicyRevision } from '../src/admin/models/CorePolicyRevision.js';
 import { getCommercialPolicyForCategory } from '../src/common/policyResolver.js';
 import { calculateEligibleAdvanceRefund } from '../src/common/policyResolver.js';
@@ -230,6 +230,22 @@ test('customer catalogue finds approved active services across Kapkote and Bages
   const rows = await listBookableServices({ city: 'Kapkote, Bageshwar' });
   assert.ok(rows.some(row => String(row.service._id) === String(service._id)));
   assert.equal((await findBookableService(service._id, { city: 'Bageshwar' }))?.service?._id.toString(), service._id.toString());
+});
+
+test('customer location search is authenticated and ignores too-short queries without contacting a provider', async () => {
+  const result = await request(app).get('/api/customer/locations/search?q=k').set(auth(customerToken)).expect(200);
+  assert.deepEqual(result.body.places, []);
+  await request(app).get('/api/customer/locations/search?q=Kapkote').expect(401);
+});
+
+test('manual customer events reject city-only locations without a selected map point', async () => {
+  const result = await request(app).post('/api/customer/events').set(auth(customerToken)).send({
+    eventType: 'wedding',
+    eventDate: '2027-10-01',
+    city: 'Kapkote',
+  }).expect(400);
+  assert.equal(result.body.error, 'MISSING_DETAILS');
+  assert.ok(result.body.missing.some((item) => item.field === 'location.coordinates'));
 });
 
 test('approving a quote does not manufacture a confirmed booking or verified payment', async () => {
@@ -601,27 +617,36 @@ test('feedback and notification preferences are validated and product outcomes r
   await request(app).get('/api/admin/reports/product-metrics').set(auth(restrictedAdminToken)).expect(403);
 });
 
-test('customer feedback persists, updates once and is visible only to permitted administrators', async () => {
-  const event = await CustomerEvent.create({ customer: customer._id, title: 'Feedback persistence event', status: 'planning' });
-  const url = `/api/customer/feedback?kind=EVENT&reference=${event._id}`;
-  assert.equal((await request(app).get(url).set(auth(customerToken)).expect(200)).body.feedback, null);
-  await request(app).post('/api/customer/feedback').set(auth(customerToken)).send({ kind: 'EVENT', reference: event._id, score: 2 }).expect(200);
-  assert.equal((await request(app).get(url).set(auth(customerToken)).expect(200)).body.feedback.score, 2);
-  await request(app).post('/api/customer/feedback').set(auth(customerToken)).send({ kind: 'EVENT', reference: event._id, score: 5 }).expect(200);
-  assert.equal((await request(app).get(url).set(auth(customerToken)).expect(200)).body.feedback.score, 5);
-  const rows = (await request(app).get('/api/admin/reports/customer-feedback').set(auth(adminToken)).expect(200)).body.responses.filter(row => row.reference === String(event._id));
-  assert.equal(rows.length, 1); assert.equal(rows[0].score, 5); assert.equal(rows[0].referenceTitle, event.title);
-  assert.equal(rows[0].customerName, customer.fullName); assert.equal('email' in rows[0], false);
-  await request(app).get('/api/admin/reports/customer-feedback').set(auth(restrictedAdminToken)).expect(403);
-  await request(app).get('/api/admin/reports/customer-feedback').set(auth(customerToken)).expect(401);
-  await request(app).get(url).expect(401);
-  const other = await CustomerEvent.create({ customer: new mongoose.Types.ObjectId(), title: 'Private event' });
-  for (const method of ['get', 'post']) {
-    const req = method === 'get' ? request(app).get(`/api/customer/feedback?kind=EVENT&reference=${other._id}`) : request(app).post('/api/customer/feedback').send({ kind: 'EVENT', reference: other._id, score: 3 });
-    await req.set(auth(customerToken)).expect(404);
+test('customer notification preferences report only an active push registration for the signed-in account', async () => {
+  const original = config.pushEnabled;
+  const user = await ExternalUser.create({ email: `push-preferences-${key()}@unified.test`, fullName: 'Push Preferences', accountType: 'CUSTOMER' });
+  const session = await ExternalSession.create({ user: user._id, refreshTokenHash: key(), expiresAt: new Date(Date.now() + 3600000) });
+  const token = signExternalAccessToken(user, session._id);
+  const prefs = () => request(app).get('/api/customer/notification-preferences').set(auth(token)).expect(200);
+  const device = await PushSubscription.create({
+    installationId: key(), bindingId: key(), token: key(),
+    domain: 'external', surface: 'CUSTOMER',
+    ownerId: customer._id, audienceId: customer._id, sessionId: new mongoose.Types.ObjectId(),
+    boundAt: new Date(), expiresAt: new Date(Date.now() + 3600000),
+  });
+
+  try {
+    config.pushEnabled = true;
+    assert.equal((await prefs()).body.pushAvailable, false);
+    await PushSubscription.updateOne({ _id: device._id }, { ownerId: user._id, audienceId: user._id, sessionId: session._id });
+    const active = await prefs();
+    assert.equal(active.body.pushAvailable, true);
+    assert.ok(active.body.policy);
+
+    config.pushEnabled = false;
+    assert.equal((await prefs()).body.pushAvailable, false);
+    config.pushEnabled = true;
+    await PushSubscription.updateOne({ _id: device._id }, { enabled: false });
+    assert.equal((await prefs()).body.pushAvailable, false);
+  } finally {
+    config.pushEnabled = original;
+    await PushSubscription.deleteOne({ _id: device._id });
   }
-  await request(app).get('/api/customer/feedback?kind=EVENT&reference=invalid').set(auth(customerToken)).expect(400);
-  for (const score of [0, 6, 2.5, '5']) await request(app).post('/api/customer/feedback').set(auth(customerToken)).send({ kind: 'EVENT', reference: event._id, score }).expect(400);
 });
 
 test('support actions consistently use the configured international number', () => {

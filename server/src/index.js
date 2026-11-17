@@ -42,9 +42,6 @@ async function main() {
         `  external domain  → aud=${config.audience}   db=${databaseName(config.mongoUriExternal)}\n` +
         `  admin domain     → aud=${config.adminAudience} db=${databaseName(config.mongoUriAdmin)}`,
     );
-    setInterval(() => {
-      console.log(`[starvnt] server is running on :${config.port}`);
-    }, 8000);
     startProductionKeepAlive();
     startCoreWorkers();
   });

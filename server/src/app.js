@@ -1,3 +1,9 @@
+import revenueCrmRoutes from './admin/routes/revenueCrm.routes.js';
+import { adminAgreementRoutes } from './foundation/agreement.routes.js';
+import vendorCollaborationRoutes from './external/routes/eventCollaboration.routes.js';
+import adminModerationRoutes from './admin/routes/eventModeration.routes.js';
+import adminWorkflowRoutes from './admin/routes/bookingWorkflow.routes.js';
+import vendorWorkflowRoutes from './external/routes/bookingWorkflow.routes.js';
 import express from 'express';
 import { customerDiscovery, adminDiscoveryRewards } from './experience/discoveryRewards.routes.js';
 import { experiencePublicRoutes, experienceCustomerRoutes, experienceAdminRoutes } from './experience/routes.js';
@@ -19,7 +25,6 @@ import { adminMeetingRoutes } from './learning/meetingRoutes.js';
 import aiRoutes from './external/routes/ai.routes.js';
 import { requireExternalAuth, requireAccountType } from './external/middleware/requireExternalAuth.js';
 import { customerRouter, auraRouter, internalRouter, webhookRouter } from './customer/routes/index.js';
-import { publicEventMediaRoutes } from './customer/routes/eventMedia.routes.js';
 
 import adminAuthRoutes from './admin/routes/auth.routes.js';
 import adminAvailabilityRoutes from './admin/routes/availability.routes.js';
@@ -38,7 +43,6 @@ import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
 import { metricsMiddleware, renderPrometheusMetrics } from './metrics.js';
 import { pushRoutes } from './notifications/push.routes.js';
-import { adminProposals, customerProposals } from './proposals/routes.js';
 
 export function createApp() {
   const app = express();
@@ -114,8 +118,6 @@ export function createApp() {
   });
   // Customer App + Aura+ (events, plan, chat)
   app.use('/api/customer', customerRouter);
-  app.use('/api/event-publications', publicEventMediaRoutes);
-  app.use('/api/customer/proposals', customerProposals);
   app.use('/api/customer', foundationCustomerRoutes);
   app.use('/api/customer', experienceCustomerRoutes);
   app.use('/api/customer', customerDiscovery);
@@ -123,6 +125,11 @@ export function createApp() {
   app.use('/api/aura', auraRouter);
   app.use('/api/internal', internalRouter);
 
+  app.use('/api/admin/crm', revenueCrmRoutes);
+  app.use('/api/vendor/collaboration', vendorCollaborationRoutes);
+  app.use('/api/admin/collaboration', adminModerationRoutes);
+  app.use('/api/vendor/workflow', vendorWorkflowRoutes);
+  app.use('/api/admin/workflow', adminWorkflowRoutes);
   app.use('/api/vendor', vendorRoutes);
   app.use('/api/commercial', commercialRoutes);
   app.use('/api', transactionRoutes);
@@ -132,8 +139,8 @@ export function createApp() {
 
   // ── INTERNAL ADMIN domain: separate auth + RBAC ───────────────────────────
   app.use('/api/admin/auth', adminAuthRoutes);
-  app.use('/api/admin/proposals', adminProposals);
   app.use('/api/admin/foundation', foundationAdminRoutes);
+  app.use('/api/admin/vendor-compliance', adminAgreementRoutes);
   app.use('/api/admin/experience', experienceAdminRoutes);
   app.use('/api/admin/discovery-rewards', adminDiscoveryRewards);
   app.use('/api/admin/academy', adminLearningRoutes);

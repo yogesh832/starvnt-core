@@ -2,13 +2,10 @@
 export const eventStorageKey = (customerId) => customerId ? `starvnt_current_event:${customerId}` : null;
 
 export function routeEventId(pathname, search = '') {
-  if (['/customer/aura', '/customer/documents', '/customer/favorites', '/customer/updates', '/customer/proposals', '/customer/reminders'].includes(pathname)) {
-    const eventId = new URLSearchParams(search).get('event');
-    return pathname === '/customer/favorites' && eventId === 'global' ? null : eventId || null;
-  }
+  if (pathname === '/customer/aura') return new URLSearchParams(search).get('event') || null;
   const match = /^\/customer\/events\/([^/]+)(?:\/|$)/.exec(pathname);
   if (!match) return null;
-  if (match[1] === 'new') return new URLSearchParams(search).get('draft') || null;
+  if (match[1] === 'new') return null;
   try { return decodeURIComponent(match[1]); } catch { return null; }
 }
 

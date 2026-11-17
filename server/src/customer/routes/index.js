@@ -1,3 +1,4 @@
+import rateLimit from 'express-rate-limit';
 import { handleRazorpayBankWebhook } from '../../external/services/razorpayBankVerification.service.js';
 import { readCustomerFeedback, saveCustomerFeedback } from '../../common/customerFeedback.service.js';
 import { profilePictureRoutes } from './profilePicture.routes.js';
@@ -16,6 +17,8 @@ import * as i from '../controllers/internal.controller.js';
 /** /api/customer/* — Customer App API. Every route is customer-authenticated. */
 export const customerRouter = Router();
 customerRouter.use(requireCustomer);
+const locationSearchLimiter = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: 'draft-7', legacyHeaders: false });
+customerRouter.get('/locations/search', locationSearchLimiter, h(c.searchLocations));
 customerRouter.use(eventCircleRoutes);
 customerRouter.use(eventMediaRoutes);
 customerRouter.use(bookingWorkflowRoutes);

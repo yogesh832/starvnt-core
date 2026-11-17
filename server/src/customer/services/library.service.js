@@ -3,7 +3,6 @@ import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { Booking, CustomerContractDocument, CustomerEvent, CustomerFavorite, EventRequirement, Payment } from '../models/index.js';
 import { badRequest, conflict, notFound } from '../utils/http.js';
 import crypto from 'node:crypto';
-import { EventProposal } from '../../proposals/models.js';
 
 const isObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 function secureFileUrl(value) {
@@ -99,14 +98,13 @@ function contractDocument(contract, event, booking, coreBooking) {
 
 export async function listDocuments(customerId, filters = {}) {
   if (filters.eventId && (!isObjectId(filters.eventId) || !await CustomerEvent.exists({ _id: filters.eventId, customer: customerId }))) throw notFound('Event not found');
-  if (filters.type && !['receipt', 'invoice', 'contract', 'proposal'].includes(filters.type)) throw badRequest('INVALID_DOCUMENT_TYPE', 'Choose a supported document type.');
-  const [events, bookings, payments, coreBookings, contracts, proposals] = await Promise.all([
+  if (filters.type && !['receipt', 'invoice', 'contract'].includes(filters.type)) throw badRequest('INVALID_DOCUMENT_TYPE', 'Choose a supported document type.');
+  const [events, bookings, payments, coreBookings, contracts] = await Promise.all([
     CustomerEvent.find({ customer: customerId }).lean(),
     Booking.find({ customer: customerId }).lean(),
     Payment.find({ customer: customerId, status: { $in: ['paid', 'verified'] } }).sort({ createdAt: -1 }).lean(),
     CoreBooking.find({ customerId }).sort({ createdAt: -1 }).lean(),
     CustomerContractDocument.find({ customer: customerId, status: { $ne: 'ARCHIVED' } }).sort({ createdAt: -1 }).lean(),
-    EventProposal.find({ customer: customerId, state: 'SENT' }).sort({ createdAt: -1 }).lean(),
   ]);
   const eventById = new Map(events.map((event) => [asId(event), event]));
   const bookingByPayment = new Map(bookings.map((booking) => [asId(booking.payment), booking]));
@@ -117,10 +115,9 @@ export async function listDocuments(customerId, filters = {}) {
     ...contracts.map((contract) => contractDocument(contract, eventById.get(asId(contract.event)) || eventById.get(asId(coreBookingById.get(asId(contract.coreBooking))?.customerEvent)), bookingById.get(asId(contract.booking)), coreBookingById.get(asId(contract.coreBooking)))),
     ...coreBookings.map(core => coreInvoice(core, eventById.get(asId(core.customerEvent)))),
     ...payments.map((payment) => paymentReceipt(payment, eventById.get(asId(payment.event)), bookingByPayment.get(asId(payment)))),
-    ...proposals.map(p => ({ id: `proposal_${asId(p)}`, type: 'proposal', title: p.frozenSnapshot?.manifest?.title || 'Event proposal', event: serializeEvent(eventById.get(asId(p.event))), version: p.version, source: 'proposal', immutable: true, status: p.response?.decision || p.state, amount: p.frozenSnapshot?.totalAmount ?? null, issuedAt: p.history?.find(row => row.action === 'send')?.at || null, canDownload: Boolean(p.pdfHash), proposalId: asId(p), downloadUrl: `/api/customer/documents/proposal_${asId(p)}/download` })),
   ];
   documents.sort((a, b) => new Date(b.issuedAt || 0) - new Date(a.issuedAt || 0));
-  return { documents: documents.filter(doc => (!filters.eventId || doc.event?.id === String(filters.eventId)) && (!filters.type || doc.type === filters.type)).map(doc => ({ source: doc.type === 'proposal' ? 'proposal' : doc.type === 'contract' ? 'customer_link' : 'saved_record', immutable: doc.type === 'proposal', version: null, ...doc })) };
+  return { documents: documents.filter(doc => (!filters.eventId || doc.event?.id === String(filters.eventId)) && (!filters.type || doc.type === filters.type)).map(doc => ({ source: doc.type === 'contract' ? 'customer_link' : 'saved_record', immutable: false, version: null, ...doc })) };
 }
 
 export async function createContract(customerId, body = {}) {
@@ -294,14 +291,6 @@ export function buildSimplePdf(lines) {
 }
 
 export async function documentPdf(customerId, documentId) {
-  if (documentId.startsWith('proposal_')) {
-    const id = documentId.slice('proposal_'.length);
-    if (!isObjectId(id)) throw notFound('Document not found');
-    const proposal = await EventProposal.findOne({ _id: id, customer: customerId, state: 'SENT' }).select('+pdf');
-    if (!proposal) throw notFound('Document not found');
-    if (!proposal.pdf || !proposal.pdfHash || crypto.createHash('sha256').update(proposal.pdf).digest('hex') !== proposal.pdfHash) throw conflict('PDF_UNAVAILABLE', 'The exact proposal PDF is unavailable. Request a new version.');
-    return { filename: `STARVNT-proposal-v${proposal.version}.pdf`, buffer: proposal.pdf };
-  }
   if (documentId.startsWith('contract_')) {
     const id = documentId.replace('contract_', '');
     if (!isObjectId(id)) throw notFound('Document not found');

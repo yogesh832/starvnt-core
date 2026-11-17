@@ -115,8 +115,8 @@ export async function verifyPan(pan, vendorName, options = {}) {
   const apiKey = options.apiKey || config.panApiKey;
   const baseUrl = options.baseUrl || config.panApiBaseUrl;
 
-  // Use mock registry in test, mock mode, or dev fallback when API key is not set
-  const useMock = options.mock ?? (config.panMockEnabled || !apiKey || MOCK_PAN_REGISTRY[normalizedPan] || options.forceMock);
+  // Explicit development samples remain unverified; missing credentials never select a mock.
+  const useMock = process.env.NODE_ENV !== 'production' && (options.mock === true || options.forceMock === true || config.panMockEnabled);
   if (useMock) {
     const mock = MOCK_PAN_REGISTRY[normalizedPan] || {
       legalName: vendorName ? vendorName.toUpperCase() : 'REGISTERED ENTERPRISE PRIVATE LIMITED',
@@ -130,7 +130,10 @@ export async function verifyPan(pan, vendorName, options = {}) {
     };
     const match = compareBusinessNames(vendorName, mock.legalName, mock.tradeName);
     return {
-      ok: true,
+      ok: false,
+      providerVerified: false,
+      error: 'DEVELOPMENT_SAMPLE_NOT_VERIFICATION',
+      message: 'Development sample data cannot verify a business identity',
       pan: normalizedPan,
       entityChar,
       entityType: mock.entityType || entityType,
@@ -147,7 +150,7 @@ export async function verifyPan(pan, vendorName, options = {}) {
     };
   }
 
-  if (!apiKey && !options.mock) {
+  if (!apiKey) {
     return {
       ok: false,
       pan: normalizedPan,
@@ -182,7 +185,7 @@ export async function verifyPan(pan, vendorName, options = {}) {
       };
     }
 
-    const response = await fetch(url, reqOptions);
+    const response = await fetch(url, { ...reqOptions, signal: AbortSignal.timeout(15000) });
     const json = await response.json().catch(() => ({}));
 
     if (!response.ok) {
@@ -202,7 +205,7 @@ export async function verifyPan(pan, vendorName, options = {}) {
     // Process gstinapi.in response shape
     let legalName = '';
     let tradeName = '';
-    let panStatus = 'VALID';
+    let panStatus = '';
     let taxpayerType = '';
     let registrationDate = '';
     let address = '';
@@ -213,7 +216,7 @@ export async function verifyPan(pan, vendorName, options = {}) {
       const data = bestRecord.data || bestRecord;
       legalName = pick(data, ['legal_name', 'legalName', 'lgnm', 'name']);
       tradeName = pick(data, ['trade_name', 'tradeName', 'tradeNam']);
-      panStatus = pick(data, ['status', 'sts']) || 'ACTIVE';
+      panStatus = pick(data, ['status', 'sts']);
       taxpayerType = pick(data, ['taxpayer_type', 'taxpayerType', 'dty']);
       registrationDate = pick(data, ['registration_date', 'rgdt']);
       address = data.address || '';
@@ -222,13 +225,13 @@ export async function verifyPan(pan, vendorName, options = {}) {
       const root = json.data || json.result;
       legalName = pick(root, ['registered_name', 'legal_name', 'company_name', 'name', 'registeredName', 'fullName']);
       tradeName = pick(root, ['trade_name', 'tradeName', 'brandName']);
-      panStatus = pick(root, ['status', 'pan_status', 'panStatus']) || 'VALID';
+      panStatus = pick(root, ['status', 'pan_status', 'panStatus']);
       taxpayerType = pick(root, ['category', 'taxpayer_type', 'entity_type']) || entityType;
       address = root.address || '';
     } else if (json.legal_name || json.name || json.registered_name) {
       legalName = pick(json, ['legal_name', 'registered_name', 'name', 'company_name']);
       tradeName = pick(json, ['trade_name']);
-      panStatus = json.status || 'VALID';
+      panStatus = json.status || '';
     }
 
     if (!legalName && !tradeName) {
@@ -246,10 +249,19 @@ export async function verifyPan(pan, vendorName, options = {}) {
       };
     }
 
-    const match = compareBusinessNames(vendorName, legalName, tradeName);
+    if (!['ACTIVE', 'VALID', 'VERIFIED'].includes(String(panStatus).toUpperCase())) return { ok: false, providerVerified: false, pan: normalizedPan, legalName, tradeName, panStatus, error: 'PAN_PROVIDER_RESULT_UNVERIFIED', raw: json, checkedAt };
+
+    const canonicalLegalName = value => String(value || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    const comparison = compareBusinessNames(vendorName, legalName);
+    // Business-name matching ignores corporate suffixes. PAN identity must not
+    // silently treat a different entity suffix as an exact legal-name match.
+    const match = canonicalLegalName(vendorName) === canonicalLegalName(legalName)
+      ? { matched: true, confidence: 'EXACT' }
+      : comparison.confidence === 'EXACT' ? { matched: false, confidence: 'HIGH' } : comparison;
 
     return {
       ok: true,
+      providerVerified: true,
       pan: normalizedPan,
       entityChar,
       entityType,
@@ -297,46 +309,17 @@ export async function discoverGstinsByPan(pan, options = {}) {
     };
   }
 
-  // Built-in mock map for GSTIN discovery
-  const MOCK_GSTIN_MAP = {
-    AABCS1234D: [
-      { gstin: '27AABCS1234D1Z5', state: 'Maharashtra', status: 'ACTIVE', legalName: 'STARVENT ENTERTAINMENT PRIVATE LIMITED' },
-    ],
-    AAACT1206D: [
-      { gstin: '33AAACT1206D1Z2', state: 'Tamil Nadu', status: 'ACTIVE', legalName: 'CENTRAL WAREHOUSING CORPORATION' },
-    ],
-    '19ABCDE1234F1Z5': [
-      { gstin: '19ABCDE1234F1Z5', state: 'West Bengal', status: 'ACTIVE', legalName: 'XYZ Events Pvt Ltd' },
-    ],
-  };
-
   const panResult = await verifyPan(normalizedPan, '', options);
-  if (!panResult.ok && panResult.error === 'INVALID_PAN_FORMAT') {
-    return panResult;
+  if (!panResult.ok) {
+    if (panResult.error === 'NO_RECORDS_FOUND' && Array.isArray(panResult.raw?.results) && !panResult.raw.results.length) return { ok: true, found: false, providerVerified: true, pan: normalizedPan, gstins: [], message: 'The provider returned no GST registrations for this PAN.', checkedAt };
+    return { ok: false, found: null, providerVerified: false, pan: normalizedPan, gstins: [], error: panResult.error, message: panResult.message || 'PAN or GST discovery requires provider review.', checkedAt };
   }
-
-  const mockList = MOCK_GSTIN_MAP[normalizedPan];
-  if (mockList && mockList.length > 0) {
-    return {
-      ok: true,
-      found: true,
-      pan: normalizedPan,
-      gstins: mockList,
-      legalName: panResult.legalName || mockList[0].legalName,
-      message: `${mockList.length} GST registration(s) found for PAN ${normalizedPan}.`,
-      checkedAt,
-    };
-  }
-
-  // If live API or no mock records found
-  return {
-    ok: true,
-    found: false,
-    pan: normalizedPan,
-    gstins: [],
-    legalName: panResult.legalName || '',
-    message: 'No GST registration found for this PAN.',
-    checkedAt,
-  };
+  const records = panResult.raw?.results;
+  const gstins = Array.isArray(records) ? records.map(record => record.data || record).map(record => ({
+    gstin: pick(record, ['gstin', 'gstin_number', 'gstinNumber']).toUpperCase(),
+    state: pick(record, ['state', 'state_name']), status: pick(record, ['status', 'sts']),
+    legalName: pick(record, ['legal_name', 'legalName', 'lgnm']),
+  })).filter(record => /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][A-Z0-9]Z[A-Z0-9]$/.test(record.gstin) && record.gstin.slice(2, 12) === normalizedPan) : [];
+  if (!gstins.length) return { ok: false, found: null, providerVerified: false, pan: normalizedPan, gstins: [], error: 'GST_DISCOVERY_UNAVAILABLE', message: 'The configured provider did not return usable GST registration records. Verify a supplied GSTIN separately.', checkedAt };
+  return { ok: true, found: true, providerVerified: true, source: 'PAN_PROVIDER', pan: normalizedPan, gstins, legalName: panResult.legalName, checkedAt };
 }
-

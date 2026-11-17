@@ -1,4 +1,3 @@
-import { authAcquisitionReceipt } from '../services/vendorAcquisition.service.js';
 import { findPhoneIdentity, recordVerifiedIdentity, identityConflict } from '../../foundation/identity.service.js';
 import { rejectPortalMismatch, portalMismatch, requestedSurface } from '../services/portalPolicy.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
@@ -33,28 +32,9 @@ import {
   verifyWidgetAccessToken,
   normalizePhone,
 } from "../services/otp.service.js";
-
 import { checkSignupAcceptance, signupDocuments } from "../../foundation/signupDocuments.js";
 
 const router = Router();
-
-router.get("/signup-documents", (req, res) => {
-  const result = signupDocuments(req.query.accountType);
-  if (!result) return res.status(400).json({ error: "INVALID_ACCOUNT_TYPE" });
-  return res.set("Cache-Control", "no-store").json(result);
-});
-
-async function createSignupAccount(req, fields) {
-  const acceptance = checkSignupAcceptance(fields.accountType, req.body?.signupAcceptance);
-  if (acceptance.error) {
-    throw Object.assign(new Error(acceptance.message), {
-      status: acceptance.status,
-      code: acceptance.error,
-    });
-  }
-  req.acquisitionCreated = true;
-  return ExternalUser.create({ ...fields, signupAcceptance: acceptance.record });
-}
 router.use(nativeAuthTransport(config.refreshCookieName));
 router.use((req, res, next) => {
   if (req.body?.accountType && !['CUSTOMER', 'VENDOR'].includes(req.body.accountType)) return res.status(400).json({ error: 'INVALID_ACCOUNT_TYPE' });
@@ -71,6 +51,23 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "RATE_LIMITED" },
 });
+
+router.get("/signup-documents", (req, res) => {
+  const result = signupDocuments(req.query.accountType);
+  if (!result) return res.status(400).json({ error: "INVALID_ACCOUNT_TYPE" });
+  return res.set("Cache-Control", "no-store").json(result);
+});
+
+async function createSignupAccount(req, fields) {
+  const acceptance = checkSignupAcceptance(fields.accountType, req.body?.signupAcceptance);
+  if (acceptance.error) {
+    throw Object.assign(new Error(acceptance.message), {
+      status: acceptance.status,
+      code: acceptance.error,
+    });
+  }
+  return ExternalUser.create({ ...fields, signupAcceptance: acceptance.record });
+}
 
 function refreshCookieOptions() {
   return {
@@ -108,7 +105,6 @@ router.post("/dev-auth", async (req, res, next) => {
     // Quick sign-in creates only the requested development identity. It must
     // never reseed the shared vendor catalog as a side effect of a login.
     if (!user) {
-      req.acquisitionCreated = true;
       user = await ExternalUser.create({
         sourceAttribution: { entryPoint: "AUTH_API", authenticationMethod: req.path, capturedAt: new Date() },
         email,
@@ -213,14 +209,12 @@ async function createSession(user, req, accountType = user.accountType) {
     expiresAt,
     accountType,
   });
-  session.$locals.acquisition = await authAcquisitionReceipt(user, session, req).catch(() => undefined);
   user.$locals.activeAccountType = accountType;
   return { session, refreshToken };
 }
 
 function issueTokens(user, session) {
   return {
-    ...(session.$locals.acquisition ? { acquisition: session.$locals.acquisition } : {}),
     accessToken: signExternalAccessToken(
       user,
       session._id,

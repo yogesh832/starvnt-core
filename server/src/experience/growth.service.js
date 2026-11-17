@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { repeatBookingEvidence } from './repeatCustomer.js';
 import { CoreBooking } from '../admin/models/CoreBooking.js';
 import { CustomerEvent } from '../customer/models/index.js';
 import { VendorBlockout } from '../external/models/VendorBlockout.js';
@@ -16,7 +17,7 @@ import { withVendorSchedule } from '../external/services/scheduleLock.js';
 
 export async function vendorDirectory(vendor) {
   const [core, external, reviews] = await Promise.all([
-    CoreBooking.find({ vendorId: vendor }).select('_id customerId customerName serviceName eventDate bookingStatus executionStatus').sort({ createdAt: -1 }).limit(501).lean(),
+    CoreBooking.find({ vendorId: vendor }).select('_id source customerBookingId quoteId reservationId customerId customerName serviceName eventDate bookingStatus executionStatus paymentStatus cancellation.refundStatus financeOperations.kind financeOperations.status financeOperations.amount').sort({ createdAt: -1 }).limit(501).lean(),
     VendorBlockout.find({ vendor, recordType: 'EXTERNAL_COMMITMENT' }).select('_id date external externalBooking.lifecycle externalBooking.acquisitionChannel').sort({ createdAt: -1 }).limit(501).lean(),
     VendorReview.find({ vendor }).select('_id customer booking rating status source feedbackPermissions').limit(1000).lean(),
   ]);
@@ -31,10 +32,13 @@ export async function vendorDirectory(vendor) {
   }
   for (const r of rows.values()) {
     r.reviews = reviews.filter(review => r.bookings.some(b => String(b.booking) === String(review.booking))).map(review => ({ _id: review._id, rating: review.rating, status: review.status, source: review.source }));
-    r.repeatCustomer = Boolean(r.customerId && r.bookings.length > 1);
+    const qualifying = r.customerId ? repeatBookingEvidence(core.slice(0, 500).filter(b => String(b.customerId) === String(r.customerId))) : [];
+    r.repeatCustomerEvidence = { ruleVersion: 'CORE_COMPLETED_V1', qualifyingBookings: qualifying, qualifyingBookingCount: qualifying.length, complete: core.length <= 500, computedAt: new Date() };
+    r.repeatCustomer = qualifying.length >= 2 ? true : core.length > 500 ? null : false;
+    r.repeatCustomerStatus = r.repeatCustomer === null ? 'UNKNOWN_PARTIAL_DATA' : r.repeatCustomer ? 'REPEAT' : 'NOT_REPEAT';
     r.campaignEligible = Boolean(r.customerId && await communicationAllowed(r.customerId, { purpose: 'MARKETING', channel: 'IN_APP', vendorId: vendor }));
   }
-  return { customers: [...rows.values()], truncated: core.length > 500 || external.length > 500, limitPerSource: 500, contactsExported: false };
+  return { customers: [...rows.values()], truncated: core.length > 500 || external.length > 500, coreTruncated: core.length > 500, limitPerSource: 500, contactsExported: false };
 }
 export async function customerRelationship(customer) {
   const [reviews, consents, interests, referral] = await Promise.all([
@@ -149,7 +153,7 @@ export async function vendorGrowth(vendor) {
   const enquiries = await Opportunity.countDocuments({ vendor });
   const campaignIds = await GrowthCampaign.distinct('_id', { vendor });
   const usefulness = await CampaignDelivery.find({ campaign: { $in: campaignIds }, state: 'DELIVERED' }).select('helpful').lean();
-  return { customers: directory.customers.length, directoryTruncated: directory.truncated, repeatCustomers: directory.customers.filter(c => c.repeatCustomer).length, optedInCustomers: directory.customers.filter(c => c.campaignEligible).length,
+  return { customers: directory.customers.length, directoryTruncated: directory.truncated, repeatCustomers: directory.coreTruncated ? null : directory.customers.filter(c => c.repeatCustomer === true).length, optedInCustomers: directory.customers.filter(c => c.campaignEligible).length,
     starvntBookings: core.filter(b => b.bookingStatus === 'CONFIRMED').length, externalBookings: external.length, enquiries,
     campaignUsefulness: { responses: usefulness.filter(d => d.helpful != null).length, helpful: usefulness.filter(d => d.helpful === true).length }, qrReviews: reviews.length, satisfaction: reviews.length ? reviews.reduce((n, r) => n + r.rating, 0) / reviews.length : null, reviewResponseRate: reviews.length ? reviews.filter(r => r.vendorReply?.text).length / reviews.length : null,
     campaigns: await GrowthCampaign.find({ vendor }).select('-requestHash').sort({ createdAt: -1 }).limit(50).lean(), sourceCounts: external.reduce((a, b) => { const s = b.externalBooking?.acquisitionChannel || 'LEGACY_UNKNOWN'; a[s] = (a[s] || 0) + 1; return a; }, {}), revenueIncluded: false };

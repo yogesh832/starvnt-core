@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { isObjectIdOrHexString } from 'mongoose';
 import { v2 as cloudinary } from 'cloudinary';
 import { requireAdminAuth, requireAnyPermission, requirePermission } from '../admin/middleware/requireAdminAuth.js';
-import { LearningLesson, LearningProgress, learningCategories } from './models.js';
+import { LearningLesson, LearningProgress, LearningFeedback, learningCategories } from './models.js';
 
 export const adminLearningRoutes = Router();
 export const vendorLearningRoutes = Router();
@@ -43,7 +43,7 @@ function isoDate(input) {
 }
 
 function visibility(at = new Date()) {
-  return { publishAt: { $lte: at }, rightsReference: { $type: 'string', $ne: '' }, $or: [{ rightsExpiresAt: null }, { rightsExpiresAt: { $gt: at } }] };
+  return { publishAt: { $lte: at }, rightsReference: { $type: 'string', $ne: '' }, $and: [{ $or: [{ state: 'PUBLISHED' }, { state: { $exists: false } }] }, { $or: [{ rightsExpiresAt: null }, { rightsExpiresAt: { $gt: at } }] }] };
 }
 
 function metadata(lesson) {
@@ -59,6 +59,7 @@ function adminView(lesson) {
     ...metadata(lesson), revision: lesson.revision, content: lesson.content, resources: lesson.resources,
     videoId: lesson.videoId, captions: lesson.captions, rightsReference: lesson.rightsReference,
     rightsExpiresAt: lesson.rightsExpiresAt, history: lesson.history,
+    state: lesson.state || (lesson.publishAt ? 'PUBLISHED' : 'DRAFT'),
   };
 }
 
@@ -102,7 +103,7 @@ adminLearningRoutes.post('/', requirePermission('academy.edit'), h(async (req, r
   let row;
   try {
     row = await LearningLesson.findOneAndUpdate(filter, {
-      $setOnInsert: { ...fields, requestHash, history: [{ actor: createdBy, action: 'DRAFT_CREATED', at: new Date(), revision: 1 }] },
+      $setOnInsert: { ...fields, state: 'DRAFT', lastEditedBy: createdBy, requestHash, history: [{ actor: createdBy, action: 'DRAFT_CREATED', at: new Date(), revision: 1 }] },
     }, { upsert: true, new: true });
   } catch (error) {
     if (error.code !== 11000) throw error;
@@ -118,22 +119,45 @@ function expectedRevision(req) {
   return revision;
 }
 
+const canonicalRequest = value => Array.isArray(value) ? value.map(canonicalRequest) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalRequest(value[key])])) : value;
+function actionHash(req, action) {
+  return createHash('sha256').update(JSON.stringify(canonicalRequest({ actor: String(req.admin._id), action, body: req.body }))).digest('hex');
+}
+async function replayLessonAction(req, action) {
+  const row = await LearningLesson.findOne({ _id: lessonId(req), revision: expectedRevision(req) + 1 });
+  const last = row?.history?.at(-1);
+  return last?.requestHash === actionHash(req, action) ? row : null;
+}
+
 async function updateLesson(req, filter, update, action, reason, evidence = {}) {
   const revision = expectedRevision(req);
   const row = await LearningLesson.findOneAndUpdate({ _id: lessonId(req), revision, ...filter }, {
     ...update,
     $inc: { ...update.$inc, revision: 1 },
-    $push: { history: { actor: String(req.admin._id), action, at: new Date(), reason, revision: revision + 1, ...evidence } },
+    $push: { history: { actor: String(req.admin._id), action, at: new Date(), reason, revision: revision + 1, requestHash: actionHash(req, action), ...evidence } },
   }, { new: true, runValidators: true });
-  if (!row) throw fail('LESSON_CHANGED', 'The lesson changed. Reload it before trying again.', 409);
+  if (!row) {
+    const replay = await replayLessonAction(req, action);
+    if (replay) return replay;
+    throw fail('LESSON_CHANGED', 'The lesson changed. Reload it before trying again.', 409);
+  }
   return row;
 }
 
 adminLearningRoutes.put('/:id', requirePermission('academy.edit'), h(async (req, res) => {
   const fields = lessonFields(req.body);
-  const row = await updateLesson(req, { publishAt: null }, {
-    $set: { ...fields, rightsReference: '' }, $unset: { rightsExpiresAt: 1 }, $inc: { contentVersion: 1 },
+  const row = await updateLesson(req, { publishAt: null, state: { $in: ['DRAFT', 'UNPUBLISHED', null] } }, {
+    $set: { ...fields, state: 'DRAFT', lastEditedBy: String(req.admin._id), rightsReference: '' }, $unset: { rightsExpiresAt: 1 }, $inc: { contentVersion: 1 },
   }, 'DRAFT_EDITED');
+  res.json({ lesson: adminView(row) });
+}));
+
+adminLearningRoutes.post('/:id/submit-review', requirePermission('academy.edit'), h(async (req, res) => {
+  const row = await updateLesson(req, { publishAt: null, state: { $in: ['DRAFT', 'UNPUBLISHED', null] } }, { $set: { state: 'REVIEW' } }, 'REVIEW_REQUESTED', text(req.body.reason, 500, true));
+  res.json({ lesson: adminView(row) });
+}));
+adminLearningRoutes.post('/:id/request-changes', requirePermission('academy.publish'), h(async (req, res) => {
+  const row = await updateLesson(req, { state: 'REVIEW' }, { $set: { state: 'DRAFT' } }, 'CHANGES_REQUESTED', text(req.body.reason, 500, true));
   res.json({ lesson: adminView(row) });
 }));
 
@@ -141,8 +165,12 @@ adminLearningRoutes.post('/:id/publication', requirePermission('academy.publish'
   const revision = expectedRevision(req);
   const reason = text(req.body.reason, 500, true);
   const action = req.body.action;
+  if (['WITHDRAW', 'PUBLISH'].includes(action)) {
+    const replay = await replayLessonAction(req, action === 'WITHDRAW' ? 'WITHDRAWN' : 'PUBLICATION_APPROVED');
+    if (replay) return res.json({ lesson: adminView(replay) });
+  }
   if (action === 'WITHDRAW') {
-    const row = await updateLesson(req, { publishAt: { $type: 'date' } }, { $unset: { publishAt: 1 } }, 'WITHDRAWN', reason);
+    const row = await updateLesson(req, { publishAt: { $type: 'date' } }, { $set: { state: 'UNPUBLISHED' }, $unset: { publishAt: 1 } }, 'WITHDRAWN', reason);
     return res.json({ lesson: adminView(row) });
   }
   if (action !== 'PUBLISH') throw fail('INVALID_PUBLICATION_ACTION', 'Choose publish or withdraw.');
@@ -152,11 +180,12 @@ adminLearningRoutes.post('/:id/publication', requirePermission('academy.publish'
   if (rightsExpiresAt && rightsExpiresAt <= Math.max(Date.now(), publishAt.getTime())) {
     throw fail('RIGHTS_EXPIRED', 'The rights must be valid when the lesson is available.');
   }
-  const draft = await LearningLesson.findOne({ _id: lessonId(req), revision, publishAt: null }).lean();
+  const draft = await LearningLesson.findOne({ _id: lessonId(req), revision, publishAt: null, state: 'REVIEW' }).lean();
   if (!draft) throw fail('LESSON_CHANGED', 'The draft changed. Reload it before publishing.', 409);
+  if ([draft.createdBy, draft.lastEditedBy].includes(String(req.admin._id))) throw fail('INDEPENDENT_REVIEW_REQUIRED', 'A different authorized publisher must review and publish this lesson.', 403);
   if (draft.videoId) await requirePrivateVideo(draft.videoId);
-  const row = await updateLesson(req, { publishAt: null }, {
-    $set: { publishAt, rightsReference, rightsExpiresAt },
+  const row = await updateLesson(req, { publishAt: null, state: 'REVIEW' }, {
+    $set: { state: 'PUBLISHED', publishAt, rightsReference, rightsExpiresAt },
   }, 'PUBLICATION_APPROVED', reason, {
     rightsReference, rightsExpiresAt, publishAt, contentVersion: draft.contentVersion, videoId: draft.videoId,
   });
@@ -187,7 +216,21 @@ vendorLearningRoutes.get('/', h(async (req, res) => {
 }));
 vendorLearningRoutes.get('/:id', h(async (req, res) => {
   const lesson = await currentLesson(req);
-  res.json({ lesson: { ...metadata(lesson), content: lesson.content, resources: lesson.resources, captions: lesson.captions } });
+  const feedback = await LearningFeedback.findOne({ vendor: req.vendorId, lesson: lesson._id, contentVersion: lesson.contentVersion }).sort({ createdAt: -1, _id: -1 }).select('rating comment createdAt -_id').lean();
+  res.json({ lesson: { ...metadata(lesson), content: lesson.content, resources: lesson.resources, captions: lesson.captions }, feedback });
+}));
+vendorLearningRoutes.post('/:id/feedback', h(async (req, res) => {
+  const lesson = await currentLesson(req);
+  if (req.body.contentVersion !== lesson.contentVersion) throw fail('LESSON_CHANGED', 'Reopen the current lesson before sending feedback.', 409);
+  const rating = req.body.rating, comment = text(req.body.comment, 1500), requestKey = text(req.body.requestKey, 100, true);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5 || requestKey.length < 8) throw fail('INVALID_FEEDBACK', 'Choose a rating from 1 to 5 and provide a request key.');
+  const requestHash = createHash('sha256').update(JSON.stringify({ rating, comment })).digest('hex');
+  const filter = { vendor: req.vendorId, lesson: lesson._id, contentVersion: lesson.contentVersion, requestKey };
+  let row;
+  try { row = await LearningFeedback.findOneAndUpdate(filter, { $setOnInsert: { actor: String(req.externalUser._id), rating, comment, requestHash } }, { upsert: true, new: true, runValidators: true }); }
+  catch (error) { if (error.code !== 11000) throw error; row = await LearningFeedback.findOne(filter); }
+  if (!row || row.requestHash !== requestHash) throw fail('REQUEST_CHANGED', 'This request key already recorded different feedback.', 409);
+  res.json({ feedback: { rating: row.rating, comment: row.comment, createdAt: row.createdAt } });
 }));
 vendorLearningRoutes.post('/:id/playback', h(async (req, res) => {
   const lesson = await currentLesson(req);

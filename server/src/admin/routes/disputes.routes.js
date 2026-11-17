@@ -1,9 +1,11 @@
+import { adminActor } from '../services/bookingWorkflow.service.js';
 import express from 'express';
 import { requireAdminAuth, requirePermission } from '../middleware/requireAdminAuth.js';
 import { CoreBooking } from '../models/CoreBooking.js';
 import { reportIssue, resolveDispute } from '../services/disputes.service.js';
 
 const router = express.Router();
+function safeBooking(booking) { const plain = booking.toObject(); for (const field of ['financeOperations', 'operationReceipts', 'workflowEvents']) delete plain[field]; return plain; }
 
 // Require admin authentication for all dispute routes
 router.use(requireAdminAuth);
@@ -53,8 +55,8 @@ router.post('/booking/:id/report', requirePermission('operations.manage'), async
       return res.status(400).json({ error: 'MISSING_DATA', message: 'Description is required to report an issue.' });
     }
 
-    const booking = await reportIssue(req.params.id, { reportedBy, issueType, description });
-    res.json({ ok: true, message: 'Issue reported and settlement placed on hold.', booking });
+    const booking = await reportIssue(req.params.id, { ...req.body, reportedBy, issueType, description }, adminActor(req.admin));
+    res.json({ ok: true, message: 'Issue reported and settlement placed on hold.', booking: safeBooking(booking) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.code || 'REPORT_ISSUE_ERROR', message: err.message });
   }
@@ -73,13 +75,13 @@ router.post('/booking/:id/resolve/:disputeId', requirePermission('operations.man
     }
 
     const result = await resolveDispute(req.params.id, req.params.disputeId, {
-      decision,
+      ...req.body, decision,
       notes,
       refundAmount,
       settlementAmount
-    }, coreActor);
+    }, adminActor(req.admin));
 
-    res.json({ ok: true, message: `Dispute resolved with decision: ${decision}`, result });
+    res.json({ ok: true, message: `Dispute resolved with decision: ${decision}`, result: safeBooking(result) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.code || 'RESOLVE_DISPUTE_ERROR', message: err.message });
   }

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { externalConn } from '../../db/index.js';
+import { quoteVersionRecord } from '../../common/quoteVersions.js';
 
 const { Schema } = mongoose;
 
@@ -43,6 +44,7 @@ const quoteSchema = new Schema(
     },
     bookingReview: { status: { type: String, enum: ['CONFLICT_REVIEW', 'RESOLVED'] }, reason: String, updatedAt: Date },
     commercialSnapshot: { type: Schema.Types.Mixed, default: null },
+    commercialVersions: [{ version: Number, contentHash: String, content: Schema.Types.Mixed, recordedAt: Date, provenance: String }],
     category: { type: String, default: '' },
     serviceName: {
       type: String,
@@ -111,5 +113,23 @@ const quoteSchema = new Schema(
   },
   { timestamps: true, optimisticConcurrency: true }
 );
+
+quoteSchema.pre('validate', async function () {
+  const materialFields = ['vendor', 'customer', 'vendorService', 'serviceName', 'eventDate', 'serviceLocation', 'pricingBreakdown', 'notes', 'validUntil'];
+  if (!this.isNew && this.commercialSnapshot && materialFields.some(field => this.isModified(field)) && !this.isModified('commercialSnapshot')) throw Object.assign(new Error('Material commercial changes require a new quote version.'), { code: 'IMMUTABLE_QUOTE_VERSION', statusCode: 409 });
+  if (!this.isNew && this.isModified('commercialSnapshot') && !this.commercialSnapshot && await this.constructor.exists({ _id: this._id, commercialSnapshot: { $ne: null } })) throw Object.assign(new Error('Submitted commercial evidence cannot be cleared.'), { code: 'IMMUTABLE_QUOTE_VERSION', statusCode: 409 });
+  if (!this.isNew && this.isModified('commercialVersions') && !this.isModified('commercialSnapshot')) throw Object.assign(new Error('Archived commercial versions cannot be edited.'), { code: 'IMMUTABLE_QUOTE_VERSION', statusCode: 409 });
+  if (!this.isModified('commercialSnapshot') || !this.commercialSnapshot) return;
+  const current = quoteVersionRecord(this);
+  const previous = this.isNew ? null : await this.constructor.findById(this._id).lean();
+  const versions = [...(previous?.commercialVersions || [])];
+  if (previous?.commercialSnapshot && !versions.some(row => row.version === previous.commercialSnapshot.version)) versions.push(quoteVersionRecord(previous, 'LEGACY_CURRENT_RECOVERED_AT_REVISION'));
+  const prior = versions.find(row => row.version === current.version);
+  if ((prior && prior.contentHash !== current.contentHash) || !Number.isSafeInteger(current.version) || current.version < 1 || (previous?.commercialSnapshot && current.version !== previous.commercialSnapshot.version && current.version !== previous.commercialSnapshot.version + 1)) {
+    throw Object.assign(new Error('Commercial content requires a new sequential quote version; submitted history cannot be overwritten.'), { code: 'IMMUTABLE_QUOTE_VERSION', statusCode: 409 });
+  }
+  if (!prior) versions.push(current);
+  this.commercialVersions = versions;
+});
 
 export const Quote = externalConn.model('Quote', quoteSchema);

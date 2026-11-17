@@ -1,30 +1,31 @@
 import { Router } from 'express';
 import { config } from '../config.js';
-import { NotificationPreference } from './preferences.models.js';
-import { PushSubscription } from './push.models.js';
+import { NotificationPreference, CustomerReminder } from './preferences.models.js';
 import { DEFAULT_NOTIFICATION_POLICY, validateNotificationPolicy } from './policy.js';
-import { asyncHandler as h } from '../customer/utils/http.js';
-import { createReminder, listReminders, cancelReminder } from './reminders.service.js';
+import { PushSubscription } from './push.models.js';
+import { CustomerEvent } from '../customer/models/index.js';
 
 export function notificationPreferencesRoutes(surface) {
   const router = Router();
   const owner = req => `${surface}:${surface === 'VENDOR' ? req.vendorId : req.externalUser._id}`;
-  router.get('/notification-preferences', h(async (req, res) => {
-    const row = await NotificationPreference.findById(owner(req)).lean();
-    const { history, ...policy } = row || DEFAULT_NOTIFICATION_POLICY;
-    if (surface !== 'CUSTOMER') return res.json({ ok: true, policy });
+  router.get('/notification-preferences', async (req, res, next) => {
+    try {
+      const row = await NotificationPreference.findById(owner(req)).lean();
+      const { history, ...policy } = row || DEFAULT_NOTIFICATION_POLICY;
+      if (surface !== 'CUSTOMER') return res.json({ ok: true, policy });
 
-    const customerId = req.externalUser._id;
-    const pushAvailable = config.pushEnabled && Boolean(await PushSubscription.exists({
-      domain: 'external',
-      surface: 'CUSTOMER',
-      ownerId: customerId,
-      audienceId: customerId,
-      enabled: true,
-      expiresAt: { $gt: new Date() },
-    }));
-    res.json({ ok: true, policy, pushAvailable });
-  }));
+      const customerId = req.externalUser._id;
+      const pushAvailable = config.pushEnabled && Boolean(await PushSubscription.exists({
+        domain: 'external',
+        surface: 'CUSTOMER',
+        ownerId: customerId,
+        audienceId: customerId,
+        enabled: true,
+        expiresAt: { $gt: new Date() },
+      }));
+      res.json({ ok: true, policy, pushAvailable });
+    } catch (err) { next(err); }
+  });
   router.put('/notification-preferences', async (req, res) => {
     try {
       const policy = validateNotificationPolicy(req.body || {});
@@ -33,9 +34,24 @@ export function notificationPreferencesRoutes(surface) {
     } catch (err) { res.status(400).json({ error: 'INVALID_NOTIFICATION_POLICY', message: err.message }); }
   });
   if (surface === 'CUSTOMER') {
-    router.get('/reminders', h(async (req, res) => res.json(await listReminders(req.externalUser._id, req.query))));
-    router.post('/reminders', h(async (req, res) => res.status(201).json(await createReminder(req.externalUser._id, req.body))));
-    router.delete('/reminders/:id', h(async (req, res) => res.json(await cancelReminder(req.externalUser._id, req.params.id))));
+    router.get('/reminders', async (req, res, next) => {
+      try { res.json({ reminders: await CustomerReminder.find({ customer: req.externalUser._id, status: { $in: ['PENDING', 'PROCESSING'] } }).sort({ dueAt: 1 }).limit(100).lean() }); } catch (err) { next(err); }
+    });
+    router.post('/reminders', async (req, res, next) => {
+      try {
+        const { eventId, title, dueAt, idempotencyKey } = req.body || {};
+        const at = new Date(dueAt);
+        if (!title?.trim() || title.length > 140 || !idempotencyKey || String(idempotencyKey).length > 160 || !Number.isFinite(at.getTime()) || at <= new Date()) return res.status(400).json({ error: 'INVALID_REMINDER' });
+        if (!await CustomerEvent.exists({ _id: eventId, customer: req.externalUser._id })) return res.status(404).json({ error: 'EVENT_NOT_FOUND' });
+        const filter = { customer: req.externalUser._id, idempotencyKey };
+        const reminder = await CustomerReminder.findOneAndUpdate(filter, { $setOnInsert: { ...filter, event: eventId, title: title.trim(), dueAt: at } }, { upsert: true, new: true });
+        if (String(reminder.event) !== String(eventId) || reminder.title !== title.trim() || reminder.dueAt.getTime() !== at.getTime()) return res.status(409).json({ error: 'IDEMPOTENCY_CONFLICT' });
+        res.status(201).json({ ok: true, reminder });
+      } catch (err) { next(err); }
+    });
+    router.delete('/reminders/:id', async (req, res, next) => {
+      try { const row = await CustomerReminder.findOne({ _id: req.params.id, customer: req.externalUser._id }); if (!row) return res.status(404).json({ error: 'REMINDER_NOT_FOUND' }); if (row.status === 'CANCELLED') return res.json({ ok: true }); const cancelled = await CustomerReminder.findOneAndUpdate({ _id: row._id, status: 'PENDING' }, { $set: { status: 'CANCELLED' } }); if (!cancelled) return res.status(409).json({ error: 'REMINDER_ALREADY_DELIVERING', message: 'This reminder is already being delivered or has been delivered.' }); res.json({ ok: true }); } catch (err) { next(err); }
+    });
   }
   return router;
 }

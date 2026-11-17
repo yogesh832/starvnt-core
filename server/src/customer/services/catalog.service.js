@@ -149,16 +149,24 @@ function fromVendor({ service, vendor, matchedLocation, matchedCoverage, portfol
   ].filter(Boolean).join(', ');
   const vendorLocation = locationLabel || vendor.location || '';
   const portfolioImages = (portfolio || []).map((p) => p.thumbnailUrl || p.url).filter(Boolean);
+  const portfolioSamples = (portfolio || []).filter(p => p.thumbnailUrl || p.url).slice(0, 4).map(p => ({
+    title: p.title || p.projectName || 'Project sample',
+    eventType: p.eventType || null,
+    mediaType: p.mediaType || 'IMAGE',
+    imageUrl: p.thumbnailUrl || p.url,
+    url: p.url || p.thumbnailUrl,
+  }));
   const images = [...(vendor.profilePicUrl ? [vendor.profilePicUrl] : []), ...portfolioImages];
   return {
     id: vsId(service._id),
-    commercialStatus: 'ESTIMATE_REQUIRES_VENDOR_CONFIRMATION',
     source: 'vendor',
     category: normalizeCategory(service.category),
     packageName: service.name,
     description: service.description || '',
     vendorId: String(vendor._id),
     vendorName: vendor.businessName,
+    profilePicUrl: vendor.profilePicUrl || null,
+    portfolioSamples,
     vendorLocation,
     vendorBio: vendor.bio || '',
     price,
@@ -266,15 +274,26 @@ async function allOptions(event) {
   return [...real.map((r) => fromVendor(r, event || {})), ...demo.map(fromDemo)].filter((o) => o.category);
 }
 
+function availabilityDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  }
+  return null;
+}
+
 /**
  * Honest availability for the event date:
  * no_event_date | blocked | booked | unconfirmed. Never assumed "available".
  */
 async function withAvailability(options, event) {
-  if (!event?.eventDate) return options.map((o) => ({ ...o, availability: 'no_event_date' }));
+  const date = availabilityDate(event?.eventDate);
+  if (!date) return options.map((o) => ({ ...o, availability: 'no_event_date' }));
   return Promise.all(options.map(async o => {
     if (!o.vendorId) return { ...o, availability: 'unconfirmed' };
-    const result = await checkTrueAvailability({ vendorId: o.vendorId, vendorServiceId: o.id.replace(/^vs_/, ''), date: event.eventDate, allDay: true, serviceLocation: event.location, excludeEventId: event._id });
+    const result = await checkTrueAvailability({ vendorId: o.vendorId, vendorServiceId: o.id.replace(/^vs_/, ''), date, allDay: true, serviceLocation: event.location, excludeEventId: event._id });
     const availability = !result.feasible ? 'blocked' : o.requiresVendorConfirmation ? 'requires_vendor_confirmation' : 'unconfirmed';
     return { ...o, availability };
   }));
@@ -402,6 +421,8 @@ export async function auraCatalogOptions(event) {
   return (await withAvailability((await allOptions(event)).filter(option => !option.isDemo), event)).map(option => ({
     id: option.id, vendorId: option.vendorId || null, category: option.category,
     service: categoryLabel(option.category), vendor: option.vendorName,
+    profilePicUrl: option.profilePicUrl || null,
+    portfolioSamples: option.portfolioSamples || [],
     package: option.packageName, price: option.price,
     basePrice: option.basePrice ?? null, pricingType: option.pricingType || null, unit: option.unit || null,
     location: option.vendorLocation || option.location?.city || null,

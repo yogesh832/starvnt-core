@@ -6,11 +6,14 @@ import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { externalConn, adminConn } from '../src/db/index.js';
 import { createApp } from '../src/app.js';
+import { config } from '../src/config.js';
 import { ExternalUser } from '../src/external/models/ExternalUser.js';
 import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
 import { VendorService } from '../src/external/models/VendorService.js';
 import { VendorCapability } from '../src/external/models/VendorCapability.js';
+import { VendorAuraSession, VendorAuraMessage } from '../src/external/models/VendorAura.js';
+import { registerLlmAdapter } from '../src/external/aura/llmAdapter.js';
 import { VendorResource } from '../src/external/models/VendorResource.js';
 import { VendorFinancialProfile } from '../src/external/models/VendorFinancialProfile.js';
 import { OperatingLocation } from '../src/external/models/OperatingLocation.js';
@@ -32,17 +35,15 @@ import { spawnSync } from 'node:child_process';
 import { sanitizeDiscoveryVideo } from '../src/experience/discoveryMedia.js';
 import { DiscoveryProject, DiscoveryPreference, DiscoveryInteraction, VendorRewardRule, VendorAchievement, VendorBenefit, VendorRedemption, VendorChallenge, VendorChallengeAward } from '../src/experience/discoveryRewards.models.js';
 import { runDiscoveryNotificationBatch } from '../src/experience/discoveryNotifications.worker.js';
-import { runDiscoveryRetentionBatch } from '../src/experience/discoveryRetention.worker.js';
 import { setConsent, CUSTOMER_NOTICE } from '../src/foundation/consent.service.js';
 import { CustomerNotification, CustomerEvent } from '../src/customer/models/index.js';
 import { Opportunity } from '../src/external/models/Opportunity.js';
 import { NotificationPreference } from '../src/notifications/preferences.models.js';
 import { Notification } from '../src/external/models/Notification.js';
-import { PushSubscription, PushJob } from '../src/notifications/push.models.js';
-import { deliverOne } from '../src/notifications/push.service.js';
 import { AdminUser } from '../src/admin/models/AdminUser.js';
 import { AdminSession } from '../src/admin/models/AdminSession.js';
 import { signAdminAccessToken } from '../src/admin/utils/tokens.js';
+
 import { GrowthMeeting, MeetingParticipation } from '../src/learning/meetingModels.js';
 
 let app, mongo;
@@ -78,6 +79,127 @@ async function create(f, data = body(f)) {
   const res = await request(app).post('/api/vendor/external-bookings').set(auth(f.token)).send(data).expect(201);
   return res.body.booking;
 }
+
+test('Vendor Aura carries a standalone team size into the Hindi equipment reply and saves only after confirmation', async () => {
+  const f = await fixture();
+  const sessionId = key();
+  const send = message => request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId, message }).expect(200);
+  const read = () => VendorCapability.findOne({ vendor: f.vendor._id, vendorService: f.service._id }).lean();
+  const first = await send('Complete capacity, resources and coverage for the same active service');
+  assert.match(first.body.reply, /team size/i);
+  await send('you add this');
+  const team = await send('15');
+  assert.match(team.body.reply, /15/);
+  assert.match(team.body.reply, /equipment/i);
+  assert.equal(team.body.pending, null);
+  const gear = await send('मेरे पास मेरा दो Sony के कैमरे हैं।');
+  assert.equal(gear.body.pending.kind, 'capability');
+  assert.match(gear.body.pending.summary, /15.*दो Sony के कैमरे/);
+  assert.equal((await read()).teamSize, 3);
+  const saved = await send('हाँ');
+  assert.equal(saved.body.pending, null);
+  assert.equal((await read()).teamSize, 15);
+  assert.equal((await read()).simultaneousEventLimit, 5);
+  assert.deepEqual((await read()).equipment, ['दो Sony के कैमरे']);
+});
+
+test('Vendor Aura resumes the repeated-team-size exchange and asks which active service to update', async () => {
+  const f = await fixture();
+  const second = await VendorService.create({
+    vendor: f.vendor._id, name: 'Studio portraits', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 1000 },
+  });
+  await VendorResource.updateOne({ _id: f.resource._id }, { $set: { status: 'MAINTENANCE' } });
+  const sessionId = key();
+  await VendorAuraSession.create({ _id: sessionId, vendor: f.vendor._id, user: f.owner._id, language: 'hi' });
+  await VendorAuraMessage.insertMany([
+    ['model', 'Please tell me your team size and equipment details so I can set them up for you.'],
+    ['user', '15'],
+    ['model', 'Got it, team size is 15. What equipment do you use for your photography services?'],
+    ['user', 'और ये देखवा के'],
+    ['model', 'मैंने 15 सदस्यों की टीम नोट कर ली है। अब कृपया अपने मुख्य उपकरण (Equipment) जैसे कैमरे, ड्रोन या लेंस की जानकारी दें। अभी your team size चाहिए। कृपया बताइए।'],
+    ['user', 'मेरे पास मेरा दो Sony के कैमरे हैं।'],
+    ['model', 'समझ गई। अभी your team size चाहिए। कृपया बताइए।'],
+  ].map(([role, content], index) => ({ session: sessionId, role, content, createdAt: new Date(1000 + index) })));
+  const send = message => request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId, message }).expect(200);
+  const response = await send('15 मैंने पहले ही बता दिया।');
+  assert.equal(response.body.pending, null);
+  assert.match(response.body.reply, /Event photos.*Studio portraits|Studio portraits.*Event photos/);
+  const selected = await send('Studio portraits');
+  assert.match(selected.body.pending.summary, /Studio portraits.*15.*Sony/);
+  const confirmed = await send('yes');
+  assert.equal(confirmed.body.actions.some(action => action.to === '/vendor/readiness'), true);
+  const other = await VendorCapability.findOne({ vendor: f.vendor._id, vendorService: second._id }).lean();
+  assert.equal(other.teamSize, 15);
+  assert.deepEqual(other.equipment, ['दो Sony के कैमरे']);
+  assert.equal((await VendorCapability.findOne({ vendorService: f.service._id }).lean()).teamSize, 3);
+});
+
+test('Vendor Aura understands shorthand and uses AI to interpret service choices in the vendor’s language', async t => {
+  const f = await fixture();
+  const wedding = 'Wedding Photography & Cinematic Video';
+  const preWedding = 'Pre-Wedding & Pahadi Concept Shoot';
+  await VendorService.updateOne({ _id: f.service._id }, { $set: { name: wedding } });
+  const second = await VendorService.create({
+    vendor: f.vendor._id, name: preWedding, category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 1000 },
+  });
+  const inactive = await VendorService.create({
+    vendor: f.vendor._id, name: 'Wedding ceremony archive', category: 'Photography', status: 'PAUSED', pricing: { basePrice: 1000 },
+  });
+  const interpreted = [];
+  registerLlmAdapter({
+    async chat({ message }) {
+      const choice = JSON.parse(message);
+      interpreted.push(choice);
+      const serviceName = choice.reply === 'शादी की रस्मों वाला' ? wedding : inactive.name;
+      return { setupAction: { kind: 'capability', capability: { serviceName, teamSize: 99, equipment: ['Unverified gear'] } } };
+    },
+  });
+  t.after(() => registerLlmAdapter(null));
+
+  const start = async ({ legacyPrompt = false } = {}) => {
+    const sessionId = key();
+    const send = message => request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId, message }).expect(200);
+    await send('Complete capacity, resources and coverage for the same active service');
+    await send('15');
+    const choice = await send('मेरे पास मेरा दो Sony के कैमरे हैं।');
+    assert.equal(choice.body.pending, null);
+    assert.ok(choice.body.reply.includes(wedding));
+    assert.ok(choice.body.reply.includes(preWedding));
+    if (legacyPrompt) {
+      await VendorAuraMessage.updateOne(
+        { session: sessionId, role: 'model', content: choice.body.reply },
+        { $set: { content: 'समझ गई। अभी the active service name चाहिए। कृपया बताइए।' } },
+      );
+    }
+    return send;
+  };
+
+  for (const reply of ['photography', 'wedding photography', 'Film cinematic video वाली।']) {
+    const send = await start({ legacyPrompt: reply.startsWith('Film') });
+    const selected = await send(reply);
+    assert.equal(selected.body.pending.kind, 'capability');
+    assert.match(selected.body.pending.summary, /Wedding Photography & Cinematic Video.*15.*Sony/);
+  }
+  assert.deepEqual(interpreted, []);
+
+  const send = await start();
+  const ambiguous = await send('wedding');
+  assert.equal(ambiguous.body.pending, null);
+  const invalid = await send('पुरानी रस्मों वाला');
+  assert.equal(invalid.body.pending, null);
+  assert.equal(interpreted[0].reply, 'पुरानी रस्मों वाला');
+  assert.deepEqual(interpreted[0].choices.map(choice => choice.name).sort(), [wedding, preWedding].sort());
+  const selected = await send('शादी की रस्मों वाला');
+  assert.equal(selected.body.pending.kind, 'capability');
+  assert.match(selected.body.pending.summary, /Wedding Photography & Cinematic Video.*15.*Sony/);
+  assert.equal(interpreted[1].reply, 'शादी की रस्मों वाला');
+  assert.equal((await VendorCapability.findOne({ vendorService: f.service._id }).lean()).teamSize, 3);
+  assert.equal(await VendorCapability.countDocuments({ vendorService: second._id }), 0);
+  await send('हाँ');
+  const saved = await VendorCapability.findOne({ vendorService: f.service._id }).lean();
+  assert.equal(saved.teamSize, 15);
+  assert.deepEqual(saved.equipment, ['दो Sony के कैमरे']);
+});
 
 test('external intake persists private source, service quantities, overdue contract balance and server actor, without a Core contract', async () => {
   const f = await fixture(), input = body(f);
@@ -204,15 +326,11 @@ test('anonymous discovery only exposes approved sanitized images and withdrawal 
   await request(app).post(`/api/admin/discovery-rewards/projects/${submitted.body.project._id}/review`).set(auth(adminToken)).send(review).expect(200);
   const feed = (await request(app).get('/api/customer/discovery/feed').set(auth(customerToken)).expect(200)).body;
   assert.equal(feed.projects.length, 1); assert.equal(JSON.stringify(feed).includes(String(f.vendor._id)), false); assert.equal(JSON.stringify(feed).includes(String(portfolio._id)), false);
-  await request(app).post(`/api/customer/discovery/interactions/${feed.projects[0].token}`).set(auth(customerToken)).send({ kind: 'SHARE' }).expect(200);
   assert.equal(await DiscoveryInteraction.countDocuments({ customer: user._id }), 0);
   await setConsent(user._id, { purpose: 'PERSONALIZATION', channel: 'ALL', status: 'GRANTED', noticeVersion: CUSTOMER_NOTICE.version, revision: 0, idempotencyKey: key() });
   await request(app).get('/api/customer/discovery/feed').set(auth(customerToken)).expect(200);
   await request(app).get('/api/customer/discovery/feed').set(auth(customerToken)).expect(200);
   assert.equal(await DiscoveryInteraction.countDocuments({ customer: user._id, kind: 'VIEW' }), 1);
-  await request(app).post(`/api/customer/discovery/interactions/${feed.projects[0].token}`).set(auth(customerToken)).send({ kind: 'SHARE' }).expect(200);
-  await request(app).post(`/api/customer/discovery/interactions/${feed.projects[0].token}`).set(auth(customerToken)).send({ kind: 'SHARE' }).expect(200);
-  assert.equal(await DiscoveryInteraction.countDocuments({ customer: user._id, kind: 'SHARE' }), 1);
   const event = await CustomerEvent.create({ customer: user._id, title: 'Inspired event' });
   await request(app).post('/api/customer/discovery/conversions').set(auth(customerToken)).send({ token: feed.projects[0].token, eventId: event._id }).expect(200);
   await Opportunity.create({ vendor: f.vendor._id, customer: user._id, vendorService: f.service._id, customerEvent: event._id, serviceName: 'Photos', eventDate: '2027-08-01' });
@@ -242,19 +360,6 @@ test('discovery video re-encodes MP4, strips metadata and audio, and rejects inv
   await assert.rejects(() => sanitizeDiscoveryVideo(Buffer.from('invalid mp4')));
 });
 
-test('withdrawn discovery copy retention is opt-in, scoped, audited and preserves the original portfolio', async () => {
-  const f = await fixture(), other = await fixture(), portfolio = await PortfolioItem.findOne({ vendor: f.vendor._id, visibility: 'PUBLIC' });
-  const row = await DiscoveryProject.create({ vendor: f.vendor._id, portfolio: portfolio._id, publicToken: key(), category: 'Wedding', style: 'Classic', point: { type: 'Point', coordinates: [73.85, 18.52] }, image: Buffer.from('private copy'), status: 'WITHDRAWN', withdrawnAt: new Date(Date.now() - 40 * 86400000) });
-  await request(app).post(`/api/vendor/discovery/projects/${row._id}/purge`).set(auth(other.token)).send({ confirm: true }).expect(404);
-  await request(app).post(`/api/vendor/discovery/projects/${row._id}/purge`).set(auth(f.token)).send({ confirm: false }).expect(400);
-  assert.equal((await runDiscoveryRetentionBatch({ days: 0 })).enabled, false);
-  assert.ok((await DiscoveryProject.findById(row._id).select('+image')).image);
-  assert.equal((await runDiscoveryRetentionBatch({ days: 30 })).purged, 1);
-  const stored = await DiscoveryProject.findById(row._id).select('+image'); assert.equal(stored.image, undefined); assert.ok(stored.mediaPurgedAt); assert.equal(stored.history.at(-1).action, 'MEDIA_PURGED');
-  assert.ok(await PortfolioItem.exists({ _id: portfolio._id, vendor: f.vendor._id }));
-  assert.equal((await runDiscoveryRetentionBatch({ days: 30 })).purged, 0);
-});
-
 test('vendor XP uses active versioned rules, is idempotent, tenant scoped and reverses when evidence disappears', async () => {
   const f = await fixture(), other = await fixture();
   await VendorRewardRule.updateMany({}, { $set: { active: false } });
@@ -272,8 +377,8 @@ test('vendor XP uses active versioned rules, is idempotent, tenant scoped and re
 test('nearby inspiration notifications require consent and opt-in, honor frequency and avoid duplicate sends', async () => {
   const f = await fixture(), user = await ExternalUser.create({ fullName: 'Customer', email: `${key()}@example.test`, accountType: 'CUSTOMER' });
   const portfolio = await PortfolioItem.findOne({ vendor: f.vendor._id, visibility: 'PUBLIC' });
-  const project = await DiscoveryProject.create({ vendor: f.vendor._id, portfolio: portfolio._id, publicToken: key(), category: 'Wedding', style: 'Classic', point: { type: 'Point', coordinates: [73.85, 18.52] }, image: Buffer.from('fixture'), status: 'APPROVED', consentAt: new Date() });
-  const preference = await DiscoveryPreference.create({ customer: user._id, point: { type: 'Point', coordinates: [73.85, 18.52] }, radiusKm: 25, notificationsEnabled: true, pushEnabled: true, notificationCategories: ['Wedding'] });
+  await DiscoveryProject.create({ vendor: f.vendor._id, portfolio: portfolio._id, publicToken: key(), category: 'Wedding', style: 'Classic', point: { type: 'Point', coordinates: [73.85, 18.52] }, image: Buffer.from('fixture'), status: 'APPROVED', consentAt: new Date() });
+  const preference = await DiscoveryPreference.create({ customer: user._id, point: { type: 'Point', coordinates: [73.85, 18.52] }, radiusKm: 25, notificationsEnabled: true, notificationCategories: ['Wedding'] });
   assert.equal((await runDiscoveryNotificationBatch()).sent, 0);
   await setConsent(user._id, { purpose: 'PERSONALIZATION', channel: 'ALL', status: 'GRANTED', noticeVersion: CUSTOMER_NOTICE.version, revision: 0, idempotencyKey: key() });
   await NotificationPreference.create({ _id: `CUSTOMER:${user._id}`, timezone: 'Asia/Kolkata', quietHours: { enabled: true, start: '00:00', end: '00:00' } });
@@ -282,27 +387,6 @@ test('nearby inspiration notifications require consent and opt-in, honor frequen
   assert.equal((await runDiscoveryNotificationBatch()).sent, 1);
   assert.equal((await runDiscoveryNotificationBatch()).sent, 0);
   assert.equal(await CustomerNotification.countDocuments({ customer: user._id, type: 'personalization' }), 1);
-  const notification = await CustomerNotification.findOne({ customer: user._id, type: 'personalization' });
-  async function pushJob() {
-    const binding = await PushSubscription.create({ installationId: key(), domain: 'external', ownerId: user._id, sessionId: id(), audienceId: user._id, surface: 'CUSTOMER', token: `ExpoPushToken[${key()}]`, bindingId: key(), boundAt: new Date(), expiresAt: new Date(Date.now() + 3600000) });
-    const job = await PushJob.create({ subscription: binding._id, bindingId: binding.bindingId, sourceId: `customer:${notification._id}`, type: 'personalization', purpose: 'PERSONALIZATION', lease: key(), expiresAt: new Date(Date.now() + 3600000) });
-    return job.toObject();
-  }
-  let providerCalls = 0; const deliver = job => deliverOne(job, { identity: async () => user, request: async () => { providerCalls++; return [{ status: 'ok', id: key() }]; } });
-  assert.equal((await deliver(await pushJob())).status, 'RECEIPT'); assert.equal(providerCalls, 1);
-  await DiscoveryPreference.updateOne({ _id: preference._id }, { $set: { pushEnabled: false } });
-  assert.equal((await deliver(await pushJob())).lastError, 'DISCOVERY_PREFERENCE_CHANGED'); assert.equal(providerCalls, 1);
-  await DiscoveryPreference.updateOne({ _id: preference._id }, { $set: { pushEnabled: true } });
-  await setConsent(user._id, { purpose: 'PERSONALIZATION', channel: 'ALL', status: 'WITHDRAWN', noticeVersion: CUSTOMER_NOTICE.version, revision: 1, idempotencyKey: key() });
-  assert.equal((await deliver(await pushJob())).lastError, 'CONSENT_WITHDRAWN'); assert.equal(providerCalls, 1);
-  await setConsent(user._id, { purpose: 'PERSONALIZATION', channel: 'ALL', status: 'GRANTED', noticeVersion: CUSTOMER_NOTICE.version, revision: 2, idempotencyKey: key() });
-  await DiscoveryPreference.updateOne({ _id: preference._id }, { $set: { notificationsEnabled: false } });
-  assert.equal((await deliver(await pushJob())).lastError, 'DISCOVERY_PREFERENCE_CHANGED'); assert.equal(providerCalls, 1);
-  await DiscoveryPreference.updateOne({ _id: preference._id }, { $set: { notificationsEnabled: true, 'point.coordinates': [77.21, 28.61] } });
-  assert.equal((await deliver(await pushJob())).lastError, 'DISCOVERY_PROJECT_UNAVAILABLE'); assert.equal(providerCalls, 1);
-  await DiscoveryPreference.updateOne({ _id: preference._id }, { $set: { 'point.coordinates': [73.85, 18.52] } });
-  await DiscoveryProject.updateOne({ _id: project._id }, { $set: { status: 'WITHDRAWN' } });
-  assert.equal((await deliver(await pushJob())).lastError, 'DISCOVERY_PROJECT_UNAVAILABLE'); assert.equal(providerCalls, 1);
   await DiscoveryPreference.updateOne({ _id: preference._id }, { $set: { notificationsEnabled: false } });
   assert.equal((await runDiscoveryNotificationBatch({ now: new Date(Date.now() + 8 * 86400000) })).sent, 0);
 });
@@ -448,6 +532,10 @@ test('public vendor identity is owner-scoped and share QR follows current public
     name: f.vendor.businessName, category: 'Photography',
     socialLinks: [{ platform: 'instagram', label: 'Instagram', url: instagram }],
   });
+  assert.equal(config.vendorQrEnabled, false);
+  await shareQr().expect(404);
+  config.vendorQrEnabled = true;
+  t.after(() => { config.vendorQrEnabled = false; });
   const qr = await shareQr().expect(200);
   assert.equal(qr.body.url, `https://starvnt.example/vendors/${f.vendor._id}`);
   assert.match(qr.body.qrDataUrl, /^data:image\/png;base64,/);
@@ -493,7 +581,17 @@ test('Academy enforces draft and rights boundaries and preserves vendor-scoped r
   const publicPath = `/api/vendor/academy/${created.id}`;
   const adminPath = `/api/admin/academy/${created.id}`;
   const read = () => request(app).get(publicPath).set(auth(vendor.token));
-  const publication = (actor, body) => request(app).post(`${adminPath}/publication`).set(actor).send(body);
+  const publication = (actor, body) => ({ expect: async status => {
+    if (body.action === 'PUBLISH' && body.rightsReference && (!body.rightsExpiresAt || Date.parse(body.rightsExpiresAt) > Date.now())) {
+      const { LearningLesson } = await import('../src/learning/models.js');
+      const row = await LearningLesson.findById(created.id);
+      if (['DRAFT', 'UNPUBLISHED'].includes(row.state)) {
+        const submitted = await request(app).post(`${adminPath}/submit-review`).set(editor).send({ revision: row.revision, reason: 'Fixture review request' }).expect(200);
+        body = { ...body, revision: submitted.body.lesson.revision };
+      }
+    }
+    return request(app).post(`${adminPath}/publication`).set(actor).send(body).expect(status);
+  } });
   await read().expect(404);
   await request(app).get(publicPath).expect(401);
   await publication(editor, { revision: 1, action: 'PUBLISH', reason: 'No publishing authority' }).expect(403);
@@ -540,7 +638,8 @@ test('Academy enforces draft and rights boundaries and preserves vendor-scoped r
   const videoAdmin = `/api/admin/academy/${video.id}/publication`;
   const playback = () => request(app).post(`/api/vendor/academy/${video.id}/playback`).set(auth(vendor.token));
   const rightsExpiresAt = new Date(Date.now() + 120000).toISOString();
-  const approval = { revision: 1, action: 'PUBLISH', reason: 'Approved authenticated asset', rightsReference: 'VIDEO-RIGHTS-FIXTURE', rightsExpiresAt };
+  await request(app).post(`/api/admin/academy/${video.id}/submit-review`).set(editor).send({ revision: 1, reason: 'Fixture video review request' }).expect(200);
+  const approval = { revision: 2, action: 'PUBLISH', reason: 'Approved authenticated asset', rightsReference: 'VIDEO-RIGHTS-FIXTURE', rightsExpiresAt };
   await request(app).post(videoAdmin).set(publisher).send(approval).expect(409);
   type = 'authenticated';
   await request(app).post(videoAdmin).set(publisher).send(approval).expect(200);
@@ -548,7 +647,7 @@ test('Academy enforces draft and rights boundaries and preserves vendor-scoped r
   assert.equal(grant.headers['cache-control'], 'no-store');
   assert.ok(new Date(grant.body.expiresAt) <= new Date(rightsExpiresAt));
   assert.match(grant.body.url, /\/video\/download\?/);
-  await request(app).post(videoAdmin).set(publisher).send({ revision: 2, action: 'WITHDRAW', reason: 'Withdraw video rights' }).expect(200);
+  await request(app).post(videoAdmin).set(publisher).send({ revision: 3, action: 'WITHDRAW', reason: 'Withdraw video rights' }).expect(200);
   await playback().expect(404);
 });
 

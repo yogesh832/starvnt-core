@@ -1,16 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { acceptPortalSession, portalLoginUrl, portalNextPath, portalPayload, PORTAL_SURFACE } from '../src/lib/portalAccess.js';
+import { acceptPortalSession, portalLoginUrl, portalPayload, PORTAL_SURFACE } from '../src/lib/portalAccess.js';
 import { readFileSync } from 'node:fs';
 const apiSource = readFileSync(new URL('../src/lib/api.js', import.meta.url), 'utf8').replaceAll('import.meta.env', '({ MODE: "test" })');
 const { makeApi } = await import('data:text/javascript;base64,' + Buffer.from(apiSource).toString('base64'));
-test('each build keeps deep links within its own surface, including normalized paths', () => {
-  for (const role of ['CUSTOMER', 'VENDOR']) {
-    const base = `/${role.toLowerCase()}`;
-    assert.equal(portalNextPath(`${base}/proposals?version=2`, role), `${base}/proposals?version=2`);
-    for (const path of ['//evil.test/vendor', '/admin', `${base}/../admin`, `${base}/%2e%2e/admin`, `${base}\\admin`, 'https://evil.test']) assert.equal(portalNextPath(path, role), base);
-  }
-});
 
 for (const expected of ['CUSTOMER', 'VENDOR']) {
   test(`${expected} accepts only its own identity and never switches an opposite-role account`, async () => {

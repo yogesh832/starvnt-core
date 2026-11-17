@@ -1,3 +1,4 @@
+import { searchCustomerLocations } from '../services/locationSearch.service.js';
 import * as events from '../services/events.service.js';
 import * as profile from '../services/profile.service.js';
 import * as decision from '../services/decision.service.js';
@@ -110,3 +111,5 @@ export const patchRequirement = async (req, res) => {
 };
 
 export const confirmRequirement = async (req, res) => res.json({ requirement: await events.confirmRequirement(me(req), req.params.id, req.params.category) });
+
+export const searchLocations = async (req, res) => res.json({ places: await searchCustomerLocations(req.query.q) });

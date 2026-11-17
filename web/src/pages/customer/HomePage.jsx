@@ -16,12 +16,12 @@ import {
   RatingText,
   useLoad,
 } from './customerUi.jsx';
-import { attentionLink, budgetText, formatDate, formatINR, planStatus } from './format.js';
+import { budgetText, formatDate, formatINR, planStatus } from './format.js';
 import { useCurrentEvent } from './currentEvent.jsx';
 import { milestones } from './EventHistoryPage.jsx';
 import SelectOptionButton from './SelectOptionButton.jsx';
 import { EventHomeHeader, WelcomeHome, PastEventHome } from './HomeOverview.jsx';
-import { pendingEventProposals } from './homeActions.js';
+import { nextHomeAction } from './homeActions.js';
 import EventSummary from './CustomerEventSummary.jsx';
 
 const TONE = { amber: 'text-amber-600 dark:text-amber-400', emerald: 'text-emerald-600 dark:text-emerald-400', primary: 'text-primary dark:text-[#a5b4fc]', muted: 'text-muted dark:text-slate-400' };
@@ -376,8 +376,6 @@ function Workspace({ firstName, event }) {
   const reload = useCallback(() => setTick((t) => t + 1), []);
   const dash = useLoad(() => customerApi.dashboard(event.id), [event.id, tick]);
   const hist = useLoad(() => customerApi.history(event.id), [event.id, tick]);
-  const proposals = useLoad(() => externalApi.call('/customer/proposals'), [event.id, tick]);
-  const pending = pendingEventProposals(proposals.data?.proposals || [], event.id);
   useEffect(() => {
     const refresh = () => { if (document.visibilityState !== 'hidden') reload(); };
     const timer = setInterval(refresh, 30000);
@@ -397,11 +395,11 @@ function Workspace({ firstName, event }) {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-5">
-      <EventHomeHeader firstName={firstName} event={ev} attention={attention} proposals={pending} proposalsLoading={proposals.loading} proposalsError={proposals.error} />
+      <EventHomeHeader firstName={firstName} event={ev} attention={attention} />
       {dash.error && <div role="status" className="customer-home-panel"><p>Showing the last loaded event records. We could not refresh them.</p><button onClick={reload} className="customer-secondary-action">Try again</button></div>}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl p-4 border text-sm"><span><b>{experience?.lifecycle || 'Planning'}</b>{experience?.daysUntilEvent != null ? ` · ${experience.daysUntilEvent === 0 ? 'Event day' : experience.daysUntilEvent > 0 ? `${experience.daysUntilEvent} days to go` : `${Math.abs(experience.daysUntilEvent)} days since the event date`}` : ev.eventDate ? ' · Date saved' : ' · Date not set'}</span><span>{experience?.decisionsPending != null && <>{experience.decisionsPending} requirement{experience?.decisionsPending === 1 ? '' : 's'} awaiting a decision</>}</span><button className="text-primary underline" onClick={reload}>Refresh</button></div>
       {(attention.length > 1 || firstOpen) && <Section title="More to plan">
-        {attention.slice(1).map((action, index) => <Link key={index} to={attentionLink(action)} className="block rounded-xl border p-3 mb-2 text-sm"><b>{action.title}</b><p>{action.detail}</p></Link>)}
+        {attention.slice(1).map((action, index) => <Link key={index} to={nextHomeAction(ev, [action]).to} className="block rounded-xl border p-3 mb-2 text-sm"><b>{action.title}</b><p>{action.detail}</p></Link>)}
         {summary.items.filter(item => item.status === 'pending' || (item.status === 'missing' && item.tier === 'essential')).slice(0, 4).map(item => <Link key={item.category} to={'/customer/events/' + ev.id + '/requirements'} className="block rounded-xl border p-3 mb-2 text-sm"><b>{item.label}</b><p>{planStatus(item).text} · Review requirement →</p></Link>)}
       </Section>}
 

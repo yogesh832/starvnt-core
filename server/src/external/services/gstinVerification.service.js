@@ -96,7 +96,7 @@ export async function verifyGstin(gstin, vendorName) {
   const url = `${config.gstinApiBaseUrl.replace(/\/$/, '')}/gstin/${encodeURIComponent(normalizedGstin)}`;
   const checkedAt = new Date();
   try {
-    const response = await fetch(url, { headers: { 'x-api-key': config.gstinApiKey } });
+    const response = await fetch(url, { headers: { 'x-api-key': config.gstinApiKey }, signal: AbortSignal.timeout(15000) });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
       return { ok: false, error: json?.message || json?.error || `GSTIN_API_${response.status}`, raw: json, checkedAt };
@@ -108,10 +108,12 @@ export async function verifyGstin(gstin, vendorName) {
     const gstinStatus = pick(data, ['sts', 'status', 'gstinStatus']);
     const taxpayerType = pick(data, ['dty', 'taxpayerType', 'taxPayerType']);
     const registrationDate = pick(data, ['rgdt', 'registrationDate', 'dateOfRegistration']);
+    if (!legalName || !['ACTIVE', 'VALID', 'VERIFIED'].includes(gstinStatus.toUpperCase())) return { ok: false, providerVerified: false, error: 'GSTIN_PROVIDER_RESULT_UNVERIFIED', gstin: normalizedGstin, legalName, tradeName, gstinStatus, raw: json, checkedAt };
     const match = compareBusinessNames(vendorName, legalName, tradeName);
 
     return {
       ok: true,
+      providerVerified: true,
       gstin: normalizedGstin,
       legalName,
       tradeName,

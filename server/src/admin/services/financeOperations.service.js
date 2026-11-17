@@ -124,6 +124,7 @@ export async function updateFinanceOperation(bookingId, operationId, input, acto
       if (!String(input.notes || '').trim() || input.reference !== op.reference || !evidenceFiles(input.evidence).length) throw workflowError('RECONCILIATION_EVIDENCE_REQUIRED', 'Match the bank reference and attach independent reconciliation evidence.');
       const reconciliationFiles = evidenceFiles(input.evidence);
       await authorizeEvidenceFiles(reconciliationFiles, booking, actor, 'FINANCE_EVIDENCE');
+      if (reconciliationFiles.some(file => op.evidence.some(existing => existing.assetId === file.assetId))) throw workflowError('INDEPENDENT_RECONCILIATION_EVIDENCE_REQUIRED', 'Attach independent statement evidence, distinct from the transfer advice.', 409);
       // Reconciliation records what actually happened after authorized execution.
       // A subsequently opened case must remain held without hiding a bank movement.
       op.evidence.push(...reconciliationFiles); op.reconciledBy = actor.id;

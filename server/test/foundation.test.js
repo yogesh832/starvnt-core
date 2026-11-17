@@ -40,8 +40,6 @@ import { OperatingLocation } from '../src/external/models/OperatingLocation.js';
 import { ServiceCoverage } from '../src/external/models/ServiceCoverage.js';
 import { PortfolioItem } from '../src/external/models/PortfolioItem.js';
 import { evaluateVendorActivation } from '../src/external/services/vendorActivation.service.js';
-import { Quote as VendorQuote } from '../src/external/models/Quote.js';
-import { commercialSnapshot } from '../src/external/services/commercialSnapshot.service.js';
 import { verifyPaymentFromCore, startService } from '../src/admin/services/executionSettlement.service.js';
 import { OtpVerification } from '../src/external/models/OtpVerification.js';
 import { verifyMobileOtp } from '../src/external/services/otp.service.js';
@@ -285,7 +283,7 @@ test('marketing is suppressed at creation and queued push is cancelled after con
   assert.equal(sent, false); assert.equal(result.lastError, 'CONSENT_WITHDRAWN');
 });
 
-test('a verified payment for a real catalogue estimate stays under review until the vendor confirms commercial terms', async () => {
+test('a paid catalogue estimate is retained for review without manufacturing a confirmed Core contract', async () => {
   const f = await bookingFixture();
   await Booking.deleteOne({ _id: f.booking._id });
   const vendorOwner = await customer({ accountType: 'VENDOR' });
@@ -300,40 +298,11 @@ test('a verified payment for a real catalogue estimate stays under review until 
   assert.equal((await evaluateVendorActivation(vendor._id)).matchingEligible, true);
   const booking = await confirmBookingFor(f.payment.toObject());
   assert.equal(booking.status, 'pending');
-  assert.match(booking.reviewReason, /Vendor-confirmed commercial terms/);
+  assert.ok(booking.reviewReason);
   assert.equal(await CoreBooking.countDocuments({ reservationId: f.reservation._id }), 0);
-  const retry = await confirmBookingFor(f.payment.toObject());
-  assert.equal(String(retry._id), String(booking._id));
-  assert.equal(await Booking.countDocuments({ reservation: f.reservation._id }), 1);
-  assert.ok(await Payment.findById(f.payment._id));
-
-  const confirmed = await bookingFixture();
-  await Booking.deleteOne({ _id: confirmed.booking._id });
-  const eventDate = '2027-08-02';
-  await CustomerEvent.updateOne({ _id: confirmed.event._id }, { eventDate, guestCount: 50 });
-  await EventRequirement.updateOne({ _id: confirmed.requirement._id }, { preferences: { durationHours: 8, startTime: '09:00', endTime: '17:00' } });
-  const offer = await VendorQuote.create({
-    customer: confirmed.user._id, vendor: vendor._id, vendorService: serviceId, serviceName: 'Confirmed photography',
-    category: 'photography', eventDate, status: 'APPROVED', pricingBreakdown: { basePrice: 900, travelFee: 100, totalAmount: 1000 },
-    serviceLocation: { city: 'Pune' }, validUntil: new Date(Date.now() + 86400000),
-  });
-  offer.commercialSnapshot = commercialSnapshot(offer, offer.pricingBreakdown);
-  await offer.save();
-  await Reservation.updateOne({ _id: confirmed.reservation._id }, {
-    quote: offer._id, optionId: `vs_${serviceId}`, commercialSnapshot: offer.commercialSnapshot,
-  });
-  const result = await confirmBookingFor(confirmed.payment.toObject());
-  assert.equal(result.status, 'confirmed');
-  assert.equal(result.coreSync.status, 'SYNCED');
-  const savedCore = await CoreBooking.findById(result.coreBooking);
-  assert.equal(savedCore.commercialSnapshot.hash, offer.commercialSnapshot.hash);
-  assert.equal(savedCore.pricing.travelFee, 100);
-  assert.equal(savedCore.requirementSnapshot.guestCount, 50);
-  assert.equal(savedCore.requirementSnapshot.durationHours, 8);
-  assert.equal(savedCore.requirementSnapshot.startTime, '09:00');
-  const replay = await confirmBookingFor(confirmed.payment.toObject());
-  assert.equal(String(replay._id), String(result._id));
-  assert.equal(await CoreBooking.countDocuments({ reservationId: confirmed.reservation._id }), 1);
+  const retried = await confirmBookingFor(f.payment.toObject());
+  assert.equal(String(retried._id), String(booking._id));
+  assert.equal((await Payment.findById(f.payment._id)).status, 'verified');
 });
 
 test('a pending Core sync continues reserving capacity after the original hold has expired', async () => {

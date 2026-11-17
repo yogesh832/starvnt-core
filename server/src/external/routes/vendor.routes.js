@@ -1,10 +1,12 @@
-import { claimVendorAcquisition } from '../services/vendorAcquisition.service.js';
+import { VendorFinancialProfile } from '../models/VendorFinancialProfile.js';
+import { searchVendorRecords } from '../services/vendorSearch.service.js';
+import { vendorAgreementRoutes } from '../../foundation/agreement.routes.js';
+import { identityOutcome, publicVerification } from '../../common/verificationPolicy.js';
 import { experienceVendorRoutes } from '../../experience/routes.js';
 import { vendorIdentityRoutes } from './vendorIdentity.routes.js';
 import { vendorLearningRoutes } from '../../learning/routes.js';
 import { vendorMeetingRoutes } from '../../learning/meetingRoutes.js';
 import { vendorDiscoveryRewards } from '../../experience/discoveryRewards.routes.js';
-import { vendorProposals } from '../../proposals/routes.js';
 import externalBookingRoutes from './externalBookings.routes.js';
 import readinessRoutes from './readiness.routes.js';
 import { observeProduct } from '../../common/productObservability.js';
@@ -100,21 +102,14 @@ async function resolveVendorContext(req, res, next) {
 }
 
 router.use(resolveVendorContext);
+router.use('/agreements', vendorAgreementRoutes);
+router.get('/search', async (req, res, next) => {
+  try { res.json({ ok: true, ...(await searchVendorRecords(req.vendorId, req.query)) }); }
+  catch (error) { next(error); }
+});
 router.use(vendorIdentityRoutes);
 router.use('/academy', vendorLearningRoutes);
 router.use('/growth-meetings', vendorMeetingRoutes);
-
-// Consent is browser-specific; only post-consent achievements may be dispatched.
-router.post('/acquisition-events/claim', async (req, res, next) => {
-  try {
-    const since = Number(req.body?.consentSince);
-    if (!Number.isFinite(since) || since <= 0 || since > Date.now() || Date.now() - since > 90 * 86400000) return res.status(400).json({ error: 'INVALID_MARKETING_CONSENT_TIME' });
-    await evaluateVendorActivation(req.vendorId);
-    res.json({ ok: true, events: await claimVendorAcquisition(req.vendorId, since) });
-  } catch (err) { next(err); }
-});
-
-router.use('/proposals', vendorProposals);
 router.use(notificationPreferencesRoutes('VENDOR'));
 router.use('/external-bookings', externalBookingRoutes);
 router.use(readinessRoutes);
@@ -131,11 +126,11 @@ router.get('/launchpad', async (req, res, next) => {
   }
 });
 
-// ── Aura+ assistant & Financial Onboarding ──────────────────────────────────
+// â”€â”€ Aura+ assistant & Financial Onboarding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.use('/aura', vendorAuraRoutes);
 router.use('/financial', financialRoutes);
 
-// ── Profile & Activation ───────────────────────────────────────────────────
+// â”€â”€ Profile & Activation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/profile', async (req, res) => {
   let googleRating = null;
   if (req.vendor.googlePlaceId && req.query.skipGoogle !== '1') {
@@ -350,7 +345,7 @@ router.get('/metrics/first-response', async (req, res, next) => {
   }
 });
 
-// ── Vendor-owned business goals ───────────────────────────────────────────
+// â”€â”€ Vendor-owned business goals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/goals', async (req, res, next) => {
   try {
     res.json({ ok: true, goals: await listVendorBusinessGoals(req.vendorId) });
@@ -399,7 +394,7 @@ router.delete('/goals/:goalId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── Services & Capabilities ────────────────────────────────────────────────
+// â”€â”€ Services & Capabilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/services', async (req, res, next) => {
   try {
     const services = await VendorService.find({ vendor: req.vendorId });
@@ -519,7 +514,7 @@ router.delete('/services/:id', async (req, res, next) => {
   }
 });
 
-// ── Capabilities ───────────────────────────────────────────────────────────
+// â”€â”€ Capabilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/capabilities', async (req, res, next) => {
   try {
     const { vendorServiceId, styles, format, teamSize, equipment, categoryAttributes, simultaneousEventLimit } =
@@ -559,7 +554,7 @@ router.post('/capabilities', async (req, res, next) => {
   }
 });
 
-// ── Operating Locations ────────────────────────────────────────────────────
+// â”€â”€ Operating Locations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/locations', async (req, res, next) => {
   try {
     const locations = await OperatingLocation.find({ vendor: req.vendorId, operatingStatus: { $ne: 'INACTIVE' } }).sort({ isPrimary: -1, createdAt: -1 });
@@ -745,7 +740,7 @@ router.delete('/locations/:id', async (req, res, next) => {
   }
 });
 
-// ── Service Coverage ───────────────────────────────────────────────────────
+// â”€â”€ Service Coverage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/coverage', async (req, res, next) => {
   try {
     const coverages = await ServiceCoverage.find({ vendor: req.vendorId });
@@ -806,7 +801,7 @@ router.delete('/coverage/:id', async (req, res, next) => {
   }
 });
 
-// ── Travel Policy ──────────────────────────────────────────────────────────
+// â”€â”€ Travel Policy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/travel-policy', async (req, res, next) => {
   try {
     let policy = await TravelPolicy.findOne({ vendor: req.vendorId });
@@ -850,7 +845,7 @@ router.put('/travel-policy', async (req, res, next) => {
   }
 });
 
-// ── Vendor Resources ───────────────────────────────────────────────────────
+// â”€â”€ Vendor Resources â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/resources', async (req, res, next) => {
   try {
     const resources = await VendorResource.find({ vendor: req.vendorId });
@@ -906,15 +901,15 @@ router.delete('/resources/:id', async (req, res, next) => {
   }
 });
 
-// ── Vendor Availability & Calendar Management ──────────────────────────────
+// â”€â”€ Vendor Availability & Calendar Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/availability/hours', async (req, res, next) => {
   try {
     const defaultHours = {
-      Monday: { isOpen: true, hours: '9 AM – 7 PM' },
-      Tuesday: { isOpen: true, hours: '9 AM – 7 PM' },
-      Wednesday: { isOpen: true, hours: '9 AM – 7 PM' },
-      Thursday: { isOpen: true, hours: '9 AM – 7 PM' },
-      Friday: { isOpen: true, hours: '9 AM – 9 PM' },
+      Monday: { isOpen: true, hours: '9 AM â€“ 7 PM' },
+      Tuesday: { isOpen: true, hours: '9 AM â€“ 7 PM' },
+      Wednesday: { isOpen: true, hours: '9 AM â€“ 7 PM' },
+      Thursday: { isOpen: true, hours: '9 AM â€“ 7 PM' },
+      Friday: { isOpen: true, hours: '9 AM â€“ 9 PM' },
       Saturday: { isOpen: true, hours: 'Full day' },
       Sunday: { isOpen: false, hours: 'Off' },
     };
@@ -1001,7 +996,7 @@ router.post('/availability/bookings', async (req, res) => {
   } catch (err) { scheduleFailure(res, err); }
 });
 
-// ── Aura+ Growth Intelligence (Spec §16) ──────────────────────────────────
+// â”€â”€ Aura+ Growth Intelligence (Spec Â§16) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/intelligence/recommendations', async (req, res, next) => {
   try {
     const insights = await generateVendorInsights(req.vendorId);
@@ -1011,7 +1006,7 @@ router.get('/intelligence/recommendations', async (req, res, next) => {
   }
 });
 
-// ── Notifications & Dynamic Badges ─────────────────────────────────────────
+// â”€â”€ Notifications & Dynamic Badges â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/notifications', async (req, res, next) => {
   try {
     const notifications = await Notification.find({ vendor: req.vendorId }).sort({ createdAt: -1 }).limit(50);
@@ -1105,7 +1100,7 @@ router.get('/badge-counts', async (req, res, next) => {
   }
 });
 
-// ── Reviews & Authentic Client Ratings (Strictly DB/API Driven) ────────────
+// â”€â”€ Reviews & Authentic Client Ratings (Strictly DB/API Driven) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/reviews', async (req, res, next) => {
   try {
     const reviews = await VendorReview.find({
@@ -1202,7 +1197,7 @@ router.post('/reviews/:id/reply', async (req, res, next) => {
   }
 });
 
-// ── Real-Time Messaging & Direct Client Communications (Spec §9, §14, §19) ─
+// â”€â”€ Real-Time Messaging & Direct Client Communications (Spec Â§9, Â§14, Â§19) â”€
 router.get('/messages/threads', async (req, res, next) => {
   try {
     let threads = await VendorMessageThread.find({ vendor: req.vendorId, status: { $ne: 'BLOCKED' } })
@@ -1478,7 +1473,7 @@ router.post('/messages/threads', async (req, res, next) => {
   }
 });
 
-// ── Vendor Documents & KYC Verification (Working Section) ──────────────────
+// â”€â”€ Vendor Documents & KYC Verification (Working Section) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/documents', async (req, res, next) => {
   try {
     const documents = await VendorDocument.find({ vendor: req.vendorId }).sort({ createdAt: -1 });
@@ -1494,8 +1489,9 @@ router.post('/documents/verify-pan', async (req, res, next) => {
     if (!pan || !String(pan).trim()) {
       return res.status(400).json({ error: 'PAN_REQUIRED' });
     }
-    const result = await verifyPan(String(pan).trim(), req.vendor.businessName);
-    res.json({ ok: true, result });
+    if (!String(req.body?.fullLegalName || '').trim()) return res.status(400).json({ error: 'PAN_LEGAL_NAME_REQUIRED' });
+    const result = await verifyPan(String(pan).trim(), String(req.body.fullLegalName).trim());
+    res.json({ ok: true, result: publicVerification(result) });
   } catch (err) {
     next(err);
   }
@@ -1508,7 +1504,7 @@ router.post('/documents/verify-gstin', async (req, res, next) => {
       return res.status(400).json({ error: 'GSTIN_REQUIRED' });
     }
     const result = await verifyGstin(String(gstin).trim(), req.vendor.businessName);
-    res.json({ ok: true, result });
+    res.json({ ok: true, result: publicVerification(result) });
   } catch (err) {
     next(err);
   }
@@ -1561,7 +1557,7 @@ router.post('/documents', async (req, res, next) => {
         error: result.error || '',
       };
 
-      if (result.ok && result.matched) {
+      if (identityOutcome(result) === 'VERIFIED') {
         status = 'VERIFIED';
         resolvedNotes = `GSTIN verified. Legal name: ${result.legalName || 'not provided'}${result.tradeName ? `; Trade name: ${result.tradeName}` : ''}`;
       } else {
@@ -1574,7 +1570,17 @@ router.post('/documents', async (req, res, next) => {
       }
     } else if (normalizedType === 'PAN') {
       verificationSource = 'PAN_API';
-      const result = await verifyPan(normalizedDocumentNumber, req.vendor.businessName);
+      const result = { ok: false, error: 'PAN_FORM_VERIFICATION_REQUIRED' };
+      const previous = await VendorFinancialProfile.findOne({ vendor: req.vendorId });
+      if (previous && normalizedDocumentNumber && previous.pan?.panNumber !== normalizedDocumentNumber) {
+        previous.identityReviewRequired = true; previous.isSettlementEligible = false;
+        previous.pan.verificationStatus = 'SUBMITTED'; previous.pan.verifiedAt = null;
+        previous.pan.history.push({ actor: String(req.externalUser._id), action: 'CHANGED_DOCUMENT_SUBMITTED', status: 'SUBMITTED', at: new Date() });
+        await previous.save();
+        await VendorDocument.updateMany({ vendor: req.vendorId, type: 'PAN' }, { $set: { status: 'SUBMITTED', verifiedAt: null } });
+        req.vendor.verification = { ...(req.vendor.verification?.toObject?.() || {}), isVerified: false, verifiedAt: null };
+        await req.vendor.save();
+      }
       verificationResult = {
         matched: Boolean(result.matched),
         confidence: result.confidence || 'NONE',
@@ -1592,7 +1598,7 @@ router.post('/documents', async (req, res, next) => {
         error: result.error || '',
       };
 
-      if (result.ok && result.matched) {
+      if (identityOutcome(result) === 'VERIFIED') {
         status = 'VERIFIED';
         resolvedNotes = `Corporate PAN verified (${result.entityType || 'Corporate'}). Legal name: ${result.legalName || result.registeredName || 'not provided'}${result.tradeName ? `; Trade name: ${result.tradeName}` : ''}`;
       } else {
