@@ -109,6 +109,7 @@ export function VendorWork({ navigation }: any) {
       ))}
       <MenuRow title="Partner Academy" icon="school-outline" onPress={() => navigation.navigate("VendorAcademy")} />
       <MenuRow title="Partner Launchpad" icon="checkmark-circle-outline" onPress={() => navigation.navigate("VendorLaunchpad")} />
+      <MenuRow title="External bookings" icon="calendar-outline" onPress={() => navigation.navigate("VendorExternalBookings")} />
       <MenuRow title="Business & Legal · Agreements" icon="document-text-outline" onPress={() => navigation.navigate("VendorAgreements")} />
       <MenuRow title="Growth Meetings" icon="people-outline" onPress={() => navigation.navigate("VendorMeetings")} />
       <MenuRow title="Social Media Links" icon="link-outline" onPress={() => navigation.navigate("VendorSocialLinks")} />
