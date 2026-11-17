@@ -92,7 +92,7 @@ test('Vendor Aura resumes the repeated-team-size exchange and asks which active 
   const selected = await send('Studio portraits');
   assert.match(selected.body.pending.summary, /Studio portraits.*15.*Sony/);
   const confirmed = await send('yes');
-  assert.equal(confirmed.body.actions.some(action => action.to === '/vendor/profile'), true);
+  assert.equal(confirmed.body.actions.some(action => action.to === '/vendor/readiness'), true);
   const other = await VendorCapability.findOne({ vendor: f.vendor._id, vendorService: second._id }).lean();
   assert.equal(other.teamSize, 15);
   assert.deepEqual(other.equipment, ['दो Sony के कैमरे']);
