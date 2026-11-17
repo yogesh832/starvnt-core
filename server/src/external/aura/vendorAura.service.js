@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { vendorAuraDiagnostic } from '../../common/vendorAuraDiagnostics.js';
 import { vendorCopy, normalizeVendorLocation, isVendorLocationSetupRequest } from '../../common/vendorAuraUi.js';
 import { VendorAuraSession, VendorAuraMessage } from '../models/VendorAura.js';
 import { VendorService } from '../models/VendorService.js';
@@ -260,6 +261,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
       let reply;
       let actions = [];
       let setup = null;
+      let actionSucceeded = false;
       try {
         const result = await executeAction(vendor, session.pending);
         if (session.pending.kind === 'block_date') {
@@ -273,7 +275,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
           reply = `✅ Revised offer sent for quote ${session.pending.quote.quoteRef || ''} (${session.pending.quote.customerName || 'customer'}) — Total ₹${Number(session.pending.quote.totalAmount).toLocaleString('en-IN')}.`;
           actions = [{ label: 'View Quotes', to: '/vendor/quotes' }];
         } else if (session.pending.kind === 'create_quote') {
-          reply = `✅ Quotation sent to ${session.pending.quote.customerName || 'customer'} for ${session.pending.quote.serviceName} — Total ₹${Number(session.pending.quote.totalAmount).toLocaleString('en-IN')}.`;
+          reply = result?.replayed ? vendorCopy(language, 'recoveredQuote') : `✅ Quotation sent to ${session.pending.quote.customerName || 'customer'} for ${session.pending.quote.serviceName} — Total ₹${Number(session.pending.quote.totalAmount).toLocaleString('en-IN')}.`;
           actions = [{ label: 'View Quotes', to: '/vendor/quotes' }];
         } else {
           const activation = result;
@@ -282,9 +284,10 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
           reply = `✅ ${vendorCopy(language, 'saved')} — ${describeAction(session.pending, language)}.${next.text}`;
           actions = next.actions;
         }
-        if (language !== 'en' && ['block_date','revise_quote','create_quote'].includes(session.pending.kind)) reply = `✅ ${vendorCopy(language,'saved')} — ${describeAction(session.pending,language)}.`;
+        if (language !== 'en' && !result?.replayed && ['block_date','revise_quote','create_quote'].includes(session.pending.kind)) reply = `✅ ${vendorCopy(language,'saved')} — ${describeAction(session.pending,language)}.`;
+        actionSucceeded = true;
       } catch (err) {
-        console.warn('[vendor-aura] setup action failed:', err?.message || err);
+        vendorAuraDiagnostic('ACTION_FAILED', { actionKind: session.pending.kind });
         reply = vendorCopy(language, 'failed');
         if (session.pending.kind === 'block_date') {
           actions = [{ label: 'Availability', to: '/vendor/availability' }];
@@ -295,25 +298,13 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
         }
       }
       await saveTurn(sessionId, text, reply, actions, null, language);
-      console.log('\n' + '═'.repeat(70));
-      console.log(`[Aura Vendor Chat ✓ Confirmed Action]`);
-      console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
-      console.log(`💬 Session  : ${sessionId}`);
-      console.log(`📩 Message  : "${text}"`);
-      console.log(`🤖 Aura Rep : "${reply}"`);
-      console.log('═'.repeat(70) + '\n');
+      if (actionSucceeded) vendorAuraDiagnostic('ACTION_CONFIRMED', { actionKind: session.pending.kind });
       return { reply, actions, fallback: false, profileUpdated: Boolean(setup), setup, pending: null };
     }
     if (answer === false) {
       const reply = vendorCopy(language, 'cancelled');
       await saveTurn(sessionId, text, reply, [], null, language);
-      console.log('\n' + '═'.repeat(70));
-      console.log(`[Aura Vendor Chat ✗ Cancelled Action]`);
-      console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
-      console.log(`💬 Session  : ${sessionId}`);
-      console.log(`📩 Message  : "${text}"`);
-      console.log(`🤖 Aura Rep : "${reply}"`);
-      console.log('═'.repeat(70) + '\n');
+      vendorAuraDiagnostic('ACTION_CANCELLED', { actionKind: session.pending.kind });
       return { reply, actions: [], fallback: false, profileUpdated: false, setup: null, pending: null };
     }
     if (!isMessageRelevantToPending(session.pending, text)) {
@@ -411,7 +402,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
       fallback = false;
     }
   } catch (err) {
-    console.warn('[vendor-aura] LLM failed, using fallback:', err?.code || err?.message || err);
+    vendorAuraDiagnostic('MODEL_FALLBACK');
   }
   tracker.markGenerationEnd();
   if (fallback) {
@@ -424,7 +415,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
   const lastAura = [...history].reverse().find((m) => m.role === 'model')?.content || '';
   const askedAbout = /about your work/i.test(lastAura);
   const { saved, activation } = await applyProfileFromChat(vendor, extractedProfile, text, { askedAbout }).catch((err) => {
-    console.warn('[vendor-aura] profile save failed:', err?.message || err);
+    vendorAuraDiagnostic('PROFILE_SAVE_FAILED');
     return { saved: [], activation: null };
   });
   // Other setup steps: the model proposes, the server validates, the vendor confirms.
@@ -495,26 +486,7 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
   await saveTurn(sessionId, text, reply, actions, pending, language);
 
   const metrics = tracker.getMetrics();
-  console.log('\n' + '═'.repeat(70));
-  console.log(`[Aura Vendor Chat]`);
-  console.log(`🏢 Vendor   : ${vendor.businessName || 'Vendor'} (${vendor._id})`);
-  console.log(`📁 Category : ${vendor.category || 'N/A'} | Page: ${page || 'N/A'}`);
-  console.log(`💬 Session  : ${sessionId}`);
-  console.log(`📩 Msg      : "${text}"`);
-  if (saved.length) {
-    console.log(`💾 Saved    : ${saved.map((s) => `${s.label}: ${s.value}`).join(' · ')}`);
-  }
-  if (proposal) {
-    console.log(`📝 Proposed : ${describeAction(proposal)}`);
-  }
-  console.log(`🤖 Aura (${route.model}${fallback ? ' [FALLBACK]' : ''}):\n"${reply}"`);
-  if (actions?.length) {
-    console.log(`🔗 Actions  : ${actions.map((a) => `${a.label} (${a.to})`).join(', ')}`);
-  }
-  if (metrics?.totalDurationMs) {
-    console.log(`⏱️ Perf     : Total ${metrics.totalDurationMs}ms | FirstToken ${metrics.firstTokenMs || 'N/A'}ms`);
-  }
-  console.log('═'.repeat(70) + '\n');
+  vendorAuraDiagnostic('TURN', { actionKind: proposal?.kind, fallback, savedFieldCount: saved.length, totalDurationMs: metrics?.totalDurationMs, firstTokenMs: metrics?.firstTokenMs });
 
   return {
     reply,

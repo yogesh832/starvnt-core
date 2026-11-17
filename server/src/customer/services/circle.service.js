@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { recordLifecycleThreadAtomically } from './lifecycleThread.js';
 import crypto from 'node:crypto';
 import * as circleRepo from '../repositories/circle.repo.js';
 import * as commerceRepo from '../repositories/commerce.repo.js';
@@ -45,8 +46,10 @@ export async function recordLifecycleEventMessage({
   type = 'message',
   metadata = null,
   serviceName = '',
+  strict = false,
 }) {
   if (!vendorId || !text) return null;
+  const guarded = promise => strict ? promise : promise.catch(() => null);
 
   const now = new Date();
   const logicalKey = `lifecycle:${crypto.createHash('sha256').update(JSON.stringify({ vendorId, customerId, eventId, bookingId, quoteId, opportunityId, sender, type, text, metadata })).digest('hex')}`;
@@ -55,13 +58,20 @@ export async function recordLifecycleEventMessage({
     : opportunityId ? { opportunity: opportunityId }
     : quoteId ? { quote: quoteId }
     : eventId ? { customerEvent: eventId } : null;
-  let thread = contextFilter ? await VendorMessageThread.findOne({
+  const threadFilter = {
     vendor: vendorId, ...(customerId ? { customer: customerId } : {}), ...contextFilter,
-  }) : null;
+  };
+  let thread = null;
+  if (contextFilter && strict) {
+    const rows = await VendorMessageThread.find(threadFilter).limit(2);
+    if (rows.length > 1) throw new Error('LIFECYCLE_CONTEXT_AMBIGUOUS');
+    thread = rows[0] || null;
+  } else if (contextFilter) thread = await VendorMessageThread.findOne(threadFilter);
 
   if (!thread && customerId && contextFilter) {
-    const cust = await ExternalUser.findById(customerId).lean().catch(() => null);
-    const event = eventId ? await CustomerEvent.findById(eventId).lean().catch(() => null) : null;
+    const cust = await guarded(ExternalUser.findById(customerId).lean());
+    if (strict && !cust) throw new Error('LIFECYCLE_CUSTOMER_UNAVAILABLE');
+    const event = eventId ? await guarded(CustomerEvent.findById(eventId).lean()) : null;
     const clientName = cust?.fullName || cust?.name || event?.contactName || 'Customer';
 
     thread = new VendorMessageThread({
@@ -83,7 +93,10 @@ export async function recordLifecycleEventMessage({
     });
   }
 
-  if (thread) {
+  if (strict) {
+    if (!thread || !contextFilter) throw new Error('LIFECYCLE_CONTEXT_REQUIRED');
+    thread = await recordLifecycleThreadAtomically({ thread, contextFilter, logicalKey, sender, senderName, text, metadata, type, now });
+  } else if (thread) {
     thread.lastMessageText = text;
     thread.lastMessageAt = now;
     thread.status = 'ACTIVE';
@@ -113,7 +126,7 @@ export async function recordLifecycleEventMessage({
   }
 
   if (eventId) {
-    await EventMessage.findOneAndUpdate({ event: eventId, idempotencyKey: logicalKey }, { $setOnInsert: {
+    await guarded(EventMessage.findOneAndUpdate({ event: eventId, idempotencyKey: logicalKey }, { $setOnInsert: {
       event: eventId,
       booking: bookingId || null,
       senderType: sender === 'CLIENT' ? 'customer' : sender === 'VENDOR' ? 'vendor' : 'team',
@@ -121,12 +134,12 @@ export async function recordLifecycleEventMessage({
       body: text,
       idempotencyKey: logicalKey,
       createdAt: now,
-    } }, { upsert: true }).catch(() => null);
+    } }, { upsert: true }));
   }
 
   if (sender === 'VENDOR' || sender === 'SYSTEM') {
     if (customerId) {
-      await notifyCustomer({
+      await guarded(notifyCustomer({
         customerId,
         type: type || 'message',
         title: title || `${senderName}: ${text.slice(0, 60)}`,
@@ -136,17 +149,17 @@ export async function recordLifecycleEventMessage({
           : (eventId ? `/customer/events/${eventId}/bookings` : '/customer/updates'),
         eventId: eventId ? String(eventId) : null,
         idempotencyKey: `customer:${logicalKey}`,
-      }).catch(() => null);
+      }));
     }
   } else if (sender === 'CLIENT') {
-    await notifyVendor({
+    await guarded(notifyVendor({
       vendorId,
       title: title || `New message from ${senderName}`,
       message: text.slice(0, 160),
       type: 'MESSAGE',
       link: '/vendor/messages',
       idempotencyKey: `vendor:${logicalKey}`,
-    }).catch(() => null);
+    }));
   }
 
   return thread;

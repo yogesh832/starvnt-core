@@ -1,3 +1,4 @@
+import { vendorAuraDiagnostic } from '../../common/vendorAuraDiagnostics.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import '../../config.js';
 import { extractReplyChunk } from '../../common/streamUtils.js';
@@ -178,7 +179,7 @@ export function createGeminiAdapter({ client } = {}) {
           return result;
         } catch (err) {
           lastErr = err;
-          console.warn(`[vendor-aura] Gemini attempt ${attempt} (${candidateModel}) failed:`, err?.message || err);
+          vendorAuraDiagnostic('MODEL_ATTEMPT_FAILED');
           // A retry would append a second response to text already shown.
           if (streamed) throw err;
           if (!isRetryable(err) || attempt === ATTEMPTS) break;

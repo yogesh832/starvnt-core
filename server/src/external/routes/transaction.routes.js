@@ -1,4 +1,5 @@
 import { reconcileVendorQuotePayment } from '../services/vendorQuotePayment.service.js';
+import { reconcileQuoteCreationEffects } from '../services/quoteCreationEffects.service.js';
 import { commercialSnapshot, assertCommercialSnapshot, confirmedPricing } from '../services/commercialSnapshot.service.js';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import crypto from 'node:crypto';
@@ -348,15 +349,22 @@ router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VEN
 
     // Cross-check with existing quotes to ensure accurate RESPONDED status
     const oppIds = opportunities.map((o) => o._id);
-    const existingQuotes = await Quote.find({ vendor: vendorId, opportunity: { $in: oppIds } }).select('opportunity status').lean().catch(() => []);
-    const quotedOppMap = new Map(existingQuotes.map((q) => [String(q.opportunity), q.status]));
+    const existingQuotes = await Quote.find({ vendor: vendorId, opportunity: { $in: oppIds } }).select('opportunity status commercialSnapshot.version').lean();
+    const quotedOppMap = new Map();
+    for (const quote of existingQuotes) {
+      const sourceId = String(quote.opportunity);
+      quotedOppMap.set(sourceId, [...(quotedOppMap.get(sourceId) || []), quote]);
+    }
 
     const enrichedOpps = await Promise.all(opportunities.map(async (o) => {
-      const quoteStatus = quotedOppMap.get(String(o._id));
+      const quotes = quotedOppMap.get(String(o._id)) || [];
       const plain = await projectVendorContext(o);
-      if (quoteStatus || plain.status === 'RESPONDED') {
+      plain.hasQuote = quotes.length > 0;
+      plain.quoteCount = quotes.length;
+      plain.quoteStatus = quotes.length === 1 ? quotes[0].status : null;
+      const submitted = quotes.some(quote => ['SUBMITTED', 'APPROVED'].includes(quote.status) || Boolean(quote.commercialSnapshot?.version));
+      if (submitted && !['DECLINED', 'EXPIRED'].includes(plain.status)) {
         plain.status = 'RESPONDED';
-        plain.quoteStatus = quoteStatus || 'SUBMITTED';
       }
       return plain;
     }));
@@ -953,6 +961,8 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       pricingBreakdown,
       notes,
       status = 'SUBMITTED',
+      requestKey,
+      expectedEnquiryUpdatedAt,
     } = req.body || {};
 
     const resolvedVendorId =
@@ -995,9 +1005,12 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       notes: String(notes || '').trim(),
       status,
       actor: req.externalUser.fullName || req.externalUser.email,
+      expectedEnquiryUpdatedAt,
+      creationCommand: requestKey === undefined ? undefined : { key: requestKey, actorId: req.externalUser._id, intent: { kind: 'VENDOR_API_QUOTE', opportunityId: opportunityId || null, expectedEnquiryUpdatedAt, customerId: String(scope.customerId), vendorServiceId: String(scope.vendorServiceId), serviceName: serviceName || 'Event Service', eventDate, serviceLocation: serviceLocation || {}, pricingBreakdown: normalizedPricing, notes: String(notes || '').trim(), status } },
     });
 
-    if (opportunityId && quote.status === 'SUBMITTED') {
+    const managedCreationEffects = await reconcileQuoteCreationEffects(quote);
+    if (!managedCreationEffects && !quote.$locals.creationRequestReplayed && opportunityId && quote.status === 'SUBMITTED') {
       await Opportunity.findOneAndUpdate(
         { _id: opportunityId, vendor: resolvedVendorId },
         { status: 'RESPONDED', action: 'Quote Sent' }
@@ -1009,7 +1022,7 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
     const totalAmount = Number(quote.pricingBreakdown?.totalAmount || 0);
     const advanceAmount = Number(quote.advanceAmount || quoteAdvanceAmount(quote, totalAmount));
 
-    if (quote.status === 'SUBMITTED') await recordLifecycleEventMessage({
+    if (!managedCreationEffects && !quote.$locals.creationRequestReplayed && quote.status === 'SUBMITTED') await recordLifecycleEventMessage({
       vendorId: resolvedVendorId,
       customerId: quote.customer,
       eventId: quote.event,
@@ -1022,7 +1035,7 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       type: 'quote',
     }).catch(() => null);
 
-    res.status(201).json({ ok: true, quote: await projectVendorContext(quote) });
+    res.status(201).json({ ok: true, quote: await projectVendorContext(quote), replayed: Boolean(quote.$locals.creationRequestReplayed) });
   } catch (err) {
     next(err);
   }

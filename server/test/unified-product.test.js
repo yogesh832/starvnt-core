@@ -280,7 +280,8 @@ test('new vendor quotes snapshot the category advance policy and version', async
     createdBy: author._id, createdByEmail: author.email, approvedBy: approver._id, approvedByEmail: approver.email, approvedAt: new Date(),
   });
   const resolved = await getCommercialPolicyForCategory('Policy Category');
-  const quote = await createVendorQuote({ vendorId: vendor._id, customerId: customer._id, vendorServiceId: service._id, serviceName: service.name, eventDate: '2027-12-12', pricingBreakdown: { basePrice: 2000, totalAmount: 2000 }, status: 'DRAFT', category: 'Policy Category', advancePolicy: resolved });
+  const source = await Opportunity.create({ vendor: vendor._id, customer: customer._id, vendorService: service._id, serviceName: service.name, eventDate: '2027-12-12' });
+  const quote = await createVendorQuote({ opportunityId: source._id, vendorId: vendor._id, customerId: customer._id, vendorServiceId: service._id, serviceName: service.name, eventDate: '2027-12-12', pricingBreakdown: { basePrice: 2000, totalAmount: 2000 }, status: 'DRAFT', category: 'Policy Category', advancePolicy: resolved });
   assert.equal(quote.advancePayment.percentage, 42);
   assert.equal(quote.advancePayment.policySnapshot.version, policy.version);
   assert.equal(quote.advancePayment.policySnapshot.category, 'Policy Category');
@@ -379,7 +380,8 @@ test('confirmed platform bookings reject overlapping blocks without being modifi
 
 test('unapproved vendors cannot submit offers or access new enquiries', async () => {
   const service = await VendorService.findOne({ vendor: vendor._id });
-  await assert.rejects(() => createVendorQuote({ vendorId: vendor._id, customerId: customer._id, vendorServiceId: service._id, eventDate: '2027-03-10', serviceName: 'Service', pricingBreakdown: { basePrice: 1000, totalAmount: 1000 }, status: 'SUBMITTED' }), { code: 'ACTIVATION_REQUIRED' });
+  const source = await Opportunity.create({ vendor: vendor._id, customer: customer._id, vendorService: service._id, serviceName: service.name, eventDate: '2027-03-10' });
+  await assert.rejects(() => createVendorQuote({ opportunityId: source._id, vendorId: vendor._id, customerId: customer._id, vendorServiceId: service._id, eventDate: '2027-03-10', serviceName: 'Service', pricingBreakdown: { basePrice: 1000, totalAmount: 1000 }, status: 'SUBMITTED' }), { code: 'ACTIVATION_REQUIRED' });
   await request(app).get('/api/vendor/opportunities').set(auth(vendorToken)).expect(403);
 });
 

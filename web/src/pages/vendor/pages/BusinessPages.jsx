@@ -2455,7 +2455,7 @@ function ModuleDocumentCard({ doc, onPreview, onDelete }) {
             <span>{doc.fileSize || "File"}</span>
             <span>·</span>
             <span className={doc.status === "VERIFIED" ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-amber-600 dark:text-amber-400 font-bold"}>
-              {doc.status === "VERIFIED" ? "✓ Verified Document" : "Under Admin Review"}
+              {doc.status === "VERIFIED" ? (doc.contentAccess === 'NO_FILE' ? '✓ Verified identity record (no file)' : '✓ Reviewed evidence file') : 'Under Admin Review'}
             </span>
           </div>
         </div>
@@ -2522,6 +2522,18 @@ export function VendorFinancialOnboardingCard() {
   // File upload state & previews
   const [uploadingDocType, setUploadingDocType] = useState(null);
   const [selectedPreviewDoc, setSelectedPreviewDoc] = useState(null);
+  const [privatePreview, setPrivatePreview] = useState({ loading: false, url: '', mime: '', error: '' });
+  useEffect(() => {
+    let active = true, url = '';
+    if (!selectedPreviewDoc) { setPrivatePreview({ loading: false, url: '', mime: '', error: '' }); return; }
+    if (selectedPreviewDoc.contentAccess === 'NO_FILE') { setPrivatePreview({ loading: false, url: '', mime: '', error: 'No file is attached to this verification record.' }); return; }
+    setPrivatePreview({ loading: true, url: '', mime: '', error: '' });
+    externalApi.raw(`/vendor/documents/${selectedPreviewDoc._id}/content`).then(async response => {
+      const blob = await response.blob(); if (!active) return;
+      url = URL.createObjectURL(blob); setPrivatePreview({ loading: false, url, mime: blob.type, error: '' });
+    }).catch(error => { if (active) setPrivatePreview({ loading: false, url: '', mime: '', error: error.message || 'Private evidence is unavailable.' }); });
+    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+  }, [selectedPreviewDoc?._id]);
 
   const loadFinancialData = useCallback(async () => {
     try {
@@ -2577,10 +2589,12 @@ export function VendorFinancialOnboardingCard() {
       setFeedback("");
       
       let base64Url = "";
-      if (file.type.startsWith("image/")) {
-        base64Url = await new Promise((resolve) => {
+      if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) throw new Error('Choose a PDF, JPEG, PNG or WebP up to 10 MB.');
+      {
+        base64Url = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = () => reject(new Error('Could not read this document.'));
           reader.readAsDataURL(file);
         });
       }
@@ -3378,13 +3392,16 @@ export function VendorFinancialOnboardingCard() {
               </button>
             </div>
 
-            {selectedPreviewDoc.fileUrl?.startsWith("data:image/") ? (
-              <img src={selectedPreviewDoc.fileUrl} alt={selectedPreviewDoc.title} className="w-full max-h-60 object-contain rounded-xl border border-gray-200 dark:border-gray-700" />
+            {privatePreview.loading && <p role="status">Loading private evidence…</p>}
+            {privatePreview.error && <p role="alert" className="text-sm text-red-700">{privatePreview.error}</p>}
+            {privatePreview.url && privatePreview.mime.startsWith('image/') ? (
+              <img src={privatePreview.url} alt={selectedPreviewDoc.title} className="w-full max-h-60 object-contain rounded-xl border border-gray-200 dark:border-gray-700" />
             ) : (
               <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center text-xs text-muted dark:text-gray-300">
-                📄 Document file attached: <strong>{selectedPreviewDoc.fileName}</strong> ({selectedPreviewDoc.fileSize || "PDF"})
+                📄 Evidence record: <strong>{selectedPreviewDoc.fileName}</strong> {selectedPreviewDoc.fileSize ? `(${selectedPreviewDoc.fileSize})` : ''}
               </div>
             )}
+            {privatePreview.url && <a className="inline-flex min-h-11 items-center underline text-sm" href={privatePreview.url} download={`vendor-document-${selectedPreviewDoc._id}.${privatePreview.mime === 'application/pdf' ? 'pdf' : privatePreview.mime === 'image/jpeg' ? 'jpg' : privatePreview.mime === 'image/webp' ? 'webp' : 'png'}`}>Download private copy</a>}
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">

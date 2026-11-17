@@ -34,6 +34,7 @@ export function NextGrowthMeetingCard() {
     {!state && <p role="status" className="text-sm text-muted">Loading schedule…</p>}
     {state && (state.meeting ? <>
       <p className="text-sm font-bold">{state.meeting.title}</p>
+      <p className="text-sm text-muted">Host: {state.meeting.hostName || 'Not recorded'}</p>
       <p className="mt-1 text-sm text-muted">{meetingTime(state.meeting)} · {state.meeting.timezone}</p>
     </> : <p className="text-sm text-muted">{state.error || 'No upcoming meetings for your account.'}</p>)}
     <Link to="/vendor/learning/meetings" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary underline">View Growth Meetings</Link>
@@ -55,7 +56,7 @@ function MeetingCard({ meeting, now, reload }) {
     setMessage('');
     try {
       const result = await externalApi.call(`${endpoint}/${meeting.id}/${path}`, {
-        method, body: { scheduleVersion: meeting.scheduleVersion, ...body },
+        method, body: { scheduleVersion: meeting.scheduleVersion, ...(path === 'feedback' ? { evidenceRevision: meeting.evidenceRevision } : {}), ...body },
       });
       if (path === 'join') {
         window.location.assign(result.url);
@@ -73,6 +74,7 @@ function MeetingCard({ meeting, now, reload }) {
   return <Card title={meeting.title}>
     <div className="space-y-3 text-sm">
       <p className="text-muted">{meetingTime(meeting)} · {meeting.timezone}</p>
+      <p>Host: {meeting.hostName || 'Not recorded'}</p>
       <p className="whitespace-pre-wrap break-words">{meeting.agenda}</p>
       {cancelled && <p className="text-red-700">Cancelled. {meeting.cancellationReason}</p>}
       {meeting.scheduleVersion > 1 && !cancelled && <p className="text-muted">Rescheduled. RSVP applies to this time only.</p>}

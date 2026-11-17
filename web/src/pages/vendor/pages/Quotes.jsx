@@ -302,7 +302,7 @@ export default function Quotes() {
   return (
     <Page
       title="Quotes & Proposals"
-      sub="Create, track, and negotiate quotations. Customers can counter-offer or accept with 30% advance."
+      sub="Create, track, and negotiate quotations. Payment terms follow the approved policy recorded with each offer."
       action={
         <div className="flex items-center gap-2">
           <button

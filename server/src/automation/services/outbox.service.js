@@ -2,6 +2,7 @@ import { OutboxEvent } from '../../admin/models/OutboxEvent.js';
 import { recordBusinessAudit } from '../../admin/utils/audit.js';
 import { dispatchEvent } from './dispatcher.service.js';
 import { incrementMetric, observeMetric } from '../../metrics.js';
+import { isObjectIdOrHexString } from 'mongoose';
 
 /**
  * Publishes an event to the Central Automation Outbox (Spec §12).
@@ -47,10 +48,14 @@ export async function publishOutboxEvent({
  * Worker cycle: Processes pending outbox events with exponential backoff and idempotency.
  * Spec §12, §17.
  */
-export async function processOutboxBatch({ batchSize = 10, immediate = false } = {}) {
+export async function processOutboxBatch({ batchSize = 10, immediate = false, eventId } = {}) {
   const query = {
     status: 'PENDING',
   };
+  if (eventId !== undefined) {
+    if (!isObjectIdOrHexString(eventId)) throw new Error('INVALID_OUTBOX_EVENT_ID');
+    query._id = eventId;
+  }
 
   if (!immediate) {
     query.nextRunAt = { $lte: new Date() };

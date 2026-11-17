@@ -9,6 +9,9 @@ import { ExternalUser } from '../src/external/models/ExternalUser.js';
 import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
 import { VendorService } from '../src/external/models/VendorService.js';
+import { VendorBlockout } from '../src/external/models/VendorBlockout.js';
+import { saveCommitment } from '../src/external/services/commitments.service.js';
+import { validateAction, executeAction } from '../src/external/aura/setupActions.js';
 import { VendorCapability } from '../src/external/models/VendorCapability.js';
 import { VendorAuraSession, VendorAuraMessage } from '../src/external/models/VendorAura.js';
 import { registerLlmAdapter } from '../src/external/aura/llmAdapter.js';
@@ -21,6 +24,55 @@ import { signExternalAccessToken } from '../src/external/utils/tokens.js';
 
 let app, mongo;
 const key = () => crypto.randomUUID();
+test('signed-in Aura chat diagnostics omit conversation, vendor profile and provider error details', async t => {
+  const f = await fixture();
+  const sensitive = 'AABPS1234D PRIVATE_CONTACT_9876543210';
+  await VendorOrganization.updateOne({ _id: f.vendor._id }, { $set: { businessName: sensitive } });
+  registerLlmAdapter({ async chat() { throw new Error(`provider error with ${sensitive}`); } });
+  const lines = [];
+  const original = { info: console.info, log: console.log, warn: console.warn };
+  for (const method of Object.keys(original)) console[method] = (...args) => lines.push(args.map(String).join(' '));
+  t.after(() => { Object.assign(console, original); registerLlmAdapter(null); });
+  const response = await request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId: key(), message: `Please explain this ${sensitive}` }).expect(200);
+  assert.equal(response.body.fallback, true);
+  assert.equal(lines.some(line => line.includes('MODEL_FALLBACK')), true);
+  assert.equal(lines.some(line => line.includes('TURN')), true);
+  assert.equal(lines.join('\n').includes(sensitive), false);
+  assert.equal(lines.join('\n').includes('provider error with'), false);
+});
+test('Aura calendar updates bind the reviewed revision and preserve the partial-day interval', async () => {
+  const { vendor } = await fixture();
+  const actor = { id: vendor.owner, role: 'VENDOR' };
+  const original = await saveCommitment(vendor._id, { date: '2027-02-10', endDate: '2027-02-11', allDay: false, startTime: '10:00', endTime: '12:00', reason: 'Original', idempotencyKey: key() }, actor);
+  const context = { blockedDates: [{ id: String(original._id), revision: original.revision || 0, date: original.date, endDate: original.endDate, allDay: false, from: '10:00', to: '12:00', timezone: original.timezone, scope: 'BUSINESS', recordType: 'VENDOR_BLOCK' }] };
+  const proposal = validateAction({ kind: 'block_date', blockout: { date: original.date, reason: 'Maintenance' } }, { context });
+  assert.equal(proposal.action.blockoutId, String(original._id));
+  assert.equal(proposal.action.blockout.allDay, false);
+  assert.equal(proposal.action.blockout.endDate, '2027-02-11');
+  await saveCommitment(vendor._id, { date: original.date, endDate: original.endDate, allDay: false, startTime: '10:00', endTime: '12:00', reason: 'Changed elsewhere', revision: original.revision || 0, idempotencyKey: key() }, actor, original._id);
+  await assert.rejects(executeAction(vendor, proposal.action), error => error.code === 'STALE_REVISION');
+  assert.equal((await VendorBlockout.findById(original._id)).reason, 'Changed elsewhere');
+  const current = await VendorBlockout.findById(original._id);
+  const fresh = { ...proposal.action, expectedRevision: current.revision };
+  await executeAction(vendor, fresh);
+  await executeAction(vendor, fresh); // Lost response retry must not append another update.
+  const saved = await VendorBlockout.findById(original._id);
+  assert.equal(saved.revision, current.revision + 1);
+  assert.equal(saved.startTime, '10:00'); assert.equal(saved.endTime, '12:00');
+  assert.equal(saved.endDate, '2027-02-11'); assert.equal(saved.reason, 'Maintenance');
+  const foreign = await fixture();
+  await assert.rejects(executeAction(foreign.vendor, fresh), error => error.code === 'CALENDAR_RECORD_CHANGED');
+});
+
+test('Aura calendar proposals do not guess missing dates or ambiguous records', () => {
+  const block = { id: 'record', revision: 2, date: '2027-02-10', recordType: 'VENDOR_BLOCK', scope: 'BUSINESS' };
+  const context = { blockedDates: [block, { ...block, id: 'second' }] };
+  assert.ok(validateAction({ kind: 'block_date', blockout: { reason: 'Maintenance' } }, { context }).error);
+  assert.ok(validateAction({ kind: 'block_date', blockout: { date: block.date, reason: 'Maintenance' } }, { context }).error);
+  assert.ok(validateAction({ kind: 'block_date', blockout: { date: '2027-02-31', reason: 'Maintenance' } }, {}).error);
+  const externalOnly = { blockedDates: [{ ...block, recordType: 'EXTERNAL_COMMITMENT' }] };
+  assert.equal(validateAction({ kind: 'block_date', blockout: { date: block.date, reason: 'Maintenance' } }, { context: externalOnly }).action.isUpdate, false);
+});
 const auth = token => ({ Authorization: `Bearer ${token}` });
 before(async () => {
   mongo = await MongoMemoryServer.create();

@@ -274,23 +274,7 @@ export default function ModuleTable({ kind, embedded = false }) {
 
   async function handleVendorVerification(vendor, approved) {
     if (!vendor?._id) return;
-    const action = approved ? 'approve' : 'reject';
-    if (!window.confirm(`${approved ? 'Approve' : 'Reject'} verification for ${vendor.businessName || 'this vendor'}?`)) return;
-    try {
-      setLoading(true);
-      await adminApi.call(`/external-users/organizations/${vendor._id}/verification`, {
-        method: 'POST',
-        body: {
-          approved,
-          notes: approved ? 'Approved from admin Vendors panel.' : 'Rejected from admin Vendors panel.',
-        },
-      });
-      setReloadKey((k) => k + 1);
-    } catch (e) {
-      setError(e.message || `Failed to ${action} vendor`);
-    } finally {
-      setLoading(false);
-    }
+    setSelectedVendorForKyc(vendor);
   }
 
   async function handleApprovalAction(approval, action) {

@@ -9,6 +9,7 @@ const copy = {
   save: ['Save', 'सेव करें', 'Save karein', 'সংরক্ষণ করুন'],
   cancel: ['Cancel', 'रद्द करें', 'Cancel karein', 'বাতিল করুন'],
   saved: ['Saved', 'सेव कर दिया है', 'Save kar diya hai', 'সংরক্ষণ করা হয়েছে'],
+  recoveredQuote: ['The existing quote was recovered. Open Quotes to review its current version and payment terms.', 'पहले से मौजूद कोटेशन मिल गया है। मौजूदा संस्करण और भुगतान शर्तें देखने के लिए Quotes खोलें।', 'Pehle se maujood quote mil gaya. Current version aur payment terms dekhne ke liye Quotes kholen.', 'আগের কোটেশনটি পাওয়া গেছে। বর্তমান সংস্করণ এবং পেমেন্টের শর্ত দেখতে Quotes খুলুন।'],
   proposal: ['Here is what I can do:', 'मैं यह कर सकती हूँ:', 'Main yeh kar sakti hoon:', 'আমি এটি করতে পারি:'],
   got: ['Got it.', 'समझ गई।', 'Samajh gayi.', 'বুঝেছি।'],
   confirm: ['Shall I save this? Say “yes” to save or “no” to cancel.', 'क्या मैं इसे सेव कर दूँ? सेव करने के लिए “हाँ”, रद्द करने के लिए “नहीं” कहें।', 'Kya main ise save kar doon? Save karne ke liye “haan”, cancel ke liye “nahi” kahein.', 'এটি সংরক্ষণ করব? সংরক্ষণ করতে “হ্যাঁ”, বাতিল করতে “না” বলুন।'],

@@ -4,10 +4,15 @@ import { adminConn, externalConn } from '../db/index.js';
 const change = new Schema({
   actor: String, action: String, reason: String, at: Date, revision: Number,
   startsAt: Date, endsAt: Date, timezone: String, scheduleVersion: Number,
+  hostName: String,
+  requestHash: String,
+  summaryBefore: { summary: String, resources: String, known: Boolean },
+  summaryAfter: { summary: String, resources: String, hash: String },
 }, { _id: false });
 const meeting = new Schema({
   title: { type: String, required: true },
   agenda: { type: String, required: true },
+  hostName: { type: String, maxlength: 160 },
   startsAt: { type: Date, required: true },
   endsAt: { type: Date, required: true },
   timezone: { type: String, required: true },
@@ -37,6 +42,12 @@ const participation = new Schema({
   attendanceActor: String,
   attendanceAt: Date,
   feedback: String,
+  evidenceRevision: { type: Number, default: 0 },
+  evidenceHistory: { type: [new Schema({
+    revision: Number, priorRevision: Number, field: { type: String, enum: ['attended', 'feedback'] },
+    actor: String, actorType: { type: String, enum: ['ADMIN', 'VENDOR'] }, at: Date, reason: String, requestHash: String,
+    before: { known: Boolean, value: Schema.Types.Mixed }, after: Schema.Types.Mixed,
+  }, { _id: false })], default: undefined, select: false },
 }, { timestamps: true });
 participation.index({ meeting: 1, scheduleVersion: 1, vendor: 1 }, { unique: true });
 participation.index({ vendor: 1, meeting: 1, scheduleVersion: 1 });

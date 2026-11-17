@@ -4,6 +4,7 @@ import { isObjectIdOrHexString } from 'mongoose';
 import { requireAdminAuth, requireAnyPermission, requirePermission } from '../admin/middleware/requireAdminAuth.js';
 import { VendorOrganization } from '../external/models/VendorOrganization.js';
 import { GrowthMeeting, MeetingParticipation } from './meetingModels.js';
+import { recordParticipationEvidence } from './participationEvidence.js';
 
 export const adminMeetingRoutes = Router();
 export const vendorMeetingRoutes = Router();
@@ -77,12 +78,15 @@ async function scheduleFields(body) {
   if (unique.length && await VendorOrganization.countDocuments({ _id: { $in: unique }, ...activeVendor }) !== unique.length) {
     throw fail('INVALID_INVITEES', 'Every invitee must be an approved active vendor.');
   }
-  return { title: vendorText(body.title, 160), agenda: vendorText(body.agenda, 4000), startsAt, endsAt, timezone, meetUrl, audience, invitees: unique };
+  // Older admin clients omit host metadata. Preserve that explicit unknown and
+  // do not clear an existing host on their schedule updates.
+  const host = body.hostName === undefined ? {} : { hostName: vendorText(body.hostName, 160) };
+  return { title: vendorText(body.title, 160), agenda: vendorText(body.agenda, 4000), ...host, startsAt, endsAt, timezone, meetUrl, audience, invitees: unique };
 }
 
 function view(row) {
   return {
-    id: String(row._id), title: row.title, agenda: row.agenda, startsAt: row.startsAt, endsAt: row.endsAt,
+    id: String(row._id), title: row.title, agenda: row.agenda, hostName: row.hostName || null, startsAt: row.startsAt, endsAt: row.endsAt,
     timezone: row.timezone, status: row.status, revision: row.revision, scheduleVersion: row.scheduleVersion,
     cancellationReason: row.cancellationReason,
     summary: row.summary, resources: row.resources,
@@ -156,7 +160,7 @@ adminMeetingRoutes.post('/', schedulePermission, h(async (req, res) => {
     row = await GrowthMeeting.findOneAndUpdate(filter, { $setOnInsert: {
       ...fields, requestHash, history: [{
         actor: createdBy, action: 'SCHEDULED', reason, at: new Date(), revision: 1, scheduleVersion: 1,
-        startsAt: fields.startsAt, endsAt: fields.endsAt, timezone: fields.timezone,
+        startsAt: fields.startsAt, endsAt: fields.endsAt, timezone: fields.timezone, hostName: fields.hostName,
       }],
     } }, { new: true, upsert: true });
   } catch (error) {
@@ -171,12 +175,22 @@ async function updateMeeting(req, constraints, set, action, scheduleChange = fal
   const revision = req.body?.revision;
   if (!Number.isSafeInteger(revision) || revision < 1) throw changed();
   const audit = { actor: String(req.admin._id), action, reason: text(req.body.reason, 500), at: new Date(), revision: revision + 1 };
-  if (scheduleChange) Object.assign(audit, { startsAt: set.startsAt, endsAt: set.endsAt, timezone: set.timezone, scheduleVersion: req.body.scheduleVersion + 1 });
+  audit.requestHash = createHash('sha256').update(JSON.stringify({ actor: audit.actor, action, revision, set, reason: audit.reason })).digest('hex');
+  const recover = () => GrowthMeeting.findOne({ _id: getId(req.params.id), revision: revision + 1, history: { $elemMatch: { revision: revision + 1, requestHash: audit.requestHash } } });
+  const replay = await recover();
+  if (replay) return replay;
+  if (scheduleChange) Object.assign(audit, { startsAt: set.startsAt, endsAt: set.endsAt, timezone: set.timezone, hostName: set.hostName, scheduleVersion: req.body.scheduleVersion + 1 });
   const filter = { _id: getId(req.params.id), revision, status: 'SCHEDULED', ...constraints };
+  if (action === 'SUMMARY_SAVED') {
+    const before = await GrowthMeeting.findOne(filter).select('summary resources scheduleVersion').lean();
+    if (!before) { const replay = await recover(); if (replay) return replay; throw changed(); }
+    audit.summaryBefore = { summary: before.summary || '', resources: before.resources || '', known: typeof before.summary === 'string' };
+    audit.summaryAfter = { summary: set.summary, resources: set.resources || '', hash: createHash('sha256').update(JSON.stringify({ scheduleVersion: before.scheduleVersion, summary: set.summary, resources: set.resources || '' })).digest('hex') };
+  }
   const row = await GrowthMeeting.findOneAndUpdate(filter, {
     $set: set, $inc: { revision: 1, ...(scheduleChange ? { scheduleVersion: 1 } : {}) }, $push: { history: audit },
   }, { new: true, runValidators: true });
-  if (!row) throw changed();
+  if (!row) { const replay = await recover(); if (replay) return replay; throw changed(); }
   return row;
 }
 
@@ -204,7 +218,7 @@ adminMeetingRoutes.get('/:id/participation', runPermission, h(async (req, res) =
   const row = await GrowthMeeting.findById(getId(req.params.id)).lean();
   if (!row) throw denied();
   const records = await MeetingParticipation.find({ meeting: row._id, scheduleVersion: row.scheduleVersion })
-    .select('vendor rsvp attended attendanceAt feedback').sort({ updatedAt: -1 }).limit(201).lean();
+    .select('vendor rsvp attended attendanceAt feedback evidenceRevision').sort({ updatedAt: -1 }).limit(201).lean();
   const names = await VendorOrganization.find({ _id: { $in: records.slice(0, 200).map(record => record.vendor) } })
     .select('businessName brandName').lean();
   const byId = new Map(names.map(vendor => [String(vendor._id), vendor.brandName || vendor.businessName]));
@@ -212,9 +226,18 @@ adminMeetingRoutes.get('/:id/participation', runPermission, h(async (req, res) =
     participants: records.slice(0, 200).map(record => ({
       vendorId: String(record.vendor), name: byId.get(String(record.vendor)) || 'Vendor unavailable',
       rsvp: record.rsvp, attended: record.attended, attendanceAt: record.attendanceAt, feedback: record.feedback,
+      evidenceRevision: record.evidenceRevision || 0,
     })),
     truncated: records.length > 200,
   });
+}));
+
+adminMeetingRoutes.get('/:id/participation/:vendorId/history', runPermission, h(async (req, res) => {
+  const row = await GrowthMeeting.findById(getId(req.params.id)).lean();
+  if (!row || !isObjectIdOrHexString(req.params.vendorId)) throw denied();
+  const record = await MeetingParticipation.findOne(participationKey(row, req.params.vendorId)).select('+evidenceHistory').slice('evidenceHistory', -101).lean();
+  if (!record) throw denied();
+  res.json({ scheduleVersion: row.scheduleVersion, evidenceRevision: record.evidenceRevision || 0, history: (record.evidenceHistory || []).slice(-100).map(({ requestHash, ...entry }) => entry), truncated: record.evidenceHistory?.length > 100 });
 }));
 
 adminMeetingRoutes.put('/:id/attendance', runPermission, h(async (req, res) => {
@@ -232,19 +255,20 @@ adminMeetingRoutes.put('/:id/attendance', runPermission, h(async (req, res) => {
       !await VendorOrganization.exists({ _id: vendorId, ...activeVendor }))) {
     throw fail('VENDOR_NOT_ELIGIBLE', 'This vendor was not eligible for the meeting.', 403);
   }
-  const participant = await saveParticipation(filter, {
-    attended, attendanceActor: String(req.admin._id), attendanceAt: new Date(),
+  const participant = await recordParticipationEvidence(filter, {
+    field: 'attended', value: attended, actor: req.admin._id, actorType: 'ADMIN', create: true,
+    expectedRevision: req.body.evidenceRevision, reason: text(req.body.reason, 500, false),
   });
-  res.json({ attended: participant.attended });
+  res.json({ attended: participant.attended, evidenceRevision: participant.evidenceRevision });
 }));
 
 vendorMeetingRoutes.use(noStore);
 vendorMeetingRoutes.get('/next', h(async (req, res) => {
   const row = await GrowthMeeting.findOne({
     ...vendorAudience(req), status: 'SCHEDULED', endsAt: { $gt: new Date() },
-  }).select('title startsAt endsAt timezone').sort({ startsAt: 1, _id: 1 }).lean();
+  }).select('title hostName startsAt endsAt timezone').sort({ startsAt: 1, _id: 1 }).lean();
   res.json({
-    meeting: row ? { id: String(row._id), title: row.title, startsAt: row.startsAt, endsAt: row.endsAt, timezone: row.timezone } : null,
+    meeting: row ? { id: String(row._id), title: row.title, hostName: row.hostName || null, startsAt: row.startsAt, endsAt: row.endsAt, timezone: row.timezone } : null,
   });
 }));
 
@@ -259,7 +283,7 @@ vendorMeetingRoutes.get('/', h(async (req, res) => {
   const rows = [...upcoming.slice(0, 50), ...past.slice(0, 50)];
   const participation = await MeetingParticipation.find({
     vendor: req.vendorId, meeting: { $in: rows.map(row => row._id) },
-  }).select('meeting scheduleVersion rsvp attended feedback').lean();
+  }).select('meeting scheduleVersion rsvp attended feedback evidenceRevision').lean();
   const byVersion = new Map(participation.map(row => [`${row.meeting}:${row.scheduleVersion}`, row]));
   res.json({
     meetings: rows.map(row => {
@@ -267,6 +291,7 @@ vendorMeetingRoutes.get('/', h(async (req, res) => {
       return {
         ...view(row), rsvp: record?.rsvp || null, attended: record?.attended ?? null,
         feedback: record?.feedback || '', canJoin: joinOpen(row, now.getTime()),
+        evidenceRevision: record?.evidenceRevision || 0,
       };
     }),
     truncated: upcoming.length > 50 || past.length > 50,
@@ -298,9 +323,9 @@ vendorMeetingRoutes.put('/:id/feedback', h(async (req, res) => {
   const row = await visibleMeeting(req);
   if (row.status !== 'SCHEDULED' || row.endsAt > new Date() || req.body?.scheduleVersion !== row.scheduleVersion) throw changed();
   const feedback = text(req.body.feedback, 1500);
-  const saved = await MeetingParticipation.findOneAndUpdate({
+  const saved = await recordParticipationEvidence({
     ...participationKey(row, req.vendorId), attended: true,
-  }, { $set: { feedback } }, { new: true });
+  }, { field: 'feedback', value: feedback, actor: req.externalUser._id, actorType: 'VENDOR', expectedRevision: req.body.evidenceRevision });
   if (!saved) throw fail('ATTENDANCE_REQUIRED', 'Feedback is available after staff record your attendance.', 403);
-  res.json({ feedback: saved.feedback });
+  res.json({ feedback: saved.feedback, evidenceRevision: saved.evidenceRevision });
 }));

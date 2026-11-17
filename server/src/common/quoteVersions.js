@@ -10,6 +10,7 @@ export function quoteVersionRecord(quote, provenance = 'SUBMITTED_VERSION') {
   const value = quote.toObject ? quote.toObject() : quote;
   const content = canonical({ vendorId: String(value.vendor?._id || value.vendor), customerId: String(value.customer?._id || value.customer), vendorServiceId: String(value.vendorService?._id || value.vendorService),
     opportunityId: value.opportunity ? String(value.opportunity?._id || value.opportunity) : null,
+    ...(value.creationEnquiryUpdatedAt ? { creationEnquiryUpdatedAt: value.creationEnquiryUpdatedAt } : {}),
     serviceName: value.serviceName, eventDate: value.eventDate, serviceLocation: value.serviceLocation,
     pricingBreakdown: value.pricingBreakdown, notes: value.notes, validUntil: value.validUntil,
     commercialSnapshot: value.commercialSnapshot, advancePolicySnapshot: value.advancePayment?.policySnapshot || null,

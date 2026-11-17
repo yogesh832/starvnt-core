@@ -11,7 +11,8 @@ import {
   VendorReviews,
 } from "./VendorInsights";
 import { external } from "../api/runtime";
-import { pickUpload } from "../api/upload";
+import { pickUpload, pickPrivateDocument } from "../api/upload";
+import { openPrivateMedia } from '../privateMedia';
 import type { Data } from "../api/client";
 import { FinancialSummary } from "./Customer";
 import {
@@ -109,6 +110,7 @@ export function VendorWork({ navigation }: any) {
       ))}
       <MenuRow title="Partner Academy" icon="school-outline" onPress={() => navigation.navigate("VendorAcademy")} />
       <MenuRow title="Partner Launchpad" icon="checkmark-circle-outline" onPress={() => navigation.navigate("VendorLaunchpad")} />
+      <MenuRow title="External bookings" icon="calendar-outline" onPress={() => navigation.navigate("VendorExternalBookings")} />
       <MenuRow title="Business & Legal · Agreements" icon="document-text-outline" onPress={() => navigation.navigate("VendorAgreements")} />
       <MenuRow title="Growth Meetings" icon="people-outline" onPress={() => navigation.navigate("VendorMeetings")} />
       <MenuRow title="Social Media Links" icon="link-outline" onPress={() => navigation.navigate("VendorSocialLinks")} />
@@ -259,16 +261,14 @@ function VendorModuleBody({ route, navigation }: any) {
                   {row.manualReview.reason}
                 </Txt>
               )}
-              {!!row.fileUrl && (
+              {row.contentAccess && row.contentAccess !== 'NO_FILE' && (
                 <Button
                   title="Open document"
                   secondary
                   busy={a.busy}
                   onPress={() => {
                     void a.run(async () => {
-                      if (!/^https?:\/\//i.test(row.fileUrl))
-                        throw new Error("This document link is unavailable.");
-                      await Linking.openURL(row.fileUrl);
+                      await openPrivateMedia(external, `/vendor/documents/${id(row)}/content`, id(row));
                     });
                   }}
                 />
@@ -298,7 +298,8 @@ function VendorModuleBody({ route, navigation }: any) {
           {key === "enquiries" && (
             <>
               <Txt muted>{row.customer?.fullName || row.clientName}</Txt>
-              {["NEW", "VIEWED"].includes(row.status) && (
+              {row.hasQuote !== false && <Button title="Review existing quotes" secondary onPress={() => navigation.navigate("VendorModule", { module: "quotes" })} />}
+              {row.hasQuote === false && ["NEW", "VIEWED", "RESPONDED"].includes(row.status) && (
                 <Button
                   title="Prepare a quote"
                   onPress={() =>
@@ -563,6 +564,8 @@ function VendorFormBody({ route, navigation }: any) {
         "POST",
         {
           opportunityId: revise ? undefined : id(item),
+          requestKey: revise ? undefined : form.idempotencyKey,
+          expectedEnquiryUpdatedAt: revise ? undefined : item.updatedAt,
           expectedCommercialVersion: revise ? item.commercialSnapshot?.version ?? 0 : undefined,
           customerId: item.customer?._id || item.customer,
           vendorServiceId: item.vendorService,
@@ -718,13 +721,13 @@ function VendorFormBody({ route, navigation }: any) {
           )}
           <Button
             title={
-              asset ? `Uploaded: ${asset.filename}` : "Choose & upload a file"
+              asset ? `${kind === 'documents' ? 'Selected' : 'Uploaded'}: ${asset.filename}` : "Choose a file"
             }
             secondary
             busy={a.busy}
             onPress={() => {
               void a.run(async () => {
-                const d = await pickUpload(kind === "portfolio");
+                const d = kind === 'documents' ? await pickPrivateDocument() : await pickUpload(kind === "portfolio");
                 if (d) setAsset(d);
               });
             }}

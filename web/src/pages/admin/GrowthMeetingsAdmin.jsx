@@ -6,11 +6,27 @@ const endpoint = '/growth-meetings';
 const field = 'mt-1 block min-h-11 w-full rounded-lg border p-2';
 const button = 'min-h-11 rounded-xl border px-4 text-sm font-semibold disabled:opacity-50';
 const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-const empty = { title: '', agenda: '', startsAt: '', endsAt: '', timezone: deviceZone, meetUrl: '', audience: 'ACTIVE', invitees: '' };
+const empty = { title: '', agenda: '', hostName: '', startsAt: '', endsAt: '', timezone: deviceZone, meetUrl: '', audience: 'ACTIVE', invitees: '' };
 const localTime = value => {
   const time = new Date(value);
   return new Date(time.getTime() - time.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
+
+function ParticipationHistory({ meetingId, vendorId, revision }) {
+  const [data, setData] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  useEffect(() => { setData(null); setError(''); }, [meetingId, vendorId, revision]);
+  return <div><button type="button" className={button} disabled={busy} onClick={async () => {
+    setBusy(true); setError('');
+    try { setData(await adminApi.call(`${endpoint}/${meetingId}/participation/${vendorId}/history`)); }
+    catch (error) { setError(error.message); } finally { setBusy(false); }
+  }}>View participation history</button>
+    {error && <p role="alert">{error}</p>}
+    {data && <><p className="text-sm">Schedule {data.scheduleVersion} · Evidence revision {data.evidenceRevision}. Earlier unrecorded edits cannot be reconstructed.</p>
+      {!data.history.length && <p>No versioned changes recorded yet.</p>}
+      {data.history.map(entry => <details key={entry.revision} className="mt-2 rounded-lg border p-2"><summary>Revision {entry.revision} · {entry.field === 'attended' ? 'Attendance' : 'Feedback'}</summary><p>{entry.actorType} · {entry.actor} · {new Date(entry.at).toLocaleString()}</p><p className="whitespace-pre-wrap break-words">Before: {entry.before.known ? String(entry.before.value) : 'Not recorded'}</p><p className="whitespace-pre-wrap break-words">After: {String(entry.after)}</p><p>{entry.reason || 'Reason not recorded'}</p></details>)}
+      {data.truncated && <p>Showing the latest 100 changes.</p>}</>}
+  </div>;
+}
 
 export default function GrowthMeetingsAdmin() {
   const { can } = useAdminAuth();
@@ -26,6 +42,7 @@ export default function GrowthMeetingsAdmin() {
   const [participants, setParticipants] = useState(null);
   const [attendee, setAttendee] = useState('');
   const [attendance, setAttendance] = useState('yes');
+  const [attendanceReason, setAttendanceReason] = useState('');
   const [query, setQuery] = useState('');
   const [candidates, setCandidates] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -47,6 +64,7 @@ export default function GrowthMeetingsAdmin() {
     setResources(row?.resources || '');
     setParticipants(null);
     setAttendee('');
+    setAttendanceReason('');
     setQuery('');
     setCandidates(null);
     setReason('');
@@ -70,7 +88,7 @@ export default function GrowthMeetingsAdmin() {
     event.preventDefault();
     act(async () => {
       const fields = {
-        title: draft.title, agenda: draft.agenda, timezone: draft.timezone,
+        title: draft.title, agenda: draft.agenda, hostName: draft.hostName, timezone: draft.timezone,
         startsAt: new Date(draft.startsAt).toISOString(), endsAt: new Date(draft.endsAt).toISOString(),
         meetUrl: draft.meetUrl, audience: draft.audience,
         invitees: draft.audience === 'INVITED' ? draft.invitees.split(/[,\s]+/).filter(Boolean) : [],
@@ -115,12 +133,14 @@ export default function GrowthMeetingsAdmin() {
       {data.truncated && <p className="text-sm text-muted">Showing the 100 most recent scheduled dates.</p>}
       {meeting && <p className="rounded-xl bg-white p-4 text-sm">
         {meeting.title} · {meeting.status} · Schedule version {meeting.scheduleVersion}
+        <br />Host: {meeting.hostName || 'Not recorded'}
         <br />{new Date(meeting.startsAt).toLocaleString(undefined, { timeZone: meeting.timezone })} · {meeting.timezone}
       </p>}
       {canEditSchedule && <form className="space-y-3 rounded-2xl bg-white p-4" onSubmit={saveSchedule}>
         <h2 className="font-bold">{meeting ? 'Change schedule' : 'Schedule a meeting'}</h2>
         {meeting && <p className="text-sm text-muted">A schedule change clears responses for the current time. Vendors respond again for the revised meeting.</p>}
         <label className="block">Topic<input className={field} required maxLength={160} {...bind('title')} /></label>
+        <label className="block">Host display name<input className={field} required maxLength={160} value={draft.hostName || ''} onChange={event => setDraft({ ...draft, hostName: event.target.value })} /></label>
         <label className="block">Agenda<textarea className={field} required maxLength={4000} {...bind('agenda')} /></label>
         <p className="text-sm text-muted">Enter the start and end in your device timezone ({deviceZone}). The display timezone is shown to vendors.</p>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -156,6 +176,21 @@ export default function GrowthMeetingsAdmin() {
           value={reason} onChange={event => setReason(event.target.value)} /></label>
         <button className={button} type="submit" disabled={busy}>{meeting ? 'Save revised schedule' : 'Schedule meeting'}</button>
       </form>}
+      {meeting && <section className="space-y-2 rounded-2xl bg-white p-4">
+        <h2 className="font-bold">Meeting decision history</h2>
+        {(meeting.history || []).map((event, index) => <details key={`${event.revision}:${index}`} className="rounded-xl border p-3">
+          <summary className="cursor-pointer text-sm font-semibold">Revision {event.revision} · {event.action} · {new Date(event.at).toLocaleString()}</summary>
+          <p className="mt-2 break-words text-sm">{event.reason} · Actor {event.actor}</p>
+          {event.hostName && <p className="text-sm">Host: {event.hostName}</p>}
+          {event.summaryAfter?.hash && <>
+            <h3 className="mt-2 font-semibold">Summary and resources saved</h3>
+            <p className="whitespace-pre-wrap break-words text-sm">{event.summaryAfter.summary}</p>
+            <p className="whitespace-pre-wrap break-words text-sm">{event.summaryAfter.resources || 'No resource notes in this revision.'}</p>
+            <p className="break-all text-xs text-muted">Hash: {event.summaryAfter.hash}</p>
+            {event.summaryBefore?.known && <details className="mt-2"><summary>Content before this change</summary><p className="whitespace-pre-wrap break-words text-sm">{event.summaryBefore.summary}</p><p className="whitespace-pre-wrap break-words text-sm">{event.summaryBefore.resources}</p></details>}
+          </>}
+        </details>)}
+      </section>}
       {meeting && canSchedule && !ended && !cancelled && <section className="space-y-3 rounded-2xl bg-white p-4">
         <h2 className="font-bold">Cancellation</h2>
         <label className="block">Cancellation reason shown to vendors<input className={field} maxLength={500} value={reason} onChange={event => setReason(event.target.value)} /></label>
@@ -170,6 +205,7 @@ export default function GrowthMeetingsAdmin() {
               {row.name} · {row.rsvp || 'No RSVP'} · {row.attended === undefined ? 'Attendance pending' : row.attended ? 'Attended' : 'Did not attend'}
               <p className="break-all text-xs text-muted">{row.vendorId}</p>
               {row.feedback && <p className="whitespace-pre-wrap break-words">{row.feedback}</p>}
+              <ParticipationHistory key={`${meeting.id}:${row.vendorId}:${row.evidenceRevision}`} meetingId={meeting.id} vendorId={row.vendorId} revision={row.evidenceRevision} />
               {ended && !cancelled && <button type="button" className="min-h-11 text-primary underline" onClick={() => {
                 setAttendee(row.vendorId);
                 setAttendance(row.attended === false ? 'no' : 'yes');
@@ -183,15 +219,17 @@ export default function GrowthMeetingsAdmin() {
           event.preventDefault();
           act(async () => {
             await adminApi.call(`${endpoint}/${meeting.id}/attendance`, {
-              method: 'PUT', body: { vendorId: attendee.trim(), attended: attendance === 'yes', scheduleVersion: meeting.scheduleVersion },
+              method: 'PUT', body: { vendorId: attendee.trim(), attended: attendance === 'yes', scheduleVersion: meeting.scheduleVersion, evidenceRevision: participants?.participants.find(row => row.vendorId === attendee.trim())?.evidenceRevision ?? 0, reason: attendanceReason },
             });
             await loadParticipants();
+            setAttendanceReason('');
           }, 'Attendance recorded.');
         }}>
           <label className="block">Vendor organization ID<input className={field} required maxLength={24} value={attendee} onChange={event => setAttendee(event.target.value)} /></label>
-          <label className="block">Attendance<select className={field} value={attendance} onChange={event => setAttendance(event.target.value)}>
+          <label className="block">Attendance note (optional)<input className={field} maxLength={500} value={attendanceReason} onChange={event => setAttendanceReason(event.target.value)} /></label>
+          <div><label htmlFor="meeting-attendance" className="block">Attendance</label><select id="meeting-attendance" className={field} value={attendance} onChange={event => setAttendance(event.target.value)}>
             <option value="yes">Attended</option><option value="no">Did not attend</option>
-          </select></label>
+          </select></div>
           <button type="submit" className={button} disabled={busy}>Save attendance</button>
         </form>}
       </section>}

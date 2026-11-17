@@ -2,6 +2,7 @@ import { VendorFinancialProfile } from '../models/VendorFinancialProfile.js';
 import { searchVendorRecords } from '../services/vendorSearch.service.js';
 import { vendorAgreementRoutes } from '../../foundation/agreement.routes.js';
 import { identityOutcome, publicVerification } from '../../common/verificationPolicy.js';
+import { decodePrivateDocument, sendPrivateDocument } from '../services/privateVendorDocument.service.js';
 import { experienceVendorRoutes } from '../../experience/routes.js';
 import { vendorIdentityRoutes } from './vendorIdentity.routes.js';
 import { vendorLearningRoutes } from '../../learning/routes.js';
@@ -1476,6 +1477,7 @@ router.post('/messages/threads', async (req, res, next) => {
 // â”€â”€ Vendor Documents & KYC Verification (Working Section) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/documents', async (req, res, next) => {
   try {
+    res.set('Cache-Control', 'private, no-store');
     const documents = await VendorDocument.find({ vendor: req.vendorId }).sort({ createdAt: -1 });
     res.json({ ok: true, documents });
   } catch (err) {
@@ -1525,15 +1527,26 @@ function providerReviewReason(result, label) {
   return `${label} check could not auto-verify.`;
 }
 
-router.post('/documents', async (req, res, next) => {
+router.get('/documents/:id/content', async (req, res, next) => {
+  try {
+    const document = mongoose.isValidObjectId(req.params.id) && await VendorDocument.findOne({ _id: req.params.id, vendor: req.vendorId }).select('+privateContent');
+    if (!document) return res.status(404).json({ error: 'DOCUMENT_NOT_FOUND' });
+    await sendPrivateDocument(res, document, req.externalUser._id, 'EXTERNAL');
+  } catch (error) { next(error); }
+});
+
+router.post('/documents', (req, res, next) => withVendorSchedule(`identity:${req.vendorId}`, async () => {
   try {
     const { title, type, documentNumber, fileName, fileUrl, fileSize, notes, expiryDate } = req.body || {};
-    if (!title || !title.trim()) {
+    if (typeof title !== 'string' || !title.trim() || title.length > 160) {
       return res.status(400).json({ error: 'TITLE_REQUIRED' });
     }
 
     const normalizedType = type || 'OTHER';
-    const normalizedDocumentNumber = documentNumber ? String(documentNumber).trim().toUpperCase() : '';
+    if (!VendorDocument.schema.path('type').enumValues.includes(normalizedType) || [documentNumber, fileName, notes, expiryDate].some(value => value !== undefined && value !== null && typeof value !== 'string') || String(documentNumber || '').length > 64 || String(fileName || '').length > 160 || String(notes || '').length > 1000 || String(expiryDate || '').length > 32) return res.status(400).json({ error: 'INVALID_DOCUMENT_METADATA', message: 'Review the document type and bounded text fields.' });
+    const privateFile = decodePrivateDocument(fileUrl);
+    const previousFinancial = ['PAN', 'GST'].includes(normalizedType) ? await VendorFinancialProfile.findOne({ vendor: req.vendorId }) : null;
+    const normalizedDocumentNumber = documentNumber ? String(documentNumber).trim().toUpperCase() : normalizedType === 'PAN' ? previousFinancial?.pan?.panNumber || '' : normalizedType === 'GST' && previousFinancial?.gst?.gstin !== 'N/A' ? previousFinancial?.gst?.gstin || '' : '';
     let status = 'SUBMITTED';
     let verificationSource = 'MANUAL';
     let verificationResult = undefined;
@@ -1542,7 +1555,7 @@ router.post('/documents', async (req, res, next) => {
 
     if (normalizedType === 'GST') {
       verificationSource = 'GSTIN_API';
-      const result = await verifyGstin(normalizedDocumentNumber, req.vendor.businessName);
+      const result = privateFile ? { ok: false, error: 'GST_FORM_VERIFICATION_REQUIRED' } : await verifyGstin(normalizedDocumentNumber, req.vendor.businessName);
       verificationResult = {
         matched: Boolean(result.matched),
         confidence: result.confidence || 'NONE',
@@ -1557,12 +1570,12 @@ router.post('/documents', async (req, res, next) => {
         error: result.error || '',
       };
 
-      if (identityOutcome(result) === 'VERIFIED') {
+      if (identityOutcome(result) === 'VERIFIED' && !privateFile) {
         status = 'VERIFIED';
         resolvedNotes = `GSTIN verified. Legal name: ${result.legalName || 'not provided'}${result.tradeName ? `; Trade name: ${result.tradeName}` : ''}`;
       } else {
         status = 'SUBMITTED';
-        const reason = result.ok
+        const reason = privateFile && identityOutcome(result) === 'VERIFIED' ? 'Uploaded certificate requires independent document review; provider lookup alone does not authenticate the file.' : result.ok
           ? `GSTIN found, but name did not confidently match "${req.vendor.businessName}".`
           : providerReviewReason(result, 'GSTIN');
         resolvedNotes = [resolvedNotes, `${reason} Admin review required.`].filter(Boolean).join(' ');
@@ -1571,7 +1584,7 @@ router.post('/documents', async (req, res, next) => {
     } else if (normalizedType === 'PAN') {
       verificationSource = 'PAN_API';
       const result = { ok: false, error: 'PAN_FORM_VERIFICATION_REQUIRED' };
-      const previous = await VendorFinancialProfile.findOne({ vendor: req.vendorId });
+      const previous = previousFinancial;
       if (previous && normalizedDocumentNumber && previous.pan?.panNumber !== normalizedDocumentNumber) {
         previous.identityReviewRequired = true; previous.isSettlementEligible = false;
         previous.pan.verificationStatus = 'SUBMITTED'; previous.pan.verifiedAt = null;
@@ -1617,8 +1630,14 @@ router.post('/documents', async (req, res, next) => {
       type: normalizedType,
       documentNumber: normalizedDocumentNumber,
       fileName: fileName ? fileName.trim() : `${title.trim().replace(/\s+/g, '_')}.pdf`,
-      fileUrl: fileUrl || '',
-      fileSize: fileSize || '1.2 MB',
+      fileUrl: '',
+      privateContent: privateFile?.bytes,
+      contentMime: privateFile?.mime,
+      contentSize: privateFile?.size,
+      contentHash: privateFile?.hash,
+      uploadedBy: privateFile ? String(req.externalUser._id) : undefined,
+      uploadedAt: privateFile ? new Date() : undefined,
+      fileSize: privateFile ? `${(privateFile.size / (1024 * 1024)).toFixed(2)} MB` : '',
       status,
       notes: resolvedNotes,
       expiryDate: expiryDate || '',
@@ -1659,7 +1678,7 @@ router.post('/documents', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-});
+}).catch(next));
 
 router.delete('/documents/:id', async (req, res, next) => {
   try {

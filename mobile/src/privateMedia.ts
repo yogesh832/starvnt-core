@@ -11,7 +11,7 @@ export async function openPrivateMedia(api: { download: (path: string) => Promis
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     return;
   }
-  const extension = mime.includes('pdf') ? 'pdf' : mime.includes('video') ? 'mp4' : mime.includes('text/plain') ? 'txt' : 'jpg';
+  const extension = mime.includes('pdf') ? 'pdf' : mime.includes('video') ? 'mp4' : mime.includes('text/plain') ? 'txt' : mime.includes('image/png') ? 'png' : mime.includes('image/webp') ? 'webp' : 'jpg';
   const local = new File(Paths.cache, `private-media-${assetId}.${extension}`);
   local.create({ overwrite: true }); local.write(new Uint8Array(await response.arrayBuffer()));
   try {

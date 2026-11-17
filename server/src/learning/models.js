@@ -1,5 +1,6 @@
 import { Schema } from 'mongoose';
 import { adminConn, externalConn } from '../db/index.js';
+import { readinessMetricKeys } from '../common/readinessMetrics.js';
 
 export const learningCategories = [
   'Getting Started', 'Profile & Branding', 'Enquiry Management', 'Quotation & Sales',
@@ -8,13 +9,17 @@ export const learningCategories = [
 
 const history = new Schema({
   actor: String, action: String, at: Date, reason: String, revision: Number, requestHash: String,
-  rightsReference: String, rightsExpiresAt: Date, publishAt: Date, contentVersion: Number, videoId: String,
+  rightsReference: String, rightsExpiresAt: Date, publishAt: Date, contentVersion: Number, contentHash: String, videoId: String,
 }, { _id: false });
 
 const lesson = new Schema({
   title: { type: String, required: true, maxlength: 160 },
   category: { type: String, enum: learningCategories, required: true },
   objective: { type: String, required: true, maxlength: 400 },
+  description: { type: String, default: '', maxlength: 1000 },
+  difficulty: { type: String, default: '', maxlength: 80 },
+  featured: { type: Boolean, default: false },
+  needsTags: [{ type: String, enum: readinessMetricKeys }],
   content: { type: String, required: true, maxlength: 20000 },
   videoId: { type: String, default: '' },
   captions: { type: String, default: '' },
@@ -27,6 +32,11 @@ const lesson = new Schema({
   lastEditedBy: String,
   revision: { type: Number, default: 1 },
   contentVersion: { type: Number, default: 1 },
+  contentVersions: { type: [new Schema({
+    version: Number, hash: String, hashVersion: { type: Number, enum: [1, 2] }, actor: String, capturedAt: Date,
+    provenance: { type: String, enum: ['CAPTURED_ON_SAVE', 'RECOVERED_CURRENT_ON_EDIT'] },
+    content: { title: String, category: String, objective: String, content: String, resources: String, videoId: String, captions: String, durationSeconds: Number, description: String, difficulty: String, featured: Boolean, needsTags: { type: [String], default: undefined } },
+  }, { _id: false })], select: false, default: undefined },
   createdBy: { type: String, required: true },
   requestKey: { type: String, required: true },
   requestHash: { type: String, required: true },

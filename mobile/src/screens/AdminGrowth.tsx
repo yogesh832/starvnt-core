@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Switch } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { internal } from '../api/runtime';
 import type { Data } from '../api/client';
@@ -22,16 +23,31 @@ function GrowthFields({ fields, form, change, busy }: {
       maxLength={limit} multiline={multiline} onChangeText={value => change(name, value)} />)}</>;
 }
 
+function ParticipationHistory({ path, revision }: { path: string; revision: number }) {
+  const [open, setOpen] = useState(false);
+  const resource = useResource(internal, path, revision, open);
+  return <><Button title="View participation history" secondary onPress={() => { setOpen(true); if (open) void resource.refresh(); }} />
+    {open && <><ErrorNotice message={resource.error} retry={resource.refresh} />
+      {resource.loading && <Txt>Loading history…</Txt>}
+      {resource.data.history && <><Txt>Schedule {resource.data.scheduleVersion} · Evidence revision {resource.data.evidenceRevision}. Earlier unrecorded edits cannot be reconstructed.</Txt>
+        {!resource.data.history.length && <Txt>No versioned changes recorded yet.</Txt>}
+        {resource.data.history.map((entry: Data) => <Card key={entry.revision}><Txt bold>Revision {entry.revision} · {entry.field === 'attended' ? 'Attendance' : 'Feedback'}</Txt><Txt>{entry.actorType} · {entry.actor} · {new Date(entry.at).toLocaleString()}</Txt><Txt>Before: {entry.before.known ? String(entry.before.value) : 'Not recorded'}</Txt><Txt>After: {String(entry.after)}</Txt><Txt>{entry.reason || 'Reason not recorded'}</Txt></Card>)}
+        {resource.data.truncated && <Txt>Showing the latest 100 changes.</Txt>}</>}
+    </>}
+  </>;
+}
+
 export function AdminAcademy({ navigation }: any) {
   const { can } = useSession();
   const resource = useResource(internal, '/academy');
   const categories: string[] = resource.data.categories || [];
+  const needsTagOptions: string[] = resource.data.needsTagOptions || [];
   const lessons: Data[] = resource.data.lessons || [];
   return <Page {...resource} title="Partner Academy" subtitle="Manage drafts and rights-approved publication.">
-    {can('academy.edit') && <Button title="New lesson" onPress={() => navigation.navigate('AdminLesson', { categories })} />}
+    {can('academy.edit') && <Button title="New lesson" onPress={() => navigation.navigate('AdminLesson', { categories, needsTagOptions })} />}
     {lessons.map(lesson => <MenuRow key={lesson.id} title={lesson.title}
       subtitle={`${lesson.category} · ${lesson.state}`}
-      onPress={() => navigation.navigate('AdminLesson', { lesson, categories })} />)}
+      onPress={() => navigation.navigate('AdminLesson', { lesson, categories, needsTagOptions })} />)}
     {!resource.loading && !resource.error && !lessons.length && <Empty title="No lessons created yet" />}
     {resource.data.truncated && <Txt muted>Showing the 100 most recent lessons.</Txt>}
   </Page>;
@@ -39,6 +55,7 @@ export function AdminAcademy({ navigation }: any) {
 
 const lessonFields: [string, string, number, boolean?][] = [
   ['title', 'Title', 160], ['objective', 'Objective', 400, true],
+  ['description', 'Catalogue description', 1000, true], ['difficulty', 'Difficulty (optional)', 80],
   ['content', 'Lesson content', 20000, true], ['resources', 'Resources', 10000, true],
   ['videoId', 'Private Academy video asset ID', 200], ['durationSeconds', 'Video duration in seconds', 4],
   ['captions', 'WebVTT captions', 45000, true],
@@ -46,8 +63,8 @@ const lessonFields: [string, string, number, boolean?][] = [
 
 export function AdminLesson({ navigation, route }: any) {
   const { can } = useSession();
-  const { lesson, categories } = route.params;
-  const [form, setForm] = useState<Data>(() => ({ category: categories[0], ...lesson }));
+  const { lesson, categories, needsTagOptions = [] } = route.params;
+  const [form, setForm] = useState<Data>(() => ({ category: categories[0], description: '', difficulty: '', featured: false, needsTags: [], ...lesson }));
   const [requestKey] = useState(() => Crypto.randomUUID());
   const [publication, setPublication] = useState<Data>({});
   const action = useAction();
@@ -74,15 +91,19 @@ export function AdminLesson({ navigation, route }: any) {
         <Choice label="Category" value={form.category} values={categories} onChange={category => setForm(current => ({ ...current, category }))} />
         <GrowthFields fields={lessonFields} form={form} busy={action.busy}
           change={(name, value) => setForm(current => ({ ...current, [name]: value }))} />
+        <Txt>Feature this lesson after publication</Txt><Switch accessibilityLabel="Feature this lesson after publication" value={form.featured === true} disabled={action.busy} onValueChange={featured => setForm(current => ({ ...current, featured }))} />
+        <Txt>Readiness topics addressed by this lesson. Learning does not change verification or eligibility.</Txt>
+        {needsTagOptions.map((topic: string) => <Button key={topic} title={`${(form.needsTags || []).includes(topic) ? 'Remove' : 'Add'} topic: ${topic.replaceAll('_', ' ')}`} secondary disabled={action.busy} onPress={() => setForm(current => ({ ...current, needsTags: (current.needsTags || []).includes(topic) ? current.needsTags.filter((key: string) => key !== topic) : [...(current.needsTags || []), topic] }))} />)}
         <Button title="Save draft" busy={action.busy} onPress={() => void action.run(async () => {
-          const { title, category, objective, content, resources, videoId, captions, durationSeconds } = form;
+          const { title, category, objective, content, resources, videoId, captions, durationSeconds, description, difficulty, featured, needsTags } = form;
           await internal.call(path, lesson ? 'PUT' : 'POST', {
             title, category, objective, content, resources, videoId, captions, durationSeconds: Number(durationSeconds || 0),
+            description, difficulty, featured, needsTags,
             requestKey, revision: lesson?.revision,
           });
           navigation.goBack();
         })} />
-      </> : <><Txt muted>{lesson?.category}</Txt><Txt>{lesson?.objective}</Txt><Txt>{lesson?.content}</Txt>
+      </> : <><Txt muted>{lesson?.category}</Txt><Txt>{lesson?.objective}</Txt><Txt>{lesson?.description}</Txt><Txt>{lesson?.difficulty}{lesson?.featured ? ' · Featured' : ''}</Txt><Txt>{(lesson?.needsTags || []).join(', ')}</Txt><Txt>{lesson?.content}</Txt>
         {!!lesson?.resources && <Txt>{lesson.resources}</Txt>}</>}
       {publishable && <>
         <Txt bold>{lesson.publishAt ? 'Withdraw lesson' : 'Approve the saved lesson for publication'}</Txt>
@@ -120,6 +141,7 @@ export function AdminMeetings({ navigation }: any) {
 
 const scheduleFields: [string, string, number, boolean?][] = [
   ['title', 'Meeting title', 160], ['agenda', 'Agenda', 4000, true],
+  ['hostName', 'Host display name', 160],
   ['startsAt', 'Starts at (ISO date with timezone)', 32], ['endsAt', 'Ends at (ISO date with timezone)', 32],
   ['timezone', 'Timezone (for example, Asia/Kolkata)', 64], ['meetUrl', 'Google Meet link', 100],
 ];
@@ -127,7 +149,7 @@ const scheduleFields: [string, string, number, boolean?][] = [
 export function AdminMeeting({ navigation, route }: any) {
   const { can } = useSession();
   const { meeting } = route.params;
-  const [form, setForm] = useState<Data>(() => ({ timezone: 'Asia/Kolkata', audience: 'ACTIVE', invitees: [], ...meeting, reason: '' }));
+  const [form, setForm] = useState<Data>(() => ({ timezone: 'Asia/Kolkata', audience: 'ACTIVE', invitees: [], hostName: '', ...meeting, reason: '' }));
   const [requestKey] = useState(() => Crypto.randomUUID());
   const [vendorQuery, setVendorQuery] = useState('');
   const [vendors, setVendors] = useState<Data[]>([]);
@@ -144,6 +166,7 @@ export function AdminMeeting({ navigation, route }: any) {
   const participants = useResource(internal, `${path}/participation`, 0, canRun);
   const records: Data[] = participants.data.participants || [];
   const [attendanceId, setAttendanceId] = useState('');
+  const [attendanceReason, setAttendanceReason] = useState('');
   function submit(endpoint: string, method: string, payload: Data) {
     void action.run(async () => {
       await internal.call(endpoint, method, payload);
@@ -152,14 +175,15 @@ export function AdminMeeting({ navigation, route }: any) {
   }
   function saveAttendance(vendorId: string, attended: boolean) {
     void action.run(async () => {
-      await internal.call(`${path}/attendance`, 'PUT', { vendorId, attended, scheduleVersion: meeting.scheduleVersion });
+      await internal.call(`${path}/attendance`, 'PUT', { vendorId, attended, scheduleVersion: meeting.scheduleVersion, evidenceRevision: records.find(record => record.vendorId === vendorId)?.evidenceRevision ?? 0, reason: attendanceReason });
       await participants.refresh();
       setAttendanceId('');
+      setAttendanceReason('');
     });
   }
   return <Page title={meeting?.title || 'Schedule a Growth Meeting'}>
     <Card>
-      {meeting && <><Txt muted>{meetingTime(meeting)}</Txt><Txt>{meeting.agenda}</Txt>
+      {meeting && <><Txt muted>{meetingTime(meeting)}</Txt><Txt>Host: {meeting.hostName || 'Not recorded'}</Txt><Txt>{meeting.agenda}</Txt>
         {!active && <Txt>Cancelled · {meeting.cancellationReason}</Txt>}</>}
       {schedule && <>
         <GrowthFields fields={scheduleFields} form={form} busy={action.busy} change={change} />
@@ -182,9 +206,9 @@ export function AdminMeeting({ navigation, route }: any) {
       {(schedule || (canSchedule && active && !past)) && <Field label="Schedule or cancellation reason"
         value={form.reason} editable={!action.busy} maxLength={500} onChangeText={value => change('reason', value)} />}
       {schedule && <Button title={meeting ? 'Reschedule' : 'Schedule meeting'} busy={action.busy} onPress={() => {
-        const { title, agenda, startsAt, endsAt, timezone, meetUrl, audience, reason } = form;
+        const { title, agenda, hostName, startsAt, endsAt, timezone, meetUrl, audience, reason } = form;
         submit(meeting ? `${path}/schedule` : path, meeting ? 'PUT' : 'POST', {
-          title, agenda, startsAt, endsAt, timezone, meetUrl, audience, invitees: audience === 'INVITED' ? invitees : [],
+          title, agenda, hostName, startsAt, endsAt, timezone, meetUrl, audience, invitees: audience === 'INVITED' ? invitees : [],
           reason, requestKey, revision: meeting?.revision, scheduleVersion: meeting?.scheduleVersion,
         });
       }} />}
@@ -193,21 +217,33 @@ export function AdminMeeting({ navigation, route }: any) {
       {canRun && <>
         <GrowthFields fields={[[ 'summary', 'Meeting summary', 6000, true ], [ 'resources', 'Resources', 6000, true ]]}
           form={form} busy={action.busy} change={change} />
-        <Button title="Publish meeting summary" busy={action.busy} onPress={() => submit(`${path}/summary`, 'PUT', {
-          summary: form.summary, resources: form.resources, revision: meeting.revision,
+        <Field label="Summary decision reason" value={form.reason} editable={!action.busy} maxLength={500} onChangeText={value => change('reason', value)} />
+        <Button title="Publish meeting summary" busy={action.busy} disabled={!form.reason.trim()} onPress={() => submit(`${path}/summary`, 'PUT', {
+          summary: form.summary, resources: form.resources, reason: form.reason, revision: meeting.revision,
         })} />
         <Txt bold>Attendance and private feedback</Txt>
+        <Field label="Attendance note (optional)" value={attendanceReason} maxLength={500} editable={!action.busy} onChangeText={setAttendanceReason} />
         <ErrorNotice message={participants.error} retry={participants.refresh} />
         {records.map(record => <Card key={record.vendorId}>
           <Txt bold>{record.name}</Txt>
           <Txt muted>{record.attended === true ? 'Attended' : record.attended === false ? 'Absent' : 'Attendance pending'} · {record.rsvp || 'No RSVP'}</Txt>
           {!!record.feedback && <Txt>{record.feedback}</Txt>}
+          <ParticipationHistory path={`${path}/participation/${record.vendorId}/history`} revision={record.evidenceRevision} />
           <Button title="Mark attended" secondary disabled={action.busy || record.attended === true} onPress={() => saveAttendance(record.vendorId, true)} />
           <Button title="Mark absent" secondary disabled={action.busy || record.attended === false} onPress={() => saveAttendance(record.vendorId, false)} />
         </Card>)}
         <Field label="Vendor ID for a walk-in attendee" value={attendanceId} maxLength={24} onChangeText={setAttendanceId} autoCapitalize="none" />
         <Button title="Record walk-in attendance" secondary disabled={action.busy || !/^[a-f0-9]{24}$/i.test(attendanceId)}
           onPress={() => saveAttendance(attendanceId, true)} />
+      </>}
+      {meeting?.history?.length > 0 && <>
+        <Txt bold>Meeting decision history</Txt>
+        {meeting.history.map((event: Data, index: number) => <Card key={`${event.revision}:${index}`}>
+          <Txt bold>Revision {event.revision} · {event.action}</Txt><Txt muted>{new Date(event.at).toLocaleString()}</Txt>
+          <Txt>{event.reason}</Txt>
+          {event.hostName && <Txt>Host: {event.hostName}</Txt>}
+          {event.summaryAfter?.hash && <><Txt>{event.summaryAfter.summary}</Txt><Txt>{event.summaryAfter.resources || 'No resource notes in this revision.'}</Txt></>}
+        </Card>)}
       </>}
       <ErrorNotice message={action.error} />
     </Card>

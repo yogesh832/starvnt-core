@@ -16,6 +16,16 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
   const [selectedDoc, setSelectedDoc] = useState(null);
 
   const vendorId = vendor?._id || vendor?.id;
+  async function downloadPrivateDocument(doc) {
+    setProcessing(true); setFeedback({ type: '', text: '' });
+    try {
+      const response = await adminApi.raw(`/external-users/organizations/${vendorId}/documents/${doc._id}/content`);
+      const blob = await response.blob(), url = URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = `vendor-document-${doc._id}.${blob.type === 'application/pdf' ? 'pdf' : blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/webp' ? 'webp' : 'png'}`; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { setFeedback({ type: 'error', text: error.message || 'Private document access is unavailable.' }); }
+    finally { setProcessing(false); }
+  }
 
   const loadData = useCallback(async () => {
     if (!vendorId) return;
@@ -40,6 +50,8 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
 
   async function handleVerify(approved, docId = null) {
     if (!vendorId || processing) return;
+    if (!docId || !actionNotes.trim()) { setFeedback({ type: 'error', text: 'Choose the exact document and enter a review reason before deciding.' }); return; }
+    const reviewed = documents.find(doc => doc._id === docId);
     const actionLabel = approved ? 'Approve' : 'Reject';
     const targetLabel = docId ? 'this document' : `KYC verification for ${organization.businessName || 'this vendor'}`;
     
@@ -54,14 +66,15 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
         body: {
           approved,
           documentId: docId,
-          notes: actionNotes.trim() || `${actionLabel}d by Core Admin verification panel.`,
+          expectedDocumentVersion: reviewed?.__v ?? 0,
+          notes: actionNotes.trim(),
         },
       });
 
       if (res.ok) {
         setFeedback({
           type: 'success',
-          text: `Vendor KYC successfully ${approved ? 'approved' : 'rejected'}. Activation requires a separate review.`,
+          text: `Document review ${approved ? 'approved' : 'rejected'}. Identity/provider status and account activation remain separate decisions.`,
         });
         setActionNotes('');
         await loadData();
@@ -259,12 +272,13 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
                               </span>
                             )}
                             <span>·</span>
-                            <span>{doc.fileName || 'Document.pdf'} ({doc.fileSize || '1.2 MB'})</span>
+                            <span>{doc.fileName || 'Verification record'} {doc.fileSize ? `(${doc.fileSize})` : '(No file size recorded)'}</span>
                             <span>·</span>
                             <span>Uploaded {new Date(doc.createdAt).toLocaleDateString('en-IN')}</span>
                           </div>
 
                           {/* Verification Breakdown */}
+                          {doc.contentAccess && doc.contentAccess !== 'NO_FILE' && can('vendorIdentity.readSensitive') && <button type="button" disabled={processing} onClick={() => downloadPrivateDocument(doc)} className="min-h-11 underline text-sm">Download private evidence for review</button>}
                           {(doc.verificationSource === 'GSTIN_API' || doc.verificationSource === 'PAN_API') && (
                             <div className="mt-2.5 p-3 rounded-xl bg-white border border-gray-200/80 text-[11px] space-y-1.5 shadow-2xs">
                               <div className="flex items-center justify-between gap-2 flex-wrap border-b border-gray-100 pb-1.5">
@@ -335,7 +349,7 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
                           {!isVerifiedDoc && (
                             <button
                               type="button"
-                              disabled={processing}
+                              disabled={processing || !actionNotes.trim() || (doc.contentAccess !== 'NO_FILE' && !can('vendorIdentity.readSensitive'))}
                               onClick={() => handleVerify(true, doc._id)}
                               className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-xs transition cursor-pointer disabled:opacity-50"
                             >

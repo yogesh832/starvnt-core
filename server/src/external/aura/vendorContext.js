@@ -1,3 +1,4 @@
+import { vendorAuraDiagnostic } from '../../common/vendorAuraDiagnostics.js';
 import { Opportunity } from '../models/Opportunity.js';
 import { Quote } from '../models/Quote.js';
 import { VendorBlockout } from '../models/VendorBlockout.js';
@@ -11,6 +12,7 @@ import { Notification } from '../models/Notification.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { evaluateVendorActivation } from '../services/vendorActivation.service.js';
 import { vendorFinancialTruth } from '../../common/financialTruth.service.js';
+import { projectVendorContext } from '../services/opportunityPrivacy.service.js';
 
 /**
  * CURRENT DATA for Vendor Aura+. Kept deliberately small: a large context
@@ -56,7 +58,7 @@ async function safe(fn, fallback) {
   try {
     return await fn();
   } catch (err) {
-    console.warn('[vendor-aura] context part failed:', err?.message || err);
+    vendorAuraDiagnostic('CONTEXT_SOURCE_UNAVAILABLE');
     return fallback;
   }
 }
@@ -87,7 +89,7 @@ async function fetchGoogleRating(googlePlaceId, businessName) {
       }
     }
   } catch (err) {
-    console.warn('[vendorContext] Google Places fetch failed:', err?.message || err);
+    vendorAuraDiagnostic('GOOGLE_SOURCE_UNAVAILABLE');
   }
   return null;
 }
@@ -125,7 +127,10 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
   const ratings = reviews.map((r) => r.rating).filter((n) => typeof n === 'number');
   // Complete joins for these owned enquiries; the recent ten-quote/twenty-
   // booking prompt windows are not sufficient to prove an enquiry has none.
-  const eligibleEnquiries = activation?.matchingEligible ? enquiries : [];
+  const [eligibleEnquiries, visibleQuotes] = await Promise.all([
+    activation?.matchingEligible ? Promise.all(enquiries.map(projectVendorContext)) : [],
+    Promise.all(quotes.map(projectVendorContext)),
+  ]);
   const enquiryIds = eligibleEnquiries.map(row => row._id);
   const enquiryQuotes = enquiryIds.length ? await Quote.find({ vendor: vendorId, opportunity: { $in: enquiryIds } }).select('_id opportunity status').lean() : [];
   const enquiryBookings = enquiryIds.length ? await CoreBooking.find({ vendorId, $or: [{ opportunityId: { $in: enquiryIds.map(String) } }, { quoteId: { $in: enquiryQuotes.map(row => String(row._id)) } }] }).select('_id opportunityId quoteId').lean() : [];
@@ -137,7 +142,8 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       name: vendor.businessName,
       category: vendor.category || null,
       status: activation?.activationState || 'UNKNOWN',
-      profileCompletePercent: activation?.completionPercentage ?? null,
+      profileCompletePercent: activation?.profileCompletion ?? null,
+      onboardingCompletionPercent: activation?.completionPercentage ?? null,
       missingForActivation: activation?.missingRequirements ?? [],
       reasonCodes: activation?.reasonCodes ?? [],
       readiness: activation?.readiness ?? null,
@@ -170,6 +176,8 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       newCount: activation?.matchingEligible ? newEnquiryCount : 0,
       open: eligibleEnquiries.map((o) => ({
         id: String(o._id),
+        updatedAt: o.updatedAt?.toISOString?.() || null,
+        vendorServiceId: String(o.vendorService?._id || o.vendorService),
         ref: o.opportunityReference || null,
         customer: o.customer?.fullName || o.customerName || null,
         customerId: o.customer?._id ? String(o.customer._id) : (o.customer ? String(o.customer) : null),
@@ -188,9 +196,11 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
     },
     quotes: {
       counts: Object.fromEntries(quoteCounts.map((q) => [String(q._id).toLowerCase(), q.n])),
-      latest: quotes.map((q) => ({
+      latest: visibleQuotes.map((q) => ({
         id: String(q._id),
         ref: q.quoteReference,
+          commercialVersion: q.commercialSnapshot?.version || 0,
+          recordVersion: q.__v || 0,
         customer: q.customer?.fullName || q.customerName || null,
         customerId: q.customer?._id ? String(q.customer._id) : (q.customer ? String(q.customer) : null),
         service: q.serviceName,
@@ -236,7 +246,7 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       })),
       pendingActions: financialTruth?.nextBestActions || [],
     },
-    blockedDates: blockouts.map((b) => ({ endDate: b.endDate || b.date, scope: b.scope || 'BUSINESS', recordType: b.recordType || 'VENDOR_BLOCK', resourceIds: b.resourceIds || [], vendorService: b.vendorService, verificationStatus: 'REPORTED', date: b.date, allDay: b.allDay, from: b.allDay ? null : b.startTime, to: b.allDay ? null : b.endTime, reason: b.reason })),
+    blockedDates: blockouts.map((b) => ({ id: String(b._id), revision: b.revision || 0, timezone: b.timezone, endDate: b.endDate || b.date, scope: b.scope || 'BUSINESS', recordType: b.recordType || 'VENDOR_BLOCK', resourceIds: b.resourceIds || [], vendorService: b.vendorService, verificationStatus: 'REPORTED', date: b.date, allDay: b.allDay, from: b.allDay ? null : b.startTime, to: b.allDay ? null : b.endTime, reason: b.reason })),
     services: services.map((s) => ({
       id: String(s._id),
       name: s.name,

@@ -89,17 +89,22 @@ export function VendorAcademy({ navigation }: any) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All categories');
   const [progress, setProgress] = useState('All lessons');
+  const [collection, setCollection] = useState('All published lessons');
   const lessons: Data[] = resource.data.lessons || [];
   const matching = lessons.filter(lesson =>
     (category === 'All categories' || lesson.category === category) &&
-    `${lesson.title} ${lesson.objective}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    `${lesson.title} ${lesson.objective} ${lesson.description || ''} ${lesson.difficulty || ''}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    (collection === 'Featured' ? lesson.featured : collection === 'Suggested for your readiness' && resource.data.recommendations?.status === 'AVAILABLE' ? !lesson.completedAt && lesson.recommendationReasons?.length : true) &&
     (progress === 'Completed' ? lesson.completedAt : progress === 'In progress' ? lesson.positionSeconds > 0 && !lesson.completedAt : progress === 'Not started' ? !lesson.positionSeconds && !lesson.completedAt : true));
   return <Page {...resource} title="Partner Academy" subtitle="Browse lessons and pick up where you left off.">
     <Field label="Search lessons" value={query} onChangeText={setQuery} />
+    <Txt muted>Suggestions match lesson topics to recorded readiness gaps. Learning does not change verification or eligibility.</Txt>
+    {!!resource.data.lessons && resource.data.recommendations?.status !== 'AVAILABLE' && <Txt>Readiness suggestions are unavailable. You can still browse published lessons.</Txt>}
+    <Choice label="Collection" values={['All published lessons', 'Featured', 'Suggested for your readiness']} value={collection} onChange={setCollection} />
     <Choice label="Category" values={['All categories', ...(resource.data.categories || [])]} value={category} onChange={setCategory} />
     <Choice label="Progress" values={['All lessons', 'Not started', 'In progress', 'Completed']} value={progress} onChange={setProgress} />
     {matching.map(lesson => <MenuRow key={lesson.id} title={lesson.title}
-      subtitle={`${lesson.category} · ${lesson.completedAt ? 'Completed' : lesson.positionSeconds ? 'In progress' : lesson.objective}`}
+      subtitle={[lesson.category, lesson.completedAt ? 'Completed' : lesson.positionSeconds ? 'In progress' : lesson.objective, lesson.description, lesson.difficulty, lesson.featured && 'Featured', !lesson.completedAt && lesson.recommendationReasons?.length > 0 && `Suggested topics: ${lesson.recommendationReasons.map((reason: Data) => reason.label).join(', ')}`].filter(Boolean).join(' · ')}
       onPress={() => openLesson(navigation, lesson)} />)}
     {!resource.loading && !resource.error && !matching.length &&
       <Empty title={lessons.length ? 'No matching lessons' : 'No published lessons yet'} />}
@@ -232,6 +237,7 @@ function MeetingCard({ meeting, refresh }: { meeting: Data; refresh: () => Promi
   return <Card>
     <Txt bold size={20}>{meeting.title}</Txt>
     <Txt muted>{meetingTime(meeting)}</Txt>
+    <Txt>Host: {meeting.hostName || 'Not recorded'}</Txt>
     <Txt>{meeting.agenda}</Txt>
     {cancelled && <Txt>Cancelled · {meeting.cancellationReason}</Txt>}
     {!cancelled && !past && <>
@@ -250,7 +256,7 @@ function MeetingCard({ meeting, refresh }: { meeting: Data; refresh: () => Promi
       <Field label="Private meeting feedback" multiline value={feedbackDraft ?? meeting.feedback} maxLength={1500}
         editable={!action.busy} onChangeText={setFeedbackDraft} />
       <Button title="Save feedback" busy={action.busy} disabled={!feedbackDraft?.trim()} onPress={() => void action.run(async () => {
-        await external.call(`${path}/feedback`, 'PUT', { ...schedule, feedback: feedbackDraft?.trim() });
+        await external.call(`${path}/feedback`, 'PUT', { ...schedule, evidenceRevision: meeting.evidenceRevision, feedback: feedbackDraft?.trim() });
         await refresh();
         setFeedbackDraft(null);
       })} />

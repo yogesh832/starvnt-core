@@ -14,6 +14,14 @@ const { Schema } = mongoose;
  */
 const quoteSchema = new Schema(
   {
+    creationRequestKey: { type: String, select: false, immutable: true },
+    creationRequestHash: { type: String, select: false, immutable: true },
+    creationRequestActor: { type: String, select: false, immutable: true },
+    creationEnquiryUpdatedAt: { type: Date, immutable: true },
+    creationEffects: { type: new Schema({
+      state: { type: String, enum: ['PENDING', 'ENQUEUED', 'COMPLETED', 'SUPERSEDED'] },
+      snapshot: { type: Schema.Types.Mixed, immutable: true }, hash: { type: String, immutable: true }, completedAt: Date, lastQueueAttemptAt: Date,
+    }, { _id: false }), select: false },
     quoteReference: {
       type: String,
       unique: true,
@@ -114,6 +122,9 @@ const quoteSchema = new Schema(
   { timestamps: true, optimisticConcurrency: true }
 );
 
+quoteSchema.index({ vendor: 1, creationRequestKey: 1 }, { unique: true, partialFilterExpression: { creationRequestKey: { $type: 'string' } } });
+quoteSchema.index({ 'creationEffects.state': 1, 'creationEffects.lastQueueAttemptAt': 1, createdAt: 1, _id: 1 }, { partialFilterExpression: { 'creationEffects.state': 'PENDING' } });
+quoteSchema.set('toJSON', { transform: (_doc, value) => { delete value.creationRequestKey; delete value.creationRequestHash; delete value.creationRequestActor; delete value.creationEffects; return value; } });
 quoteSchema.pre('validate', async function () {
   const materialFields = ['vendor', 'customer', 'vendorService', 'serviceName', 'eventDate', 'serviceLocation', 'pricingBreakdown', 'notes', 'validUntil'];
   if (!this.isNew && this.commercialSnapshot && materialFields.some(field => this.isModified(field)) && !this.isModified('commercialSnapshot')) throw Object.assign(new Error('Material commercial changes require a new quote version.'), { code: 'IMMUTABLE_QUOTE_VERSION', statusCode: 409 });

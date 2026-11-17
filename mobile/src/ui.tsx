@@ -620,6 +620,7 @@ export function Page({
   error,
   refresh,
   refreshing = false,
+  lastSuccessfulSync,
 }: React.PropsWithChildren<{
   title?: string;
   subtitle?: string;
@@ -627,6 +628,7 @@ export function Page({
   error?: string;
   refresh?: () => void;
   refreshing?: boolean;
+  lastSuccessfulSync?: string | null;
 }>) {
   const c = usePalette();
   const compact = useWindowDimensions().width <= 360;
@@ -668,6 +670,7 @@ export function Page({
           </View>
         )}
         <ErrorNotice message={error} retry={refresh} />
+        {!!lastSuccessfulSync && <Txt muted size={12}>Last successful sync: {new Date(lastSuccessfulSync).toLocaleString()}{error ? ' · Current source unavailable.' : ''}</Txt>}
         {loading ? (
           <LoadingScroller />
         ) : error ? null : (
@@ -747,7 +750,7 @@ export function Stats({ items }: { items: [string, string | number][] }) {
   );
 }
 export function useResource(api: Client, path: string, pollMs = 0, enabled = true) {
-  const [snapshot, setSnapshot] = useState({ api, path, data: {} as Data });
+  const [snapshot, setSnapshot] = useState({ api, path, data: {} as Data, lastSuccessfulSync: null as string | null });
   const current = snapshot.api === api && snapshot.path === path;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -759,14 +762,14 @@ export function useResource(api: Client, path: string, pollMs = 0, enabled = tru
       setSnapshot((previous) =>
         previous.api === api && previous.path === path
           ? previous
-          : { api, path, data: {} },
+          : { api, path, data: {}, lastSuccessfulSync: null },
       );
       if (pull) setRefreshing(true);
       else setLoading(true);
       setError("");
       try {
         const value = await api.call(path);
-        if (serial.current === request) setSnapshot({ api, path, data: value });
+        if (serial.current === request) setSnapshot({ api, path, data: value, lastSuccessfulSync: new Date().toISOString() });
       } catch (e) {
         if (serial.current === request) setError((e as Error).message);
       } finally {
@@ -795,6 +798,7 @@ export function useResource(api: Client, path: string, pollMs = 0, enabled = tru
   );
   return {
     data: current ? snapshot.data : {},
+    lastSuccessfulSync: current ? snapshot.lastSuccessfulSync : null,
     loading: loading || !current,
     error,
     refreshing,

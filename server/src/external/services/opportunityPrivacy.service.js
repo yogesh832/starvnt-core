@@ -20,6 +20,8 @@ export function canRevealOpportunityContact(opportunity, verifiedBooking = false
 
 export function maskOpportunityCustomer(opportunity, verifiedBooking = false) {
   const plain = opportunity?.toObject ? opportunity.toObject() : { ...(opportunity || {}) };
+  delete plain.creationRequestKey; delete plain.creationRequestHash; delete plain.creationRequestActor;
+  delete plain.creationEffects; delete plain.lifecycleContextKey;
   if (canRevealOpportunityContact(plain, verifiedBooking)) {
     return plain;
   }
