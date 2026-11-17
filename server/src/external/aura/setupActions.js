@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { validDate } from '../../common/scheduleRules.js';
 import { saveCommitment } from '../services/commitments.service.js';
 import { describeVendorAction } from '../../common/vendorAuraUi.js';
 import { vendorCategoryError } from '../../common/vendorCategories.js';
@@ -453,25 +454,28 @@ export function validateAction(raw, { said, vendor = {}, services = [], context 
     const latestReason = reasonFrom(latestUserMsg);
 
     let date = parseDate(b.date) || dateIn(latestUserMsg) || dateIn(said);
-    if (!date && context?.blockedDates?.length) {
-      date = context.blockedDates[context.blockedDates.length - 1]?.date;
-    }
-    if (!date) return { error: 'the date to block' };
+    if (!validDate(date)) return { error: 'a valid calendar date to block' };
 
     const reason = latestReason || str(b.reason, 150) || reasonFrom(said);
     if (!reason || reason.toLowerCase() === 'unavailable') {
       return { error: 'the reason / notes for blocking the date (e.g. Vacation, Maintenance, Personal, Manual Booking)' };
     }
 
-    const isUpdate = Boolean(context?.blockedDates?.some((bl) => bl.date === date));
-    const startTime = str(b.startTime, 10) || '00:00';
-    const endTime = str(b.endTime, 10) || '23:59';
-    const allDay = b.allDay !== false;
+    const candidates = (context?.blockedDates || []).filter(bl => bl.date === date && bl.recordType === 'VENDOR_BLOCK' && bl.scope === 'BUSINESS');
+    if (candidates.length > 1) return { error: 'the specific calendar record; open Calendar because several blocks exist on that date' };
+    const existing = candidates[0];
+    if (existing && (!existing.id || !Number.isInteger(existing.revision))) return { error: 'a refreshed calendar record before confirming an update' };
+    const isUpdate = Boolean(existing);
+    // Updating a reason must not widen a partial-day or multi-day block.
+    const startTime = existing ? existing.from || '00:00' : str(b.startTime, 10) || '00:00';
+    const endTime = existing ? existing.to || '23:59' : str(b.endTime, 10) || '23:59';
+    const allDay = existing ? existing.allDay : b.allDay !== false;
     return {
       action: {
         kind,
         isUpdate,
-        blockout: { date, reason, startTime, endTime, allDay },
+        ...(existing ? { blockoutId: existing.id, expectedRevision: existing.revision } : {}),
+        blockout: { date, endDate: existing?.endDate || date, reason, startTime, endTime, allDay, ...(existing ? { timezone: existing.timezone, vendorService: existing.vendorService, resourceIds: existing.resourceIds || [] } : {}) },
       },
     };
   }
@@ -721,11 +725,11 @@ export async function executeAction(vendor, a) {
 
   if (a.kind === 'block_date') {
     const b = a.blockout;
-    const candidates = a.isUpdate ? await VendorBlockout.find({ vendor: vendorId, date: b.date, status: { $ne: 'CANCELLED' }, recordType: 'VENDOR_BLOCK', scope: 'BUSINESS' }).limit(2) : [];
-    if (candidates.length > 1) throw new Error('Several blocks exist on this date. Edit the specific record in Calendar.');
-    const existing = candidates[0] || null;
-    const row = await saveCommitment(vendorId, { ...b, date: b.date, allDay: b.allDay !== false, startTime: b.startTime || '00:00', endTime: b.endTime || '23:59', revision: existing?.revision || 0, idempotencyKey: a.idempotencyKey || `aura:${crypto.createHash('sha256').update(JSON.stringify(a)).digest('hex')}` }, { id: vendor.owner || vendorId, role: 'VENDOR' }, existing?._id || null);
-    return { kind: 'block_date', date: row.date, reason: row.reason, isUpdate: !!existing };
+    if (a.isUpdate && (!a.blockoutId || !Number.isInteger(a.expectedRevision))) throw Object.assign(new Error('Refresh Calendar and confirm the current block.'), { code: 'CALENDAR_VERSION_REQUIRED' });
+    const existing = a.isUpdate ? await VendorBlockout.findOne({ _id: a.blockoutId, vendor: vendorId, date: b.date, recordType: 'VENDOR_BLOCK', scope: 'BUSINESS' }) : null;
+    if (a.isUpdate && !existing) throw Object.assign(new Error('The reviewed calendar record is no longer available.'), { code: 'CALENDAR_RECORD_CHANGED' });
+    const row = await saveCommitment(vendorId, { ...b, date: b.date, allDay: b.allDay !== false, startTime: b.startTime || '00:00', endTime: b.endTime || '23:59', revision: a.isUpdate ? a.expectedRevision : 0, idempotencyKey: a.idempotencyKey || `aura:${crypto.createHash('sha256').update(JSON.stringify(a)).digest('hex')}` }, { id: vendor.owner || vendorId, role: 'VENDOR' }, existing?._id || null);
+    return { kind: 'block_date', date: row.date, reason: row.reason, isUpdate: a.isUpdate === true };
   }
 
   if (a.kind === 'revise_quote') {

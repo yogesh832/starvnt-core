@@ -1,0 +1,9 @@
+# Aura calendar confirmation revisions — 17 November 2026
+
+Partial V45.02/V45.04 implementation in the existing Aura/calendar flow. Pending updates now retain the exact owned Vendor business block ID and reviewed revision. Execution uses the existing schedule lease, ownership/availability checks, stale-revision guard and idempotent history recovery. It no longer substitutes the latest revision at confirmation time. A changed record therefore requires a fresh review; an unchanged retry recovers the original result without a second update.
+
+Context includes canonical block ID/revision/timezone. Existing partial-day/multi-day interval, service and resource references are retained when confirming a reason update. Ambiguous multiple business blocks require Calendar. A missing date no longer chooses the last context block. Invalid calendar dates reject, and external commitments are never selected as ordinary business-block updates. New blocks still use the existing schedule conflict rules; no new financial or external-booking authority is introduced.
+
+Verification: five tests pass in vendor-aura-capability.test.js, including two new cases for stale edits, retry history, tenant ownership, preserved interval, invalid/missing date and ambiguous/source selection. Existing capability confirmation and multilingual exchanges remain covered. Full backend regression: 302 passed, zero failed in tmp/vendor-main17-implementation/backend-tests.log. Synthetic database only, no external sends/provider/model calls or production data.
+
+Migration: additive context/action fields; pre-upgrade pending updates without an ID/revision require a fresh proposal. No record migration. Rollback must preserve the schedule service's ownership/idempotency/stale checks and stored history. Native/human conversational acceptance and version-binding for the remaining setup commands are still open.

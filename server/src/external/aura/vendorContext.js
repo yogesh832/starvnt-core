@@ -245,7 +245,7 @@ export async function buildVendorContext(vendor, { page = null } = {}) {
       })),
       pendingActions: financialTruth?.nextBestActions || [],
     },
-    blockedDates: blockouts.map((b) => ({ endDate: b.endDate || b.date, scope: b.scope || 'BUSINESS', recordType: b.recordType || 'VENDOR_BLOCK', resourceIds: b.resourceIds || [], vendorService: b.vendorService, verificationStatus: 'REPORTED', date: b.date, allDay: b.allDay, from: b.allDay ? null : b.startTime, to: b.allDay ? null : b.endTime, reason: b.reason })),
+    blockedDates: blockouts.map((b) => ({ id: String(b._id), revision: b.revision || 0, timezone: b.timezone, endDate: b.endDate || b.date, scope: b.scope || 'BUSINESS', recordType: b.recordType || 'VENDOR_BLOCK', resourceIds: b.resourceIds || [], vendorService: b.vendorService, verificationStatus: 'REPORTED', date: b.date, allDay: b.allDay, from: b.allDay ? null : b.startTime, to: b.allDay ? null : b.endTime, reason: b.reason })),
     services: services.map((s) => ({
       id: String(s._id),
       name: s.name,
