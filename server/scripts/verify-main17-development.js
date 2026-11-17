@@ -18,6 +18,7 @@ const { VendorService } = await import('../src/external/models/VendorService.js'
 const { Quote } = await import('../src/external/models/Quote.js');
 const { commercialSnapshot } = await import('../src/external/services/commercialSnapshot.service.js');
 const { VendorDocument } = await import('../src/external/models/VendorDocument.js');
+const { AdminUser } = await import('../src/admin/models/AdminUser.js');
 const bcrypt = (await import('bcryptjs')).default;
 const express = (await import('express')).default;
 const checks = [];
@@ -96,8 +97,44 @@ try {
   await page.getByRole('link', { name: 'Download private copy', exact: true }).waitFor();
   checks.push('PDF upload stores actual private bytes and owner preview retrieves an audited authenticated copy');
   await page.screenshot({ path: resolve(output, 'private-document-owner-desktop.png'), fullPage: true });
+  const editor = await AdminUser.create({ fullName: 'Synthetic Academy Editor', email: 'main17-editor@example.test', role: 'ADMIN', permissions: ['academy.read', 'academy.edit'], passwordHash: await bcrypt.hash(password, 4) });
+  const editorLogin = await fetch('http://127.0.0.1:4119/api/admin/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: editor.email, password }) });
+  assert.equal(editorLogin.status, 200);
+  const editorSession = await editorLogin.json(); assert.ok(editorSession.accessToken);
+  const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  await adminContext.addInitScript(token => localStorage.setItem('starvnt_admin_access_token', token), editorSession.accessToken);
+  const adminPage = await adminContext.newPage();
+  await adminPage.goto('http://127.0.0.1:5199/admin/academy');
+  await adminPage.getByRole('heading', { name: 'Partner Academy', exact: true }).waitFor();
+  await adminPage.getByLabel('Title', { exact: true }).fill('Synthetic archived resource lesson');
+  await adminPage.getByLabel('Category', { exact: true }).selectOption('Getting Started');
+  await adminPage.getByLabel('Learning objective', { exact: true }).fill('Synthetic archive review');
+  await adminPage.getByLabel('Lesson text', { exact: true }).fill('Synthetic original lesson');
+  await adminPage.getByLabel('Resource notes', { exact: true }).fill('Synthetic original resources');
+  await adminPage.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await adminPage.getByRole('button', { name: 'View versions', exact: true }).waitFor();
+  await adminPage.getByLabel('Resource notes', { exact: true }).fill('Synthetic revised resources');
+  await adminPage.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await adminPage.getByText('Content version 2', { exact: false }).waitFor();
+  await adminPage.getByRole('button', { name: 'View versions', exact: true }).click();
+  await adminPage.getByText('Version 1 · Synthetic archived resource lesson', { exact: true }).click();
+  await adminPage.getByText('Version 2 · Current · Synthetic archived resource lesson', { exact: true }).click();
+  await adminPage.locator('p').filter({ hasText: /^Synthetic original resources$/ }).waitFor();
+  await adminPage.locator('p').filter({ hasText: /^Synthetic revised resources$/ }).waitFor();
+  await adminPage.setViewportSize({ width: 390, height: 844 });
+  await adminPage.getByRole('heading', { name: 'Saved content versions', exact: true }).scrollIntoViewIfNeeded();
+  assert.ok(await adminPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await adminPage.screenshot({ path: resolve(output, 'academy-resource-versions-mobile-web.png'), fullPage: true });
+  checks.push('Signed-in Academy editor preserves original resources after revision and renders both read-only versions at 390px');
   writeFileSync(resolve(output, 'report.json'), JSON.stringify({ environment: 'Synthetic isolated MongoMemoryServer + local Express + production Vite bundle + headless Chrome. Responsive web, not native-device acceptance.', checks, screenshotsContain: 'Synthetic fixtures only', passed: true }, null, 2));
   console.log(JSON.stringify({ passed: true, checks: checks.length, report: resolve(output, 'report.json') }));
+} catch (error) {
+  for (const [contextIndex, context] of (browser?.contexts() || []).entries()) {
+    for (const [pageIndex, page] of context.pages().entries()) {
+      await page.screenshot({ path: resolve(output, `failure-${contextIndex}-${pageIndex}.png`), fullPage: true }).catch(() => {});
+    }
+  }
+  throw error;
 } finally {
   await browser?.close();
   await Promise.all([api && new Promise(done => api.close(done)), site && new Promise(done => site.close(done))]);

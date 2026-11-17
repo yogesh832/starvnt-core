@@ -8,7 +8,7 @@ export const learningCategories = [
 
 const history = new Schema({
   actor: String, action: String, at: Date, reason: String, revision: Number, requestHash: String,
-  rightsReference: String, rightsExpiresAt: Date, publishAt: Date, contentVersion: Number, videoId: String,
+  rightsReference: String, rightsExpiresAt: Date, publishAt: Date, contentVersion: Number, contentHash: String, videoId: String,
 }, { _id: false });
 
 const lesson = new Schema({
@@ -27,6 +27,11 @@ const lesson = new Schema({
   lastEditedBy: String,
   revision: { type: Number, default: 1 },
   contentVersion: { type: Number, default: 1 },
+  contentVersions: { type: [new Schema({
+    version: Number, hash: String, actor: String, capturedAt: Date,
+    provenance: { type: String, enum: ['CAPTURED_ON_SAVE', 'RECOVERED_CURRENT_ON_EDIT'] },
+    content: { title: String, category: String, objective: String, content: String, resources: String, videoId: String, captions: String, durationSeconds: Number },
+  }, { _id: false })], select: false, default: undefined },
   createdBy: { type: String, required: true },
   requestKey: { type: String, required: true },
   requestHash: { type: String, required: true },

@@ -4,6 +4,7 @@ import { isObjectIdOrHexString } from 'mongoose';
 import { v2 as cloudinary } from 'cloudinary';
 import { requireAdminAuth, requireAnyPermission, requirePermission } from '../admin/middleware/requireAdminAuth.js';
 import { LearningLesson, LearningProgress, LearningFeedback, learningCategories } from './models.js';
+import { learningContentSnapshot, learningContentHash, appendLearningContentVersions, assertLearningContentHistory } from '../common/learningContentVersions.js';
 
 export const adminLearningRoutes = Router();
 export const vendorLearningRoutes = Router();
@@ -103,7 +104,7 @@ adminLearningRoutes.post('/', requirePermission('academy.edit'), h(async (req, r
   let row;
   try {
     row = await LearningLesson.findOneAndUpdate(filter, {
-      $setOnInsert: { ...fields, state: 'DRAFT', lastEditedBy: createdBy, requestHash, history: [{ actor: createdBy, action: 'DRAFT_CREATED', at: new Date(), revision: 1 }] },
+      $setOnInsert: { ...fields, state: 'DRAFT', lastEditedBy: createdBy, requestHash, contentVersions: [learningContentSnapshot(fields, { version: 1, actor: createdBy })], history: [{ actor: createdBy, action: 'DRAFT_CREATED', at: new Date(), revision: 1 }] },
     }, { upsert: true, new: true });
   } catch (error) {
     if (error.code !== 11000) throw error;
@@ -134,7 +135,7 @@ async function updateLesson(req, filter, update, action, reason, evidence = {}) 
   const row = await LearningLesson.findOneAndUpdate({ _id: lessonId(req), revision, ...filter }, {
     ...update,
     $inc: { ...update.$inc, revision: 1 },
-    $push: { history: { actor: String(req.admin._id), action, at: new Date(), reason, revision: revision + 1, requestHash: actionHash(req, action), ...evidence } },
+    $push: { ...update.$push, history: { actor: String(req.admin._id), action, at: new Date(), reason, revision: revision + 1, requestHash: actionHash(req, action), ...evidence } },
   }, { new: true, runValidators: true });
   if (!row) {
     const replay = await replayLessonAction(req, action);
@@ -146,10 +147,23 @@ async function updateLesson(req, filter, update, action, reason, evidence = {}) 
 
 adminLearningRoutes.put('/:id', requirePermission('academy.edit'), h(async (req, res) => {
   const fields = lessonFields(req.body);
+  const replay = await replayLessonAction(req, 'DRAFT_EDITED');
+  if (replay) return res.json({ lesson: adminView(replay) });
+  const previous = await LearningLesson.findOne({ _id: lessonId(req), revision: expectedRevision(req) }).select('+contentVersions').lean();
+  if (!previous) throw fail('LESSON_CHANGED', 'The lesson changed. Reload it before trying again.', 409);
+  const versions = appendLearningContentVersions(previous, fields, req.admin._id);
   const row = await updateLesson(req, { publishAt: null, state: { $in: ['DRAFT', 'UNPUBLISHED', null] } }, {
     $set: { ...fields, state: 'DRAFT', lastEditedBy: String(req.admin._id), rightsReference: '' }, $unset: { rightsExpiresAt: 1 }, $inc: { contentVersion: 1 },
+    $push: { contentVersions: { $each: versions } },
   }, 'DRAFT_EDITED');
   res.json({ lesson: adminView(row) });
+}));
+
+adminLearningRoutes.get('/:id/versions', requireAnyPermission('academy.read', 'academy.edit', 'academy.publish'), h(async (req, res) => {
+  const row = await LearningLesson.findById(lessonId(req)).select('+contentVersions').lean();
+  if (!row) throw fail('LESSON_UNAVAILABLE', 'This lesson is unavailable.', 404);
+  assertLearningContentHistory(row);
+  res.json({ currentVersion: row.contentVersion, versions: row.contentVersions || [], currentVersionArchived: Boolean(row.contentVersions?.some(entry => entry.version === row.contentVersion)) });
 }));
 
 adminLearningRoutes.post('/:id/submit-review', requirePermission('academy.edit'), h(async (req, res) => {
@@ -187,7 +201,7 @@ adminLearningRoutes.post('/:id/publication', requirePermission('academy.publish'
   const row = await updateLesson(req, { publishAt: null, state: 'REVIEW' }, {
     $set: { state: 'PUBLISHED', publishAt, rightsReference, rightsExpiresAt },
   }, 'PUBLICATION_APPROVED', reason, {
-    rightsReference, rightsExpiresAt, publishAt, contentVersion: draft.contentVersion, videoId: draft.videoId,
+    rightsReference, rightsExpiresAt, publishAt, contentVersion: draft.contentVersion, contentHash: learningContentHash(draft), videoId: draft.videoId,
   });
   res.json({ lesson: adminView(row) });
 }));

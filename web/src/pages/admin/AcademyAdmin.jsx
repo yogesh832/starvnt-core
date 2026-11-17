@@ -6,6 +6,38 @@ const empty = { title: '', category: '', objective: '', content: '', resources: 
 const field = 'mt-1 block min-h-11 w-full rounded-lg border p-2';
 const button = 'min-h-11 rounded-xl border px-4 text-sm font-semibold disabled:opacity-50';
 
+function LessonVersions({ lessonId, revision }) {
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  useEffect(() => { setResult(null); setError(''); setLoading(false); }, [lessonId, revision]);
+  async function load() {
+    setLoading(true); setError('');
+    try { setResult(await adminApi.call(`/academy/${lessonId}/versions`)); }
+    catch (error) { setError(error.message); }
+    finally { setLoading(false); }
+  }
+  return <section className="space-y-3 rounded-2xl bg-white p-4">
+    <h2 className="font-bold">Saved content versions</h2>
+    <p className="text-sm text-muted">Read-only lesson text, captions and resource notes. Publication and rights decisions remain in the decision history.</p>
+    <button className={button} type="button" disabled={loading} onClick={load}>{loading ? 'Loading versions…' : result ? 'Refresh versions' : 'View versions'}</button>
+    {error && <p role="alert" className="text-red-700">{error}</p>}
+    {result && <>
+      {!result.currentVersionArchived && <p className="text-sm">This older lesson has no saved snapshot for its current version. Its present content will be preserved on the next edit; earlier missing versions cannot be reconstructed.</p>}
+      {result.versions.map(version => <details key={version.version} className="rounded-xl border p-3">
+        <summary className="cursor-pointer font-semibold">Version {version.version}{version.version === result.currentVersion ? ' · Current' : ''} · {version.content.title}</summary>
+        <p className="mt-2 break-all text-xs text-muted">Hash: {version.hash}</p>
+        <p className="text-xs text-muted">{version.provenance === 'RECOVERED_CURRENT_ON_EDIT' ? 'Existing content captured before editing' : 'Captured on save'} · {new Date(version.capturedAt).toLocaleString()}</p>
+        <p className="mt-2 text-sm">{version.content.objective}</p>
+        <h3 className="mt-3 font-semibold">Lesson text</h3><p className="whitespace-pre-wrap break-words text-sm">{version.content.content}</p>
+        <h3 className="mt-3 font-semibold">Resource notes</h3><p className="whitespace-pre-wrap break-words text-sm">{version.content.resources || 'No resources saved in this version.'}</p>
+        {version.content.videoId && <p className="mt-2 text-sm">Video reference: <span className="break-all">{version.content.videoId}</span>. Historical media is not playable from this archive.</p>}
+        {version.content.captions && <details className="mt-2"><summary>Saved captions</summary><pre className="whitespace-pre-wrap break-words text-xs">{version.content.captions}</pre></details>}
+      </details>)}
+    </>}
+  </section>;
+}
+
 export default function AcademyAdmin() {
   const { can } = useAdminAuth();
   const canEdit = can('academy.edit');
@@ -92,23 +124,24 @@ export default function AcademyAdmin() {
         <fieldset className="space-y-3" disabled={!editable || busy}>
           <legend className="mb-3 font-bold">Lesson content</legend>
           <label className="block">Title<input className={field} required maxLength={160} {...bind('title')} /></label>
-          <label className="block">Category<select className={field} required {...bind('category')}>
+          <div><label htmlFor="academy-category" className="block">Category</label><select id="academy-category" className={field} required {...bind('category')}>
             <option value="">Choose a category</option>{data.categories.map(value => <option key={value}>{value}</option>)}
-          </select></label>
-          <label className="block">Learning objective<textarea className={field} required maxLength={400} {...bind('objective')} /></label>
-          <label className="block">Lesson text<textarea className={field} required rows={6} maxLength={20000} {...bind('content')} /></label>
-          <label className="block">Resource notes<textarea className={field} rows={3} maxLength={10000} {...bind('resources')} /></label>
+          </select></div>
+          <div><label htmlFor="academy-objective" className="block">Learning objective</label><textarea id="academy-objective" className={field} required maxLength={400} {...bind('objective')} /></div>
+          <div><label htmlFor="academy-content" className="block">Lesson text</label><textarea id="academy-content" className={field} required rows={6} maxLength={20000} {...bind('content')} /></div>
+          <div><label htmlFor="academy-resources" className="block">Resource notes</label><textarea id="academy-resources" className={field} rows={3} maxLength={10000} {...bind('resources')} /></div>
           <label className="block">Authenticated Cloudinary MP4 asset ID (optional)
             <input className={field} maxLength={200} placeholder="starvnt_private/academy/lesson-name" {...bind('videoId')} />
           </label>
           {draft.videoId && <>
             <label className="block">Video duration in seconds<input className={field} required type="number" min="1" max="3600"
               value={draft.durationSeconds} onChange={event => setDraft({ ...draft, durationSeconds: Number(event.target.value) })} /></label>
-            <label className="block">WebVTT captions<textarea className={field} required maxLength={45000} rows={5} {...bind('captions')} /></label>
+            <div><label htmlFor="academy-captions" className="block">WebVTT captions</label><textarea id="academy-captions" className={field} required maxLength={45000} rows={5} {...bind('captions')} /></div>
           </>}
           {editable && <button className={button} type="submit">Save draft</button>}
         </fieldset>
       </form>}
+      {lesson && <LessonVersions key={`${lesson.id}:${lesson.revision}`} lessonId={lesson.id} revision={lesson.revision} />}
       {lesson && <section className="space-y-3 rounded-2xl bg-white p-4">
         <h2 className="font-bold">Publication and rights</h2>
         <p className="text-sm">State: {lesson.state}. A different authorized publisher reviews the saved content before publication.</p>
