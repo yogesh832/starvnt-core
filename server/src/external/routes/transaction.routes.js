@@ -635,12 +635,12 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
       .populate('vendor', 'businessName category location');
     if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND', message: 'Quote not found.' });
 
-    if (quote.status !== 'APPROVED') assertCommercialSnapshot(quote, req.body?.expectedCommercialVersion, true);
     // Anchor acceptance to the enquiry's owned event before considering input.
     const linkedOpportunity = quote.opportunity ? await Opportunity.findOne({ _id: quote.opportunity, customer: req.externalUser._id, vendor: quote.vendor?._id || quote.vendor }).lean() : null;
     if (quoteEventMismatch(linkedOpportunity?.customerEvent, req.body?.eventId)) {
       return res.status(409).json({ error: 'QUOTE_EVENT_MISMATCH', message: 'This quote belongs to a different event.' });
     }
+    if (quote.status !== 'APPROVED') assertCommercialSnapshot(quote, req.body?.expectedCommercialVersion, true);
     let event = null;
     const eventId = linkedOpportunity?.customerEvent || req.body?.eventId;
     if (eventId) {
