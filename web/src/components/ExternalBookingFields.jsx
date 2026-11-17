@@ -1,5 +1,5 @@
-export const EXTERNAL_SOURCES = ['DIRECT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'WEBSITE', 'JUSTDIAL', 'REFERRAL', 'REPEAT', 'OTHER', 'LEGACY_UNKNOWN'];
-export const EXTERNAL_STAGES = { ENQUIRY: ['NEGOTIATION', 'QUOTE_SENT', 'ON_HOLD', 'CONFIRMED', 'CANCELLED'], NEGOTIATION: ['QUOTE_SENT', 'ON_HOLD', 'CONFIRMED', 'CANCELLED'], QUOTE_SENT: ['NEGOTIATION', 'ON_HOLD', 'CONFIRMED', 'CANCELLED'], ON_HOLD: ['CONFIRMED', 'ENQUIRY', 'NEGOTIATION', 'CANCELLED'], CONFIRMED: ['IN_PROGRESS', 'ON_HOLD', 'CANCELLED'], IN_PROGRESS: ['COMPLETED', 'CANCELLED'], COMPLETED: [], CANCELLED: [] };
+export { externalAcquisitionChannels as EXTERNAL_SOURCES, externalLifecycleTransitions as EXTERNAL_STAGES } from '../../../shared/externalBookingLifecycle.js';
+import { externalAcquisitionChannels as EXTERNAL_SOURCES } from '../../../shared/externalBookingLifecycle.js';
 export const human = value => String(value || '').replaceAll('_', ' ').toLowerCase();
 export const localDateTime = value => value ? new Date(new Date(value).getTime() - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
 export default function ExternalBookingFields({ value = {}, onChange, services = [], resources = [], editing = false }) {

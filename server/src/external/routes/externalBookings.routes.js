@@ -10,13 +10,15 @@ import { externalFinancials, EXTERNAL_CHANNELS, EXTERNAL_TRANSITIONS } from '../
 import { schedulingError } from '../../common/scheduleRules.js';
 import { asyncHandler as h } from '../../customer/utils/http.js';
 import { withVendorSchedule } from '../services/scheduleLock.js';
+import { externalDocumentKinds } from '../../../../shared/externalDocuments.js';
+import { recordBusinessAudit } from '../../admin/utils/audit.js';
 
 const router = Router();
 const actor = req => ({ id: req.externalUser._id, role: 'VENDOR' });
 export function serializeExternalBooking(doc) {
   const row = doc.toObject?.() || { ...doc };
   const b = row.externalBooking || {};
-  row.externalBooking = { ...b, lifecycle: b.lifecycle || (row.status === 'CANCELLED' ? 'CANCELLED' : 'CONFIRMED'), acquisitionChannel: b.acquisitionChannel || 'LEGACY_UNKNOWN', attachments: (b.attachments || []).map(a => ({ _id: a._id, name: a.name, kind: a.kind, at: a.at })) };
+  row.externalBooking = { ...b, lifecycle: b.lifecycle || (row.status === 'CANCELLED' ? 'CANCELLED' : 'CONFIRMED'), acquisitionChannel: b.acquisitionChannel || 'LEGACY_UNKNOWN', attachments: (b.attachments || []).map(a => ({ _id: a._id, name: a.name, kind: a.kind, at: a.at, uploaderId: a.actor, source: 'VENDOR_PRIVATE', bookingId: row._id })) };
   delete row.requestHash;
   return { ...row, financials: externalFinancials(row), source: 'VENDOR_PRIVATE', verificationStatus: 'REPORTED' };
 }
@@ -56,7 +58,7 @@ router.get('/financial-summary', h(async (req, res) => {
   res.json({ ok: true, source: 'VENDOR_PRIVATE', verification: 'VENDOR_REPORTED', excludedFromStarvntRevenue: true, ...totals });
 }));
 router.post('/', h(async (req, res) => {
-  if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(req.body?.externalBooking?.lifecycle)) throw schedulingError('INVALID_INITIAL_STATE', 'Start with an enquiry, quote, hold or confirmed booking.');
+  if (['IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'LOST', 'REFUNDED'].includes(req.body?.externalBooking?.lifecycle)) throw schedulingError('INVALID_INITIAL_STATE', 'Start with an enquiry, quote, hold or confirmed booking.');
   const row = await saveCommitment(req.vendorId, { ...req.body, recordType: 'EXTERNAL_COMMITMENT' }, actor(req));
   res.status(201).json({ ok: true, booking: serializeExternalBooking(row) });
 }));
@@ -78,7 +80,7 @@ export function validateExternalAttachment(file, kind) {
     'image/jpeg': b?.[0] === 255 && b?.[1] === 216 && b?.[2] === 255,
     'image/webp': b?.subarray(0, 4).toString() === 'RIFF' && b?.subarray(8, 12).toString() === 'WEBP',
   };
-  if (!b?.length || b.length > 10 * 1024 * 1024 || !signatures[file.mimetype] || !['INVOICE', 'RECEIPT', 'OTHER'].includes(kind)) throw schedulingError('INVALID_ATTACHMENT', 'Upload a PDF, JPEG, PNG or WebP up to 10 MB and choose its purpose.');
+  if (!b?.length || b.length > 10 * 1024 * 1024 || !signatures[file.mimetype] || !externalDocumentKinds.includes(kind)) throw schedulingError('INVALID_ATTACHMENT', 'Upload a PDF, JPEG, PNG or WebP up to 10 MB and choose its purpose.');
 }
 function mediaConfig() {
   if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) throw schedulingError('PRIVATE_STORAGE_UNAVAILABLE', 'Private document storage is unavailable. Try later.', 503);
@@ -110,7 +112,9 @@ router.get('/:id/attachments/:attachmentId/download', h(async (req, res) => {
   const row = await owned(req), attachment = row.externalBooking.attachments.id(req.params.attachmentId);
   if (!attachment) throw schedulingError('ATTACHMENT_NOT_FOUND', 'Document not found.', 404);
   mediaConfig();
+  await recordBusinessAudit({ actorId: String(req.externalUser._id), actorType: 'EXTERNAL', organizationId: String(req.vendorId), action: 'EXTERNAL_BOOKING_DOCUMENT_ACCESS_GRANTED', resourceType: 'EXTERNAL_BOOKING_DOCUMENT', resourceId: String(attachment._id), referenceId: String(row._id), source: 'VENDOR_PRIVATE' });
   const expiry = Math.floor(Date.now() / 1000) + 300;
+  res.set('Cache-Control', 'private, no-store');
   res.json({ url: cloudinary.utils.private_download_url(attachment.publicId, attachment.format, { resource_type: attachment.resourceType, type: 'authenticated', expires_at: expiry, attachment: true }), expiresAt: new Date(expiry * 1000) });
 }));
 export default router;
