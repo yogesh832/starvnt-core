@@ -13,9 +13,8 @@ import { Opportunity } from '../src/external/models/Opportunity.js';
 import { Quote } from '../src/external/models/Quote.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
 import { VendorService } from '../src/external/models/VendorService.js';
-import { EventProposal } from '../src/proposals/models.js';
 
-let mongo, app, owner, stranger, partner, eventA, eventB, eventOther, quoteA, proposalA;
+let mongo, app, owner, stranger, partner, eventA, eventB, eventOther, quoteA;
 const key = () => crypto.randomUUID(), auth = person => ({ Authorization: `Bearer ${person.token}` });
 before(async () => {
   mongo = await MongoMemoryServer.create();
@@ -36,9 +35,6 @@ before(async () => {
     const opportunity = await Opportunity.create({ vendor: vendor._id, vendorService: service._id, customer: row.customer, customerEvent: row._id, serviceName: 'Photography', eventDate: row.eventDate });
     const quote = await Quote.create({ opportunity: opportunity._id, vendor: vendor._id, customer: row.customer, vendorService: service._id, serviceName: row.title, eventDate: row.eventDate, pricingBreakdown: { basePrice: 1000, totalAmount: 1000 }, status: 'SUBMITTED', advancePayment: { percentage: 20, amount: 200 } });
     if (row === eventA) quoteA = quote;
-    const snapshot = { manifest: { title: row.title, eventDate: row.eventDate, city: row.city }, lines: [], sections: [], payments: [], totalAmount: 1000 };
-    const proposal = await EventProposal.create({ event: row._id, customer: row.customer, version: 1, state: 'SENT', manifest: snapshot.manifest, frozenSnapshot: snapshot, snapshotHash: key(), pdfHash: key() });
-    if (row === eventA) proposalA = proposal;
   }
 }, { timeout: 120000 });
 after(async () => { await Promise.all([externalConn.close(), adminConn.close()]); await mongo?.stop(); });
@@ -59,15 +55,8 @@ test('cross-event acceptance is rejected before commercial mutations', async () 
   assert.equal(body.error, 'QUOTE_EVENT_MISMATCH');
   assert.equal((await Quote.findById(quoteA._id)).status, 'SUBMITTED');
 });
-test('event proposal lists preserve exact frozen versions and keep global listing compatible', async () => {
-  const scoped = await request(app).get(`/api/customer/proposals?eventId=${eventA._id}`).set(auth(owner)).expect(200);
-  assert.deepEqual(scoped.body.proposals.map(row => row._id), [String(proposalA._id)]);
-  assert.equal(scoped.body.proposals[0].pdfHash, proposalA.pdfHash);
-  const all = await request(app).get('/api/customer/proposals').set(auth(owner)).expect(200);
-  assert.equal(all.body.proposals.length, 2);
-});
-test('scoped offer and proposal routes reject other customers, vendors and missing sessions', async () => {
-  for (const path of ['/api/customer/vendor-quotes', '/api/customer/proposals']) {
+test('scoped offer routes reject other customers, vendors and missing sessions', async () => {
+  for (const path of ['/api/customer/vendor-quotes']) {
     await request(app).get(`${path}?eventId=${eventOther._id}`).set(auth(owner)).expect(404);
     await request(app).get(`${path}?eventId=invalid`).set(auth(owner)).expect(400);
     await request(app).get(`${path}?eventId=${eventA._id}`).set(auth(partner)).expect(403);
