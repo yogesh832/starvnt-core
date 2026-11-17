@@ -1,3 +1,6 @@
+import BookingWorkflow from '../../components/BookingWorkflow.jsx';
+import VendorCompliance from './VendorCompliance.jsx';
+import RevenueCrm from './RevenueCrm.jsx';
 import ProductMetrics from './ProductMetrics.jsx';
 import ExperienceControls from './ExperienceControls.jsx';
 import DiscoveryRewardsAdmin from './DiscoveryRewardsAdmin.jsx';
@@ -32,9 +35,12 @@ const MODULES = [
   { path: 'customers', label: 'Customers', icon: 'customers', anyOf: ['customers.read'] },
   { path: 'availability', label: 'Availability & External Commitments', icon: 'calendar', anyOf: ['vendors.read'] },
   { path: 'vendors', label: 'Vendors', icon: 'vendors', anyOf: ['vendors.read'] },
+  { path: 'vendor-compliance', label: 'Vendor compliance', icon: 'documents', anyOf: ['vendorCompliance.read'] },
   { path: 'events', label: 'Events', icon: 'events', anyOf: ['events.read'] },
   { path: 'bookings', label: 'Bookings', icon: 'bookings', anyOf: ['bookings.read'] },
   { path: 'finance', label: 'Finance', icon: 'payments', anyOf: ['payments.read', 'settlements.read', 'financePolicies.read', 'financeCoupons.read', 'settings.read'] },
+  { path: 'execution', label: 'Service review', icon: 'bookings', anyOf: ['operations.read', 'operations.manage', 'bookings.read', 'settlements.read', 'payments.refund', 'settlements.release', 'settlements.approve'] },
+  { path: 'crm', label: 'Revenue CRM', icon: 'customers', anyOf: ['leads.read'] },
   { path: 'operations', label: 'Operations', icon: 'operations', anyOf: ['execution.read', 'automation.read'] },
   { path: 'product-outcomes', label: 'Product outcomes', icon: 'reports', anyOf: ['analytics.read', 'reports.read'] },
   { path: 'reports', label: 'Reports', icon: 'reports', anyOf: ['analytics.read', 'reports.read'] },
@@ -351,11 +357,14 @@ export default function AdminShell() {
               <Route path="customers" element={<ModuleTable kind="customers" />} />
               <Route path="availability" element={<Availability />} />
               <Route path="vendors" element={<ModuleTable kind="vendors" />} />
+              <Route path="vendor-compliance" element={<VendorCompliance />} />
               <Route path="events" element={<ModuleTable kind="events" />} />
               <Route path="bookings" element={<ModuleTable kind="bookings" />} />
               <Route path="finance" element={<Finance />} />
               <Route path="payments" element={<Navigate to="/admin/finance" replace />} />
               <Route path="operations" element={<Operations />} />
+              <Route path="execution" element={<BookingWorkflow admin />} />
+              <Route path="crm" element={<RevenueCrm />} />
               <Route path="product-outcomes" element={<ProductMetrics />} />
               <Route path="reports" element={<ModuleTable kind="reports" />} />
               <Route path="automation" element={<ModuleTable kind="automation" />} />

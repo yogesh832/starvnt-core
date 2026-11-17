@@ -112,10 +112,10 @@ export function AccountScreen({ navigation }: any) {
     </Page>
   );
 }
-export function ProfileScreen() {
+export function ProfileScreen({ navigation }: any) {
   const { user } = useSession();
   return user?.accountType === "VENDOR" ? (
-    <VendorProfile />
+    <VendorProfile navigation={navigation} />
   ) : (
     <CustomerProfile />
   );

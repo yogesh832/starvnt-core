@@ -5,7 +5,13 @@ const { Schema } = mongoose;
 
 const followUpSchema = new Schema(
   {
-    vendor: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', required: true, index: true },
+    scope: { type: String, enum: ['VENDOR', 'STAFF'], default: 'VENDOR' },
+    requirement: { type: Schema.Types.ObjectId, index: true },
+    owner: { type: Schema.Types.ObjectId, index: true },
+    requestKey: String,
+    requestHash: String,
+    history: [{ actor: String, at: Date, action: String, notes: String }],
+    vendor: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', required() { return this.scope !== 'STAFF'; }, index: true },
     customer: { type: Schema.Types.ObjectId, ref: 'ExternalUser', default: null },
     title: { type: String, required: true },
     description: { type: String, default: '' },
@@ -15,4 +21,5 @@ const followUpSchema = new Schema(
   { timestamps: true }
 );
 
+followUpSchema.index({ requirement: 1, requestKey: 1 }, { unique: true, partialFilterExpression: { scope: 'STAFF' } });
 export const FollowUp = externalConn.model('FollowUp', followUpSchema);

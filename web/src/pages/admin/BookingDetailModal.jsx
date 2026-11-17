@@ -1,9 +1,11 @@
+import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { adminApi } from '../../lib/api.js';
 import Icon from '../../components/Icon.jsx';
 import { StatusChip } from '../../components/ui.jsx';
 
 export default function BookingDetailModal({ booking, onClose, onRefresh }) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'financials' | 'evidence' | 'actions'
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -11,11 +13,6 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
   // Form states for Admin actions
   const [paymentRef, setPaymentRef] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
-  const [validationNotes, setValidationNotes] = useState('');
-  const [settlementRef, setSettlementRef] = useState('');
-  const [refundRef, setRefundRef] = useState('');
-  const [refundAmount, setRefundAmount] = useState('');
-  const [failureReason, setFailureReason] = useState('');
 
   if (!booking) return null;
 
@@ -73,153 +70,6 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
     }
   }
 
-  async function handleValidateCompletion(approved) {
-    if (!window.confirm(`${approved ? 'Approve' : 'Reject'} completion evidence for this booking?`)) return;
-    setLoading(true);
-    setMessage({ type: '', text: '' });
-    try {
-      const res = await adminApi.call(`/operations/bookings/${_id}/validate-completion`, {
-        method: 'POST',
-        body: {
-          approved,
-          notes: validationNotes || (approved ? 'Completion verified by Super Admin' : 'Rejected due to incomplete work'),
-        },
-      });
-      if (res.ok) {
-        setMessage({ type: 'success', text: approved ? 'Completion approved! Settlement is now eligible.' : 'Completion rejected.' });
-        setTimeout(() => {
-          onRefresh();
-          onClose();
-        }, 1200);
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Validation failed' });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSettle(e) {
-    e.preventDefault();
-    if (!settlementRef.trim()) {
-      setMessage({ type: 'error', text: 'Enter the real bank or transfer reference before releasing settlement.' });
-      return;
-    }
-    if (!window.confirm('Execute vendor payout and release settlement?')) return;
-    setLoading(true);
-    setMessage({ type: '', text: '' });
-    try {
-      const res = await adminApi.call(`/operations/bookings/${_id}/settle`, {
-        method: 'POST',
-        body: {
-          transactionReference: settlementRef.trim(),
-          notes: 'Settled by StarVnt Core Operations',
-        },
-      });
-      if (res.pendingApproval) {
-        setMessage({ type: 'success', text: 'Settlement release request created. A different finance admin must approve it before payout release.' });
-      } else if (res.ok) {
-        setMessage({ type: 'success', text: 'Vendor settlement executed and settled!' });
-      }
-      if (res.ok) {
-        setTimeout(() => {
-          onRefresh();
-          onClose();
-        }, 1200);
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Settlement execution failed' });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRefund(e) {
-    e.preventDefault();
-    const amount = Number(refundAmount || paymentSummary.paidAmount || totalAmount || 0);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setMessage({ type: 'error', text: 'Enter a valid refund amount.' });
-      return;
-    }
-    if (!refundRef.trim()) {
-      setMessage({ type: 'error', text: 'Enter the real refund/payment provider reference.' });
-      return;
-    }
-    if (!window.confirm('Create refund request for maker-checker approval?')) return;
-    setLoading(true);
-    setMessage({ type: '', text: '' });
-    try {
-      const res = await adminApi.call(`/operations/bookings/${_id}/refund`, {
-        method: 'POST',
-        body: {
-          amount,
-          reference: refundRef.trim(),
-          notes: 'Refund requested by StarVnt Core Operations',
-        },
-      });
-      if (res.pendingApproval) {
-        setMessage({ type: 'success', text: 'Refund request created. A different finance admin must approve it before ledger posting.' });
-      } else if (res.ok) {
-        setMessage({ type: 'success', text: 'Refund posted to the finance ledger.' });
-      }
-      if (res.ok) {
-        setTimeout(() => {
-          onRefresh();
-          onClose();
-        }, 1200);
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Refund request failed' });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleFailAndReassign(e) {
-    e.preventDefault();
-    if (!failureReason.trim()) return alert('Please enter a reason for vendor failure.');
-    if (!window.confirm('Mark this vendor as FAILED and discover alternative matching vendors?')) return;
-    setLoading(true);
-    setMessage({ type: '', text: '' });
-    try {
-      const res = await adminApi.call(`/operations/bookings/${_id}/fail-and-reassign`, {
-        method: 'POST',
-        body: {
-          reason: failureReason.trim(),
-        },
-      });
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'Vendor marked failed. Alternatives discovered!' });
-        setTimeout(() => {
-          onRefresh();
-          onClose();
-        }, 1400);
-      }
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'Failed to reassign' });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const executionSteps = [
-    { key: 'NOT_STARTED', label: 'Booked' },
-    { key: 'SERVICE_SCHEDULED', label: 'Scheduled' },
-    { key: 'SERVICE_STARTED', label: 'Started' },
-    { key: 'COMPLETION_SUBMITTED', label: 'Evidence Submitted' },
-    { key: 'COMPLETION_VERIFIED', label: 'Completed & Verified' },
-  ];
-
-  const currentStepIdx = executionSteps.findIndex((s) => s.key === executionStatus);
-  const activeStepNumber = currentStepIdx >= 0 ? currentStepIdx : 0;
-
-  const latestEvidence = Array.isArray(completionEvidence)
-    ? completionEvidence[completionEvidence.length - 1]
-    : completionEvidence;
-  const evidencePhotos = latestEvidence?.photos || [];
-  const evidenceVideos = latestEvidence?.videos || [];
-  const evidenceFiles = latestEvidence?.files || [];
-  const hasMedia = evidencePhotos.length > 0 || evidenceVideos.length > 0 || evidenceFiles.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-navy/80 backdrop-blur-sm overflow-y-auto">
@@ -546,174 +396,15 @@ export default function BookingDetailModal({ booking, onClose, onRefresh }) {
             </div>
           )}
 
-          {/* TAB 4: ADMIN OPERATIONS */}
-          {activeTab === 'actions' && (
-            <div className="space-y-6">
-              {/* Payment Verification */}
-              {paymentStatus !== 'PAYMENT_VERIFIED' && (
-                <form onSubmit={handleVerifyPayment} className="bg-slate-50 border border-gray-100 rounded-2xl p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-navy uppercase tracking-wider">
-                    <Icon name="wallet" size={15} className="text-primary" />
-                    <span>Authoritatively Verify Customer Payment</span>
-                  </div>
-                  <p className="text-xs text-muted">
-                    Match this booking against an authoritative verified customer payment before execution continues.
-                  </p>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      placeholder="Bank UTR / Transaction Reference"
-                      value={paymentRef}
-                      onChange={(e) => setPaymentRef(e.target.value)}
-                      className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-primary"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Internal verification notes"
-                      value={paymentNotes}
-                      onChange={(e) => setPaymentNotes(e.target.value)}
-                      className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-primary"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
-                  >
-                    {loading ? 'Processing...' : 'Verify & Mark Paid'}
-                  </button>
-                </form>
-              )}
-
-              {/* Completion Validation */}
-              <div className="bg-slate-50 border border-gray-100 rounded-2xl p-5 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-navy uppercase tracking-wider">
-                  <Icon name="check" size={15} className="text-emerald-600" />
-                  <span>Validate Service Completion</span>
-                </div>
-                <p className="text-xs text-muted">
-                  Super Admin audit of ground execution. Approving completion unlocks vendor settlement eligibility.
-                </p>
-                <input
-                  type="text"
-                  placeholder="Audit feedback or rejection reason"
-                  value={validationNotes}
-                  onChange={(e) => setValidationNotes(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:border-primary"
-                />
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleValidateCompletion(true)}
-                    disabled={loading}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
-                  >
-                    Approve Completion
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleValidateCompletion(false)}
-                    disabled={loading}
-                    className="px-4 py-2 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
-                  >
-                    Reject Completion
-                  </button>
-                </div>
-              </div>
-
-              {/* Release Settlement */}
-              {settlementStatus === 'SETTLEMENT_ELIGIBLE' && (
-                <form onSubmit={handleSettle} className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900 uppercase tracking-wider">
-                    <Icon name="trend" size={15} className="text-emerald-600" />
-                    <span>Release Vendor Settlement Payout</span>
-                  </div>
-                  <p className="text-xs text-muted">
-                    This booking has completed verification. Trigger automated settlement transfer to the vendor.
-                  </p>
-                  <input
-                    type="text"
-                    placeholder="Bank Transfer Reference / UTR Number"
-                    value={settlementRef}
-                    onChange={(e) => setSettlementRef(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-emerald-200 rounded-xl text-xs outline-none focus:border-emerald-600"
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
-                  >
-                    {loading ? 'Releasing...' : 'Release Settlement Now'}
-                  </button>
-                </form>
-              )}
-
-              {paymentStatus === 'PAYMENT_VERIFIED' && (
-                <form onSubmit={handleRefund} className="bg-amber-50/60 border border-amber-100 rounded-2xl p-5 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-900 uppercase tracking-wider">
-                    <Icon name="payments" size={15} className="text-amber-600" />
-                    <span>Request Customer Refund</span>
-                  </div>
-                  <p className="text-xs text-muted">
-                    Refunds require a second finance admin approval before they are posted to the ledger.
-                  </p>
-                  <div className="grid sm:grid-cols-2 gap-2">
-                    <input
-                      type="number"
-                      min="1"
-                      step="1"
-                      placeholder={`Amount, max ₹${Number(paymentSummary.paidAmount || totalAmount || 0).toLocaleString('en-IN')}`}
-                      value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
-                      className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs outline-none focus:border-amber-600"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Refund ID / payment provider reference"
-                      value={refundRef}
-                      onChange={(e) => setRefundRef(e.target.value)}
-                      className="px-3 py-2 bg-white border border-amber-200 rounded-xl text-xs outline-none focus:border-amber-600"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer"
-                  >
-                    {loading ? 'Requesting...' : 'Request Refund Approval'}
-                  </button>
-                </form>
-              )}
-
-              {/* Emergency Vendor Failure and Reassignment */}
-              <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-5 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-rose-800 uppercase tracking-wider">
-                  <Icon name="shield" size={15} className="text-rose-600" />
-                  <span>Vendor Failure & Fallback Reassignment</span>
-                </div>
-                <p className="text-xs text-muted">
-                  If the assigned vendor cannot perform, mark failure to reassign immediately to alternative vendors in the same location.
-                </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Failure reason (e.g. vendor no-show, vehicle breakdown)"
-                    value={failureReason}
-                    onChange={(e) => setFailureReason(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-white border border-rose-200 rounded-xl text-xs outline-none focus:border-rose-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleFailAndReassign}
-                    disabled={loading}
-                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
-                  >
-                    Fail & Discover Alternatives
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === 'actions' && <div className="space-y-4">
+            <p className="text-sm">Review execution, private evidence, protection cases and independent finance reconciliation in the service workspace.</p>
+            <button className="rounded-xl bg-primary text-white px-4 py-3 font-bold" onClick={() => { onClose(); navigate(`/admin/execution?booking=${_id}`); }}>Open service review and finance</button>
+            {paymentStatus !== 'PAYMENT_VERIFIED' && <form onSubmit={handleVerifyPayment} className="space-y-3 border rounded-xl p-4">
+              <label className="block text-sm">Verified customer payment or order reference<input className="block border rounded p-2 w-full" value={paymentRef} onChange={e => setPaymentRef(e.target.value)} /></label>
+              <label className="block text-sm">Payment review notes<input className="block border rounded p-2 w-full" value={paymentNotes} onChange={e => setPaymentNotes(e.target.value)} /></label>
+              <button disabled={loading} className="border rounded px-3 py-2">Match recorded payment</button>
+            </form>}
+          </div>}
         </div>
 
         {/* Footer */}

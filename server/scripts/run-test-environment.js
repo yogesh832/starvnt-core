@@ -24,7 +24,10 @@ for (const key of ['MONGO_URI_EXTERNAL', 'MONGO_URI_ADMIN']) {
     process.exit(1);
   }
 }
-const child = spawn(process.execPath, ['--watch', 'src/index.js'], {
+const serverArgs = process.argv.includes('--no-watch')
+  ? ['src/index.js']
+  : ['--watch', 'src/index.js'];
+const child = spawn(process.execPath, serverArgs, {
   cwd: serverRoot,
   env: { ...process.env, ...qaEnv, NODE_ENV: 'test', STARVNT_ENV_FILE: envPath },
   stdio: 'inherit', windowsHide: true,

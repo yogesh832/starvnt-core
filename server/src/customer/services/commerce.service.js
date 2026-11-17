@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { assertCommercialSnapshot } from '../../external/services/commercialSnapshot.service.js';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { syncBookingTruth, cancelOwnedBooking } from './bookingTruth.service.js';
 import { withVendorSchedule } from '../../external/services/scheduleLock.js';
@@ -21,7 +22,7 @@ import { Quote } from '../../external/models/Quote.js';
 import { ExternalUser } from '../../external/models/ExternalUser.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { Booking, LOCKED_REQUIREMENT_STATUSES } from '../models/index.js';
-import { validateCompletionFromCore } from '../../admin/services/executionSettlement.service.js';
+import { acknowledgeCompletion } from '../../admin/services/executionSettlement.service.js';
 import { recordLifecycleEventMessage } from './circle.service.js';
 import { HttpError, badRequest, conflict, notFound } from '../utils/http.js';
 import { publicCoupon, validateCouponForPayment, recordCouponUsageOnce, normalizeCouponCode } from './coupon.service.js';
@@ -30,8 +31,8 @@ import { publishOutboxEvent } from '../../automation/services/outbox.service.js'
 /**
  * Reserve → pay → verify → book (Blueprint §6, phases 9–10).
  * - Accepting a quote creates 48 h holds (reservations), never bookings.
- * - The browser callback only moves a payment to "processing".
- * - Only a signed webhook or an ops verification makes it "verified".
+ * - A signed callback starts server-side capture verification; pending capture remains processing.
+ * - Signed webhooks, authoritative provider lookup or ops verification establish payment truth.
  * - A booking is confirmed only if the payment is verified AND the hold is
  *   live AND the date isn't taken; otherwise it waits "under review".
  */
@@ -118,6 +119,7 @@ export function serializeBooking(b) {
 export async function acceptQuote(customerId, quoteId) {
   const quote = await quotesRepo.findOwned(customerId, quoteId).catch(() => null);
   if (!quote) throw notFound('Quote not found');
+  if (quote.items.some(item => !item.isDemo)) throw conflict('VENDOR_COST_CONFIRMATION_REQUIRED', 'Request a vendor-confirmed quote before reserving this service.');
   const ids = quote.items.map(item => String(item.optionId || '').replace(/^vs_/, '')).filter(id => mongoose.isValidObjectId(id));
   const vendors = [...new Set((await VendorService.find({ _id: { $in: ids } }).select('vendor').lean()).map(s => String(s.vendor)))].sort();
   const acquire = index => index === vendors.length ? acceptQuoteLocked(customerId, quoteId) : withVendorSchedule(vendors[index], () => acquire(index + 1));
@@ -186,6 +188,8 @@ async function acceptQuoteLocked(customerId, quoteId) {
             advancePercent, vendorCancellationPenaltyPercent: policy.vendorCancellationPenaltyPercent,
             customerCancellationRefunds: policy.customerCancellationRefunds,
             settlementCondition: policy.settlementCondition, settlementDelayDays: policy.settlementDelayDays,
+            completionRequirements: policy.completionRequirements, manualFinanceAllowed: policy.manualFinanceAllowed,
+            partialRefundAllowed: policy.partialRefundAllowed, partialSettlementAllowed: policy.partialSettlementAllowed,
           },
           amount: advance,
           balanceAmount: Math.max(0, i.price - advance),
@@ -357,28 +361,10 @@ export async function verifyBookingCompletion(customerId, bookingId, body = {}) 
     throw badRequest('BOOKING_NOT_READY', 'The vendor must submit completion evidence before you can verify completion.');
   }
 
-  const verified = await validateCompletionFromCore(
-    coreBooking._id,
-    { approved: true, notes: body?.notes || 'Customer verified completion' },
-    `CUSTOMER:${customerId}`
-  );
-
-  if (coreBooking.customerBookingId) {
-    await Booking.updateOne({ _id: coreBooking.customerBookingId, customer: customerId }, { $set: { executionStatus: 'completed', completedAt: new Date() } });
-  }
-
-  if (coreBooking.vendorId) {
-    await recordLifecycleEventMessage({
-      vendorId: coreBooking.vendorId,
-      customerId,
-      eventId: coreBooking.customerEvent,
-      bookingId: coreBooking._id,
-      sender: 'CLIENT',
-      senderName: 'Customer',
-      text: `✓ Completion Verified: Customer verified proof of work for ${coreBooking.serviceName || 'booking'}. Remaining balance is ready for payout/settlement.`,
-      type: 'completion',
-    }).catch(() => null);
-  }
+  const verified = await acknowledgeCompletion(coreBooking._id, customerId, {
+    notes: body?.notes || 'Customer acknowledged submitted completion evidence',
+    idempotencyKey: body?.idempotencyKey || `customer-ack-${coreBooking._id}`,
+  });
 
   return { ok: true, booking: verified };
 }
@@ -391,12 +377,14 @@ export async function previewReservationCoupon(customerId, eventId, reservationI
     if (mongoose.isValidObjectId(reservationId)) {
       reservation = await Reservation.findOne({
         event: event._id,
+        event: event._id, customer: customerId,
         $or: [{ _id: reservationId }, { quoteItem: reservationId }, { quote: reservationId }],
       });
     }
     if (!reservation) {
       const cb = (await CoreBooking.findById(reservationId).catch(() => null)) || (await Booking.findById(reservationId).catch(() => null));
       if (cb) {
+        if (String(cb.customerId || cb.customer) !== String(customerId) || String(cb.customerEvent || cb.event) !== String(event._id)) throw notFound('Booking not found for this event');
         if (cb.reservation) reservation = await Reservation.findById(cb.reservation).catch(() => null);
         if (!reservation && cb.quoteId) reservation = await Reservation.findOne({ quote: cb.quoteId }).catch(() => null);
         if (!reservation) {
@@ -405,7 +393,7 @@ export async function previewReservationCoupon(customerId, eventId, reservationI
           const balAmt = cb.paymentSummary?.balanceAmount ?? cb.balanceAmount ?? Math.max(0, totalAmt - paidAmt);
           reservation = {
             _id: cb._id,
-            event: event._id,
+            event: event._id, customer: customerId,
             category: cb.category || 'venue',
             vendorName: cb.vendorName || 'Vendor Partner',
             packageName: cb.serviceName || cb.packageName || 'Service Package',
@@ -423,6 +411,12 @@ export async function previewReservationCoupon(customerId, eventId, reservationI
   if (!reservation) throw notFound('Reservation not found');
   const isBalancePayment = reservation.status === 'converted' || reservation.status === 'pending_balance';
   if (!isBalancePayment && reservation.status !== 'pending_payment') throw conflict('RESERVATION_NOT_PAYABLE', 'This reservation is not awaiting payment');
+  if (String(reservation.event) !== String(event._id) || String(reservation.customer) !== String(customerId)) throw notFound('Reservation not found for this event');
+  if (!isBalancePayment && !reservation.isDemo) {
+    const confirmed = await Quote.findOne({ _id: reservation.quote, customer: customerId, status: 'APPROVED' });
+    if (!confirmed || !reservation.commercialSnapshot) throw conflict('VENDOR_COST_CONFIRMATION_REQUIRED', 'Review a vendor-confirmed quote before paying.');
+    assertCommercialSnapshot(confirmed, reservation.commercialSnapshot.version, true);
+  }
   const baseAmount = isBalancePayment ? (reservation.balanceAmount ?? reservation.amount) : advanceAmountOf(reservation);
   const orderAmount = packageTotalOf(reservation);
   const { coupon, discountAmount } = await validateCouponForPayment(code, { orderAmount, baseAmount });
@@ -485,6 +479,11 @@ export async function payReservation(customer, eventId, reservationId, body = {}
     }
 
     if (String(reservation.event) !== String(event._id) || String(reservation.customer) !== String(customerId)) throw notFound('Reservation not found for this event');
+    if (!isBalancePayment && !reservation.isDemo) {
+      const confirmed = await Quote.findOne({ _id: reservation.quote, customer: customerId, status: 'APPROVED' });
+      if (!confirmed || !reservation.commercialSnapshot) throw conflict('VENDOR_COST_CONFIRMATION_REQUIRED', 'Review a vendor-confirmed quote before paying.');
+      assertCommercialSnapshot(confirmed, reservation.commercialSnapshot.version, true);
+    }
     let baseAmount = advanceAmountOf(reservation);
     if (isBalancePayment) {
       const existing = await commerceRepo.findBookingForReservation(reservation._id);
@@ -701,6 +700,14 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
     if (!claimed) reason = 'The vendor was just booked by someone else for your date';
   }
 
+  if (!reason && !reservation.isDemo) {
+    try {
+      if (!vq || !reservation.commercialSnapshot) throw new Error('Accepted vendor-confirmed terms are missing');
+      assertCommercialSnapshot(vq, reservation.commercialSnapshot.version, true);
+      if (vq.commercialSnapshot.hash !== reservation.commercialSnapshot.hash || Number(packageTotalOf(reservation)) !== Number(reservation.commercialSnapshot.pricing.totalAmount)) throw new Error('The confirmed commercial terms changed');
+    } catch (error) { reason = error.message; }
+  }
+
   if (!reason && vendorId) {
     const readiness = await evaluateVendorActivation(vendorId);
     if (!serviceMatchingEligible(readiness, vq?.vendorService || String(reservation.optionId).replace(/^vs_/, ''))) reason = 'Vendor activation is not approved or operational requirements are incomplete';
@@ -712,14 +719,18 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
   await assertLease();
   const customerUser = await ExternalUser.findById(event.customer);
   const totalAmount = packageTotalOf(reservation);
+  const { originalBookingRequirement } = await import('../../admin/services/executionSettlement.service.js');
+  const requirementSnapshot = !reason && vendorId ? await originalBookingRequirement({ requirementId: reservation.requirement, quoteId: vq ? String(vq._id) : null, customerId: event.customer, customerEvent: event._id, category: reservation.category, eventDate: vq?.eventDate || event.eventDate, serviceLocation: vq?.serviceLocation || event.location, commercialSnapshot: reservation.commercialSnapshot }) : null;
   const coreSnapshot = !reason && vendorId ? {
     ...(vq ? { quoteId: String(vq._id), opportunityId: vq.opportunity ? String(vq.opportunity) : undefined } : {}),
     vendorId, vendorService: vq?.vendorService || String(reservation.optionId).replace(/^vs_/, ''),
     vendorName: reservation.vendorName, customerName: customerUser?.fullName || 'Customer',
     serviceName: vq?.serviceName || reservation.packageName, category: reservation.category,
     eventDate: vq?.eventDate || event.eventDate, serviceLocation: vq?.serviceLocation || event.location || {},
-    pricing: vq?.pricingBreakdown || { totalAmount }, totalAmount,
+    pricing: reservation.commercialSnapshot?.pricing || vq?.pricingBreakdown || { totalAmount }, totalAmount,
     financialPolicySnapshot: reservation.financialPolicySnapshot,
+    commercialSnapshot: reservation.commercialSnapshot || vq?.commercialSnapshot || null,
+    requirementSnapshot,
     paymentStatus: 'PAYMENT_VERIFIED', executionStatus: 'SERVICE_SCHEDULED', settlementStatus: 'NOT_ELIGIBLE',
     paymentSummary: { advancePercentage: reservation.advancePercent, advanceAmount: payment.amount,
       paidAmount: payment.amount, balanceAmount: Math.max(0, totalAmount - payment.amount),
@@ -791,7 +802,7 @@ async function confirmBookingLocked(payment, vendorId = null, assertLease = asyn
   return booking;
 }
 
-/** Verify a payment (webhook or ops) and run booking confirmation. Idempotent. */
+/** Apply verified payment evidence from a webhook, provider lookup or ops. Idempotent. */
 export async function verifyPayment(paymentId, { actorType, actorId }) {
   const payment = await commerceRepo.getPayment(paymentId);
   if (!payment) return null;
@@ -847,6 +858,13 @@ export async function handleRazorpayWebhook(rawBody, headers) {
   }
 
   try {
+  if (['refund.created', 'refund.processed', 'refund.failed'].includes(eventType)) {
+    const refund = body.payload?.refund?.entity;
+    const { reconcileRefundWebhook } = await import('../../admin/services/financeOperations.service.js');
+    const matched = await reconcileRefundWebhook(refund);
+    await commerceRepo.finishWebhookEvent(delivery);
+    return { ok: true, ignored: !matched };
+  }
   const pay = body.payload?.payment?.entity || null;
   const order = body.payload?.order?.entity || null;
   const orderId = pay?.order_id || order?.id;

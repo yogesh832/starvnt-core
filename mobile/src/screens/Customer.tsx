@@ -575,6 +575,10 @@ function EventSectionBody({ route, navigation }: any) {
             <Pill>{human(p.status)}</Pill>
             <Txt muted>{date(p.createdAt)}</Txt>
             {p.failureReason && <Txt>{p.failureReason}</Txt>}
+            {p.status !== "verified" && (
+              <Button title="Check payment status" secondary busy={a.busy}
+                onPress={() => act(`${eventPath(eventId)}/payments/${id(p)}/reconcile`)} />
+            )}
           </Card>
         ))}
         {!(

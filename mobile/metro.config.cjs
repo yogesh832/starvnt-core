@@ -1,7 +1,15 @@
 const path = require('node:path');
 const { getDefaultConfig } = require('expo/metro-config');
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, '..');
+
+const config = getDefaultConfig(projectRoot);
+config.watchFolders = [workspaceRoot];
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules'),
+];
 const appEntry = path.join(__dirname, 'index.ts');
 
 // The Vite workspace uses React 18. Every mobile import, including imports

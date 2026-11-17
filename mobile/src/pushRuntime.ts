@@ -5,9 +5,11 @@ import * as SecureStore from "expo-secure-store";
 import { external, internal } from "./api/runtime";
 
 export type PushDomain = "external" | "admin";
+export const isExpoGo =
+  (Constants as any).appOwnership === "expo" ||
+  Constants.executionEnvironment === "storeClient";
 export const pushAvailable =
-  (Platform.OS === "android" || Platform.OS === "ios") &&
-  Constants.executionEnvironment !== "storeClient";
+  (Platform.OS === "android" || Platform.OS === "ios") && !isExpoGo;
 export const pushProjectId =
   process.env.EXPO_PUBLIC_EAS_PROJECT_ID ||
   Constants.easConfig?.projectId ||
@@ -16,8 +18,13 @@ export const pushProjectId =
 let sdk: typeof import("expo-notifications") | undefined;
 export function notifications() {
   if (!pushAvailable) return null;
-  return (sdk ||=
-    require("expo-notifications") as typeof import("expo-notifications"));
+  if (sdk) return sdk;
+  try {
+    return (sdk =
+      require("expo-notifications") as typeof import("expo-notifications"));
+  } catch {
+    return null;
+  }
 }
 let queue: Promise<unknown> = Promise.resolve();
 export function pushSerial<T>(action: () => Promise<T>): Promise<T> {

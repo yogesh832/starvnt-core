@@ -105,7 +105,7 @@ function VendorOffer({
                 const result = await external.call(
                   `/customer/vendor-quotes/${id(q)}/accept`,
                   "POST",
-                  { eventId },
+                  { eventId, expectedCommercialVersion: q.commercialSnapshot?.version },
                 );
                 refresh();
                 if (result.eventId)
@@ -129,7 +129,7 @@ function VendorOffer({
           Online payments are not configured. Your quote remains available here.
         </Txt>
       )}
-      {["CREATED", "PROCESSING", "PAID", "FAILED"].includes(
+      {["ORDER_CREATED", "PROCESSING", "PAID", "FAILED"].includes(
         q.advanceStatus,
       ) && (
         <Button
@@ -211,7 +211,7 @@ function CheckoutBody({ route, navigation }: any) {
     const result = await external.call(
       `${endpoint}/${quote ? "pay-advance" : "pay"}`,
       "POST",
-      { couponCode: coupon.trim() },
+      { couponCode: coupon.trim(), ...(quote ? { expectedCommercialVersion: quote.commercialSnapshot?.version } : {}) },
     );
     const checkout = result.checkout;
     if (!checkout?.orderId || !checkout.key)

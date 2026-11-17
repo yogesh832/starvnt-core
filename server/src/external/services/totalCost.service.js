@@ -130,5 +130,9 @@ export async function calculateValidatedTotalCost({
     destinationPoint: serviceLocation?.locality || serviceLocation?.city || 'Service Location',
     validatedTotalCost,
     costStatus: 'ESTIMATE_REQUIRES_VENDOR_CONFIRMATION',
+    provenance: { distance: closestOrigin ? distanceEvidence(closestOrigin, serviceLocation).source : 'ASSUMED_DISTANCE',
+      travel: policySource, tollsAndParking: tollsAndParking ? 'FALLBACK_ALLOWANCE' : 'ESTIMATED_ZERO_OR_INCLUDED',
+      accommodation: isOutstation ? policySource : 'ESTIMATED_NOT_REQUIRED' },
+    requiresVendorConfirmation: true,
   };
 }

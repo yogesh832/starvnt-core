@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { externalApi } from '../../../lib/api.js';
 import { Page, Card } from './shared.jsx';
 import { VENDOR_QR_ENABLED } from '../../../../../server/src/common/vendorQrRelease.js';
 const button = 'border rounded-xl px-4 min-h-11 text-sm disabled:opacity-50';
 export default function CustomerGrowth({ mode = 'directory' }) {
+  const [searchParams] = useSearchParams();
+  const selectedRecord = searchParams.get('record');
   const showQr = VENDOR_QR_ENABLED && mode === 'qr';
   const [directory, setDirectory] = useState(null), [growth, setGrowth] = useState(null), [experiences, setExperiences] = useState([]);
   const [error, setError] = useState(''), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [query, setQuery] = useState(''), [selected, setSelected] = useState(''), [qr, setQr] = useState(null);
@@ -30,7 +32,7 @@ export default function CustomerGrowth({ mode = 'directory' }) {
       {directory?.truncated && <p role="status">Showing the latest 500 bookings per source. Totals for this directory are limited to these records.</p>}
       {mode === 'directory' && directory && <>
         <Card><p className="text-sm text-muted">Private external contacts stay separate until the customer verifies and explicitly links their feedback to an account. Similar names or phone numbers never merge records. Names are self-reported.</p><label className="block text-sm mt-3">Find a customer in this view<input className="block border rounded-xl p-3 w-full mt-1" value={query} onChange={e => setQuery(e.target.value)} /></label></Card>
-        {directory.customers.filter(c => c.name.toLowerCase().includes(query.toLowerCase())).map(c => <Card key={c.key}><div className="space-y-2 text-sm"><h2 className="font-bold text-base">{c.name}</h2><p>{c.sources.join(' · ')} · {c.repeatCustomer ? 'Repeat customer' : 'Saved booking relationship'}</p><p>In-app campaign permission: {c.campaignEligible ? 'Granted' : 'Not granted'}</p><ul className="space-y-2">{c.bookings.map(b => <li className="border rounded-xl p-3 break-words" key={`${b.source}:${b.booking}`}>{b.date} · {b.service || 'External event'} · {b.status}<p className="text-xs text-muted">{b.source} {b.acquisitionChannel && `· ${b.acquisitionChannel}`}</p></li>)}</ul>{c.reviews.map(r => <p key={r._id}>Feedback: {r.rating}/5 · {r.status}</p>)}</div></Card>)}
+        {directory.customers.filter(c => (!selectedRecord || c.key === selectedRecord) && c.name.toLowerCase().includes(query.toLowerCase())).map(c => <Card key={c.key}><div className="space-y-2 text-sm"><h2 className="font-bold text-base">{c.name}</h2><p>{c.sources.join(' · ')} · {c.repeatCustomer === null ? 'Repeat status unavailable — partial history' : c.repeatCustomer ? 'Repeat customer' : 'Saved booking relationship'}</p><p className="text-xs text-muted">{c.repeatCustomerEvidence ? `${c.repeatCustomerEvidence.qualifyingBookingCount} qualifying completed Core bookings. External work, cancellations, refunds and duplicate service records are excluded.` : "Repeat-customer evidence is unavailable."}</p><p>In-app campaign permission: {c.campaignEligible ? 'Granted' : 'Not granted'}</p><ul className="space-y-2">{c.bookings.map(b => <li className="border rounded-xl p-3 break-words" key={`${b.source}:${b.booking}`}>{b.date} · {b.service || 'External event'} · {b.status}<p className="text-xs text-muted">{b.source} {b.acquisitionChannel && `· ${b.acquisitionChannel}`}</p></li>)}</ul>{c.reviews.map(r => <p key={r._id}>Feedback: {r.rating}/5 · {r.status}</p>)}</div></Card>)}
         {directory.customers.length === 0 && <Card>No saved booking relationships yet.</Card>}
       </>}
       {showQr && <>

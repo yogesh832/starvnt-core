@@ -1,25 +1,28 @@
+import PageMetadata from './components/PageMetadata.jsx';
 import './components/auraMark.css';
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from './auth/ExternalAuthContext.jsx';
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext.jsx';
 import { LogoWord } from './components/ui.jsx';
-import ExternalLogin from './pages/external/Login.jsx';
+
 import Landing from './pages/customer/Landing.jsx';
-import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
-import CustomerPortal from './pages/customer/CustomerPortal.jsx';
-import VendorPortal from './pages/vendor/VendorPortal.jsx';
-import ExperiencePage from './pages/ExperiencePage.jsx';
+
 import { VENDOR_QR_ENABLED } from '../../server/src/common/vendorQrRelease.js';
-import AdminLogin from './pages/admin/AdminLogin.jsx';
-import AdminShell from './pages/admin/AdminShell.jsx';
-import DevApiTest from './pages/DevApiTest.jsx';
-import DevSingleClickAuth from './pages/DevSingleClickAuth.jsx';
-import PublicPolicyPage from './pages/PublicPolicyPage.jsx';
-import PublicVendorProfile from './pages/PublicVendorProfile.jsx';
+
+const ExternalLogin = lazy(() => import('./pages/external/Login.jsx'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy.jsx'));
+const CustomerPortal = lazy(() => import('./pages/customer/CustomerPortal.jsx'));
+const VendorPortal = lazy(() => import('./pages/vendor/VendorPortal.jsx'));
+const ExperiencePage = lazy(() => import('./pages/ExperiencePage.jsx'));
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin.jsx'));
+const AdminShell = lazy(() => import('./pages/admin/AdminShell.jsx'));
+const DevApiTest = lazy(() => import('./pages/DevApiTest.jsx'));
+const DevSingleClickAuth = lazy(() => import('./pages/DevSingleClickAuth.jsx'));
+const PublicPolicyPage = lazy(() => import('./pages/PublicPolicyPage.jsx'));
+const PublicVendorProfile = lazy(() => import('./pages/PublicVendorProfile.jsx'));
 
 const DEV_TOOLS_ENABLED = import.meta.env.DEV;
-
 
 class ErrorBoundary extends React.Component {
   state = { error: null };
@@ -110,7 +113,7 @@ function RootRedirect() {
 }
 
 export default function App() {
-  return <ErrorBoundary><ApplicationRoutes /></ErrorBoundary>;
+  return <ErrorBoundary><PageMetadata /><Suspense fallback={<FullScreenLoader />}><ApplicationRoutes /></Suspense></ErrorBoundary>;
 }
 
 function ApplicationRoutes() {

@@ -10,7 +10,7 @@ const PIPELINE = [
   { stage: 'All', hint: 'All quotations' },
   { stage: 'Draft', hint: 'Finish pricing & terms' },
   { stage: 'Submitted', hint: 'Awaiting customer / negotiations' },
-  { stage: 'Approved', hint: 'Booking request confirmed' },
+  { stage: 'Approved', hint: 'Customer accepted; payment confirmation is separate' },
   { stage: 'Rejected', hint: 'Customer declined' },
   { stage: 'Expired', hint: 'No response in window' },
 ];
@@ -172,6 +172,7 @@ export default function Quotes() {
       await externalApi.call(`/vendor/quotes/${editingQuote._id}/revise`, {
         method: 'POST',
         body: {
+          expectedCommercialVersion: editingQuote.commercialSnapshot?.version ?? 0,
           pricingBreakdown: {
             basePrice: Number(form.basePrice || 0),
             travelFee: Number(form.travelFee || 0),
@@ -773,16 +774,22 @@ export default function Quotes() {
                 </span>
               </div>
               <div className="text-[11px] text-muted flex items-center justify-between bg-primary-soft/40 px-3 py-1.5 rounded-xl">
-                <span>Advance Required to Confirm (30%):</span>
+                <span>Advance under saved policy{viewingQuote.advancePayment?.percentage != null ? ` (${viewingQuote.advancePayment.percentage}%)` : ''}:</span>
                 <strong className="text-primary font-extrabold">
-                  ₹{Math.ceil(
-                    (Number(viewingQuote.pricingBreakdown?.totalAmount || 0) * 30) / 100
-                  ).toLocaleString('en-IN')}
+                  {viewingQuote.advancePayment?.percentage != null ? `₹${(Math.round(Number(viewingQuote.pricingBreakdown?.totalAmount || 0) * Number(viewingQuote.advancePayment.percentage)) / 100).toLocaleString('en-IN')}` : 'Approved policy required'}
                 </strong>
               </div>
             </div>
 
             {/* Negotiation & Counter-Offer Activity Timeline */}
+            <section className="border rounded-2xl p-4 space-y-3"><h3 className="font-bold">Submitted commercial versions</h3>
+              {!viewingQuote.commercialVersions?.length && <p className="text-sm text-muted">No archived submitted version is available. Historical terms are not inferred.</p>}
+              {viewingQuote.commercialVersions?.map(version => <details key={version.version} className="text-sm"><summary className="min-h-11 cursor-pointer">Version {version.version} · INR {Number(version.content.pricingBreakdown?.totalAmount || 0).toLocaleString('en-IN')}</summary>
+                <p>{version.content.serviceName} · {version.content.eventDate}</p><p className="whitespace-pre-wrap">{version.content.notes}</p>
+                <p>Validity: {new Date(version.content.validUntil).toLocaleString()}</p>
+                <p className="text-xs break-all">Content hash: {version.contentHash}</p><p className="text-xs">Archived {new Date(version.recordedAt).toLocaleString()} · {version.provenance === 'LEGACY_CURRENT_RECOVERED_AT_REVISION' ? 'Recovered current legacy version; earlier history is unknown.' : 'Submitted version recorded.'}</p>
+              </details>)}
+            </section>
             <div className="border border-gray-100 rounded-2xl p-4 space-y-3">
               <div className="font-bold text-navy text-[13px] flex items-center gap-1.5">
                 <Icon name="message" size={14} className="text-primary" />

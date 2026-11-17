@@ -1,3 +1,4 @@
+import { handleRazorpayBankWebhook } from '../../external/services/razorpayBankVerification.service.js';
 import { CustomerFeedback } from '../../common/productObservability.js';
 import { CustomerEvent, CustomerNotification } from '../models/index.js';
 import { notificationPreferencesRoutes } from '../../notifications/preferences.routes.js';
@@ -108,4 +109,5 @@ internalRouter.use(jsonErrorHandler);
  */
 export const webhookRouter = Router();
 webhookRouter.post('/razorpay', express.raw({ type: '*/*', limit: '1mb' }), h(i.razorpayWebhook));
+webhookRouter.post('/razorpayx', express.raw({ type: '*/*', limit: '1mb' }), h(async (req, res) => res.json(await handleRazorpayBankWebhook(req.body, req.headers))));
 webhookRouter.use(jsonErrorHandler);

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { once } from 'node:events';
 import { test } from 'node:test';
@@ -12,7 +13,9 @@ import { createVoiceRouter } from '../../server/src/external/routes/voice.routes
 const moduleUrl = (source: string) => 'data:text/javascript;base64,' + Buffer.from(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText).toString('base64');
-const expo = new URL('../node_modules/expo/src/', import.meta.url);
+const expoLocal = new URL('../node_modules/expo/src/', import.meta.url);
+const expoHoisted = new URL('../../node_modules/expo/src/', import.meta.url);
+const expo = existsSync(expoLocal) ? expoLocal : expoHoisted;
 const blobUtils = moduleUrl(await readFile(new URL('utils/blobUtils.ts', expo), 'utf8'));
 const encoderSource = await readFile(new URL('winter/fetch/convertFormData.ts', expo), 'utf8');
 const { convertFormDataAsync } = await import(moduleUrl(encoderSource.replace('../../utils/blobUtils', blobUtils)));

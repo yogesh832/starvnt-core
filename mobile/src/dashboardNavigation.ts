@@ -20,7 +20,7 @@ export function dashboardSelection(workspace: Workspace, state?: NavState): stri
   const route = state?.routes[state.index ?? 0];
   if (!route) return 'Overview';
   if (route.name === 'Main') return route.state?.routes[route.state.index ?? 0]?.name || 'Overview';
-  if (['Profile', 'Library', 'NotificationSettings', 'VendorFinancial', 'VendorSetup', 'TestAuth'].includes(route.name)) return 'Me';
+  if (['Profile', 'Library', 'NotificationSettings', 'VendorFinancial', 'VendorSetup', 'VendorSocialLinks', 'TestAuth'].includes(route.name)) return 'Me';
   if (route.name === 'AuraHistory' || (route.name === 'Chat' && !['thread', 'circle'].includes(route.params?.kind))) return workspace === 'admin' ? 'Overview' : 'AuraTab';
   if (route.name === 'Chat' || route.name === 'Circle') return workspace === 'admin' ? 'CoreUpdates' : 'Updates';
   if (workspace === 'admin') return 'Overview';

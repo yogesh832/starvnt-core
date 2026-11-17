@@ -1,3 +1,4 @@
+import { BookingWorkflow } from '../BookingWorkflow';
 import React, { useState } from "react";
 import { View } from "react-native";
 import { internal } from "../api/runtime";
@@ -211,88 +212,8 @@ export function AdminBooking({ route, navigation }: any) {
           ))}
         </>
       )}
-      {tab === "actions" && (
-        <>
-          <Field
-            label="Review notes / reason"
-            value={reason}
-            onChangeText={setReason}
-            multiline
-          />
-          {can("payments.approve") && (
-            <Card>
-              <Field
-                label="Verified payment ledger reference"
-                value={reference}
-                onChangeText={setReference}
-              />
-              <Button
-                title="Verify recorded payment"
-                busy={a.busy}
-                disabled={!reference.trim()}
-                onPress={() =>
-                  mutate(
-                    "verify-payment",
-                    { transactionReference: reference.trim() },
-                    "Verify this payment evidence?",
-                  )
-                }
-              />
-            </Card>
-          )}
-          {can("operations.manage") && (
-            <Card>
-              <Txt bold>Completion review</Txt>
-              <Txt muted>
-                Inspect the submitted files and notes before recording a
-                decision.
-              </Txt>
-              <Button
-                title="Validate service completion"
-                busy={a.busy}
-                disabled={!evidence.length}
-                onPress={() =>
-                  mutate(
-                    "validate-completion",
-                    { approved: true },
-                    "Validate completion?",
-                  )
-                }
-              />
-              <Button
-                title="Reject completion evidence"
-                secondary
-                busy={a.busy}
-                disabled={!evidence.length}
-                onPress={() =>
-                  mutate(
-                    "validate-completion",
-                    { approved: false },
-                    "Reject this completion evidence?",
-                  )
-                }
-              />
-            </Card>
-          )}
-          {[
-            ["refund", "payments.refund", "Request refund"],
-            ["settle", "settlements.release", "Request settlement release"],
-            ["fail-and-reassign", "operations.manage", "Report vendor failure"],
-          ].map(
-            ([action, permission, title]) =>
-              can(permission) && (
-                <Button
-                  key={action}
-                  title={title}
-                  secondary
-                  onPress={() =>
-                    navigation.navigate("AdminFinance", { booking: b, action })
-                  }
-                />
-              ),
-          )}
-        </>
-      )}
+      {tab === "actions" && <BookingWorkflow admin bookingId={id(b)} />}
+
     </Page>
   );
 }

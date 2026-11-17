@@ -126,6 +126,13 @@ function VendorQuoteBody({ route, navigation }: any) {
           <Txt bold size={22}>
             Proposal & negotiation history
           </Txt>
+          {(quote.commercialVersions || []).map((version: Data) => <Card key={version.version}>
+            <Txt bold>Submitted commercial version {version.version}</Txt>
+            <Txt>INR {version.content.pricingBreakdown?.totalAmount} · {version.content.eventDate}</Txt>
+            <Txt>{version.content.notes}</Txt>
+            <Txt muted>Archived {new Date(version.recordedAt).toLocaleString()}{version.provenance === 'LEGACY_CURRENT_RECOVERED_AT_REVISION' ? ' · Recovered current legacy version; earlier history is unknown.' : ''}</Txt>
+            <Txt muted>Content hash: {version.contentHash}</Txt>
+          </Card>)}
           {[...(quote.history || [])]
             .reverse()
             .map((entry: Data, index: number) => (

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { externalConn } from '../../db/index.js';
+import { identityStates, publicFinancialProfile } from '../../common/verificationPolicy.js';
 
 const { Schema } = mongoose;
 
@@ -20,24 +21,32 @@ const vendorFinancialProfileSchema = new Schema(
       unique: true,
       index: true,
     },
+    identityReviewRequired: { type: Boolean, default: false },
     pan: {
       panNumber: { type: String, trim: true, default: '', uppercase: true },
       verificationStatus: {
         type: String,
-        enum: ['NOT_VERIFIED', 'VERIFIED', 'FAILED'],
-        default: 'NOT_VERIFIED',
+        enum: [...identityStates, 'NOT_VERIFIED', 'FAILED'],
+        default: 'NOT_SUBMITTED',
       },
       legalName: { type: String, trim: true, default: '' },
+      submittedLegalName: { type: String, default: '' },
+      submittedAt: Date,
+      checkedAt: Date,
+      providerReference: String,
+      history: [{ actor: String, action: String, at: Date, status: String, submittedLegalName: String, providerReference: String, verifiedAt: Date }],
       entityType: { type: String, trim: true, default: '' },
       verifiedAt: { type: Date, default: null },
       raw: { type: Schema.Types.Mixed, default: null },
     },
     gst: {
       isRegistered: { type: Boolean, required: true, default: false },
+      declaredAt: Date,
+      declaredBy: String,
       gstin: { type: String, trim: true, default: '', uppercase: true },
       verificationStatus: {
         type: String,
-        enum: ['NOT_VERIFIED', 'VERIFIED', 'FAILED', 'NOT_APPLICABLE'],
+        enum: [...identityStates, 'NOT_VERIFIED', 'FAILED', 'NOT_APPLICABLE'],
         default: 'NOT_APPLICABLE',
       },
       legalName: { type: String, trim: true, default: '' },
@@ -78,6 +87,7 @@ const vendorFinancialProfileSchema = new Schema(
     },
     isSettlementEligible: { type: Boolean, default: false, index: true },
     wallet: {
+      freezeSource: { type: String, default: '' },
       availableBalance: { type: Number, default: 0 },
       pendingBalance: { type: Number, default: 0 },
       frozenBalance: { type: Number, default: 0 },
@@ -89,6 +99,8 @@ const vendorFinancialProfileSchema = new Schema(
   },
   { timestamps: true }
 );
+
+vendorFinancialProfileSchema.set('toJSON', { transform: (_doc, value) => publicFinancialProfile(value) });
 
 export const VendorFinancialProfile = externalConn.model(
   'VendorFinancialProfile',

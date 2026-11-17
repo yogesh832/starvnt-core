@@ -238,7 +238,7 @@ export function BudgetScreen({ route, navigation }: any) {
                     style={{
                       width: `${percentage}%`,
                       height: 9,
-                      backgroundColor: c.accent,
+                      backgroundColor: c.action,
                     }}
                   />
                 </View>

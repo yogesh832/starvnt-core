@@ -21,7 +21,7 @@ export default function AcademyAdmin() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const lesson = data?.lessons.find(row => row.id === selection);
-  const editable = canEdit && !lesson?.publishAt;
+  const editable = canEdit && !lesson?.publishAt && lesson?.state !== 'REVIEW';
 
   async function load() { setData(await adminApi.call('/academy')); }
   useEffect(() => { load().catch(error => setError(error.message)); }, []);
@@ -85,7 +85,7 @@ export default function AcademyAdmin() {
     {data && <>
       <label className="block text-sm">Choose a lesson<select className={field} disabled={busy} value={selection} onChange={event => select(event.target.value)}>
         <option value="">{canEdit ? 'New draft' : 'Select a lesson'}</option>
-        {data.lessons.map(row => <option key={row.id} value={row.id}>{row.title} · {row.publishAt ? 'Publication configured' : 'Draft'}</option>)}
+        {data.lessons.map(row => <option key={row.id} value={row.id}>{row.title} · {row.state}</option>)}
       </select></label>
       {data.truncated && <p className="text-sm text-muted">Showing the 100 most recently updated lessons.</p>}
       {(lesson || canEdit) && <form className="rounded-2xl bg-white p-4" onSubmit={save}>
@@ -111,9 +111,12 @@ export default function AcademyAdmin() {
       </form>}
       {lesson && <section className="space-y-3 rounded-2xl bg-white p-4">
         <h2 className="font-bold">Publication and rights</h2>
+        <p className="text-sm">State: {lesson.state}. A different authorized publisher reviews the saved content before publication.</p>
+        {canEdit && ['DRAFT', 'UNPUBLISHED'].includes(lesson.state) && <button disabled={busy} className={button} onClick={() => act(() => adminApi.call(`/academy/${lesson.id}/submit-review`, { method: 'POST', body: { revision: lesson.revision, reason: 'Saved lesson submitted for independent review' } }))}>Submit saved version for review</button>}
+        {canPublish && lesson.state === 'REVIEW' && <button disabled={busy || !reason.trim()} className={button} onClick={() => act(() => adminApi.call(`/academy/${lesson.id}/request-changes`, { method: 'POST', body: { revision: lesson.revision, reason } }))}>Return for changes with decision reason</button>}
         <p className="text-sm text-muted">{lesson.publishAt ? `Available from ${new Date(lesson.publishAt).toLocaleString()}` : 'Draft'} · Content version {lesson.contentVersion}</p>
         {lesson.publishAt && <p className="break-words text-sm">Rights reference {lesson.rightsReference}{lesson.rightsExpiresAt && ` · Ends ${new Date(lesson.rightsExpiresAt).toLocaleString()}`}</p>}
-        {canPublish && <form onSubmit={publish} className="space-y-3">
+        {canPublish && (lesson.state === 'REVIEW' || lesson.publishAt) && <form onSubmit={publish} className="space-y-3">
           {!lesson.publishAt && <>
             <label className="block">Approved rights reference<input className={field} required maxLength={200} value={rightsReference} onChange={event => setRightsReference(event.target.value)} /></label>
             <p className="text-sm text-muted">Enter dates in your device timezone. Leave expiry blank only for rights without a time limit.</p>

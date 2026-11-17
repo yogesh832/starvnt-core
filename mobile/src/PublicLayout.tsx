@@ -20,9 +20,9 @@ export function PublicGradient({ photo = false }: { photo?: boolean }) {
   const c = usePalette();
   const gradientId = `public${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const colors = photo
-    ? ["rgba(14,19,48,.92)", "rgba(14,19,48,.45)", "rgba(14,19,48,.94)"]
+    ? c.dark ? ["rgba(0,0,0,.92)", "rgba(0,0,0,.45)", "rgba(0,0,0,.94)"] : ["rgba(14,19,48,.92)", "rgba(14,19,48,.45)", "rgba(14,19,48,.94)"]
     : c.dark
-      ? ["#0e1330", "#141a3c", "#1a1d2e"]
+      ? [c.bg, c.bg, c.bg]
       : ["#efeaff", "#f4f5fb", "#ffffff"];
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -50,14 +50,14 @@ export function PublicLayout({
   const { setActiveDomain } = useSession();
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.dark ? "#0e1330" : "#efeaff" }}
+      style={{ flex: 1, backgroundColor: c.dark ? c.bg : "#efeaff" }}
     >
       <PublicGradient />
       <View
         style={{
           borderBottomWidth: 1,
           borderColor: c.line,
-          backgroundColor: c.dark ? "#0e1330cc" : "#ffffffaa",
+          backgroundColor: c.dark ? "#000000cc" : "#ffffffaa",
         }}
       >
         <View

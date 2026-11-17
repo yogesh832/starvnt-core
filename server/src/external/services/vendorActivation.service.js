@@ -11,6 +11,7 @@ import { vendorVerification } from '../../common/vendorVerification.js';
 import { activationDecision } from '../../common/activationPolicy.js';
 import { ExternalUser } from '../models/ExternalUser.js';
 import { coverageConfigured, validBusinessCoordinates } from '../../common/vendorReadiness.js';
+import { readinessMetrics, readinessCalculationVersion } from '../../common/readinessMetrics.js';
 
 const REASON_LABELS = {
   PROFILE_INCOMPLETE: 'Brand profile details are incomplete',
@@ -222,7 +223,7 @@ export async function evaluateVendorActivation(vendorId) {
   const marketingEligible = Boolean(accountStatus === 'ACTIVE' && vendor.growthPreferences?.marketingOptIn && hasProfile && isFinancialVerified && vendor.activationReview?.status === 'APPROVED' && !['REJECTED', 'SUSPENDED'].includes(targetState) && hasPublishedPortfolio);
 
 
-  return {
+  const result = {
     vendorId: vendor._id,
     businessName: vendor.businessName,
     brandName: vendor.brandName || vendor.businessName,
@@ -271,4 +272,6 @@ export async function evaluateVendorActivation(vendorId) {
     reasonCodes: [...reasonCodes],
     missingRequirements: reasonLabels([...reasonCodes]),
   };
+  const computedAt = new Date();
+  return { ...result, calculationVersion: readinessCalculationVersion, computedAt, metrics: readinessMetrics(result, finProfile, computedAt) };
 }

@@ -28,7 +28,11 @@ export async function matchVendorsForRequirement({
   guestCount = 500,
   durationHours = 8,
   requiredStyles = [],
+  deliverables = [],
+  operationalConstraints = '',
+  budget = null,
   overrideRadiusKm = null,
+  excludeVendorIds = [],
 }) {
   const policy = await getCommercialPolicyForCategory(category);
   const effectivePolicyRadius = overrideRadiusKm || policy.defaultRadiusKm || 25;
@@ -46,6 +50,18 @@ export async function matchVendorsForRequirement({
   for (const svc of services) {
     const vendor = svc.vendor;
     if (!vendor) continue;
+    if (excludeVendorIds.map(String).includes(String(vendor._id))) continue;
+    const capability = await VendorCapability.findOne({ vendor: vendor._id, vendorService: svc._id });
+    const maximumGuests = Number(capability?.categoryAttributes?.maxGuests || capability?.categoryAttributes?.guestCapacity || 0);
+    if (maximumGuests > 0 && Number(guestCount) > maximumGuests) {
+      excludedCandidates.push({ vendorId: vendor._id, serviceId: svc._id, gate: 'GUEST_CAPACITY', ineligibleReason: `Requested ${guestCount} guests exceeds declared capacity ${maximumGuests}` });
+      continue;
+    }
+    const requestedDeliverables = Array.isArray(deliverables) ? deliverables : [];
+    if (requestedDeliverables.length && svc.deliverables?.length && requestedDeliverables.some(item => !svc.deliverables.some(available => available.toLowerCase() === String(item).toLowerCase()))) {
+      excludedCandidates.push({ vendorId: vendor._id, serviceId: svc._id, gate: 'SERVICE_DELIVERABLES', ineligibleReason: 'The declared service does not include all requested deliverables.' });
+      continue;
+    }
 
     // Hard Gate 1: Vendor commercial eligibility.
     // Core readiness is authoritative; profile completion alone is not enough.
@@ -173,11 +189,6 @@ export async function matchVendorsForRequirement({
     });
 
     // 5. Capability Match Score
-    const capability = await VendorCapability.findOne({
-      vendor: vendor._id,
-      vendorService: svc._id,
-    });
-
     let matchScore = 80;
     if (capability && requiredStyles.length > 0) {
       const matchedStyles = requiredStyles.filter((s) =>
@@ -200,8 +211,13 @@ export async function matchVendorsForRequirement({
       matchPercentage: matchScore,
       cost: costBreakdown,
       validatedTotalCost: costBreakdown.validatedTotalCost,
+      costStatus: costBreakdown.costStatus,
+      requiresVendorConfirmation: true,
       capability: capability || null,
       recommended: false,
+      requirementComparison: { requestedGuests: guestCount, declaredGuestCapacity: maximumGuests || null,
+        requestedDurationHours: durationHours, requestedStyles: requiredStyles, requestedDeliverables,
+        operationalConstraints, budget, requiresVendorConfirmation: true },
       explainability: {
         coverage: coversTargetLocation ? 'standard_coverage' : 'extended_service_fallback',
         availability: 'feasible',
@@ -240,7 +256,7 @@ export async function matchVendorsForRequirement({
   if (eligibleCandidates.length > 0) {
     eligibleCandidates[0].recommended = true;
     eligibleCandidates[0].whyCallout =
-      'Lowest validated total cost among vendors meeting your requirements with confirmed availability.';
+      'Lowest estimated total among eligible vendors. A confirmed vendor quote is required before payment.';
   }
 
   // Spec §22: Up to 4 validated options max. Never manufacture fake options.

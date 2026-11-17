@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Icon from '../../components/Icon.jsx';
 import { StatusChip } from '../../components/ui.jsx';
@@ -8,6 +9,7 @@ import { adminApi } from '../../lib/api.js';
  * Matches Screen 6 of the Complete Screen Set for Internal Admin.
  */
 export default function EventWorkspace({ event = {}, onBack }) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('Overview');
   const [checklist, setChecklist] = useState([
     { id: 1, text: 'Review catering quotes', done: false },
@@ -64,35 +66,9 @@ export default function EventWorkspace({ event = {}, onBack }) {
     }
   }
 
-  async function handleValidateCompletion(id) {
-    try {
-      await adminApi.call(`/operations/bookings/${id}/validate-completion`, { method: 'POST', body: { approved: true } });
-      setAdminBookings((prev) =>
-        prev.map((b) => (b._id === id ? { ...b, executionStatus: 'COMPLETION_VERIFIED', settlementStatus: 'SETTLEMENT_ELIGIBLE' } : b))
-      );
-      setAdminFeedback('Completion validated! Settlement unlocked.');
-    } catch (err) {
-      setAdminFeedback(err.message || 'Completion validation failed.');
-    }
-  }
+  function handleValidateCompletion(id) { navigate(`/admin/execution?booking=${id}`); }
 
-  async function handleSettle(id) {
-    const reference = window.prompt('Enter the real bank/transfer settlement reference');
-    if (!reference?.trim()) return;
-    try {
-      const res = await adminApi.call(`/operations/bookings/${id}/settle`, { method: 'POST', body: { transactionReference: reference.trim() } });
-      if (res.pendingApproval) {
-        setAdminFeedback('Settlement release request created. A different finance admin must approve it before payout release.');
-        return;
-      }
-      setAdminBookings((prev) =>
-        prev.map((b) => (b._id === id ? { ...b, settlementStatus: 'SETTLED' } : b))
-      );
-      setAdminFeedback('Settlement released to vendor.');
-    } catch (err) {
-      setAdminFeedback(err.message || 'Settlement release failed.');
-    }
-  }
+  function handleSettle(id) { navigate(`/admin/execution?booking=${id}`); }
 
   function toggleTodo(id) {
     setChecklist((prev) =>

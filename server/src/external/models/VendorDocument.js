@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { externalConn } from '../../db/index.js';
+import { publicVendorDocument } from '../../common/verificationPolicy.js';
 
 const { Schema } = mongoose;
 
@@ -100,4 +101,5 @@ const vendorDocumentSchema = new Schema(
   { timestamps: true }
 );
 
+vendorDocumentSchema.set('toJSON', { transform: (_doc, value) => publicVendorDocument(value) });
 export const VendorDocument = externalConn.model('VendorDocument', vendorDocumentSchema);

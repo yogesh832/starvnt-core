@@ -4,7 +4,7 @@ import { externalConn } from '../../db/index.js';
 const { Schema } = mongoose;
 
 /**
- * ExternalUserDB.BankVerificationLogs — Audit logs and idempotency for ₹0.02 bank account verification.
+ * ExternalUserDB.BankVerificationLogs — Audit logs and idempotency for bank account verification.
  * Spec §6, §7, §8, §18, §19, §20:
  * Stores verification_id, vendor_id, bank_account_id, provider, transaction details,
  * name match status, status transitions, and audit timestamps.
@@ -20,10 +20,11 @@ const bankVerificationLogSchema = new Schema(
       index: true,
     },
     bankAccountId: { type: String, trim: true, default: '' },
-    provider: { type: String, trim: true, default: 'SANDBOX_MOCK' },
+    bankFingerprint: { type: String, default: '' },
+    provider: { type: String, trim: true, default: 'RAZORPAY' },
     providerTransactionId: { type: String, trim: true, default: '' },
     verificationReference: { type: String, trim: true, default: '', index: true },
-    amount: { type: Number, default: 0.02 },
+    amount: { type: Number, default: 0 },
     currency: { type: String, default: 'INR' },
     accountHolderName: { type: String, trim: true, required: true },
     submittedAccountNumber: { type: String, trim: true, required: true },
@@ -54,6 +55,9 @@ const bankVerificationLogSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Only the new Razorpay provider participates; legacy audit records are unchanged.
+bankVerificationLogSchema.index({ vendor: 1, provider: 1 }, { unique: true, partialFilterExpression: { provider: 'RAZORPAY', verificationStatus: 'PROCESSING' } });
 
 export const BankVerificationLog = externalConn.model(
   'BankVerificationLog',

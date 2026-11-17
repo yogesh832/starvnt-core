@@ -61,7 +61,7 @@ export function AuraChatView({ messages, user, vendor, text, onChangeText, onSen
   attachment?: Data | null; onAttach: () => void; onRemoveAttachment: () => void; eventTitle?: string; activeEventId?: string; onSwitchEvent?: (event: Data) => void; onOpenEvent: () => void; hasQuestion: boolean;
 }>) {
   const c = useAuraPalette();
-  const scroll = useRef<ScrollView>(null), input = useRef<TextInput>(null), nearBottom = useRef(true);
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null), input = useRef<React.ComponentRef<typeof TextInput>>(null), nearBottom = useRef(true);
   const [sheet, setSheet] = useState<'menu' | 'voice' | 'dictate' | null>(null);
   const [menuOpen, setMenuOpen] = useState(false), [pickingEvent, setPickingEvent] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -76,8 +76,9 @@ export function AuraChatView({ messages, user, vendor, text, onChangeText, onSen
   // visible. Losing focus unmounts the recorder/player and cancels the session.
   if (sheet === 'dictate') return <AuraVoice mode="dictate" onTranscription={value => { onChangeText([text.trim(), value].filter(Boolean).join(' ')); focusInput(); }} onUtterance={onVoiceMessage} onClose={() => setSheet(null)} onKeyboard={focusInput} />;
   function newChat() { setMenuOpen(false); setSheet(null); onNew(); }
+  const ThemedStatusBar = StatusBar as React.ComponentType<any>;
   return <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
-    <StatusBar barStyle={c.dark ? 'light-content' : 'dark-content'} backgroundColor={c.bg} />
+    <ThemedStatusBar barStyle={c.dark ? 'light-content' : 'dark-content'} backgroundColor={c.bg} />
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: c.subtle }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Open Aura sidebar" accessibilityState={{ expanded: menuOpen }} onPress={() => { setPickingEvent(false); setMenuOpen(true); }} style={{ minWidth: 40, minHeight: 40, justifyContent: 'center', alignItems: 'center' }}><SidebarToggle color={c.ink} /></Pressable>

@@ -4,6 +4,12 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 const source = new URL("../../web/", import.meta.url);
 const target = new URL("../assets/brand/", import.meta.url);
 const css = await readFile(new URL("src/theme.css", source), "utf8");
+const darkCss = await readFile(new URL("src/dark-theme.css", source), "utf8");
+const darkToken = (name) => {
+  const value = darkCss.match(new RegExp(`--sv-${name}:\\s*(#[0-9a-fA-F]{6});`))?.[1];
+  if (!value) throw new Error(`Missing shared dark theme token: ${name}`);
+  return value;
+};
 const html = await readFile(new URL("index.html", source), "utf8");
 const components = await readFile(
   new URL("src/components/ui.jsx", source),
@@ -15,16 +21,6 @@ const token = (name) => {
     .match(new RegExp(`--color-${name}:\\s*([^;]+);`))?.[1]
     ?.trim();
   if (!value) throw new Error(`Missing web brand token: ${name}`);
-  return value;
-};
-const rule = (selector, property) => {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const value = css
-    .match(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`))?.[1]
-    .match(new RegExp(`(?:^|[;\\s])${property}:\\s*([^;!}]+)`))?.[1]
-    ?.trim();
-  if (!value)
-    throw new Error(`Missing web brand rule: ${selector} / ${property}`);
   return value;
 };
 await mkdir(target, { recursive: true });
@@ -63,17 +59,23 @@ const brand = {
     danger: "#dc2626",
   },
   dark: {
-    bg: rule("html.dark body", "background"),
-    card: rule("html.dark .bg-white", "background-color"),
-    ink: rule("html.dark .text-ink", "color"),
-    navy: rule("html.dark .text-navy", "color"),
-    muted: rule("html.dark .text-muted", "color"),
-    line: rule("html.dark .border-gray-100", "border-color"),
-    accent: rule("html.dark .text-primary", "color"),
-    accentDark: "#6366f1",
-    onAccent: token("navy-deep"),
-    soft: rule("html.dark .bg-primary-soft", "background-color"),
-    danger: rule("html.dark .text-red-600", "color"),
+    bg: darkToken("bg"),
+    card: darkToken("surface"),
+    ink: darkToken("ink"),
+    navy: darkToken("ink"),
+    muted: darkToken("muted"),
+    line: darkToken("border"),
+    accent: darkToken("link"),
+    accentDark: darkToken("action-hover"),
+    onAccent: darkToken("on-action"),
+    soft: darkToken("selected"),
+    danger: darkToken("danger"),
+    panel: darkToken("panel"),
+    elevated: darkToken("elevated"),
+    input: darkToken("input"),
+    lineStrong: darkToken("border-strong"),
+    action: darkToken("action"),
+    success: darkToken("success"),
   },
   wordmarkGradient: [
     token("primary"),

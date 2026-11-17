@@ -8,7 +8,7 @@ import { AdminAuditLog } from '../models/AdminAuditLog.js';
 import { auditContext } from '../utils/audit.js';
 
 const router = express.Router();
-const POLICY_FIELDS = ['minimumReservationPercent', 'vendorCancellationPenaltyPercent', 'customerCancellationRefunds', 'settlementCondition', 'settlementDelayDays'];
+const POLICY_FIELDS = ['minimumReservationPercent', 'vendorCancellationPenaltyPercent', 'customerCancellationRefunds', 'settlementCondition', 'settlementDelayDays', 'completionRequirements', 'manualFinanceAllowed', 'partialRefundAllowed', 'partialSettlementAllowed'];
 const ALLOWED_SETTLEMENT_CONDITIONS = ['EVENT_DATE_PASSED', 'DELIVERABLES_UPLOADED', 'MANUAL_APPROVAL_REQUIRED'];
 router.use(requireAdminAuth);
 
@@ -44,6 +44,23 @@ function validateValues(input, fallback = {}) {
   if (!ALLOWED_SETTLEMENT_CONDITIONS.includes(values.settlementCondition)) return { error: 'INVALID_SETTLEMENT_CONDITION' };
   values.settlementDelayDays = Number(values.settlementDelayDays ?? 0);
   if (!Number.isInteger(values.settlementDelayDays) || values.settlementDelayDays < 0 || values.settlementDelayDays > 365) return { error: 'INVALID_SETTLEMENT_DELAY' };
+  for (const field of ['manualFinanceAllowed', 'partialRefundAllowed', 'partialSettlementAllowed']) {
+    if (values[field] != null && typeof values[field] !== 'boolean') return { error: 'INVALID_FINANCE_PERMISSION_POLICY' };
+  }
+  if (values.completionRequirements != null) {
+    const requirements = values.completionRequirements;
+    if (typeof requirements !== 'object' || Array.isArray(requirements)) return { error: 'INVALID_COMPLETION_POLICY' };
+    for (const field of ['requiredMilestones', 'requiredChecklist']) {
+      if (!Array.isArray(requirements[field]) || requirements[field].length > 50 || requirements[field].some(value => typeof value !== 'string' || !value.trim() || value.length > 150)) return { error: 'INVALID_COMPLETION_POLICY' };
+    }
+    for (const field of ['requireCheckIn', 'evidenceRequired', 'customerAcknowledgementRequired']) {
+      if (typeof requirements[field] !== 'boolean') return { error: 'INVALID_COMPLETION_POLICY' };
+    }
+    for (const field of ['allowReopen', 'allowMilestoneCorrection']) {
+      if (requirements[field] != null && typeof requirements[field] !== 'boolean') return { error: 'INVALID_COMPLETION_POLICY' };
+    }
+    values.completionRequirements = Object.fromEntries(['requiredMilestones', 'requiredChecklist', 'requireCheckIn', 'evidenceRequired', 'customerAcknowledgementRequired', 'allowReopen', 'allowMilestoneCorrection'].filter(key => requirements[key] !== undefined).map(key => [key, requirements[key]]));
+  }
   return { values };
 }
 

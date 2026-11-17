@@ -10,6 +10,8 @@ import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
 import { VendorService } from '../src/external/models/VendorService.js';
 import { Quote } from '../src/external/models/Quote.js';
+import { CoreBooking } from '../src/admin/models/CoreBooking.js';
+import { VendorReview } from '../src/external/models/VendorReview.js';
 import { signExternalAccessToken } from '../src/external/utils/tokens.js';
 
 let mongo, app;
@@ -59,4 +61,48 @@ test('Launchpad counts the authenticated vendor\'s real services and sent quotes
 
 test('Launchpad endpoint still requires an authenticated Vendor session', async () => {
   await request(app).get('/api/vendor/launchpad').expect(401);
+});
+
+test('elapsed days, unverified bookings and unverified published reviews cannot grant growth milestones', async () => {
+  const f = await fixture();
+  await VendorOrganization.updateOne({ _id: f.vendor._id }, { $set: { 'foundingPartner.offerStartedAt': new Date('2020-01-01'), 'foundingPartner.offerExpiresAt': new Date('2020-01-31') } });
+  const booking = await CoreBooking.create({ vendorId: f.vendor._id, customerId: f.owner._id, serviceName: 'Fixture', eventDate: '2027-01-01', totalAmount: 100, bookingStatus: 'CONFIRMED', paymentStatus: 'PENDING' });
+  const review = await VendorReview.create({ vendor: f.vendor._id, customerName: 'Fixture reviewer', rating: 5, reviewText: 'Fixture only', status: 'PUBLISHED', isVerified: false });
+  let result = (await request(app).get('/api/vendor/launchpad').set(f.auth).expect(200)).body;
+  assert.equal(result.daysRemaining, 0); assert.equal(result.isCompleted, false);
+  assert.equal(result.steps.find(s => s.key === 'FIRST_BOOKING').completed, false);
+  assert.equal(result.steps.find(s => s.key === 'FIRST_REVIEW').completed, false);
+  booking.paymentStatus = 'PAYMENT_VERIFIED'; await booking.save();
+  review.isVerified = true; await review.save();
+  result = (await request(app).get('/api/vendor/launchpad').set(f.auth).expect(200)).body;
+  assert.equal(result.steps.find(s => s.key === 'FIRST_BOOKING').completed, true);
+  assert.equal(result.steps.find(s => s.key === 'FIRST_REVIEW').completed, true);
+});
+
+test('Launchpad retains observed evidence changes without rewriting history or treating unavailable sources as zero', async t => {
+  const f = await fixture(), other = await fixture();
+  const endpoint = '/api/vendor/launchpad';
+  const load = () => request(app).get(endpoint).set(f.auth).expect(200);
+  let data = (await load()).body;
+  const initial = data.steps.find(s => s.key === 'ADD_SERVICES');
+  assert.equal(initial.status, 'PENDING'); assert.equal(initial.history.length, 1);
+  data = (await load()).body;
+  assert.equal(data.steps.find(s => s.key === 'ADD_SERVICES').history.length, 1);
+  const service = await VendorService.create({ vendor: f.vendor._id, name: 'Fixture priced service', category: 'Photography', status: 'ACTIVE', pricing: { basePrice: 1000 } });
+  data = (await load()).body;
+  const complete = data.steps.find(s => s.key === 'ADD_SERVICES');
+  assert.equal(complete.status, 'COMPLETE'); assert.ok(complete.completionObservedAt); assert.equal(complete.completedAt, null);
+  await VendorService.updateOne({ _id: service._id }, { $set: { status: 'ARCHIVED' } });
+  data = (await load()).body;
+  const reverted = data.steps.find(s => s.key === 'ADD_SERVICES');
+  assert.equal(reverted.status, 'PENDING'); assert.equal(reverted.history.length, 3);
+  assert.equal(reverted.completionObservedAt, complete.completionObservedAt);
+  const isolated = (await request(app).get(`${endpoint}?vendorId=${f.vendor._id}`).set(other.auth).expect(200)).body;
+  assert.equal(isolated.steps.find(s => s.key === 'ADD_SERVICES').history.length, 1);
+  t.mock.method(CoreBooking, 'countDocuments', () => { throw new Error('Fixture evidence outage'); });
+  const partial = (await load()).body;
+  assert.equal(partial.partial, true); assert.equal(partial.progressPercent, null);
+  const unavailable = partial.steps.find(s => s.key === 'FIRST_BOOKING');
+  assert.equal(unavailable.completed, null); assert.equal(unavailable.status, 'UNKNOWN');
+  assert.equal(partial.steps.find(s => s.key === 'ADD_SERVICES').sourceStatus, 'READY');
 });

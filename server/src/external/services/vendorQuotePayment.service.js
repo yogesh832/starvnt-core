@@ -7,11 +7,11 @@ import { Quote } from '../models/Quote.js';
 import { Opportunity } from '../models/Opportunity.js';
 import { Reservation } from '../../customer/models/index.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
+import { originalBookingRequirement } from '../../admin/services/executionSettlement.service.js';
 import { transitionQuote } from './quoteStateMachine.service.js';
 import { recordCouponUsageOnce } from '../../customer/services/coupon.service.js';
 import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
 import * as razorpay from '../../customer/services/payments/razorpay.js';
-
 
 function quoteAdvancePercentage(quote) {
   const percent = Number(quote?.advancePayment?.percentage);
@@ -89,6 +89,7 @@ async function completePaidVendorQuoteLocked({ quote, actorName, paymentId }, as
   const totalAmount = Number(quote.pricingBreakdown?.totalAmount || 0);
   const paidAmount = Number(quote.advancePayment?.amount || quoteAdvanceAmount(quote, totalAmount));
   const bookingOpportunity = quote.opportunity ? await Opportunity.findById(quote.opportunity).select('customerEvent').lean() : null;
+  const requirementSnapshot = await originalBookingRequirement({ quoteId: String(quote._id), vendorService: quote.vendorService, category: vendorCategory, eventDate: quote.eventDate, serviceLocation: quote.serviceLocation, customerId, customerEvent: bookingOpportunity?.customerEvent, commercialSnapshot: quote.commercialSnapshot });
   const booking = await CoreBooking.findOneAndUpdate(
     { quoteId: String(quote._id) },
     {
@@ -105,6 +106,8 @@ async function completePaidVendorQuoteLocked({ quote, actorName, paymentId }, as
         pricing: quote.pricingBreakdown || { totalAmount },
         totalAmount,
         financialPolicySnapshot: quoteFinancialPolicySnapshot(quote),
+        commercialSnapshot: quote.commercialSnapshot,
+        requirementSnapshot,
         bookingStatus: 'CONFIRMED',
         settlementStatus: 'NOT_ELIGIBLE',
       },
@@ -148,7 +151,6 @@ async function completePaidVendorQuoteLocked({ quote, actorName, paymentId }, as
 
   return { quote: approved, booking };
 }
-
 
 export async function reconcileVendorQuotePayment({ quote, actorName, paymentId }) {
   const orderId = quote.advancePayment?.providerOrderId;

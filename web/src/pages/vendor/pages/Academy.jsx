@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { externalApi } from '../../../lib/api.js';
 import { Card, Page } from './shared.jsx';
@@ -35,6 +35,8 @@ function Lesson({ lesson, onProgress, onClose }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const base = `/vendor/academy/${lesson.id}`;
+  const [rating, setRating] = useState('5'), [comment, setComment] = useState(''), [feedbackNotice, setFeedbackNotice] = useState('');
+  const feedbackRequest = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -42,6 +44,7 @@ function Lesson({ lesson, onProgress, onClose }) {
     externalApi.call(base).then(data => {
       if (!active) return;
       setDetail(data.lesson);
+      setRating(String(data.feedback?.rating || 5)); setComment(data.feedback?.comment || '');
       if (data.lesson.captions) {
         track = URL.createObjectURL(new Blob([data.lesson.captions], { type: 'text/vtt' }));
         setCaptionUrl(track);
@@ -88,6 +91,21 @@ function Lesson({ lesson, onProgress, onClose }) {
       {detail.resources && <section><h3 className="font-bold">Resources</h3><p className="mt-2 whitespace-pre-wrap break-words">{detail.resources}</p></section>}
       {lesson.completedAt ? <p role="status" className="font-semibold text-emerald-700">Completed</p> :
         <button type="button" className={button} onClick={() => save(lesson.positionSeconds, true)}>Mark complete</button>}
+      <form className="border-t pt-4 space-y-3" onSubmit={async event => {
+        event.preventDefault(); setBusy(true); setError(''); setFeedbackNotice('');
+        const content = JSON.stringify({ rating: Number(rating), comment, contentVersion: detail.contentVersion });
+        if (feedbackRequest.current?.content !== content) feedbackRequest.current = { content, key: crypto.randomUUID() };
+        try {
+          await externalApi.call(`${base}/feedback`, { method: 'POST', body: { rating: Number(rating), comment, contentVersion: detail.contentVersion, requestKey: feedbackRequest.current.key } });
+          setFeedbackNotice('Private lesson feedback saved for this version.');
+        } catch (error) { setError(error.message); } finally { setBusy(false); }
+      }}>
+        <h3 className="font-bold">Private lesson feedback</h3>
+        <label className="block">Usefulness (1–5)<select className="block border rounded-xl p-3" value={rating} onChange={event => setRating(event.target.value)}>{[1, 2, 3, 4, 5].map(value => <option key={value}>{value}</option>)}</select></label>
+        <label className="block">Comment (optional)<textarea className="block w-full border rounded-xl p-3" value={comment} maxLength={1500} onChange={event => setComment(event.target.value)} /></label>
+        <button className={button} disabled={busy}>Save lesson feedback</button>
+        {feedbackNotice && <p role="status">{feedbackNotice}</p>}
+      </form>
     </div>}
   </Card>;
 }
@@ -112,7 +130,7 @@ export default function Academy() {
   const chosen = lessons.find(row => row.id === selected);
   const shown = lessons.filter(row => (!category || row.category === category) &&
     `${row.title} ${row.objective}`.toLowerCase().includes(search.trim().toLowerCase()) &&
-    (filter === 'complete' ? row.completedAt : filter === 'continue' ? canResume(row) : true));
+    (filter === 'complete' ? row.completedAt : filter === 'continue' ? canResume(row) : filter === 'new' ? !row.completedAt && !row.positionSeconds : true));
 
   function selectLesson(id) {
     const next = new URLSearchParams(params);
@@ -143,7 +161,7 @@ export default function Academy() {
             <option value="">All categories</option>{data.categories.map(value => <option key={value}>{value}</option>)}
           </select></label>
           <label className="text-sm">Progress<select className="block min-h-11 w-full rounded-lg border px-2" value={filter} onChange={event => setFilter(event.target.value)}>
-            <option value="">All lessons</option><option value="continue">Continue watching</option><option value="complete">Completed</option>
+            <option value="">All lessons</option><option value="new">Not started</option><option value="continue">Continue watching</option><option value="complete">Completed</option>
           </select></label>
         </div>
         <ul className="mt-4 space-y-2">

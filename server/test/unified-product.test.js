@@ -1,3 +1,4 @@
+import { commercialSnapshot } from '../src/external/services/commercialSnapshot.service.js';
 import { before, after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -250,6 +251,8 @@ test('manual customer events reject city-only locations without a selected map p
 test('approving a quote does not manufacture a confirmed booking or verified payment', async () => {
   const service = await VendorService.create({ vendor: vendor._id, name: 'Quote test service', category: 'Photography', pricing: { basePrice: 5000 } });
   const quote = await Quote.create({ vendor: vendor._id, customer: customer._id, vendorService: service._id, serviceName: 'Quote test', eventDate: '2027-10-01', status: 'SUBMITTED', pricingBreakdown: { basePrice: 5000, totalAmount: 5000 } });
+  quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown);
+  await quote.save();
   await transitionQuote(quote._id, 'APPROVED', { actor: 'CUSTOMER', reason: 'Customer accepted' });
   assert.equal(await CoreBooking.countDocuments({ quoteId: String(quote._id) }), 0);
   assert.notEqual((await Quote.findById(quote._id)).advancePayment.status, 'VERIFIED');

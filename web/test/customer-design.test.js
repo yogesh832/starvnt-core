@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 const require = createRequire(import.meta.url);
 const { StaticRouter } = require('react-router-dom/server');
 function component(name) {
-  const code = buildSync({ entryPoints: [fileURLToPath(new URL(`../src/pages/customer/${name}.jsx`, import.meta.url))], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', external: ['react', 'react-dom', 'react-router-dom'] }).outputFiles[0].text;
+  const code = buildSync({ entryPoints: [fileURLToPath(new URL(`../src/pages/customer/${name}.jsx`, import.meta.url))], bundle: true, write: false, platform: 'node', format: 'cjs', jsx: 'automatic', loader: { '.webp': 'dataurl' }, external: ['react', 'react-dom', 'react-router-dom'] }).outputFiles[0].text;
   const module = { exports: {} };
   new Function('require', 'module', 'exports', code)(require, module, module.exports);
   return module.exports.default;

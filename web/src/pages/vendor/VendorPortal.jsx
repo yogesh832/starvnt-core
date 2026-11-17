@@ -1,3 +1,6 @@
+import VendorGlobalSearch from './VendorGlobalSearch.jsx';
+import Agreements from './pages/Agreements.jsx';
+import BookingWorkflow from '../../components/BookingWorkflow.jsx';
 import CustomerGrowth from './pages/CustomerGrowth.jsx';
 import { VENDOR_QR_ENABLED } from '../../../../server/src/common/vendorQrRelease.js';
 import DiscoveryRewards from './pages/DiscoveryRewards.jsx';
@@ -345,9 +348,11 @@ export default function VendorPortal() {
     { to: 'launchpad', label: 'Launchpad', icon: 'check' },
     { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
     { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
+    { to: 'execution', label: 'Service execution', icon: 'bookings' },
     { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
     { to: 'external-bookings', label: 'External bookings', icon: 'calendar' },
     { to: 'readiness', label: 'Business readiness', icon: 'check' },
+    { to: 'agreements', label: 'Business & Legal · Agreements', icon: 'documents' },
     { to: 'customers', label: 'Customer 360', icon: 'customers' },
     ...(VENDOR_QR_ENABLED ? [{ to: 'experience-qr', label: 'Experience QR', icon: 'reviews' }] : []),
     { to: 'growth', label: 'Customer growth', icon: 'analytics' },
@@ -469,10 +474,7 @@ export default function VendorPortal() {
           </button>
           <div className="flex-1 max-w-xs sm:max-w-sm md:max-w-md flex items-center gap-2.5 bg-gray-50 border border-gray-200/80 rounded-xl px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-navy min-w-0 shadow-inner focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/40 transition-all dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:focus-within:bg-gray-900">
             <Icon name="search" size={15} className="shrink-0 text-muted" />
-            <input
-              className="bg-transparent flex-1 outline-none placeholder:text-muted/60 text-xs sm:text-sm w-full min-w-0 font-medium"
-              placeholder="Search enquiries, bookings..."
-            />
+            <VendorGlobalSearch />
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 ml-auto shrink-0">
@@ -627,9 +629,11 @@ export default function VendorPortal() {
             <Route path="enquiries" element={<Enquiries />} />
             <Route path="quotes" element={<Quotes />} />
             <Route path="bookings" element={<Bookings />} />
+            <Route path="execution" element={<BookingWorkflow />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="external-bookings" element={<ExternalBookings />} />
             <Route path="readiness" element={<ReadinessPage />} />
+            <Route path="agreements" element={<Agreements />} />
             <Route path="customers" element={<CustomerGrowth />} />
             {VENDOR_QR_ENABLED && <Route path="experience-qr" element={<CustomerGrowth mode="qr" />} />}
             <Route path="growth" element={<CustomerGrowth mode="growth" />} />

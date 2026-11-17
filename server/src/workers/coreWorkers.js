@@ -1,3 +1,5 @@
+import { remindStaffFollowUps } from '../admin/services/revenueCrm.service.js';
+import { reconcileWorkflowBatch } from '../admin/services/bookingWorkflowEffects.service.js';
 import { runReminderBatch, runEventDeadlineBatch } from '../notifications/reminders.worker.js';
 import { runDiscoveryNotificationBatch } from '../experience/discoveryNotifications.worker.js';
 import { reconcileBookingBatch } from '../customer/services/bookingTruth.service.js';
@@ -40,6 +42,8 @@ export function startCoreWorkers() {
     try {
       const results = await reconcileBookingBatch();
       await expireExternalHolds();
+      await reconcileWorkflowBatch();
+      await remindStaffFollowUps();
       if (results.some(r => !r.ok)) throw new Error('Booking reconciliation has pending failures');
       markWorkerSuccess('booking-reconciliation', 0);
     } catch (err) { markWorkerError('booking-reconciliation', err, 0); }

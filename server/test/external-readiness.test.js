@@ -581,7 +581,17 @@ test('Academy enforces draft and rights boundaries and preserves vendor-scoped r
   const publicPath = `/api/vendor/academy/${created.id}`;
   const adminPath = `/api/admin/academy/${created.id}`;
   const read = () => request(app).get(publicPath).set(auth(vendor.token));
-  const publication = (actor, body) => request(app).post(`${adminPath}/publication`).set(actor).send(body);
+  const publication = (actor, body) => ({ expect: async status => {
+    if (body.action === 'PUBLISH' && body.rightsReference && (!body.rightsExpiresAt || Date.parse(body.rightsExpiresAt) > Date.now())) {
+      const { LearningLesson } = await import('../src/learning/models.js');
+      const row = await LearningLesson.findById(created.id);
+      if (['DRAFT', 'UNPUBLISHED'].includes(row.state)) {
+        const submitted = await request(app).post(`${adminPath}/submit-review`).set(editor).send({ revision: row.revision, reason: 'Fixture review request' }).expect(200);
+        body = { ...body, revision: submitted.body.lesson.revision };
+      }
+    }
+    return request(app).post(`${adminPath}/publication`).set(actor).send(body).expect(status);
+  } });
   await read().expect(404);
   await request(app).get(publicPath).expect(401);
   await publication(editor, { revision: 1, action: 'PUBLISH', reason: 'No publishing authority' }).expect(403);
@@ -628,7 +638,8 @@ test('Academy enforces draft and rights boundaries and preserves vendor-scoped r
   const videoAdmin = `/api/admin/academy/${video.id}/publication`;
   const playback = () => request(app).post(`/api/vendor/academy/${video.id}/playback`).set(auth(vendor.token));
   const rightsExpiresAt = new Date(Date.now() + 120000).toISOString();
-  const approval = { revision: 1, action: 'PUBLISH', reason: 'Approved authenticated asset', rightsReference: 'VIDEO-RIGHTS-FIXTURE', rightsExpiresAt };
+  await request(app).post(`/api/admin/academy/${video.id}/submit-review`).set(editor).send({ revision: 1, reason: 'Fixture video review request' }).expect(200);
+  const approval = { revision: 2, action: 'PUBLISH', reason: 'Approved authenticated asset', rightsReference: 'VIDEO-RIGHTS-FIXTURE', rightsExpiresAt };
   await request(app).post(videoAdmin).set(publisher).send(approval).expect(409);
   type = 'authenticated';
   await request(app).post(videoAdmin).set(publisher).send(approval).expect(200);
@@ -636,7 +647,7 @@ test('Academy enforces draft and rights boundaries and preserves vendor-scoped r
   assert.equal(grant.headers['cache-control'], 'no-store');
   assert.ok(new Date(grant.body.expiresAt) <= new Date(rightsExpiresAt));
   assert.match(grant.body.url, /\/video\/download\?/);
-  await request(app).post(videoAdmin).set(publisher).send({ revision: 2, action: 'WITHDRAW', reason: 'Withdraw video rights' }).expect(200);
+  await request(app).post(videoAdmin).set(publisher).send({ revision: 3, action: 'WITHDRAW', reason: 'Withdraw video rights' }).expect(200);
   await playback().expect(404);
 });
 

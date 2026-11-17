@@ -28,7 +28,7 @@ const fields = [
   ["website", "Website"],
   ["bio", "About your business"],
 ];
-export function VendorProfile() {
+export function VendorProfile({ navigation }: any) {
   const r = useResource(external, "/vendor/profile");
   const a = useAction();
   const [form, setForm] = useState<Data>({});
@@ -79,6 +79,7 @@ export function VendorProfile() {
       subtitle="The same business identity shown to customers on the web."
     >
       <ErrorNotice message={a.error} />
+      <Button title="Social Media Links" secondary onPress={() => navigation.navigate('VendorSocialLinks')} />
       {!!notice && <Txt>{notice}</Txt>}
       <Card>
         {!!r.data.vendor?.profilePicUrl && (

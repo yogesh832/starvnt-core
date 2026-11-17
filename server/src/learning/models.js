@@ -7,7 +7,7 @@ export const learningCategories = [
 ];
 
 const history = new Schema({
-  actor: String, action: String, at: Date, reason: String, revision: Number,
+  actor: String, action: String, at: Date, reason: String, revision: Number, requestHash: String,
   rightsReference: String, rightsExpiresAt: Date, publishAt: Date, contentVersion: Number, videoId: String,
 }, { _id: false });
 
@@ -23,6 +23,8 @@ const lesson = new Schema({
   rightsReference: { type: String, default: '' },
   rightsExpiresAt: Date,
   publishAt: Date,
+  state: { type: String, enum: ['DRAFT', 'REVIEW', 'PUBLISHED', 'UNPUBLISHED'] },
+  lastEditedBy: String,
   revision: { type: Number, default: 1 },
   contentVersion: { type: Number, default: 1 },
   createdBy: { type: String, required: true },
@@ -44,3 +46,16 @@ progress.index({ vendor: 1, lesson: 1, contentVersion: 1 }, { unique: true });
 
 export const LearningLesson = adminConn.model('LearningLesson', lesson);
 export const LearningProgress = externalConn.model('LearningProgress', progress);
+
+const feedback = new Schema({
+  vendor: { type: Schema.Types.ObjectId, required: true },
+  lesson: { type: Schema.Types.ObjectId, required: true },
+  contentVersion: { type: Number, required: true },
+  actor: { type: String, required: true },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  comment: { type: String, maxlength: 1500, default: '' },
+  requestKey: { type: String, required: true },
+  requestHash: { type: String, required: true },
+}, { timestamps: { createdAt: true, updatedAt: false } });
+feedback.index({ vendor: 1, lesson: 1, contentVersion: 1, requestKey: 1 }, { unique: true });
+export const LearningFeedback = externalConn.model('LearningFeedback', feedback);

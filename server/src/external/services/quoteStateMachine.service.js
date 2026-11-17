@@ -1,3 +1,4 @@
+import { commercialSnapshot, assertCommercialSnapshot } from './commercialSnapshot.service.js';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { Quote } from '../models/Quote.js';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
@@ -50,9 +51,9 @@ export async function createQuote({
   category = '',
 }) {
   const initialStatus = ['DRAFT', 'SUBMITTED'].includes(status) ? status : 'DRAFT';
-  if (initialStatus === 'SUBMITTED') await assertQuoteSubmission({ vendor: vendorId, vendorService: vendorServiceId, eventDate, serviceLocation, category, advancePolicy });
+  if (initialStatus === 'SUBMITTED') advancePolicy = await assertQuoteSubmission({ vendor: vendorId, vendorService: vendorServiceId, eventDate, serviceLocation, category, advancePolicy });
 
-  const quote = await Quote.create({
+  const quote = new Quote({
     opportunity: opportunityId || null,
     vendor: vendorId,
     customer: customerId,
@@ -79,6 +80,10 @@ export async function createQuote({
           customerCancellationRefunds: advancePolicy.customerCancellationRefunds || {},
           settlementCondition: advancePolicy.settlementCondition,
           settlementDelayDays: advancePolicy.settlementDelayDays,
+          completionRequirements: advancePolicy.completionRequirements,
+          manualFinanceAllowed: advancePolicy.manualFinanceAllowed,
+          partialRefundAllowed: advancePolicy.partialRefundAllowed,
+          partialSettlementAllowed: advancePolicy.partialSettlementAllowed,
         },
       },
     } : undefined,
@@ -95,6 +100,10 @@ export async function createQuote({
     ],
   });
 
+  if (initialStatus === 'SUBMITTED') {
+    quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown);
+  }
+  await quote.save();
   return quote;
 }
 
@@ -113,6 +122,7 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
   }
 
   const currentStatus = quote.status;
+  if (targetStatus === 'APPROVED') assertCommercialSnapshot(quote);
   let submissionPolicy = null;
   if (targetStatus === 'SUBMITTED') submissionPolicy = await assertQuoteSubmission({ ...quote.toObject(), category: quote.category || quote.vendor?.category });
   const allowedNext = ALLOWED_TRANSITIONS[currentStatus] || [];
@@ -130,6 +140,7 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
   // Update status and history
   quote.status = targetStatus;
   if (targetStatus === 'SUBMITTED' && submissionPolicy) {
+    quote.commercialSnapshot = commercialSnapshot(quote, quote.pricingBreakdown, (quote.commercialSnapshot?.version || 0) + 1);
     quote.advancePayment = {
       ...(quote.advancePayment?.toObject?.() || quote.advancePayment || {}),
       percentage: submissionPolicy.minimumReservationPercent,
@@ -149,6 +160,10 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
           customerCancellationRefunds: submissionPolicy.customerCancellationRefunds || {},
           settlementCondition: submissionPolicy.settlementCondition,
           settlementDelayDays: submissionPolicy.settlementDelayDays,
+          completionRequirements: submissionPolicy.completionRequirements,
+          manualFinanceAllowed: submissionPolicy.manualFinanceAllowed,
+          partialRefundAllowed: submissionPolicy.partialRefundAllowed,
+          partialSettlementAllowed: submissionPolicy.partialSettlementAllowed,
         },
       },
     };

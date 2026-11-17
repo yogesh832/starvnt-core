@@ -73,6 +73,7 @@ export const LOCKED_REQUIREMENT_STATUSES = ['confirmed', 'booked', 'completed'];
 
 const eventRequirementSchema = new Schema(
   {
+    crm: { owner: String, stage: { type: String, default: 'NEW' }, reportedValue: Number, lostReason: String, history: [{ key: String, hash: String, actor: String, at: Date, from: String, to: String, notes: String }] },
     event: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', required: true, index: true },
     category: { type: String, required: true },
     status: { type: String, enum: REQUIREMENT_STATUSES, default: 'missing' },
@@ -203,6 +204,7 @@ const reservationSchema = new Schema(
     packageName: { type: String, required: true },
     packageTotal: { type: Number, default: null, min: 0 },
     advancePercent: { type: Number, default: null, min: 0, max: 100 },
+    commercialSnapshot: { type: Schema.Types.Mixed, default: null },
     financialPolicySnapshot: { type: Schema.Types.Mixed, default: null },
     amount: { type: Number, required: true, min: 0 }, // advance payable now
     balanceAmount: { type: Number, default: null, min: 0 },
@@ -221,7 +223,7 @@ const paymentSchema = new Schema(
     reservation: { type: Schema.Types.ObjectId, ref: 'CustomerReservation', required: true, index: true },
     amount: { type: Number, required: true, min: 0 }, // rupees
     currency: { type: String, default: 'INR' },
-    // Only a webhook or an ops verification can make a payment "verified".
+    // Verification requires a signed webhook, authoritative provider lookup or ops verification.
     status: { type: String, enum: ['pending', 'processing', 'paid', 'failed', 'verified'], default: 'pending', index: true },
     provider: { type: String, default: 'razorpay' },
     providerOrderId: { type: String, default: undefined },

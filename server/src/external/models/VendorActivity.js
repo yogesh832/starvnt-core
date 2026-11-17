@@ -5,7 +5,9 @@ const { Schema } = mongoose;
 
 const vendorActivitySchema = new Schema(
   {
-    vendor: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', required: true, index: true },
+    adminOwner: { type: Schema.Types.ObjectId, index: true },
+    requestKey: String,
+    vendor: { type: Schema.Types.ObjectId, ref: 'VendorOrganization', required() { return !this.adminOwner; }, index: true },
     type: { type: String, required: true }, // e.g., 'REMINDER', 'CALL', 'EMAIL'
     title: { type: String, required: true },
     description: { type: String, default: '' },
@@ -19,4 +21,5 @@ const vendorActivitySchema = new Schema(
   { timestamps: true }
 );
 
+vendorActivitySchema.index({ requestKey: 1 }, { unique: true, partialFilterExpression: { requestKey: { $type: 'string' } } });
 export const VendorActivity = externalConn.model('VendorActivity', vendorActivitySchema);

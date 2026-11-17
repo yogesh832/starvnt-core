@@ -24,7 +24,7 @@ for (const [key, name] of [
     "Dedicated QA databases required",
   );
 }
-assert.equal(env.PORT, "4100", "QA must use port 4100");
+assert.equal(process.env.PORT || env.PORT, "4100", "QA must use port 4100");
 const base = "http://127.0.0.1:4100/api";
 const results = [];
 const sessions = [];
@@ -155,7 +155,9 @@ try {
     );
     await check(`Core workspace ${module.key}`, async () => {
       const data = await admin.api.call(path);
-      if (collection && !["reports"].includes(module.key))
+      if (module.key === "productMetrics") {
+        assert.ok(data.metrics?.definitions, "Expected product metric definitions");
+      } else if (collection && module.key !== "reports")
         assert.ok(
           Array.isArray(data[collection]),
           `${collection} must be an array`,
@@ -196,9 +198,13 @@ try {
       );
       await check(`${email}: ${module.key}`, () => staff.api.call(path));
     }
-    if (!can("settings.update"))
+    if (!can("settings.update") && !can("financeCoupons.manage"))
       await check(`${email}: coupon write denied`, () =>
-        denied(staff.api, "/coupons", "POST", { code: "DENIED" }),
+        denied(staff.api, "/coupons", "POST", {
+          code: `DENIED-${run}`,
+          discountType: "PERCENTAGE",
+          discountValue: 10,
+        }),
       );
   }
   await check("Customer token cannot read vendor workspace", () =>
@@ -238,6 +244,7 @@ try {
           eventType: "birthday",
           eventDate: "2027-10-20",
           city: "Pune",
+          location: { coordinates: { lat: 18.52, lng: 73.85 } },
           guestCount: 60,
           budget: 70000,
           services: [{ category: "photography", status: "pending" }],
@@ -355,6 +362,7 @@ try {
       (
         await vendor.api.call("/vendor/availability/blockouts", "POST", {
           date: "2027-10-21",
+          idempotencyKey: `mobile-qa-blockout-${run}`,
           allDay: false,
           startTime: "10:00",
           endTime: "12:00",
@@ -553,10 +561,12 @@ try {
           const result = await vendor.api.call(
             `/vendor/opportunities/${declinedOpportunity._id}/decline`,
             "POST",
+            { reason: "Unavailable for this QA event date." },
           );
           assert.equal(result.status, "DECLINED");
           const saved = await Opportunity.findById(declinedOpportunity._id).lean();
           assert.equal(saved.status, "DECLINED");
+          assert.equal(saved.declineReason, "Unavailable for this QA event date.");
         });
         await Quote.updateOne(
           { _id: quote._id },
@@ -643,6 +653,7 @@ try {
         eventType: "birthday",
         eventDate: "2027-10-22",
         city: "Pune",
+        location: { coordinates: { lat: 18.52, lng: 73.85 } },
         services: [],
       });
       await check(

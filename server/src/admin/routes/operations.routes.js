@@ -1,3 +1,5 @@
+import { adminActor } from '../services/bookingWorkflow.service.js';
+import { requestFinanceOperation } from '../services/financeOperations.service.js';
 import express from 'express';
 import { requireAdminAuth, requirePermission } from '../middleware/requireAdminAuth.js';
 import { CoreBooking } from '../models/CoreBooking.js';
@@ -139,7 +141,7 @@ router.get('/bookings', requireAnyPermission('bookings.read', 'operations.read')
     }
 
     const [bookings, total, distinctVendors, distinctCategories, distinctCities, statsAgg] = await Promise.all([
-      CoreBooking.find(filter)
+      CoreBooking.find(filter).select('-financeOperations -operationReceipts -workflowEvents')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -211,7 +213,7 @@ router.get('/bookings', requireAnyPermission('bookings.read', 'operations.read')
  */
 router.get('/bookings/:id', requireAnyPermission('bookings.read', 'operations.read'), async (req, res, next) => {
   try {
-    const booking = await CoreBooking.findById(req.params.id);
+    const booking = await CoreBooking.findById(req.params.id).select('-financeOperations -operationReceipts -workflowEvents');
     if (!booking) {
       return res.status(404).json({ error: 'BOOKING_NOT_FOUND' });
     }
@@ -422,101 +424,9 @@ router.post('/approvals/:id/reject', requireAnyPermission('settlements.approve',
   }
 });
 
-router.post('/bookings/:id/refund', requirePermission('payments.refund'), async (req, res) => {
-  try {
-    const booking = await CoreBooking.findById(req.params.id);
-    if (!booking) return res.status(404).json({ error: 'BOOKING_NOT_FOUND' });
-
-    const approvedRequest = req.body?.approvalId ? await AdminApprovalRequest.findOne({
-      _id: req.body.approvalId, type: 'REFUND', targetId: String(req.params.id), status: 'APPROVED',
-    }) : null;
-    const amount = money(req.body?.amount ?? approvedRequest?.payload?.amount ?? booking.paymentSummary?.paidAmount);
-    const reference = String(req.body?.reference || req.body?.transactionReference || approvedRequest?.payload?.reference || '').trim();
-    if (amount <= 0) return res.status(400).json({ error: 'REFUND_AMOUNT_REQUIRED', message: 'Refund amount must be greater than zero.' });
-    if (!reference) return res.status(400).json({ error: 'REFUND_REFERENCE_REQUIRED', message: 'A real refund/payment provider reference is required.' });
-
-    let refundLimit = null;
-    const refundTiers = booking.financialPolicySnapshot?.customerCancellationRefunds;
-    if (refundTiers && typeof refundTiers === 'object') {
-      const eventDate = String(booking.eventDate || '').slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return res.status(409).json({ error: 'REFUND_EVENT_DATE_REQUIRED', message: 'The event date is required to calculate this booking’s approved refund terms.' });
-      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-      const daysBeforeEvent = Math.floor((Date.parse(`${eventDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
-      const previousRefunds = await FinanceLedgerEntry.aggregate([
-        { $match: { booking: booking._id, type: 'REFUND' } },
-        { $group: { _id: null, amount: { $sum: '$amount' } } },
-      ]);
-      refundLimit = calculateEligibleAdvanceRefund({
-        eligibleAdvance: booking.paymentSummary?.advanceAmount ?? booking.paymentSummary?.paidAmount,
-        refundTiers,
-        daysBeforeEvent,
-        alreadyRefunded: previousRefunds[0]?.amount || 0,
-      });
-      if (!refundLimit) return res.status(409).json({ error: 'REFUND_POLICY_UNRESOLVED', message: 'This booking has no applicable approved refund tier for the current date.' });
-      if (amount > refundLimit.amount) return res.status(400).json({ error: 'REFUND_EXCEEDS_POLICY_LIMIT', maximumRefund: refundLimit.amount, eligiblePercent: refundLimit.percent });
-    }
-
-    if (!req.body?.approvalId) {
-      const existing = await AdminApprovalRequest.findOne({
-        type: 'REFUND',
-        targetId: String(req.params.id),
-        status: 'PENDING',
-      }).lean();
-      const approval = existing || await AdminApprovalRequest.create({
-        type: 'REFUND',
-        targetType: 'CoreBooking',
-        targetId: String(req.params.id),
-        requestedBy: req.admin._id,
-        requestedByEmail: req.admin.email,
-        reason: String(req.body?.reason || req.body?.notes || 'Refund requested').trim(),
-        payload: {
-          amount,
-          reference,
-          notes: req.body?.notes || '',
-        },
-        requestId: req.requestId || '',
-      });
-      return res.status(202).json({
-        ok: true,
-        pendingApproval: true,
-        approval: approvalSummary(approval),
-        message: 'Refund request created. A different authorized admin must approve it before ledger posting.',
-      });
-    }
-
-    const approval = approvedRequest;
-    if (!approval) {
-      return res.status(403).json({ error: 'APPROVAL_REQUIRED', message: 'Approved maker-checker request is required before refund posting.' });
-    }
-    if (String(approval.requestedBy) === String(req.admin._id)) {
-      return res.status(403).json({ error: 'MAKER_CHECKER_REQUIRED', message: 'The requesting admin cannot execute the same approved refund.' });
-    }
-
-    const approvedAmount = money(approval.payload?.amount);
-    const approvedReference = String(approval.payload?.reference || '').trim();
-    if (amount !== approvedAmount || reference !== approvedReference) {
-      return res.status(409).json({ error: 'APPROVED_REFUND_TERMS_MISMATCH', message: 'The refund amount and provider reference must match the approved request.' });
-    }
-
-    booking.paymentStatus = 'REFUNDED';
-    booking.settlementStatus = booking.settlementStatus === 'SETTLED' ? booking.settlementStatus : 'NOT_ELIGIBLE';
-    await booking.save();
-    await recordRefund(
-      booking,
-      {
-        amount: approvedAmount,
-        reference: approvedReference,
-        reason: req.body.reason || req.body.notes || approval.reason,
-      },
-      req.admin.email
-    );
-    approval.status = 'USED';
-    approval.usedAt = new Date();
-    await approval.save();
-    res.json({ ok: true, booking });
-  } catch (err) {
-    res.status(err.statusCode || 400).json({ error: err.code || 'REFUND_ERROR', message: err.message });
-  }
+router.post('/bookings/:id/refund', requirePermission('payments.refund'), async (req, res, next) => {
+  try { const booking = await requestFinanceOperation(req.params.id, { ...req.body, kind: 'REFUND' }, adminActor(req.admin)); res.status(202).json({ ok: true, bookingId: booking._id, version: booking.workflowVersion, pendingReconciliation: true }); }
+  catch (error) { next(error); }
 });
 
 /**
@@ -542,8 +452,7 @@ router.post('/bookings/:id/verify-payment', requirePermission('payments.approve'
 router.post(['/bookings/:id/validate-completion', '/bookings/:id/verify-completion'], requirePermission('operations.manage'), async (req, res) => {
   try {
     const coreActor = req.admin ? req.admin.email : 'CORE_ADMIN';
-    const { approved = true, notes } = req.body || {};
-    const booking = await validateCompletionFromCore(req.params.id, { approved, notes }, coreActor);
+    const booking = await validateCompletionFromCore(req.params.id, req.body || {}, adminActor(req.admin));
     res.json({ ok: true, booking });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'VALIDATION_ERROR', message: err.message });
@@ -553,62 +462,9 @@ router.post(['/bookings/:id/validate-completion', '/bookings/:id/verify-completi
 /**
  * Authoritative Settlement Execution from Core (Golden Test K).
  */
-router.post('/bookings/:id/settle', requirePermission('settlements.release'), async (req, res) => {
-  try {
-    const coreActor = req.admin ? req.admin.email : 'CORE_FINANCE';
-    const transactionReference = String(req.body?.transactionReference || '').trim();
-    if (!transactionReference) {
-      return res.status(400).json({ error: 'SETTLEMENT_REFERENCE_REQUIRED', message: 'A real bank/transfer reference is required.' });
-    }
-
-    if (!req.body?.approvalId) {
-      const existing = await AdminApprovalRequest.findOne({
-        type: 'SETTLEMENT_RELEASE',
-        targetId: String(req.params.id),
-        status: 'PENDING',
-      }).lean();
-      const approval = existing || await AdminApprovalRequest.create({
-        type: 'SETTLEMENT_RELEASE',
-        targetType: 'CoreBooking',
-        targetId: String(req.params.id),
-        requestedBy: req.admin._id,
-        requestedByEmail: req.admin.email,
-        reason: String(req.body?.reason || req.body?.notes || 'Settlement release requested').trim(),
-        payload: {
-          transactionReference,
-          notes: req.body?.notes || '',
-        },
-        requestId: req.requestId || '',
-      });
-      return res.status(202).json({
-        ok: true,
-        pendingApproval: true,
-        approval: approvalSummary(approval),
-        message: 'Settlement release request created. A different authorized admin must approve it before payout release.',
-      });
-    }
-
-    const approval = await AdminApprovalRequest.findOne({
-      _id: req.body.approvalId,
-      type: 'SETTLEMENT_RELEASE',
-      targetId: String(req.params.id),
-      status: 'APPROVED',
-    });
-    if (!approval) {
-      return res.status(403).json({ error: 'APPROVAL_REQUIRED', message: 'Approved maker-checker request is required before settlement release.' });
-    }
-    if (String(approval.requestedBy) === String(req.admin._id)) {
-      return res.status(403).json({ error: 'MAKER_CHECKER_REQUIRED', message: 'The requesting admin cannot execute the same approved settlement release.' });
-    }
-
-    const booking = await settleBooking(req.params.id, { ...approval.payload, ...req.body, approvalId: String(approval._id) }, coreActor);
-    approval.status = 'USED';
-    approval.usedAt = new Date();
-    await approval.save();
-    res.json({ ok: true, booking });
-  } catch (err) {
-    res.status(err.statusCode || 400).json({ error: err.code || 'SETTLEMENT_ERROR', message: err.message });
-  }
+router.post('/bookings/:id/settle', requirePermission('settlements.release'), async (req, res, next) => {
+  try { const booking = await settleBooking(req.params.id, { ...req.body, kind: 'SETTLEMENT' }, adminActor(req.admin)); res.status(202).json({ ok: true, bookingId: booking._id, version: booking.workflowVersion, pendingReconciliation: true }); }
+  catch (error) { next(error); }
 });
 
 /**
@@ -619,7 +475,7 @@ router.post('/bookings/:id/fail-and-reassign', requirePermission('operations.man
     const { reason, failedBy } = req.body || {};
     const result = await handleVendorFailureAndDiscoverAlternatives(req.params.id, {
       reason,
-      failedBy: failedBy || req.admin?.email || 'CORE_OPS',
+      ...req.body, actor: adminActor(req.admin),
     });
     res.json({ ok: true, ...result });
   } catch (err) {

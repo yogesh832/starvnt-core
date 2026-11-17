@@ -1,3 +1,5 @@
+import hero640 from '../../assets/images/vendor-landing-hero-640.webp';
+import hero1200 from '../../assets/images/vendor-landing-hero-1200.webp';
 import AuraMark from '../../components/AuraMark.jsx';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -149,12 +151,13 @@ export default function Landing() {
 
         {/* Right Column: Hero Image — hidden on small mobile */}
         <div className="relative hidden sm:block rounded-3xl overflow-hidden shadow-2xl border-4 border-white aspect-4/3 lg:aspect-square">
-          <img
-            src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80"
+          <picture className="contents"><source media="(min-width: 640px)" srcSet={`${hero640} 640w, ${hero1200} 1200w`} sizes="(min-width: 1024px) 45vw, 90vw" /><img
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E"
+            width="1200" height="800" fetchPriority="high"
             alt="Beautiful Wedding Setup"
             className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-navy/60 via-transparent to-transparent flex flex-col justify-end p-6 sm:p-8 text-white">
+          /></picture>
+          <div className="vendor-landing-photo-overlay absolute inset-0 bg-gradient-to-t from-navy/60 via-transparent to-transparent flex flex-col justify-end p-6 sm:p-8 text-white">
             <p className="text-lg sm:text-2xl font-serif italic drop-shadow-md">
               "Beautiful events create happier people."
             </p>
@@ -172,7 +175,7 @@ export default function Landing() {
           ].map(([number, title, detail]) => <div key={number} className="rounded-2xl border border-primary/10 bg-white/80 p-6 dark:border-white/10 dark:bg-white/5"><span className="text-sm font-bold text-primary dark:text-violet-300">{number}</span><h3 className="mt-2 font-bold text-navy dark:text-white">{title}</h3><p className="mt-2 text-sm leading-relaxed text-muted dark:text-gray-300">{detail}</p></div>)}
         </div>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-primary-soft p-6 dark:bg-white/5">
-          <div><h2 className="font-bold text-navy dark:text-white">Bring your services to STARVNT</h2><p className="mt-1 text-sm text-muted dark:text-gray-300">Create your vendor profile, showcase your work and manage incoming enquiries.</p></div>
+          <div><h2 className="font-bold text-navy dark:text-white">Bring your services to STARVNT</h2><p className="mt-1 text-sm text-ink/80 dark:text-gray-300">Create your vendor profile, showcase your work and manage incoming enquiries.</p></div>
           <Link to="/signup?as=vendor&next=%2Fvendor" className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white">Join as a vendor</Link>
         </div>
       </section>

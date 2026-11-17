@@ -6,6 +6,7 @@ import { vendorDestination } from '../vendorDestination';
 import { emptyGoal, goalMetrics, goalPayload, istTimestamp, metricDuration, metricMoney, metricNumber, metricPeriod } from '../vendorBusiness';
 import { VENDOR_SUPPORT } from '../../../shared/vendorSupport.js';
 import { Button, Card, Choice, Empty, ErrorNotice, Field, human, id, Page, Pill, Txt, useAction, useResource } from '../ui';
+import { VendorGrowthCards } from './VendorGrowth';
 
 function Metric({ label, value, detail, destination, open }: { label: string; value: string; detail: string; destination: string; open: (path: string) => void }) {
   return <Card><Txt muted size={13}>{label}</Txt><Txt bold size={23}>{value}</Txt><Txt muted size={12}>{detail}</Txt><Button title={`View ${label.toLowerCase()}`} secondary onPress={() => open(destination)} /></Card>;
@@ -86,6 +87,7 @@ export function VendorBusinessPage({ navigation, mode = 'home' }: { navigation: 
     {r.loading && <Txt>Loading authorized business data…</Txt>}
     <Choice label="Measurement period" values={['7', '30', '60', '90']} labels={{ '7': '7 days', '30': '30 days', '60': '60 days', '90': '90 days' }} value={period} onChange={setPeriod} />
     <Button title={r.refreshing ? 'Refreshing business data…' : 'Refresh business data'} secondary disabled={r.loading || r.refreshing} onPress={r.refresh} />
+    {home && <VendorGrowthCards navigation={navigation} />}
     {!r.loading && !r.error && !d && <ErrorNotice message="Business data is unavailable. Retry to retrieve the saved dashboard." retry={r.refresh} />}
     {d && <>
       <Txt muted>Updated {istTimestamp(d.generatedAt)} IST. Refresh for the latest saved status.</Txt>
@@ -142,12 +144,18 @@ export function VendorBusinessPage({ navigation, mode = 'home' }: { navigation: 
         <Card><Txt bold size={23}>Profile & Operating Readiness</Txt>
           {!readiness ? <Txt>Readiness unavailable. Refresh to retry.</Txt> : <>
             {[
-              ['Profile completion', `${readiness.completionPercentage}%`], ['Business verification', readiness.readiness.verificationStatus],
+              ['Business profile completion', `${readiness.profileCompletion}%`], ['Onboarding completion', `${readiness.completionPercentage}%`], ['Business verification', readiness.readiness.verificationStatus],
               ['Account activation', readiness.activationState], ['Matching eligibility', readiness.matchingEligible ? 'ELIGIBLE' : 'LOCKED'],
               ['Active service readiness', readiness.checklist.services ? 'CONFIGURED' : 'INCOMPLETE'], ['Availability', readiness.readiness.availabilityStatus],
               ['Service coverage', readiness.checklist.coverage ? 'CONFIGURED' : 'MISSING'], ['Identity and bank verification', readiness.checklist.verified ? 'VERIFIED' : 'PENDING'],
             ].map(([label, value]) => <Txt key={label}>{label}: {human(value)}</Txt>)}
             {!!readiness.reviewFeedback && <Txt>{readiness.reviewFeedback}</Txt>}
+            {(readiness.metrics || []).map((metric: Data) => <Card key={metric.key}>
+              <Txt bold>{metric.label}: {typeof metric.value === 'number' ? `${metric.value}%` : String(metric.value).replaceAll('_', ' ')}</Txt>
+              <Txt muted>{metric.definition}</Txt>
+              {!!metric.pendingReason && <Txt>{metric.pendingReason}</Txt>}
+              <Txt muted>Calculated {new Date(metric.computedAt).toLocaleString()} · {metric.calculationVersion}</Txt>
+            </Card>)}
             {!readiness.matchingEligible && <Txt>Matching is locked. Complete the missing requirements; verification and activation require authorized staff approval.</Txt>}
             <Button title="Review business setup" secondary onPress={() => navigation.navigate('Work')} />
             {['DRAFT', 'PROFILE_INCOMPLETE'].includes(readiness.activationState) && readiness.commercialReadiness && <Button title="Submit profile for review" busy={a.busy} onPress={() => { void a.run(async () => { await external.call('/vendor/activation-review', 'POST'); await r.refresh(); }); }} />}

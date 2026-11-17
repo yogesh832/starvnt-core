@@ -88,7 +88,7 @@ export function LandingScreen({ navigation }: any) {
                   width: 7,
                   height: 7,
                   borderRadius: 7,
-                  backgroundColor: c.accent,
+                  backgroundColor: c.action,
                 }}
               />
               <Txt size={12} bold>
@@ -183,7 +183,7 @@ export function LandingScreen({ navigation }: any) {
               accessibilityLabel="Start planning"
               onPress={() => begin(text)}
               style={{
-                backgroundColor: c.accent,
+                backgroundColor: c.action,
                 width: 48,
                 height: 48,
                 borderRadius: 16,

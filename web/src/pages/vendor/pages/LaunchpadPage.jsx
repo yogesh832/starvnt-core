@@ -46,6 +46,9 @@ export default function LaunchpadPage() {
 
         {data && (
           <>
+            <p className="text-xs text-muted">Last successful sync: {new Date(data.computedAt).toLocaleString()}{error ? ' · Showing saved data; it may be stale.' : ''}</p>
+            {data.partial && <div role="alert">Some evidence sources are unavailable. Overall progress is unknown. <button className="underline min-h-11" onClick={loadData} disabled={loading}>Retry evidence</button></div>}
+            {data.historyStatus === 'UNAVAILABLE' && <p role="alert">Milestone history is unavailable; current source evidence is shown separately. <button className="underline min-h-11" onClick={loadData}>Retry history</button></p>}
             {/* Launchpad Hero Card */}
             <Card>
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -68,13 +71,13 @@ export default function LaunchpadPage() {
                     {data.isCompleted ? '🎉 Launchpad Completed!' : `${data.daysRemaining} days remaining in launchpad`}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    Complete all 4 phases to unlock verified partner matching and exclusive platform perks.
+                    Track saved setup and verified STARVNT activity. Matching, activation and benefits follow their separate approved policies.
                   </p>
                 </div>
 
                 <div className="text-right flex flex-col items-end">
                   <div className="text-3xl font-extrabold text-primary">
-                    {data.progressPercent}%
+                    {data.progressPercent === null ? 'Unknown' : `${data.progressPercent}%`}
                   </div>
                   <span className="text-xs text-gray-500">
                     {data.completedCount} of {data.totalSteps} steps completed
@@ -86,18 +89,15 @@ export default function LaunchpadPage() {
               <div className="w-full bg-gray-100 rounded-full h-3 mt-4 overflow-hidden">
                 <div
                   className="bg-primary h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${data.progressPercent}%` }}
+                  style={{ width: `${data.progressPercent ?? 0}%` }}
                 />
               </div>
 
               {/* Founding Partner Perks Callout */}
               {data.isFoundingPartner && (
                 <div className="mt-4 p-3 bg-amber-50/70 rounded-xl border border-amber-200/80 text-xs text-amber-900 flex flex-wrap gap-4 items-center">
-                  <span className="font-bold">✨ Founding Partner Benefits:</span>
-                  <span>• 0% Platform Commission</span>
-                  <span>• Priority Customer Discovery</span>
-                  <span>• Founding Partner Badge</span>
-                  <span>• 100 Growth Credits on Completion</span>
+                  <span className="font-bold">Founding Partner cohort recorded</span>
+                  <span>Any fee waiver, priority or reward requires a separately approved policy and entitlement. Launchpad completion does not award financial benefits.</span>
                 </div>
               )}
             </Card>
@@ -146,6 +146,10 @@ export default function LaunchpadPage() {
                             <h4 className={`font-semibold text-sm ${step.completed ? 'text-gray-900' : 'text-gray-800'}`}>
                               {step.label}
                             </h4>
+                            <p className="text-xs mt-2">Status: {step.status} · Responsible: {step.responsibleRole?.replaceAll('_', ' ')}</p>
+                            {step.pendingReason && <p className="text-xs mt-2">{step.pendingReason}</p>}
+                            {step.completionObservedAt && <p className="text-xs mt-2">First observed complete: {new Date(step.completionObservedAt).toLocaleString()}. Historical completion time is not established.</p>}
+                            {step.history && <details className="text-xs mt-2"><summary className="min-h-11 cursor-pointer">Evidence history</summary><ul>{step.history.map((entry, index) => <li key={index}>{new Date(entry.at).toLocaleString()} · {entry.action} · {entry.completed ? 'Complete' : 'Pending'} · {entry.actor}</li>)}</ul></details>}
                             <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                               {step.description}
                             </p>

@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /customer
+Disallow: /vendor$
+Disallow: /vendor/
+Disallow: /auth-test
+Disallow: /dev/
+Disallow: /event-share/
+
+Sitemap: https://vendor.starvnt.com/sitemap.xml

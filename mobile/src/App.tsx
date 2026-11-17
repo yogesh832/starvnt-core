@@ -56,7 +56,10 @@ import {
 } from "./screens/Vendor";
 import { VendorCalendar } from "./screens/VendorCalendar";
 import { VendorFinancial } from "./screens/VendorFinancial";
+import { VendorAgreements } from './screens/VendorAgreements';
+import { VendorLaunchpad } from './screens/VendorLaunchpad';
 import { VendorSetup } from "./screens/VendorSetup";
+import { VendorAcademy, VendorLesson, VendorMeetings, VendorSocialLinks } from './screens/VendorGrowth';
 import {
   AdminHome,
   AdminModule,
@@ -67,6 +70,7 @@ import {
 } from "./screens/Admin";
 import { AdminEntity } from "./screens/AdminEntity";
 import { AdminAccess, AdminFinance } from "./screens/AdminActions";
+import { AdminAcademy, AdminLesson, AdminMeeting, AdminMeetings } from './screens/AdminGrowth';
 import { AccountScreen, ProfileScreen, LibraryScreen } from "./screens/Account";
 import { LegalNoticeScreen } from "./screens/LegalNotice";
 import { ExperienceScreen } from "./screens/ExperiencePage";
@@ -410,6 +414,16 @@ function Navigation() {
               component={VendorSetup}
               options={{ title: "Business setup" }}
             />
+            <Stack.Screen name="VendorAcademy" component={VendorAcademy} options={{ title: 'Partner Academy' }} />
+            <Stack.Screen name="VendorAgreements" component={VendorAgreements} options={{ title: 'Agreements' }} />
+            <Stack.Screen name="VendorLaunchpad" component={VendorLaunchpad} options={{ title: 'Partner Launchpad' }} />
+            <Stack.Screen name="VendorLesson" component={VendorLesson} options={{ title: 'Academy lesson' }} />
+            <Stack.Screen name="VendorMeetings" component={VendorMeetings} options={{ title: 'Growth Meetings' }} />
+            <Stack.Screen name="VendorSocialLinks" component={VendorSocialLinks} options={{ title: 'Social Media Links' }} />
+            <Stack.Screen name="AdminAcademy" component={AdminAcademy} options={{ title: 'Partner Academy' }} />
+            <Stack.Screen name="AdminLesson" component={AdminLesson} options={{ title: 'Academy lesson' }} />
+            <Stack.Screen name="AdminMeetings" component={AdminMeetings} options={{ title: 'Growth Meetings' }} />
+            <Stack.Screen name="AdminMeeting" component={AdminMeeting} options={{ title: 'Growth Meeting' }} />
             <Stack.Screen
               name="AdminModule"
               component={AdminModule}

@@ -1,4 +1,5 @@
 import { VendorBusinessPage } from './VendorBusiness';
+import { growthPermissions } from './AdminGrowth';
 import React, { useMemo } from "react";
 import { external, internal } from "../api/runtime";
 import { useSession } from "../auth/Session";
@@ -29,6 +30,8 @@ import {
 export function AdminHome({ navigation }: any) {
   const { admin, can } = useSession();
   const modules = visibleModules(admin);
+  const academy = growthPermissions.academy.some(can);
+  const meetings = growthPermissions.meetings.some(can);
   const source = useMemo(
     () => ({
       ...internal,
@@ -68,6 +71,8 @@ export function AdminHome({ navigation }: any) {
           ["Booking GMV", bookingStats ? money(bookingStats.totalGmv) : "—"],
         ]}
       />
+      {academy && <MenuRow title="Partner Academy" icon="school-outline" onPress={() => navigation.navigate('AdminAcademy')} />}
+      {meetings && <MenuRow title="Growth Meetings" icon="calendar-outline" onPress={() => navigation.navigate('AdminMeetings')} />}
       {adminAttention(data).map((item) => (
         <MenuRow
           key={item.title}
@@ -160,7 +165,7 @@ export function AdminHome({ navigation }: any) {
           }
         />
       ))}
-      {!modules.length && (
+      {!modules.length && !academy && !meetings && (
         <Empty
           title="No modules assigned"
           description="An administrator can grant access to the modules you need."

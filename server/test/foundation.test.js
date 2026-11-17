@@ -283,7 +283,7 @@ test('marketing is suppressed at creation and queued push is cancelled after con
   assert.equal(sent, false); assert.equal(result.lastError, 'CONSENT_WITHDRAWN');
 });
 
-test('real catalogue booking without a vendor quote creates an authoritative linked Core contract', async () => {
+test('a paid catalogue estimate is retained for review without manufacturing a confirmed Core contract', async () => {
   const f = await bookingFixture();
   await Booking.deleteOne({ _id: f.booking._id });
   const vendorOwner = await customer({ accountType: 'VENDOR' });
@@ -297,8 +297,12 @@ test('real catalogue booking without a vendor quote creates an authoritative lin
   await PortfolioItem.create({ vendor: vendor._id, mediaType: 'IMAGE', url: 'https://example.test/photo.jpg' });
   assert.equal((await evaluateVendorActivation(vendor._id)).matchingEligible, true);
   const booking = await confirmBookingFor(f.payment.toObject());
-  assert.equal(booking.status, 'confirmed'); assert.equal(booking.coreSync.status, 'SYNCED');
-  const core = await CoreBooking.findById(booking.coreBooking); assert.ok(core); assert.equal(core.reservationId.toString(), f.reservation._id.toString());
+  assert.equal(booking.status, 'pending');
+  assert.ok(booking.reviewReason);
+  assert.equal(await CoreBooking.countDocuments({ reservationId: f.reservation._id }), 0);
+  const retried = await confirmBookingFor(f.payment.toObject());
+  assert.equal(String(retried._id), String(booking._id));
+  assert.equal((await Payment.findById(f.payment._id)).status, 'verified');
 });
 
 test('a pending Core sync continues reserving capacity after the original hold has expired', async () => {

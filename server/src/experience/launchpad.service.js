@@ -2,11 +2,11 @@ import { VendorOrganization } from '../external/models/VendorOrganization.js';
 import { PortfolioItem } from '../external/models/PortfolioItem.js';
 import { ServiceCoverage } from '../external/models/ServiceCoverage.js';
 import { CoreBooking } from '../admin/models/CoreBooking.js';
-import { VendorBlockout } from '../external/models/VendorBlockout.js';
 import { VendorReview } from '../external/models/VendorReview.js';
 import { Quote } from '../external/models/Quote.js';
 import { VendorService } from '../external/models/VendorService.js';
-import { vendorGrowthEvidence } from '../external/services/discoveryReadiness.service.js';
+import { evaluateVendorActivation } from '../external/services/vendorActivation.service.js';
+import { observeLaunchpad, launchpadCalculationVersion } from './launchpadEvidence.js';
 import { config } from '../config.js';
 
 /**
@@ -36,26 +36,24 @@ export async function getLaunchpadProgress(vendorId) {
   const daysRemaining = Math.max(0, Math.ceil((new Date(offerExpiresAt).getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
 
   // Query evidence in parallel
-  const [evidence, portfolioCount, coverageCount, servicesCount, quotesCount, bookingsCount, reviewsCount] = await Promise.all([
-    vendorGrowthEvidence(vendorId),
-    PortfolioItem.countDocuments({ vendor: vendorId, visibility: 'PUBLIC' }),
-    ServiceCoverage.countDocuments({ vendor: vendorId }),
-    VendorService.countDocuments({ vendor: vendorId, status: 'ACTIVE', 'pricing.basePrice': { $gt: 0 } }),
-    Quote.countDocuments({ vendor: vendorId, $or: [{ status: { $in: ['SUBMITTED', 'APPROVED', 'REJECTED'] } }, { 'history.toStatus': 'SUBMITTED' }] }),
-    Promise.all([
-      CoreBooking.countDocuments({ vendorId, bookingStatus: 'CONFIRMED' }),
-      VendorBlockout.countDocuments({ vendor: vendorId, recordType: 'EXTERNAL_COMMITMENT', status: 'ACTIVE', 'externalBooking.lifecycle': { $in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] } })
-    ]).then(([core, ext]) => core + ext),
-    VendorReview.countDocuments({ vendor: vendorId, status: 'PUBLISHED' }),
-  ]);
+  const sources = await Promise.allSettled([
+    () => evaluateVendorActivation(vendorId),
+    () => PortfolioItem.countDocuments({ vendor: vendorId, visibility: 'PUBLIC' }),
+    () => ServiceCoverage.countDocuments({ vendor: vendorId }),
+    () => VendorService.countDocuments({ vendor: vendorId, status: 'ACTIVE', 'pricing.basePrice': { $gt: 0 } }),
+    () => Quote.countDocuments({ vendor: vendorId, $or: [{ status: { $in: ['SUBMITTED', 'APPROVED', 'REJECTED'] } }, { 'history.toStatus': 'SUBMITTED' }] }),
+    () => CoreBooking.countDocuments({ vendorId, bookingStatus: 'CONFIRMED', paymentStatus: 'PAYMENT_VERIFIED' }),
+    () => VendorReview.countDocuments({ vendor: vendorId, status: 'PUBLISHED', isVerified: true }),
+  ].map(job => Promise.resolve().then(job)));
+  const [activation, portfolioCount, coverageCount, servicesCount, quotesCount, bookingsCount, reviewsCount] = sources.map(source => source.status === 'fulfilled' ? source.value : null);
 
   const steps = [
     {
       key: 'BUILD_PROFILE',
       phase: 'Build',
       label: 'Complete business profile',
-      description: 'Add business name, category, location, bio, and working hours.',
-      completed: Boolean(vendor.isProfileCompleted || (vendor.businessName && vendor.location && vendor.bio)),
+      description: 'Add business name, category and location. Operating setup and onboarding are separate metrics.',
+      completed: activation?.profileCompletion === 100,
       actionLink: '/vendor/profile',
     },
     {
@@ -87,7 +85,7 @@ export async function getLaunchpadProgress(vendorId) {
       phase: 'Showcase',
       label: 'Submit business verification',
       description: 'Verify your identity and bank details for trust and settlement.',
-      completed: evidence.milestones.some(step => step.key === 'VERIFICATION' && step.complete),
+      completed: activation?.checklist.verified === true,
       actionLink: '/vendor/documents',
     },
     {
@@ -95,7 +93,7 @@ export async function getLaunchpadProgress(vendorId) {
       phase: 'Get Ready',
       label: 'Operations & matching eligibility',
       description: 'Meet platform readiness criteria to receive customer opportunities.',
-      completed: Boolean(evidence.matchingEligible),
+      completed: activation?.matchingEligible === true,
       actionLink: '/vendor/readiness',
     },
     {
@@ -109,8 +107,8 @@ export async function getLaunchpadProgress(vendorId) {
     {
       key: 'FIRST_BOOKING',
       phase: 'Grow',
-      label: 'Record your first booking',
-      description: 'Manage confirmed STARVNT bookings or external client events.',
+      label: 'Receive your first STARVNT booking',
+      description: 'A confirmed STARVNT Core booking with verified payment.',
       completed: bookingsCount >= 1,
       actionLink: '/vendor/bookings',
     },
@@ -124,11 +122,37 @@ export async function getLaunchpadProgress(vendorId) {
     },
   ];
 
+  const sourceIndex = [0, 3, 1, 2, 0, 0, 4, 5, 6];
+  steps.forEach((step, index) => {
+    const source = sources[sourceIndex[index]], ready = source.status === 'fulfilled';
+    step.sourceStatus = ready ? 'READY' : 'UNAVAILABLE';
+    if (!ready) step.completed = null;
+    step.status = !ready ? 'UNKNOWN' : step.completed ? 'COMPLETE' : 'PENDING';
+    step.responsibleRole = ['COMPLETE_VERIFICATION', 'OPERATIONS_READY'].includes(step.key) ? 'VENDOR_AND_AUTHORIZED_REVIEWER' : step.key === 'FIRST_BOOKING' ? 'CORE_BOOKING_AND_PAYMENT_VERIFICATION' : step.key === 'FIRST_REVIEW' ? 'CUSTOMER_AND_REVIEW_MODERATION' : 'VENDOR_OWNER';
+    step.pendingReason = !ready ? 'Evidence source unavailable. Retry to determine this milestone.' : step.completed ? null : step.description;
+    step.calculationVersion = launchpadCalculationVersion;
+    step.computedAt = now;
+    step.evidence = ready ? sourceIndex[index] === 0 ? { source: 'CANONICAL_ACTIVATION', metric: step.key, value: step.key === 'BUILD_PROFILE' ? activation.profileCompletion : step.key === 'COMPLETE_VERIFICATION' ? activation.checklist.verified : activation.matchingEligible, calculationVersion: activation.calculationVersion } : { source: ['ACTIVATION', 'PUBLIC_PORTFOLIO', 'SERVICE_COVERAGE', 'ACTIVE_PRICED_SERVICES', 'SENT_QUOTES', 'CONFIRMED_PAYMENT_VERIFIED_CORE_BOOKINGS', 'PUBLISHED_VERIFIED_REVIEWS'][sourceIndex[index]], count: source.value } : null;
+  });
+  let observations;
+  try { observations = await observeLaunchpad(vendorId, steps, now); }
+  catch { observations = null; }
+  for (const step of steps) {
+    const observation = observations?.get(step.key);
+    step.historyStatus = observations ? 'AVAILABLE' : 'UNAVAILABLE';
+    step.completionObservedAt = observation?.firstCompletedObservedAt || null;
+    step.history = observation?.history || null;
+    // Observation time is not the historical source completion time.
+    step.completedAt = null;
+  }
+  const partial = steps.some(step => step.completed === null);
+
   const completedCount = steps.filter(s => s.completed).length;
-  const progressPercent = Math.round((completedCount / steps.length) * 100);
+  const progressPercent = partial ? null : Math.round((completedCount / steps.length) * 100);
   const isCompleted = completedCount === steps.length;
 
   return {
+    calculationVersion: launchpadCalculationVersion, computedAt: now, partial, historyStatus: observations ? 'AVAILABLE' : 'UNAVAILABLE',
     isFoundingPartner,
     cohort: vendor.foundingPartner?.cohort || 'Alpha Cohort',
     offerStartedAt,

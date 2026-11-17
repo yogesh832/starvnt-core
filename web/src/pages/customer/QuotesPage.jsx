@@ -36,7 +36,7 @@ function VendorOfferCard({ quote, eventId, onChanged }) {
     setBusy('accept');
     setError('');
     try {
-      const res = await customerApi.acceptVendorQuote(quote.id, eventId);
+      const res = await customerApi.acceptVendorQuote(quote.id, eventId, quote.commercialSnapshot?.version);
       onChanged?.();
       const targetEventId = eventId || res?.eventId;
       if (targetEventId) {

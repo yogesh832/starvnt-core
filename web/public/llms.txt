@@ -1,0 +1,13 @@
+# STARVNT Vendor OS — Manage Your Event Business
+
+> Manage event enquiries, quotations, bookings and payment records with STARVNT Vendor OS.
+
+## Public pages
+
+- [Home](https://vendor.starvnt.com/): Public STARVNT introduction.
+- [Privacy](https://vendor.starvnt.com/privacy): Privacy information.
+- [Terms](https://vendor.starvnt.com/terms): Terms of service.
+
+## Account access
+
+Account workspaces require sign-in. Private customer, vendor and admin records are not public resources.

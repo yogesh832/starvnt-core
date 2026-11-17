@@ -1,4 +1,5 @@
 import { reconcileVendorQuotePayment } from '../services/vendorQuotePayment.service.js';
+import { commercialSnapshot, assertCommercialSnapshot, confirmedPricing } from '../services/commercialSnapshot.service.js';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import crypto from 'node:crypto';
 import { config } from '../../config.js';
@@ -21,8 +22,8 @@ import { normalizeCategory } from '../../customer/services/planCatalog.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../services/matching.service.js';
 import { createQuote, transitionQuote } from '../services/quoteStateMachine.service.js';
-import { startService, submitCompletionEvidence, validateCompletionFromCore } from '../../admin/services/executionSettlement.service.js';
-import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.js';
+import { startService, submitCompletionEvidence, acknowledgeCompletion, originalBookingRequirement, getExecutionProjection } from '../../admin/services/executionSettlement.service.js';
+import { maskOpportunityCustomer, projectVendorContext } from '../services/opportunityPrivacy.service.js';
 import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
 import * as razorpay from '../../customer/services/payments/razorpay.js';
 import { validateCouponForPayment, recordCouponUsageOnce } from '../../customer/services/coupon.service.js';
@@ -60,13 +61,7 @@ function numberField(value) {
 }
 
 function normalizePricingBreakdown(input = {}) {
-  const basePrice = numberField(input.basePrice);
-  const travelFee = numberField(input.travelFee);
-  const equipmentFee = numberField(input.equipmentFee);
-  const setupFee = numberField(input.setupFee);
-  const additionalFee = numberField(input.additionalFee);
-  const totalAmount = numberField(input.totalAmount) || basePrice + travelFee + equipmentFee + setupFee + additionalFee;
-  return { basePrice, travelFee, equipmentFee, setupFee, additionalFee, totalAmount };
+  return confirmedPricing({ ...input, totalAmount: input.totalAmount ?? Number(input.basePrice || 0) + Number(input.travelFee || 0) + Number(input.equipmentFee || 0) + Number(input.setupFee || 0) + Number(input.additionalFee || 0) });
 }
 
 function quoteForCustomer(quote) {
@@ -87,6 +82,7 @@ function quoteForCustomer(quote) {
     vendorCategory: quote.vendor?.category || '',
     vendorLocation: quote.vendor?.location || '',
     pricingBreakdown: quote.pricingBreakdown,
+    commercialSnapshot: quote.commercialSnapshot,
     totalAmount: total,
     advancePercentage: quoteAdvancePercentage(quote),
     advanceAmount: payableAdvance,
@@ -355,15 +351,15 @@ router.get('/vendor/opportunities', requireExternalAuth, requireAccountType('VEN
     const existingQuotes = await Quote.find({ vendor: vendorId, opportunity: { $in: oppIds } }).select('opportunity status').lean().catch(() => []);
     const quotedOppMap = new Map(existingQuotes.map((q) => [String(q.opportunity), q.status]));
 
-    const enrichedOpps = opportunities.map((o) => {
+    const enrichedOpps = await Promise.all(opportunities.map(async (o) => {
       const quoteStatus = quotedOppMap.get(String(o._id));
-      const plain = maskOpportunityCustomer(o, quoteStatus);
+      const plain = await projectVendorContext(o);
       if (quoteStatus || plain.status === 'RESPONDED') {
         plain.status = 'RESPONDED';
         plain.quoteStatus = quoteStatus || 'SUBMITTED';
       }
       return plain;
-    });
+    }));
 
     res.json({ ok: true, count: enrichedOpps.length, opportunities: enrichedOpps });
   } catch (err) {
@@ -418,7 +414,7 @@ router.get('/quotes', requireExternalAuth, async (req, res, next) => {
       .populate('vendor', 'businessName category location')
       .sort({ createdAt: -1 });
 
-    res.json({ ok: true, count: quotes.length, quotes });
+    res.json({ ok: true, count: quotes.length, quotes: activeAccountType(req.externalUser) === 'VENDOR' ? await Promise.all(quotes.map(projectVendorContext)) : quotes });
   } catch (err) {
     next(err);
   }
@@ -478,11 +474,7 @@ router.post('/customer/bookings/:id/verify-completion', requireExternalAuth, req
       });
     }
 
-    const verified = await validateCompletionFromCore(
-      booking._id,
-      { approved: true, notes: req.body?.notes || 'Customer confirmed service completion' },
-      `CUSTOMER:${req.externalUser._id}`
-    );
+    const verified = await acknowledgeCompletion(booking._id, req.externalUser._id, { ...req.body, idempotencyKey: req.body?.idempotencyKey || `customer-ack-${booking._id}-${booking.completionEvidence.at(-1)?._id || "none"}` });
 
     res.json({ ok: true, booking: bookingForCustomer(verified) });
   } catch (err) {
@@ -643,6 +635,7 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
       .populate('vendor', 'businessName category location');
     if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND', message: 'Quote not found.' });
 
+    if (quote.status !== 'APPROVED') assertCommercialSnapshot(quote, req.body?.expectedCommercialVersion, true);
     // Anchor acceptance to the enquiry's owned event before considering input.
     const linkedOpportunity = quote.opportunity ? await Opportunity.findOne({ _id: quote.opportunity, customer: req.externalUser._id, vendor: quote.vendor?._id || quote.vendor }).lean() : null;
     if (quoteEventMismatch(linkedOpportunity?.customerEvent, req.body?.eventId)) {
@@ -752,6 +745,7 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
         reservation.packageTotal = total;
         reservation.advancePercent = quoteAdvancePercentage(quote);
         reservation.financialPolicySnapshot = quoteFinancialPolicySnapshot(quote);
+        reservation.commercialSnapshot = quote.commercialSnapshot;
         reservation.amount = advance;
         reservation.balanceAmount = Math.max(0, total - advance);
         reservation.isDemo = false;
@@ -772,6 +766,7 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
           packageTotal: total,
           advancePercent: quoteAdvancePercentage(quote),
           financialPolicySnapshot: quoteFinancialPolicySnapshot(quote),
+        commercialSnapshot: quote.commercialSnapshot,
           amount: advance,
           balanceAmount: Math.max(0, total - advance),
           isDemo: false,
@@ -808,6 +803,7 @@ router.post('/customer/vendor-quotes/:id/pay-advance', requireExternalAuth, requ
     if (quote.status !== 'SUBMITTED') {
       return res.status(400).json({ error: 'QUOTE_NOT_PAYABLE', message: 'This quote is not awaiting customer payment.' });
     }
+    assertCommercialSnapshot(quote, req.body?.expectedCommercialVersion, true);
     if (['ORDER_CREATED', 'PROCESSING'].includes(quote.advancePayment?.status)) return res.status(409).json({ error: 'PAYMENT_ALREADY_STARTED', message: 'Resume or reconcile the existing payment before creating another order.' });
     if (!razorpay.checkoutConfigured()) {
       return res.status(503).json({ error: 'PAYMENT_NOT_CONFIGURED', message: 'Online payments are not fully configured on the server.' });
@@ -935,7 +931,7 @@ router.get('/vendor/quotes', requireExternalAuth, requireAccountType('VENDOR'), 
       .populate('customer', 'fullName email phone')
       .sort({ createdAt: -1 });
 
-    res.json({ ok: true, count: quotes.length, quotes });
+    res.json({ ok: true, count: quotes.length, quotes: activeAccountType(req.externalUser) === 'VENDOR' ? await Promise.all(quotes.map(projectVendorContext)) : quotes });
   } catch (err) {
     next(err);
   }
@@ -1026,7 +1022,7 @@ router.post('/quotes', requireExternalAuth, requireAccountType('VENDOR'), async 
       type: 'quote',
     }).catch(() => null);
 
-    res.status(201).json({ ok: true, quote });
+    res.status(201).json({ ok: true, quote: await projectVendorContext(quote) });
   } catch (err) {
     next(err);
   }
@@ -1037,6 +1033,9 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
     const vendorId = req.externalUser.vendorOrganization;
     if (!vendorId) return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
 
+    const vendor = await VendorOrganization.findById(vendorId);
+    if (!vendor) return res.status(404).json({ error: 'VENDOR_NOT_FOUND' });
+
     const quote = await Quote.findOne({ _id: req.params.id, vendor: vendorId });
     if (!quote) return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
     if (!['DRAFT', 'SUBMITTED'].includes(quote.status)) {
@@ -1045,6 +1044,9 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
         message: 'Only draft or submitted quotes can be revised.',
       });
     }
+
+    if (['ORDER_CREATED', 'PROCESSING', 'VERIFIED'].includes(quote.advancePayment?.status)) return res.status(409).json({ error: 'QUOTE_PAYMENT_IN_PROGRESS', message: 'Reconcile the existing payment before changing this offer.' });
+    if (quote.commercialSnapshot && req.body?.expectedCommercialVersion !== quote.commercialSnapshot.version) return res.status(409).json({ error: 'COMMERCIAL_VERSION_CONFLICT', message: 'The submitted quote changed. Reload and review its current version before revising.' });
 
     const pricing = normalizePricingBreakdown(req.body?.pricingBreakdown || {});
     if (!pricing.basePrice || !pricing.totalAmount) {
@@ -1070,6 +1072,7 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
     quote.notes = cleanMessage;
     quote.status = 'SUBMITTED';
     quote.validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    quote.commercialSnapshot = commercialSnapshot(quote, pricing, (quote.commercialSnapshot?.version || 0) + 1);
     quote.advancePayment = {
       percentage: currentPolicy.minimumReservationPercent,
       policySnapshot: {
@@ -1147,7 +1150,7 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
 
     res.json({
       ok: true,
-      quote: await quote.populate('customer', 'fullName email phone'),
+      quote: await projectVendorContext(await quote.populate('customer', 'fullName email phone')),
     });
   } catch (err) {
     res.status(err.statusCode || 400).json({ error: err.code || 'QUOTE_REVISION_FAILED', message: err.message });
@@ -1171,7 +1174,7 @@ router.get('/quotes/:id', requireExternalAuth, async (req, res, next) => {
       return res.status(404).json({ error: 'QUOTE_NOT_FOUND' });
     }
 
-    res.json({ ok: true, quote });
+    res.json({ ok: true, quote: activeAccountType(req.externalUser) === 'VENDOR' ? await projectVendorContext(quote) : quote });
   } catch (err) {
     next(err);
   }
@@ -1196,6 +1199,7 @@ router.post('/quotes/:id/transition', requireExternalAuth, async (req, res) => {
     if (!(vendor ? ['SUBMITTED'] : ['APPROVED', 'REJECTED']).includes(targetStatus)) {
       return res.status(403).json({ error: 'QUOTE_TRANSITION_FORBIDDEN' });
     }
+    if (!vendor && targetStatus === 'APPROVED') assertCommercialSnapshot(owned, req.body?.expectedCommercialVersion, true);
 
     const quote = await transitionQuote(req.params.id, targetStatus, {
       actor: req.externalUser.fullName || req.externalUser.email,
@@ -1215,7 +1219,7 @@ router.post('/quotes/:id/transition', requireExternalAuth, async (req, res) => {
       });
     }
 
-    res.json({ ok: true, quote });
+    res.json({ ok: true, quote: activeAccountType(req.externalUser) === 'VENDOR' ? await projectVendorContext(quote) : quote });
   } catch (err) {
     return res.status(err.statusCode || 400).json({
       error: err.code || 'INVALID_QUOTE_TRANSITION',
@@ -1233,6 +1237,7 @@ router.post('/quotes/:id/transition', requireExternalAuth, async (req, res) => {
 router.get('/bookings', requireExternalAuth, requireAccountType('CUSTOMER'), async (req, res, next) => {
   try {
     const bookings = await CoreBooking.find({ customerId: req.externalUser._id }).sort({ eventDate: 1 })
+      .select('-financeOperations -operationReceipts -workflowEvents')
       .populate('vendorId', 'businessName category')
       .populate('quoteId');
     res.json({ ok: true, count: bookings.length, bookings });
@@ -1253,7 +1258,10 @@ router.get('/vendor/bookings', requireExternalAuth, requireAccountType('VENDOR')
 
     const bookings = await CoreBooking.find({
       $or: [{ vendorId }, { vendorId: String(vendorId) }],
-    }).sort({ eventDate: 1 });
+    }).select('-financeOperations -operationReceipts -workflowEvents -requirementSnapshot').sort({ eventDate: 1 });
+    for (const booking of bookings) for (const dispute of booking.disputes) {
+      dispute.evidence = dispute.evidence.filter(entry => entry.actor === String(req.externalUser._id));
+    }
     res.json({ ok: true, count: bookings.length, bookings });
   } catch (err) {
     next(err);
@@ -1310,202 +1318,14 @@ async function resolveCustomerEventAndBooking(coreBooking) {
  * Vendor marks service execution as started.
  */
 router.post('/vendor/bookings/:id/start', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
-  try {
-    const vendorId = req.externalUser.vendorOrganization;
-    const booking = await startService(req.params.id, vendorId);
-
-    // Sync status and notify customer
-    try {
-      const vendorOrg = await VendorOrganization.findById(vendorId).lean();
-      const vendorName = vendorOrg?.businessName || booking.vendorName || 'Vendor';
-      const serviceName = booking.serviceName || 'Event Service';
-      const text = `Service status: In progress · ${serviceName}.`;
-
-      const { eventId, custBooking, customerId } = await resolveCustomerEventAndBooking(booking, { strict: true });
-      const targetCustomerId = customerId || booking.customerId;
-
-      // Save resolved eventId back onto core booking if missing
-      if (eventId && !booking.customerEvent) {
-        booking.customerEvent = eventId;
-        await booking.save().catch(() => null);
-      }
-
-      // 0. Sync CustomerBooking
-      if (custBooking) {
-        await Booking.updateOne(
-          { _id: custBooking._id },
-          { $set: { executionStatus: 'SERVICE_STARTED', startedAt: new Date() } }
-        ).catch(() => null);
-      }
-
-      // Check-in updates booking state only. A vendor-authored chat message
-      // is composed separately in this booking's conversation.
-      // 3. Send HIGH priority Notification to Customer
-      if (targetCustomerId) {
-        await notifyCustomer({
-          customerId: targetCustomerId,
-          eventId,
-          bookingId: custBooking?._id || booking._id,
-          type: 'booking',
-          priority: 'HIGH',
-          title: `🚀 Service Started - ${vendorName}`,
-          body: text,
-          actionUrl: eventId ? `/customer/events/${eventId}/bookings` : '/customer/updates',
-          idempotencyKey: `start-work-${booking._id}`,
-          payload: {
-            bookingId: custBooking?._id || booking._id,
-            coreBookingId: booking._id,
-            eventId,
-          },
-        }).catch((e) => console.warn('[startService notifyCustomer err]:', e.message));
-      }
-    } catch (notifyErr) {
-      console.warn('[startService notify notice]:', notifyErr.message);
-    }
-
-    res.json({ ok: true, booking });
-  } catch (err) {
-    res.status(err.statusCode || 400).json({ error: err.code || 'EXECUTION_ERROR', message: err.message });
-  }
+  try { const booking = await startService(req.params.id, req.externalUser.vendorOrganization, req.body, req.externalUser._id); res.json({ ok: true, booking: { _id: booking._id, ...getExecutionProjection(booking) } }); }
+  catch (error) { next(error); }
+});
+router.post('/vendor/bookings/:id/submit-completion', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
+  try { const booking = await submitCompletionEvidence(req.params.id, req.externalUser.vendorOrganization, req.body, req.externalUser._id); res.json({ ok: true, booking: { _id: booking._id, ...getExecutionProjection(booking) } }); }
+  catch (error) { next(error); }
 });
 
-/**
- * Vendor submits completion evidence (Golden Test J).
- */
-router.post(
-  '/vendor/bookings/:id/submit-completion',
-  requireExternalAuth,
-  requireAccountType('VENDOR'),
-  async (req, res) => {
-    try {
-      const vendorId = req.externalUser.vendorOrganization;
-      const { deliverablesUrl, checklist, notes, files, photos, videos } = req.body || {};
-
-      const booking = await submitCompletionEvidence(req.params.id, vendorId, {
-        deliverablesUrl,
-        checklist,
-        notes,
-        files,
-        photos,
-        videos,
-      });
-
-      // Notify customer with High Priority to review evidence, verify completion, and pay balance
-      try {
-        const vendorOrg = await VendorOrganization.findById(vendorId).lean();
-        const vendorName = vendorOrg?.businessName || booking.vendorName || 'Vendor';
-        const refName = booking.bookingReference || `BK-${String(booking._id).slice(-4)}`;
-        const evidenceUrl = deliverablesUrl || (photos && photos[0]) || (videos && videos[0]) || '';
-
-        const textParts = [
-          `📸 Work Marked Done & Completion Evidence Uploaded for ${refName} by ${vendorName}.`,
-          notes ? `Notes: ${notes}` : '',
-          evidenceUrl ? `Proof: ${evidenceUrl}` : '',
-          `Please inspect the uploaded evidence assets and verify completion to unlock settlement.`,
-        ];
-        const text = textParts.filter(Boolean).join('\n');
-
-        const { eventId, custBooking, customerId } = await resolveCustomerEventAndBooking(booking, { strict: true });
-        const targetCustomerId = customerId || booking.customerId;
-
-        // Save resolved eventId back onto core booking if missing
-        if (eventId && !booking.customerEvent) {
-          booking.customerEvent = eventId;
-          await booking.save().catch(() => null);
-        }
-
-        // 1. Sync CustomerBooking
-        if (custBooking) {
-          await Booking.updateOne(
-            { _id: custBooking._id },
-            { $set: { executionStatus: 'COMPLETION_SUBMITTED', completedAt: new Date(), completionEvidence: booking.completionEvidence } }
-          ).catch(() => null);
-        }
-
-        // 2. Post to VendorMessageThread
-        if (targetCustomerId) {
-          await VendorMessageThread.findOneAndUpdate(
-            { vendor: vendorId, customer: targetCustomerId, booking: booking._id },
-            {
-              $set: {
-                lastMessageText: `Work marked done for ${refName}. Evidence uploaded!`,
-                lastMessageAt: new Date(),
-                status: 'ACTIVE',
-              },
-              $push: {
-                messages: {
-                  sender: 'SYSTEM',
-                  senderName: 'STARVNT',
-                  text,
-                  isRead: false,
-                  createdAt: new Date(),
-                },
-              },
-              $inc: { unreadClientCount: 1 },
-            }
-          ).catch(() => null);
-        }
-
-        // 3. Post to EventMessage (Circle chat) with evidence assets & action payload
-        if (eventId) {
-          await EventMessage.create({
-            event: eventId,
-            booking: custBooking?._id || booking._id,
-            senderType: 'system',
-            senderName: 'STARVNT',
-            body: text,
-            payload: {
-              type: 'EVIDENCE_SUBMITTED',
-              bookingId: booking._id,
-              eventId,
-              vendorName,
-              deliverablesUrl: deliverablesUrl || '',
-              photos: photos || [],
-              videos: videos || [],
-              notes: notes || '',
-              actionUrl: `/customer/events/${eventId}/bookings?inspect=${booking._id}`,
-              actionLabel: 'Review & Verify Evidence',
-            },
-          }).catch((e) => console.warn('[submitCompletion EventMessage err]:', e.message));
-        }
-
-        // 4. Send HIGH PRIORITY Notification to Customer
-        if (targetCustomerId) {
-          await notifyCustomer({
-            customerId: targetCustomerId,
-            eventId,
-            bookingId: custBooking?._id || booking._id,
-            type: 'completion',
-            priority: 'HIGH',
-            title: `🚨 Completion Evidence Uploaded - Action Required`,
-            body: `Work marked done by ${vendorName}. Proof of work attached! Inspect evidence & verify completion.`,
-            actionUrl: eventId ? `/customer/events/${eventId}/bookings?inspect=${booking._id}` : `/customer/bookings`,
-            idempotencyKey: `submit-completion-${booking._id}-${crypto.createHash('sha256').update(JSON.stringify(req.body || {})).digest('hex')}`,
-            payload: {
-              bookingId: custBooking?._id || booking._id,
-              coreBookingId: booking._id,
-              eventId,
-              evidenceUrl,
-              photos: photos || [],
-              videos: videos || [],
-            },
-          }).catch((e) => console.warn('[submitCompletion notifyCustomer err]:', e.message));
-        }
-      } catch (notifyErr) {
-        console.warn('[submitCompletion notify notice]:', notifyErr.message);
-      }
-
-      res.json({ ok: true, booking });
-    } catch (err) {
-      res.status(err.statusCode || 400).json({ error: err.code || 'COMPLETION_ERROR', message: err.message });
-    }
-  }
-);
-
-/**
- * NON-NEGOTIABLE CORE AUTHORITY GUARDS:
- * Vendor cannot declare PAYMENT_VERIFIED, COMPLETION_VERIFIED, or SETTLEMENT_ELIGIBLE (Golden Test J, Spec §3, §11).
- */
 router.post(
   '/vendor/bookings/:id/verify-completion',
   requireExternalAuth,

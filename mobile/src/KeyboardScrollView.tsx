@@ -3,7 +3,7 @@ import { Keyboard, Platform, ScrollView, ScrollViewProps, TextInput } from 'reac
 
 /** Keep the focused field above Android's resized keyboard viewport. */
 export function KeyboardScrollView({ onFocus, onBlur, onScroll, onLayout, ...props }: ScrollViewProps) {
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const offset = useRef(0);
   const ownedInput = useRef<ReturnType<typeof TextInput.State.currentlyFocusedInput>>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -15,7 +15,7 @@ export function KeyboardScrollView({ onFocus, onBlur, onScroll, onLayout, ...pro
       const keyboard = Keyboard.metrics();
       if (focused && focused === ownedInput.current && keyboard) {
         focused.measureInWindow((_x, inputY, _width, inputHeight) => {
-          scroll.current?.getNativeScrollRef()?.measureInWindow((_sx, viewY, _sw, viewHeight) => {
+          (scroll.current as any)?.getNativeScrollRef()?.measureInWindow((_sx: number, viewY: number, _sw: number, viewHeight: number) => {
             // Window coordinates include the stack header and persistent tabs.
             const bottom = Math.min(viewY + viewHeight, keyboard.screenY) - 24;
             const overflow = inputY + inputHeight - bottom;

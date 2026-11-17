@@ -1,0 +1,155 @@
+import { before, after, test } from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import mongoose from 'mongoose';
+import request from 'supertest';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import { externalConn, adminConn } from '../src/db/index.js';
+import { createApp } from '../src/app.js';
+import { AdminUser } from '../src/admin/models/AdminUser.js';
+import { AdminSession } from '../src/admin/models/AdminSession.js';
+import { ExternalUser } from '../src/external/models/ExternalUser.js';
+import { ExternalSession } from '../src/external/models/ExternalSession.js';
+import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
+import { CoreBooking } from '../src/admin/models/CoreBooking.js';
+import { AgreementVersion, VendorAgreement } from '../src/foundation/agreement.models.js';
+import { BusinessAuditLog } from '../src/admin/models/BusinessAuditLog.js';
+import { signAdminAccessToken } from '../src/admin/utils/tokens.js';
+import { signExternalAccessToken } from '../src/external/utils/tokens.js';
+
+let mongo, app;
+before(async () => {
+  mongo = await MongoMemoryServer.create();
+  await Promise.all([externalConn.openUri(mongo.getUri('agreement_external')), adminConn.openUri(mongo.getUri('agreement_admin'))]);
+  app = createApp();
+  await Promise.all([...Object.values(externalConn.models), ...Object.values(adminConn.models)].map(model => model.init()));
+}, { timeout: 120000 });
+after(async () => { await Promise.all([externalConn.close(), adminConn.close()]); await mongo?.stop(); });
+async function admin(role = 'SUPER_ADMIN', permissions = []) {
+  const actor = await AdminUser.create({ fullName: 'Fixture reviewer', email: `${crypto.randomUUID()}@example.test`, passwordHash: 'fixture-only', role, permissions });
+  const session = await AdminSession.create({ admin: actor._id, refreshTokenHash: crypto.randomUUID(), expiresAt: new Date(Date.now() + 3600000) });
+  return { actor, auth: { Authorization: `Bearer ${signAdminAccessToken(actor, session._id)}` } };
+}
+async function vendor() {
+  const actor = await ExternalUser.create({ fullName: 'Fixture owner', email: `${crypto.randomUUID()}@example.test`, accountType: 'VENDOR' });
+  const organization = await VendorOrganization.create({ owner: actor._id, businessName: 'Fixture vendor' });
+  actor.vendorOrganization = organization._id; await actor.save();
+  const session = await ExternalSession.create({ user: actor._id, refreshTokenHash: crypto.randomUUID(), expiresAt: new Date(Date.now() + 3600000) });
+  return { actor, organization, auth: { Authorization: `Bearer ${signExternalAccessToken(actor, session._id)}` } };
+}
+const path = '/api/admin/vendor-compliance';
+async function published(types = ['LISTING']) {
+  const author = await admin(), reviewer = await admin();
+  const created = await request(app).post(`${path}/versions`).set(author.auth).send({ idempotencyKey: crypto.randomUUID(), family: `fixture-${crypto.randomUUID()}`, title: 'Nonbinding fixture document', body: 'Fixture text for software tests only. This is not legal advice or a production agreement.', relationshipTypes: types, effectiveFrom: new Date(Date.now() - 60000).toISOString() }).expect(201);
+  const id = created.body.version._id;
+  await request(app).post(`${path}/versions/${id}/submit-review`).set(author.auth).send({ expectedRevision: 0 }).expect(200);
+  await request(app).post(`${path}/versions/${id}/approve`).set(author.auth).send({ expectedRevision: 1, legalReviewReference: 'Fixture review', legalReviewConfirmed: true }).expect(403);
+  await request(app).post(`${path}/versions/${id}/approve`).set(reviewer.auth).send({ expectedRevision: 1 }).expect(409);
+  await request(app).post(`${path}/versions/${id}/approve`).set(reviewer.auth).send({ expectedRevision: 1, legalReviewReference: 'Fixture evidence only', legalReviewConfirmed: true }).expect(200);
+  await request(app).post(`${path}/versions/${id}/publish`).set(author.auth).send({ expectedRevision: 2 }).expect(409);
+  const released = await request(app).post(`${path}/versions/${id}/publish`).set(author.auth).send({ expectedRevision: 2, confirmPublication: true }).expect(200);
+  return { author, reviewer, version: released.body.version };
+}
+test('legal templates require independent review, explicit publication and granular Admin permissions', async () => {
+  const restricted = await admin('ADMIN', ['vendorCompliance.read']);
+  await request(app).post(`${path}/versions`).set(restricted.auth).send({}).expect(403);
+  const f = await published();
+  await request(app).post(`${path}/versions/${f.version._id}/archive`).set(restricted.auth).send({ expectedRevision: 3 }).expect(403);
+  await request(app).post(`${path}/versions/${f.version._id}/archive`).set(f.author.auth).send({ expectedRevision: 3, body: 'Changed text' }).expect(409);
+  assert.equal((await AgreementVersion.findById(f.version._id)).body, f.version.body);
+});
+test('acceptance is vendor-owned, exact-version/scope bound, replay-safe and downloadable after archival', async () => {
+  const f = await published(), a = await vendor(), b = await vendor();
+  const assigned = await request(app).post(`${path}/assignments`).set(f.author.auth).send({ vendorId: a.organization._id, versionId: f.version._id, relationshipType: 'LISTING' }).expect(201);
+  const row = assigned.body.agreement;
+  await request(app).get(`/api/vendor/agreements/${row._id}`).set(b.auth).expect(404);
+  const payload = { signatoryFullName: 'Fixture Signatory', authorityConfirmed: true, idempotencyKey: crypto.randomUUID(), expectedHash: row.snapshot.contentHash, expectedScopeHash: row.scopeHash, expectedVersionId: row.versionId, expectedRevision: row.revision };
+  await request(app).post(`/api/vendor/agreements/${row._id}/accept`).set(a.auth).send({ ...payload, expectedHash: 'wrong' }).expect(409);
+  await request(app).post(`/api/vendor/agreements/${row._id}/accept`).set(a.auth).send({ ...payload, authorityConfirmed: false }).expect(400);
+  const accepted = await request(app).post(`/api/vendor/agreements/${row._id}/accept`).set(a.auth).send(payload).expect(200);
+  const replay = await request(app).post(`/api/vendor/agreements/${row._id}/accept`).set(a.auth).send(payload).expect(200);
+  assert.equal(accepted.body.agreement.state, 'ACCEPTED');
+  assert.equal(accepted.body.agreement.acceptance.requestKey, undefined);
+  assert.equal(accepted.body.agreement.acceptance.requestHash, undefined);
+  assert.equal(replay.body.agreement.acceptance.acceptedAt, accepted.body.agreement.acceptance.acceptedAt);
+  assert.equal((await VendorAgreement.findById(row._id)).history.filter(h => h.action === 'ACCEPTED').length, 1);
+  const readOnly = await admin('ADMIN', ['vendorCompliance.read']);
+  await request(app).get(`${path}/assignments/${row._id}/evidence`).set(readOnly.auth).expect(403);
+  await request(app).get(`${path}/assignments/${row._id}/evidence`).set(a.auth).expect(401);
+  const exported = await request(app).get(`${path}/assignments/${row._id}/evidence`).set(f.author.auth).expect(200);
+  assert.equal(exported.body.documentHash, row.snapshot.contentHash);
+  assert.equal(exported.body.acceptance.authorityConfirmed, true);
+  assert.equal(exported.body.acceptance.signatoryFullName, undefined);
+  assert.equal(exported.body.snapshot, undefined);
+  assert.equal(exported.text.includes(payload.signatoryFullName), false);
+  assert.equal(exported.text.includes(payload.idempotencyKey), false);
+  assert.equal(exported.headers['cache-control'], 'private, no-store');
+  assert.equal(await BusinessAuditLog.countDocuments({ resourceId: row._id, action: 'AGREEMENT_EVIDENCE_EXPORTED' }), 1);
+  await request(app).post(`/api/vendor/agreements/${row._id}/accept`).set(a.auth).send({ ...payload, signatoryFullName: 'Changed name' }).expect(409);
+  await request(app).post(`${path}/versions/${f.version._id}/archive`).set(f.author.auth).send({ expectedRevision: 3 }).expect(200);
+  const copy = await request(app).get(`/api/vendor/agreements/${row._id}/document`).set(a.auth).expect(200);
+  assert.ok(copy.text.includes(f.version.body)); assert.ok(copy.text.includes(row.scopeHash));
+  assert.equal(copy.headers['cache-control'], 'private, no-store');
+  await request(app).get(`/api/vendor/agreements/${row._id}/document`).set(b.auth).expect(404);
+  await request(app).post(`${path}/assignments`).set(f.author.auth).send({ vendorId: b.organization._id, versionId: f.version._id, relationshipType: 'LISTING' }).expect(409);
+});
+
+test('draft and review retries preserve exact content, versions and audit identity', async () => {
+  const author = await admin();
+  const payload = { idempotencyKey: crypto.randomUUID(), family: crypto.randomUUID(), title: 'Fixture retry', body: '  Exact fixture text.\n', relationshipTypes: ['LEAD'], effectiveFrom: new Date(Date.now() - 60000).toISOString() };
+  const first = await request(app).post(`${path}/versions`).set(author.auth).send(payload).expect(201);
+  const row = first.body.version;
+  assert.equal(row.body, payload.body); assert.equal(row.requestKey, undefined);
+  await request(app).post(`${path}/versions/${row._id}/submit-review`).set(author.auth).send({ expectedRevision: 0 }).expect(200);
+  const retry = await request(app).post(`${path}/versions/${row._id}/submit-review`).set(author.auth).send({ expectedRevision: 0 }).expect(200);
+  assert.equal(retry.body.version.revision, 1);
+  await BusinessAuditLog.deleteOne({ resourceId: row._id, action: 'AGREEMENT_DRAFT_CREATED' });
+  const replay = await request(app).post(`${path}/versions`).set(author.auth).send(payload).expect(201);
+  assert.equal(replay.body.version._id, row._id);
+  assert.equal(await AgreementVersion.countDocuments({ family: payload.family }), 1);
+  assert.equal((await BusinessAuditLog.findOne({ resourceId: row._id, action: 'AGREEMENT_DRAFT_CREATED' })).toState, 'DRAFT');
+  await request(app).post(`${path}/versions`).set(author.auth).send({ ...payload, body: 'Changed fixture text' }).expect(409);
+});
+test('managed work orders require approved vendor allocation and reject materially changed commercial scope', async () => {
+  const f = await published(['MANAGED']), v = await vendor();
+  const booking = await CoreBooking.create({ vendorId: v.organization._id, customerId: new mongoose.Types.ObjectId(), serviceName: 'Fixture service', eventDate: '2027-01-01', totalAmount: 1000, commercialSnapshot: { hash: 'fixture-commercial' }, requirementSnapshot: { service: 'Fixture' }, financialPolicySnapshot: { version: 'fixture' } });
+  const payload = { vendorId: v.organization._id, versionId: f.version._id, relationshipType: 'MANAGED', bookingId: booking._id };
+  const unavailable = await request(app).post(`${path}/assignments`).set(f.author.auth).send(payload).expect(409);
+  assert.equal(unavailable.body.error, 'WORK_ORDER_ALLOCATION_NOT_APPROVED');
+  booking.commercialSnapshot = { hash: 'fixture-commercial', vendorPayableMinor: 80000, vendorAllocationApprovalReference: 'fixture-approved-policy', currency: 'INR', vendorScope: { service: 'Fixture service' } }; await booking.save();
+  const created = await request(app).post(`${path}/assignments`).set(f.author.auth).send(payload).expect(201);
+  const row = created.body.agreement;
+  assert.equal(row.scope.amountMinor, 80000); assert.equal(row.scope.financialPolicySnapshot, undefined);
+  booking.totalAmount = 1100; await booking.save();
+  const changed = await request(app).post(`/api/vendor/agreements/${row._id}/accept`).set(v.auth).send({ signatoryFullName: 'Fixture signatory', authorityConfirmed: true, idempotencyKey: crypto.randomUUID(), expectedRevision: 0, expectedHash: row.snapshot.contentHash, expectedScopeHash: row.scopeHash, expectedVersionId: row.versionId }).expect(409);
+  assert.equal(changed.body.error, 'AGREEMENT_MATERIAL_CHANGE');
+});
+
+test('Academy requires independent publication review and preserves explicit lifecycle states', async () => {
+  const author = await admin(), reviewer = await admin(), reader = await admin('ADMIN', ['academy.read']);
+  const content = { title: 'Lifecycle fixture', category: 'Getting Started', objective: 'Fixture objective', content: 'Synthetic lesson text', requestKey: crypto.randomUUID() };
+  const created = (await request(app).post('/api/admin/academy').set(author.auth).send(content).expect(201)).body.lesson;
+  assert.equal(created.state, 'DRAFT');
+  const path = `/api/admin/academy/${created.id}`;
+  const publish = { action: 'PUBLISH', revision: 1, reason: 'Fixture publication decision', rightsReference: 'fixture-rights' };
+  await request(app).post(`${path}/publication`).set(reviewer.auth).send(publish).expect(409);
+  await request(app).post(`${path}/submit-review`).set(reader.auth).send({ revision: 1, reason: 'Denied review' }).expect(403);
+  const review = (await request(app).post(`${path}/submit-review`).set(author.auth).send({ revision: 1, reason: 'Fixture request' }).expect(200)).body.lesson;
+  assert.equal(review.state, 'REVIEW');
+  const replay = (await request(app).post(`${path}/submit-review`).set(author.auth).send({ reason: 'Fixture request', revision: 1 }).expect(200)).body.lesson;
+  assert.equal(replay.revision, 2); assert.equal(replay.history.length, 2);
+  await request(app).post(`${path}/submit-review`).set(author.auth).send({ revision: 1, reason: 'Changed request' }).expect(409);
+  await request(app).put(path).set(author.auth).send({ ...content, revision: 2 }).expect(409);
+  await request(app).post(`${path}/publication`).set(author.auth).send({ ...publish, revision: 2 }).expect(403);
+  const changes = (await request(app).post(`${path}/request-changes`).set(reviewer.auth).send({ revision: 2, reason: 'Fixture content correction' }).expect(200)).body.lesson;
+  assert.equal(changes.state, 'DRAFT');
+  await request(app).post(`${path}/submit-review`).set(author.auth).send({ revision: 3, reason: 'Fixture resubmission' }).expect(200);
+  await request(app).post(`${path}/publication`).set(reviewer.auth).send({ ...publish, revision: 2 }).expect(409);
+  const published = (await request(app).post(`${path}/publication`).set(reviewer.auth).send({ ...publish, revision: 4 }).expect(200)).body.lesson;
+  assert.equal(published.state, 'PUBLISHED');
+  const publishedRetry = (await request(app).post(`${path}/publication`).set(reviewer.auth).send({ ...publish, revision: 4 }).expect(200)).body.lesson;
+  assert.equal(publishedRetry.revision, 5); assert.equal(publishedRetry.publishAt, published.publishAt);
+  const withdrawn = (await request(app).post(`${path}/publication`).set(reviewer.auth).send({ action: 'WITHDRAW', revision: 5, reason: 'Fixture withdrawal' }).expect(200)).body.lesson;
+  assert.equal(withdrawn.state, 'UNPUBLISHED');
+  assert.deepEqual(withdrawn.history.map(h => h.action), ['DRAFT_CREATED', 'REVIEW_REQUESTED', 'CHANGES_REQUESTED', 'REVIEW_REQUESTED', 'PUBLICATION_APPROVED', 'WITHDRAWN']);
+});

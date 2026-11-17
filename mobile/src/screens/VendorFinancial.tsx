@@ -25,6 +25,7 @@ export function VendorFinancial() {
   const a = useAction();
   const hydrated = useRef(false);
   const [pan, setPan] = useState("");
+  const [legalName, setLegalName] = useState("");
   const [gstRegistered, setGstRegistered] = useState("no");
   const [gstin, setGstin] = useState("");
   const [discovery, setDiscovery] = useState<Data | null>(null);
@@ -40,13 +41,14 @@ export function VendorFinancial() {
   useEffect(() => {
     if (!r.data.profile || hydrated.current) return;
     hydrated.current = true;
-    setPan(profile.pan?.panNumber || "");
+    setPan("");
+    setLegalName(profile.pan?.submittedLegalName || profile.pan?.legalName || "");
     setGstRegistered(profile.gst?.isRegistered ? "yes" : "no");
-    setGstin(profile.gst?.isRegistered ? profile.gst.gstin || "" : "");
+    setGstin(profile.gst?.isRegistered && !profile.gst.gstin?.includes("*") ? profile.gst.gstin || "" : "");
     const saved = profile.bankAccount || {};
     setBank({
       accountHolderName: saved.accountHolderName || "",
-      accountNumber: saved.accountNumber || "",
+      accountNumber: saved.accountNumber?.includes("*") ? "" : saved.accountNumber || "",
       ifsc: saved.ifsc || "",
       bankName: saved.bankName || "",
       accountType: saved.accountType || "SAVINGS",
@@ -116,18 +118,21 @@ export function VendorFinancial() {
         </Txt>
         <Pill>{human(profile.pan?.verificationStatus || "NOT_VERIFIED")}</Pill>
         {!!profile.pan?.legalName && <Txt>{profile.pan.legalName}</Txt>}
+        {!!profile.pan?.maskedPan && <Txt muted>Saved PAN: {profile.pan.maskedPan}</Txt>}
+        <Field label="Full Name as per PAN Card" value={legalName} onChangeText={setLegalName} maxLength={200} />
         <Field
-          label="PAN number"
+          label="PAN Number"
           autoCapitalize="characters"
           value={pan}
           onChangeText={(v) => setPan(v.toUpperCase())}
           maxLength={10}
         />
+        <Txt muted>An applicable identity date is only requested when required by the approved provider process. This lookup does not require a date.</Txt>
         <Button
-          title="Save & verify PAN"
+          title="Submit for Verification"
           busy={a.busy}
           onPress={() =>
-            a.run(async () => act("pan", { panNumber: validatePan() }))
+            a.run(async () => act("pan", { fullLegalName: legalName.trim(), panNumber: validatePan() }))
           }
         />
       </Card>
@@ -214,6 +219,10 @@ export function VendorFinancial() {
         <Pill>
           {human(profile.bankAccount?.verificationStatus || "NOT_VERIFIED")}
         </Pill>
+        <Txt muted>Razorpay verifies your account number, IFSC and account holder name.</Txt>
+        {r.data.bankVerification?.configured === false && (
+          <Txt muted>Bank verification is not available yet. Save your details and contact STARVNT support.</Txt>
+        )}
         {!!profile.bankAccount?.failureReason && (
           <ErrorNotice message={profile.bankAccount.failureReason} />
         )}
@@ -249,14 +258,15 @@ export function VendorFinancial() {
           onPress={() => a.run(async () => act("bank", bankBody()))}
         />
         <Button
-          title="Verify this bank account"
+          title={["PROCESSING", "PENDING"].includes(profile.bankAccount?.verificationStatus) ? "Check verification status" : "Verify with Razorpay"}
+          disabled={r.data.bankVerification?.configured === false}
           secondary
           busy={a.busy}
           onPress={() =>
             confirm(
               "Verify bank account?",
-              "Core will submit the displayed bank details to the configured verification provider.",
-              () => a.run(async () => act("bank/verify", bankBody())),
+              "STARVNT will submit your saved account, or the new details you entered, to Razorpay for verification.",
+              () => a.run(async () => act("bank/verify", !bank.accountNumber.trim() && profile.bankAccount?.accountNumber ? {} : bankBody())),
             )
           }
         />

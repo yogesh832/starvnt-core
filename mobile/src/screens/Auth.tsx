@@ -3,18 +3,40 @@ import { VendorCategoryPicker } from "../VendorCategoryPicker";
 import React, { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from '@react-navigation/native';
 import { Linking, Modal, Platform, Pressable, TurboModuleRegistry, View } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { useSession } from "../auth/Session";
 import { AuthLayout } from "../AuthLayout";
 import { external } from "../api/runtime";
 import { TEST_AUTH_ENABLED } from "../testAuth";
-import { useAction } from "../ui";
+import { Page, Txt, useAction } from "../ui";
 import { AuthButton, AuthCode, AuthField, AuthLink, AuthTabs, AuthText } from '../AuthUI';
+import { useSignupDocuments } from '../useSignupDocuments';
 export function AuthScreen({ route, navigation }: any) {
     const { signIn, setActiveDomain, activeDomain } = useSession();
     const isAdmin = activeDomain === "admin";
     const accountType = PORTAL_SURFACE;
     const [mode, setMode] = useState(route.params?.mode || "login");
+    const register = !isAdmin && mode === 'register';
+    const [documentsRevision, setDocumentsRevision] = useState(0);
+    const [acceptedVersions, setAcceptedVersions] = useState('');
+    const [openDocument, setOpenDocument] = useState<'terms' | 'privacy' | null>(null);
+    const signupDocuments = useSignupDocuments(register ? accountType : null, documentsRevision);
+    const documentReferences = signupDocuments.documents?.map(({ kind, version, hash }) => ({ kind, version, hash })) || [];
+    const currentVersions = documentReferences.length ? JSON.stringify(documentReferences) : '';
+    const signupAcceptance = register && currentVersions && acceptedVersions === currentVersions
+        ? { accepted: true, documents: documentReferences }
+        : undefined;
+    const displayedDocument = signupDocuments.documents?.find(document => document.kind === openDocument);
+    function requireSignupDocuments() {
+        if (!register) return;
+        if (signupDocuments.loading || signupDocuments.error || (signupDocuments.required && documentReferences.length !== 2)) {
+            throw new Error('Signup documents are unavailable. Reload them before continuing.');
+        }
+        if (signupDocuments.required && !signupAcceptance) {
+            throw new Error('Review and accept the signup documents before continuing.');
+        }
+    }
     const [method, setMethod] = useState("email");
     const [phase, setPhase] = useState("identity");
     const [needsPassword, setNeedsPassword] = useState(false);
@@ -58,11 +80,13 @@ export function AuthScreen({ route, navigation }: any) {
         setForm((v) => ({ ...v, otp: "", password: "" }));
     }
     async function submit() {
+        requireSignupDocuments();
         const payload = {
             ...form,
             email: form.email.trim().toLowerCase(),
             phone: form.phone.replace(/[\s()-]/g, ''),
             accountType,
+            signupAcceptance,
         };
         if (isAdmin) {
             await signIn("admin", "login", payload);
@@ -122,6 +146,7 @@ export function AuthScreen({ route, navigation }: any) {
                 : "login", payload);
     }
     async function google() {
+        requireSignupDocuments();
         // Check the host binary before importing the SDK: its module evaluates
         // getEnforcing('RNGoogleSignin') immediately, even with a dynamic import.
         if (Platform.OS === 'web') {
@@ -154,6 +179,7 @@ export function AuthScreen({ route, navigation }: any) {
         await signIn("external", "google", {
             credential: response.data.idToken,
             accountType,
+            signupAcceptance,
             mode,
             businessName: form.businessName,
             city: form.city,
@@ -161,11 +187,24 @@ export function AuthScreen({ route, navigation }: any) {
         });
     }
     const vendor = !isAdmin && accountType === 'VENDOR';
-    const register = !isAdmin && mode === 'register';
     const verifying = !isAdmin && phase === 'verify';
     const working = action.busy;
-    const run = (fn: () => Promise<void>) => { setPortalMismatch(null); void action.run(async () => { try { await fn(); } catch (error) { const data = (error as any).data; if (data?.error === 'ACCOUNT_TYPE_MISMATCH') setPortalMismatch(data); throw error; } }); };
-    const changeMode = () => { setMode(register ? 'login' : 'register'); reset(); };
+    const run = (fn: () => Promise<void>) => {
+        setPortalMismatch(null);
+        void action.run(async () => {
+            try { await fn(); }
+            catch (error) {
+                const data = (error as any).data;
+                if (data?.error === 'ACCOUNT_TYPE_MISMATCH') setPortalMismatch(data);
+                if (data?.error === 'SIGNUP_DOCUMENTS_CHANGED') {
+                    setAcceptedVersions('');
+                    setDocumentsRevision(revision => revision + 1);
+                }
+                throw error;
+            }
+        });
+    };
+    const changeMode = () => { setMode(register ? 'login' : 'register'); setAcceptedVersions(''); reset(); };
     async function resend() {
         if (Date.now() < resendAt)
             return;
@@ -223,6 +262,23 @@ export function AuthScreen({ route, navigation }: any) {
         {(needsPassword || register) && <AuthText size={12} color="#a9bddb">Use at least 8 characters with uppercase, lowercase, a number and a symbol.</AuthText>}
       </>}
       {isAdmin && <AuthField label="Authenticator code (if enabled)" {...field('mfaToken')} keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} editable={!working}/>}
+      {register && <View style={{ gap: 8 }}>
+        {signupDocuments.loading && <AuthText>Loading signup documents…</AuthText>}
+        {(signupDocuments.error || (signupDocuments.required && documentReferences.length !== 2)) &&
+          <AuthLink title="Signup documents unavailable. Retry" onPress={() => setDocumentsRevision(value => value + 1)} />}
+        {signupDocuments.required && documentReferences.length === 2 && <>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            <AuthLink title="Terms of Service" onPress={() => setOpenDocument('terms')} />
+            <AuthLink title="Privacy Policy" onPress={() => setOpenDocument('privacy')} />
+          </View>
+          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: Boolean(signupAcceptance), disabled: working }} disabled={working}
+            onPress={() => setAcceptedVersions(signupAcceptance ? '' : currentVersions)}
+            style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <AuthText bold>{signupAcceptance ? '☑' : '☐'}</AuthText>
+            <View style={{ flex: 1 }}><AuthText>I accept the Terms and acknowledge the Privacy Policy.</AuthText></View>
+          </Pressable>
+        </>}
+      </View>}
       {!!action.error && <View accessibilityRole="alert" style={{ padding: 12, borderRadius: 12, backgroundColor: '#401d32' }}><AuthText color="#ffb7ca">{action.error}</AuthText>{portalMismatch && <AuthLink title={`Go to ${portalMismatch.accountType === 'VENDOR' ? 'vendor' : 'customer'} dashboard login`} onPress={() => { void Linking.openURL(portalLoginUrl(portalMismatch.accountType)); }} />}</View>}
       <View style={{ marginTop: verifying ? 28 : 0 }}><AuthButton title={isAdmin || phase === 'password' ? 'Enter your workspace' : verifying ? 'Verify & Continue' : method === 'email' ? 'Send OTP to Email  →' : 'Send OTP to Mobile  →'} busy={working} onPress={() => run(submit)}/></View>
       {verifying && <AuthLink title={method === 'phone' ? 'Change mobile number' : 'Change email address'} disabled={working} onPress={reset}/>}
@@ -230,9 +286,20 @@ export function AuthScreen({ route, navigation }: any) {
     </View>
     {phase === 'identity' && <View style={{ gap: 2 }}>
       {!isAdmin && <AuthLink title={register ? 'Switch to sign in' : 'Create an account'} disabled={working} onPress={changeMode}/>}
-      <AuthLink title={isAdmin ? 'Customer or vendor sign in' : 'Internal team sign in'} disabled={working} onPress={() => setActiveDomain(isAdmin ? 'external' : 'admin')}/>
+      <AuthLink title={isAdmin ? 'Vendor sign in' : 'Internal team sign in'} disabled={working} onPress={() => setActiveDomain(isAdmin ? 'external' : 'admin')}/>
       {TEST_AUTH_ENABLED && <AuthLink title="Dev · Quick Test Auth" onPress={() => navigation.navigate('TestAuth')}/>}
     </View>}
+    <Modal visible={Boolean(displayedDocument)} onRequestClose={() => setOpenDocument(null)} animationType="slide">
+      <SafeAreaView style={{ flex: 1 }}>
+        {displayedDocument && <Page title={displayedDocument.kind === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
+          subtitle={`Version ${displayedDocument.version} · Effective ${displayedDocument.effectiveFrom.slice(0, 10)}`}>
+          <Pressable accessibilityRole="button" onPress={() => setOpenDocument(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Txt bold>Back to signup</Txt>
+          </Pressable>
+          <Txt>{displayedDocument.body}</Txt>
+        </Page>}
+      </SafeAreaView>
+    </Modal>
 
   </AuthLayout>;
 }

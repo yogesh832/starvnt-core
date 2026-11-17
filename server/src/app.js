@@ -1,3 +1,9 @@
+import revenueCrmRoutes from './admin/routes/revenueCrm.routes.js';
+import { adminAgreementRoutes } from './foundation/agreement.routes.js';
+import vendorCollaborationRoutes from './external/routes/eventCollaboration.routes.js';
+import adminModerationRoutes from './admin/routes/eventModeration.routes.js';
+import adminWorkflowRoutes from './admin/routes/bookingWorkflow.routes.js';
+import vendorWorkflowRoutes from './external/routes/bookingWorkflow.routes.js';
 import express from 'express';
 import { customerDiscovery, adminDiscoveryRewards } from './experience/discoveryRewards.routes.js';
 import { experiencePublicRoutes, experienceCustomerRoutes, experienceAdminRoutes } from './experience/routes.js';
@@ -119,6 +125,11 @@ export function createApp() {
   app.use('/api/aura', auraRouter);
   app.use('/api/internal', internalRouter);
 
+  app.use('/api/admin/crm', revenueCrmRoutes);
+  app.use('/api/vendor/collaboration', vendorCollaborationRoutes);
+  app.use('/api/admin/collaboration', adminModerationRoutes);
+  app.use('/api/vendor/workflow', vendorWorkflowRoutes);
+  app.use('/api/admin/workflow', adminWorkflowRoutes);
   app.use('/api/vendor', vendorRoutes);
   app.use('/api/commercial', commercialRoutes);
   app.use('/api', transactionRoutes);
@@ -129,6 +140,7 @@ export function createApp() {
   // ── INTERNAL ADMIN domain: separate auth + RBAC ───────────────────────────
   app.use('/api/admin/auth', adminAuthRoutes);
   app.use('/api/admin/foundation', foundationAdminRoutes);
+  app.use('/api/admin/vendor-compliance', adminAgreementRoutes);
   app.use('/api/admin/experience', experienceAdminRoutes);
   app.use('/api/admin/discovery-rewards', adminDiscoveryRewards);
   app.use('/api/admin/academy', adminLearningRoutes);

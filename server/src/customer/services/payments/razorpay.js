@@ -13,6 +13,7 @@ const env = () => ({
 
 export const isConfigured = () => Boolean(env().keyId && env().keySecret);
 export const webhookConfigured = () => Boolean(env().webhookSecret);
+// Checkout verifies capture through the server REST API. Webhooks add asynchronous recovery.
 export const checkoutConfigured = () => isConfigured();
 export const publicKeyId = () => env().keyId;
 
@@ -53,6 +54,25 @@ export async function listOrderPayments(orderId) {
     throw err;
   }
   return Array.isArray(data.items) ? data.items : [];
+}
+
+async function refundRequest(path, body) {
+  const { keyId, keySecret } = env();
+  if (!keyId || !keySecret) throw new Error('REFUND_PROVIDER_NOT_CONFIGURED');
+  const response = await fetch(`https://api.razorpay.com/v1/${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}` },
+    ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15000),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error?.description || 'REFUND_PROVIDER_UNAVAILABLE');
+  return result;
+}
+export function createRefund(paymentId, { amount, receipt }) {
+  return refundRequest(`payments/${encodeURIComponent(paymentId)}/refund`, { amount: toPaise(amount), receipt });
+}
+export function listPaymentRefunds(paymentId, skip = 0) {
+  return refundRequest(`payments/${encodeURIComponent(paymentId)}/refunds?count=100&skip=${skip}`);
 }
 
 /** HMAC-SHA256 of the raw body with the webhook secret, compared in constant time. */
