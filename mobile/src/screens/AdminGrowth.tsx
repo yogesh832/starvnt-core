@@ -23,6 +23,20 @@ function GrowthFields({ fields, form, change, busy }: {
       maxLength={limit} multiline={multiline} onChangeText={value => change(name, value)} />)}</>;
 }
 
+function ParticipationHistory({ path, revision }: { path: string; revision: number }) {
+  const [open, setOpen] = useState(false);
+  const resource = useResource(internal, path, revision, open);
+  return <><Button title="View participation history" secondary onPress={() => { setOpen(true); if (open) void resource.refresh(); }} />
+    {open && <><ErrorNotice message={resource.error} retry={resource.refresh} />
+      {resource.loading && <Txt>Loading history…</Txt>}
+      {resource.data.history && <><Txt>Schedule {resource.data.scheduleVersion} · Evidence revision {resource.data.evidenceRevision}. Earlier unrecorded edits cannot be reconstructed.</Txt>
+        {!resource.data.history.length && <Txt>No versioned changes recorded yet.</Txt>}
+        {resource.data.history.map((entry: Data) => <Card key={entry.revision}><Txt bold>Revision {entry.revision} · {entry.field === 'attended' ? 'Attendance' : 'Feedback'}</Txt><Txt>{entry.actorType} · {entry.actor} · {new Date(entry.at).toLocaleString()}</Txt><Txt>Before: {entry.before.known ? String(entry.before.value) : 'Not recorded'}</Txt><Txt>After: {String(entry.after)}</Txt><Txt>{entry.reason || 'Reason not recorded'}</Txt></Card>)}
+        {resource.data.truncated && <Txt>Showing the latest 100 changes.</Txt>}</>}
+    </>}
+  </>;
+}
+
 export function AdminAcademy({ navigation }: any) {
   const { can } = useSession();
   const resource = useResource(internal, '/academy');
@@ -152,6 +166,7 @@ export function AdminMeeting({ navigation, route }: any) {
   const participants = useResource(internal, `${path}/participation`, 0, canRun);
   const records: Data[] = participants.data.participants || [];
   const [attendanceId, setAttendanceId] = useState('');
+  const [attendanceReason, setAttendanceReason] = useState('');
   function submit(endpoint: string, method: string, payload: Data) {
     void action.run(async () => {
       await internal.call(endpoint, method, payload);
@@ -160,9 +175,10 @@ export function AdminMeeting({ navigation, route }: any) {
   }
   function saveAttendance(vendorId: string, attended: boolean) {
     void action.run(async () => {
-      await internal.call(`${path}/attendance`, 'PUT', { vendorId, attended, scheduleVersion: meeting.scheduleVersion });
+      await internal.call(`${path}/attendance`, 'PUT', { vendorId, attended, scheduleVersion: meeting.scheduleVersion, evidenceRevision: records.find(record => record.vendorId === vendorId)?.evidenceRevision ?? 0, reason: attendanceReason });
       await participants.refresh();
       setAttendanceId('');
+      setAttendanceReason('');
     });
   }
   return <Page title={meeting?.title || 'Schedule a Growth Meeting'}>
@@ -206,11 +222,13 @@ export function AdminMeeting({ navigation, route }: any) {
           summary: form.summary, resources: form.resources, reason: form.reason, revision: meeting.revision,
         })} />
         <Txt bold>Attendance and private feedback</Txt>
+        <Field label="Attendance note (optional)" value={attendanceReason} maxLength={500} editable={!action.busy} onChangeText={setAttendanceReason} />
         <ErrorNotice message={participants.error} retry={participants.refresh} />
         {records.map(record => <Card key={record.vendorId}>
           <Txt bold>{record.name}</Txt>
           <Txt muted>{record.attended === true ? 'Attended' : record.attended === false ? 'Absent' : 'Attendance pending'} · {record.rsvp || 'No RSVP'}</Txt>
           {!!record.feedback && <Txt>{record.feedback}</Txt>}
+          <ParticipationHistory path={`${path}/participation/${record.vendorId}/history`} revision={record.evidenceRevision} />
           <Button title="Mark attended" secondary disabled={action.busy || record.attended === true} onPress={() => saveAttendance(record.vendorId, true)} />
           <Button title="Mark absent" secondary disabled={action.busy || record.attended === false} onPress={() => saveAttendance(record.vendorId, false)} />
         </Card>)}

@@ -42,6 +42,12 @@ const participation = new Schema({
   attendanceActor: String,
   attendanceAt: Date,
   feedback: String,
+  evidenceRevision: { type: Number, default: 0 },
+  evidenceHistory: { type: [new Schema({
+    revision: Number, priorRevision: Number, field: { type: String, enum: ['attended', 'feedback'] },
+    actor: String, actorType: { type: String, enum: ['ADMIN', 'VENDOR'] }, at: Date, reason: String, requestHash: String,
+    before: { known: Boolean, value: Schema.Types.Mixed }, after: Schema.Types.Mixed,
+  }, { _id: false })], default: undefined, select: false },
 }, { timestamps: true });
 participation.index({ meeting: 1, scheduleVersion: 1, vendor: 1 }, { unique: true });
 participation.index({ vendor: 1, meeting: 1, scheduleVersion: 1 });

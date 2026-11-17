@@ -256,7 +256,7 @@ function MeetingCard({ meeting, refresh }: { meeting: Data; refresh: () => Promi
       <Field label="Private meeting feedback" multiline value={feedbackDraft ?? meeting.feedback} maxLength={1500}
         editable={!action.busy} onChangeText={setFeedbackDraft} />
       <Button title="Save feedback" busy={action.busy} disabled={!feedbackDraft?.trim()} onPress={() => void action.run(async () => {
-        await external.call(`${path}/feedback`, 'PUT', { ...schedule, feedback: feedbackDraft?.trim() });
+        await external.call(`${path}/feedback`, 'PUT', { ...schedule, evidenceRevision: meeting.evidenceRevision, feedback: feedbackDraft?.trim() });
         await refresh();
         setFeedbackDraft(null);
       })} />

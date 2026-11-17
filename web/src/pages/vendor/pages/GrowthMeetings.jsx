@@ -56,7 +56,7 @@ function MeetingCard({ meeting, now, reload }) {
     setMessage('');
     try {
       const result = await externalApi.call(`${endpoint}/${meeting.id}/${path}`, {
-        method, body: { scheduleVersion: meeting.scheduleVersion, ...body },
+        method, body: { scheduleVersion: meeting.scheduleVersion, ...(path === 'feedback' ? { evidenceRevision: meeting.evidenceRevision } : {}), ...body },
       });
       if (path === 'join') {
         window.location.assign(result.url);

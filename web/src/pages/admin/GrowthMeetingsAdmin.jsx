@@ -12,6 +12,22 @@ const localTime = value => {
   return new Date(time.getTime() - time.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
 
+function ParticipationHistory({ meetingId, vendorId, revision }) {
+  const [data, setData] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  useEffect(() => { setData(null); setError(''); }, [meetingId, vendorId, revision]);
+  return <div><button type="button" className={button} disabled={busy} onClick={async () => {
+    setBusy(true); setError('');
+    try { setData(await adminApi.call(`${endpoint}/${meetingId}/participation/${vendorId}/history`)); }
+    catch (error) { setError(error.message); } finally { setBusy(false); }
+  }}>View participation history</button>
+    {error && <p role="alert">{error}</p>}
+    {data && <><p className="text-sm">Schedule {data.scheduleVersion} · Evidence revision {data.evidenceRevision}. Earlier unrecorded edits cannot be reconstructed.</p>
+      {!data.history.length && <p>No versioned changes recorded yet.</p>}
+      {data.history.map(entry => <details key={entry.revision} className="mt-2 rounded-lg border p-2"><summary>Revision {entry.revision} · {entry.field === 'attended' ? 'Attendance' : 'Feedback'}</summary><p>{entry.actorType} · {entry.actor} · {new Date(entry.at).toLocaleString()}</p><p className="whitespace-pre-wrap break-words">Before: {entry.before.known ? String(entry.before.value) : 'Not recorded'}</p><p className="whitespace-pre-wrap break-words">After: {String(entry.after)}</p><p>{entry.reason || 'Reason not recorded'}</p></details>)}
+      {data.truncated && <p>Showing the latest 100 changes.</p>}</>}
+  </div>;
+}
+
 export default function GrowthMeetingsAdmin() {
   const { can } = useAdminAuth();
   const canSchedule = can('growthMeetings.schedule');
@@ -26,6 +42,7 @@ export default function GrowthMeetingsAdmin() {
   const [participants, setParticipants] = useState(null);
   const [attendee, setAttendee] = useState('');
   const [attendance, setAttendance] = useState('yes');
+  const [attendanceReason, setAttendanceReason] = useState('');
   const [query, setQuery] = useState('');
   const [candidates, setCandidates] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -47,6 +64,7 @@ export default function GrowthMeetingsAdmin() {
     setResources(row?.resources || '');
     setParticipants(null);
     setAttendee('');
+    setAttendanceReason('');
     setQuery('');
     setCandidates(null);
     setReason('');
@@ -187,6 +205,7 @@ export default function GrowthMeetingsAdmin() {
               {row.name} · {row.rsvp || 'No RSVP'} · {row.attended === undefined ? 'Attendance pending' : row.attended ? 'Attended' : 'Did not attend'}
               <p className="break-all text-xs text-muted">{row.vendorId}</p>
               {row.feedback && <p className="whitespace-pre-wrap break-words">{row.feedback}</p>}
+              <ParticipationHistory key={`${meeting.id}:${row.vendorId}:${row.evidenceRevision}`} meetingId={meeting.id} vendorId={row.vendorId} revision={row.evidenceRevision} />
               {ended && !cancelled && <button type="button" className="min-h-11 text-primary underline" onClick={() => {
                 setAttendee(row.vendorId);
                 setAttendance(row.attended === false ? 'no' : 'yes');
@@ -200,15 +219,17 @@ export default function GrowthMeetingsAdmin() {
           event.preventDefault();
           act(async () => {
             await adminApi.call(`${endpoint}/${meeting.id}/attendance`, {
-              method: 'PUT', body: { vendorId: attendee.trim(), attended: attendance === 'yes', scheduleVersion: meeting.scheduleVersion },
+              method: 'PUT', body: { vendorId: attendee.trim(), attended: attendance === 'yes', scheduleVersion: meeting.scheduleVersion, evidenceRevision: participants?.participants.find(row => row.vendorId === attendee.trim())?.evidenceRevision ?? 0, reason: attendanceReason },
             });
             await loadParticipants();
+            setAttendanceReason('');
           }, 'Attendance recorded.');
         }}>
           <label className="block">Vendor organization ID<input className={field} required maxLength={24} value={attendee} onChange={event => setAttendee(event.target.value)} /></label>
-          <label className="block">Attendance<select className={field} value={attendance} onChange={event => setAttendance(event.target.value)}>
+          <label className="block">Attendance note (optional)<input className={field} maxLength={500} value={attendanceReason} onChange={event => setAttendanceReason(event.target.value)} /></label>
+          <div><label htmlFor="meeting-attendance" className="block">Attendance</label><select id="meeting-attendance" className={field} value={attendance} onChange={event => setAttendance(event.target.value)}>
             <option value="yes">Attended</option><option value="no">Did not attend</option>
-          </select></label>
+          </select></div>
           <button type="submit" className={button} disabled={busy}>Save attendance</button>
         </form>}
       </section>}
