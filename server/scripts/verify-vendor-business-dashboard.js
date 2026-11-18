@@ -202,8 +202,11 @@ try {
   await page.getByText('No goals configured yet.', { exact: true }).waitFor();
   await page.getByRole('link', { name: 'Open record', exact: true }).first().click();
   await page.waitForURL(`**/vendor/enquiries?record=${actionable._id}`);
-  await page.getByRole('button', { name: /Respond & Quote|Revise \/ Update Offer/i }).first().waitFor();
-  report.checks.push({ name: 'Action deep-link opens authorized enquiry detail', passed: true });
+  await page.getByRole('button', { name: 'Review existing quotes', exact: true }).first().click();
+  await page.waitForURL('**/vendor/quotes');
+  check('Enquiry with a saved draft routes to existing quotes without creating another initial offer', await Quote.countDocuments({ opportunity: actionable._id }), 1);
+  check('Reviewing the enquiry preserves its saved draft status', (await Quote.findById(draft._id)).status, 'DRAFT');
+  report.checks.push({ name: 'Action deep-link opens authorized enquiry detail and preserves its existing offer', passed: true });
   await page.goto(`http://127.0.0.1:5197/vendor/quotes?record=${draft._id}`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: /close/i }).first().waitFor();
   report.checks.push({ name: 'Quote action opens existing quote detail', passed: true });
