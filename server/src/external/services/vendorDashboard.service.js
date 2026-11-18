@@ -209,16 +209,16 @@ export function buildDashboard(data, { now = new Date(), periodDays = 30 } = {})
 export async function getVendorDashboard(vendorId, options = {}) {
   // Bounded projections deliberately omit customer identities, message bodies and bank details.
   const sources = {
-    opportunities: Opportunity.find({ vendor: vendorId }).select('_id createdAt status slaResponseTimeMs slaExpiresAt declineReason').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
-    quotes: Quote.find({ vendor: vendorId }).select('_id opportunity status history').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
-    bookings: CoreBooking.find({ vendorId }).select('_id quoteId opportunityId createdAt eventDate bookingStatus executionStatus protectionStatus totalAmount paymentStatus paymentSummary taxSummary settlementStatus settlementDetails validationAudit.verifiedAt').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
-    reviews: VendorReview.find({ vendor: vendorId, status: 'PUBLISHED', isVerified: true }).select('_id rating createdAt vendorReply.text').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
-    threads: VendorMessageThread.find({ vendor: vendorId, status: { $ne: 'BLOCKED' } }).select('_id opportunity quote status unreadVendorCount messages.sender messages.createdAt').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
-    ledger: FinanceLedgerEntry.find({ vendorId }).select('booking type amount currency postedAt').sort({ postedAt: -1 }).limit(LIMIT + 1).lean(),
-    readiness: evaluateVendorActivation(vendorId),
+    opportunities: () => Opportunity.find({ vendor: vendorId }).select('_id createdAt status slaResponseTimeMs slaExpiresAt declineReason').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
+    quotes: () => Quote.find({ vendor: vendorId }).select('_id opportunity status history').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
+    bookings: () => CoreBooking.find({ vendorId }).select('_id quoteId opportunityId createdAt eventDate bookingStatus executionStatus protectionStatus totalAmount paymentStatus paymentSummary taxSummary settlementStatus settlementDetails validationAudit.verifiedAt').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
+    reviews: () => VendorReview.find({ vendor: vendorId, status: 'PUBLISHED', isVerified: true }).select('_id rating createdAt vendorReply.text').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
+    threads: () => VendorMessageThread.find({ vendor: vendorId, status: { $ne: 'BLOCKED' } }).select('_id opportunity quote status unreadVendorCount messages.sender messages.createdAt').sort({ createdAt: -1 }).limit(LIMIT + 1).lean(),
+    ledger: () => FinanceLedgerEntry.find({ vendorId }).select('booking type amount currency postedAt').sort({ postedAt: -1 }).limit(LIMIT + 1).lean(),
+    readiness: () => evaluateVendorActivation(vendorId),
   };
   const names = Object.keys(sources);
-  const results = await Promise.allSettled(Object.values(sources));
+  const results = await Promise.allSettled(Object.values(sources).map(job => Promise.resolve().then(job)));
   const data = { states: {} };
   results.forEach((result, index) => {
     const name = names[index];

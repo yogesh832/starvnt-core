@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { externalApi } from '../../lib/api.js';
+import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
+import { dashboardSnapshot, dashboardWidgetMessage, isVendorDashboard } from '../../../../shared/vendorDashboardFreshness.js';
 
 const panel = 'bg-white rounded-3xl p-4 sm:p-6 border border-gray-100 shadow-xs min-w-0';
 const button = 'min-h-11 rounded-xl border border-primary/30 px-3 py-2 text-sm font-semibold text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50';
@@ -21,6 +23,7 @@ function Metric({ label, value, detail, to }) {
 
 export function VendorGoals() {
   const [goals, setGoals] = useState(null);
+  const [lastSync, setLastSync] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -30,7 +33,7 @@ export function VendorGoals() {
     try {
       const result = await externalApi.call('/vendor/goals');
       if (!result.ok || !Array.isArray(result.goals)) throw new Error('Could not retrieve goals.');
-      setGoals(result.goals); setError('');
+      setGoals(result.goals); setLastSync(new Date().toISOString()); setError('');
     } catch (err) { setError(err.message); }
   }, []);
   useEffect(() => { load(); }, [load]);
@@ -46,10 +49,11 @@ export function VendorGoals() {
   const field = key => ({ value: form[key], onChange: event => setForm(previous => ({ ...previous, [key]: event.target.value })) });
   return <section className={panel} aria-labelledby="vendor-goals-title" aria-busy={busy}>
     <h2 id="vendor-goals-title" className="font-extrabold text-lg text-navy">Your business goals</h2>
+    <p className="text-xs text-muted">Last successful sync: {lastSync ? new Date(lastSync).toLocaleString() : 'Not yet established'}{error && goals ? ' · Saved goals may be stale.' : ''}</p>
     <p className="text-xs text-muted mt-1">Up to three active goals. Targets count saved records within the dates you choose (UTC). Editing dates or targets recalculates progress; changes are audited. Historical baselines are unavailable.</p>
     {error && <p role="alert" className="my-3 text-sm text-red-700">{error} <button className={button} onClick={load} disabled={busy}>Retry</button></p>}
     {goals === null && !error && <p role="status" className="mt-3 text-sm">Loading goals…</p>}
-    {goals?.length === 0 && <p className="mt-3 text-sm text-muted">No goals configured yet.</p>}
+    {!error && goals?.length === 0 && <p className="mt-3 text-sm text-muted">No goals configured yet.</p>}
     <div className="space-y-3 mt-4">{goals?.map(goal => <article key={goal.id} className="rounded-2xl border border-gray-200 p-3">
       <h3 className="font-bold break-words">{goal.name}</h3>
       <p className="text-xs text-muted">{goal.metric.replaceAll('_', ' ')} · {goal.periodStart} – {goal.periodEnd} UTC · {goal.status}</p>
@@ -76,26 +80,30 @@ export function VendorGoals() {
 }
 
 export default function VendorBusinessDashboard({ analyticsOnly = false, financialOnly = false }) {
+  const { user } = useExternalAuth();
   const [periodDays, setPeriodDays] = useState(30);
-  const [dashboard, setDashboard] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
+  const scope = `${user?._id || user?.id || ''}:${periodDays}`;
+  const dashboard = snapshot?.scope === scope ? snapshot.view : null;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let live = true;
-    setLoading(true); setError(''); setDashboard(null);
+    setLoading(true); setError('');
     externalApi.call(`/vendor/dashboard?periodDays=${periodDays}`).then(result => {
-      if (!result.ok || !result.dashboard) throw new Error('Dashboard data is unavailable.');
-      if (live) setDashboard(result.dashboard);
+      if (!result.ok || !isVendorDashboard(result.dashboard)) throw new Error('Dashboard data is unavailable.');
+      if (live) setSnapshot(previous => dashboardSnapshot(previous, result.dashboard, scope));
     }).catch(err => { if (live) setError(err.message); }).finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [periodDays, revision]);
+  }, [periodDays, revision, scope]);
   const retry = () => setRevision(value => value + 1);
   const sales = dashboard?.sales;
   const financial = dashboard?.financial;
   const quality = dashboard?.quality;
-  const readiness = dashboard?.readiness;
+  const readiness = error ? null : dashboard?.readiness;
   const partial = dashboard && Object.values(dashboard.sourceStates).some(state => state !== 'AVAILABLE');
+  const freshness = key => <p role="status" className="text-xs text-muted mt-2">{dashboardWidgetMessage(snapshot?.widgets[key], Boolean(error))}{(error || snapshot?.widgets[key]?.status !== 'READY') && <button type="button" className={button} disabled={loading} onClick={retry}>Retry this widget</button>}</p>;
   return <div className="space-y-5 min-w-0">
     <div className="flex flex-wrap items-end gap-3">
       <label className="text-xs font-semibold">Measurement period<select className={input} value={periodDays} onChange={event => setPeriodDays(Number(event.target.value))}>{[7, 30, 60, 90].map(days => <option key={days} value={days}>Last {days} complete days</option>)}</select></label>
@@ -109,17 +117,19 @@ export default function VendorBusinessDashboard({ analyticsOnly = false, financi
       {!analyticsOnly && !financialOnly && <>
         <section className={panel} aria-labelledby="business-actions-title">
           <h2 className="font-extrabold text-lg text-navy" id="business-actions-title">Today’s Action Center</h2>
+          {freshness('actions')}
           <p className="text-xs text-muted mt-1">Current saved status · preparation, customer responses, then documentation · showing up to 20 actions. Only saved response SLA deadlines are shown.</p>
-          {dashboard.actions.length ? <ul className="divide-y divide-gray-100 mt-3">{dashboard.actions.map(action => <li key={action.id} className="py-3 flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><h3 className="font-bold text-sm">{action.title}</h3><p className="text-xs text-muted break-words">{action.reason}</p><p className="text-xs mt-1">{action.module} · {action.sourceId.slice(-8)} · {action.status.replaceAll('_', ' ')} · Needs attention{action.dueAt ? ` · Response SLA ${new Date(action.dueAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : ''}</p></div><Link className={button} to={action.href}>Open record</Link></li>)}</ul> : <p className="mt-3 text-sm text-muted">{partial ? 'No actions established from the available sources.' : 'No actions requiring attention in the supported records.'}</p>}
+          {dashboard.actions.length ? <ul className="divide-y divide-gray-100 mt-3">{dashboard.actions.map(action => <li key={action.id} className="py-3 flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><h3 className="font-bold text-sm">{action.title}</h3><p className="text-xs text-muted break-words">{action.reason}</p><p className="text-xs mt-1">{action.module} · {action.sourceId.slice(-8)} · {action.status.replaceAll('_', ' ')} · Needs attention{action.dueAt ? ` · Response SLA ${new Date(action.dueAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : ''}</p></div><Link className={button} to={action.href}>Open record</Link></li>)}</ul> : <p className="mt-3 text-sm text-muted">{error || partial ? 'No actions established from the available sources.' : 'No actions requiring attention in the supported records.'}</p>}
         </section>
-        <section className={panel} aria-labelledby="business-health-title"><h2 id="business-health-title" className="font-extrabold text-lg text-navy">Business Health Snapshot</h2><p className="text-xs text-muted mt-1">Current state across all saved records</p><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+        <section className={panel} aria-labelledby="business-health-title"><h2 id="business-health-title" className="font-extrabold text-lg text-navy">Business Health Snapshot</h2>{freshness('snapshot')}<p className="text-xs text-muted mt-1">Current state across all saved records</p><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
           <Metric label="Enquiries requiring action" value={number(dashboard.snapshot.actionableEnquiries)} detail="New or viewed enquiries awaiting a response" to="/vendor/enquiries" />
           <Metric label="Quotes awaiting action" value={number(dashboard.snapshot.pendingQuotes)} detail="Draft quotations awaiting vendor submission" to="/vendor/quotes" />
           <Metric label="Upcoming confirmed bookings" value={number(dashboard.snapshot.upcomingBookings)} detail="Today or later in IST; excludes verified completion" to="/vendor/bookings" />
         </div></section>
-        <section className={panel} aria-labelledby="business-upcoming-title"><h2 id="business-upcoming-title" className="font-extrabold text-lg text-navy">Upcoming Confirmed Bookings</h2>{dashboard.upcomingBookings === null ? <p role="status" className="mt-3">Booking data unavailable.</p> : dashboard.upcomingBookings.length === 0 ? <p className="mt-3 text-sm text-muted">No upcoming confirmed bookings.</p> : <ul className="mt-3 space-y-3">{dashboard.upcomingBookings.map(booking => <li key={booking.id} className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">{booking.eventDate} · {booking.status.replaceAll('_', ' ')} · {booking.id.slice(-8)}</p><Link className={button} to={booking.href}>Open booking</Link></li>)}</ul>}<p className="mt-3 text-xs text-muted">Next five saved confirmed contracts, ordered by event date (IST).</p></section>
+        <section className={panel} aria-labelledby="business-upcoming-title"><h2 id="business-upcoming-title" className="font-extrabold text-lg text-navy">Upcoming Confirmed Bookings</h2>{freshness('upcomingBookings')}{dashboard.upcomingBookings === null ? <p role="status" className="mt-3">Booking data unavailable.</p> : dashboard.upcomingBookings.length === 0 ? <p className="mt-3 text-sm text-muted">{error ? 'Upcoming bookings could not be refreshed.' : 'No upcoming confirmed bookings.'}</p> : <ul className="mt-3 space-y-3">{dashboard.upcomingBookings.map(booking => <li key={booking.id} className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">{booking.eventDate} · {booking.status.replaceAll('_', ' ')} · {booking.id.slice(-8)}</p><Link className={button} to={booking.href}>Open booking</Link></li>)}</ul>}<p className="mt-3 text-xs text-muted">Next five saved confirmed contracts, ordered by event date (IST).</p></section>
       </>}
       {!financialOnly && <section className={panel} aria-labelledby="business-sales-title">
+        {freshness('sales')}
         <h2 className="font-extrabold text-lg text-navy" id="business-sales-title">Lead & Sales Performance</h2>
         <p className="text-xs text-muted mt-1">Enquiry cohort: {range(dashboard.periods.cohort)} IST. Each enquiry has a 30-day attribution window; the latest 30 days are excluded so cohorts can mature. Current cancelled bookings are excluded. Confirmation uses Core contract creation time.</p>
         {!sales.available ? <p className="mt-3" role="status">Insufficient data: {sales.reason}</p> : <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
@@ -134,7 +144,7 @@ export default function VendorBusinessDashboard({ analyticsOnly = false, financi
         </div>}
       </section>}
       {!analyticsOnly && <section className={panel} aria-labelledby="business-finance-title">
-        <h2 className="font-extrabold text-lg text-navy" id="business-finance-title">Financial Clarity</h2>
+        <h2 className="font-extrabold text-lg text-navy" id="business-finance-title">Financial Clarity</h2>{freshness('financial')}
         <p className="text-xs text-muted mt-1">{range(dashboard.periods.selected)} IST · INR. Contract metrics describe current confirmed contracts created in this period; ledger totals use posting dates. Payments are verified amounts on those contracts, not period cash flow.</p>
         {!financial.available && <p role="status" className="text-sm mt-3">{financial.reason}</p>}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
@@ -152,17 +162,17 @@ export default function VendorBusinessDashboard({ analyticsOnly = false, financi
         <p className="mt-3 text-xs text-muted">Settlement initiation is unavailable in the current lifecycle. Profit cannot be calculated because actual direct costs are not recorded reliably.</p>
       </section>}
       {!analyticsOnly && !financialOnly && <>
-        <section className={panel} aria-labelledby="business-quality-title"><h2 id="business-quality-title" className="font-extrabold text-lg text-navy">Service Quality & Customer Trust</h2><div className="grid sm:grid-cols-2 gap-3 mt-4">
+        <section className={panel} aria-labelledby="business-quality-title"><h2 id="business-quality-title" className="font-extrabold text-lg text-navy">Service Quality & Customer Trust</h2>{freshness('quality')}<div className="grid sm:grid-cols-2 gap-3 mt-4">
           <Metric label="Verified STARVNT rating" value={quality.rating == null ? quality.reviewCount === 0 ? 'No verified reviews yet.' : 'Unavailable' : `${quality.rating} / 5`} detail={`${number(quality.reviewCount)} published verified reviews · all time`} to="/vendor/reviews" />
           <Metric label="Unresolved booking issues" value={number(quality.unresolvedIssues)} detail="Authorized Core protection states; open the booking workflow to review" to="/vendor/bookings" />
           <Metric label="Completed bookings" value={number(quality.completedBookings)} detail="Core COMPLETION_VERIFIED · all time" to="/vendor/bookings" />
         </div>{quality.recent.length > 0 && <ul className="mt-3 text-sm space-y-2">{quality.recent.map(review => <li key={review.id}><Link to="/vendor/reviews">{review.rating} / 5 · {day(review.createdAt)} · {review.replied ? 'Reply saved' : 'Open review to respond'}</Link></li>)}</ul>}<p className="text-xs text-muted mt-3">On-time execution and feedback trends: insufficient evidence for a reliable assessment. Missing history is not a service failure.</p></section>
-        <section className={panel} aria-labelledby="business-readiness-title"><h2 id="business-readiness-title" className="font-extrabold text-lg text-navy">Profile & Operating Readiness</h2>{readiness ? <><dl className="grid sm:grid-cols-2 gap-3 mt-4 text-sm">{[
-          ['Profile completion', `${readiness.completionPercentage}%`], ['Business verification', readiness.readiness.verificationStatus], ['Account activation', readiness.activationState], ['Matching eligibility', readiness.matchingEligible ? 'ELIGIBLE' : 'LOCKED'], ['Active service readiness', readiness.checklist.services ? 'CONFIGURED' : 'INCOMPLETE'], ['Availability', readiness.readiness.availabilityStatus], ['Service coverage', readiness.checklist.coverage ? 'CONFIGURED' : 'MISSING'], ['Identity and bank verification', readiness.checklist.verified ? 'VERIFIED' : 'PENDING'],
+        <section className={panel} aria-labelledby="business-readiness-title"><h2 id="business-readiness-title" className="font-extrabold text-lg text-navy">Profile & Operating Readiness</h2>{freshness('readiness')}{readiness ? <><dl className="grid sm:grid-cols-2 gap-3 mt-4 text-sm">{[
+          ['Business profile completion', readiness.profileCompletion == null ? 'Unavailable' : `${readiness.profileCompletion}%`], ['Onboarding completion', readiness.completionPercentage == null ? 'Unavailable' : `${readiness.completionPercentage}%`], ['Business verification', readiness.readiness.verificationStatus], ['Account activation', readiness.activationState], ['Matching eligibility', readiness.matchingEligible ? 'ELIGIBLE' : 'LOCKED'], ['Active service readiness', readiness.checklist.services ? 'CONFIGURED' : 'INCOMPLETE'], ['Availability', readiness.readiness.availabilityStatus], ['Service coverage', readiness.checklist.coverage ? 'CONFIGURED' : 'MISSING'], ['Identity and bank verification', readiness.checklist.verified ? 'VERIFIED' : 'PENDING'],
         ].map(([label, value]) => <div key={label} className="rounded-xl border border-gray-200 p-3"><dt className="text-xs text-muted">{label}</dt><dd className="font-bold break-words mt-1">{value.replaceAll('_', ' ')}</dd></div>)}</dl>{!readiness.matchingEligible && <p className="mt-3 text-sm">Matching is locked. Complete the requirements below; verification and activation require authorized staff approval. <Link className="text-primary underline" to="/vendor/profile">Review profile and approval status</Link></p>}</> : <p role="status" className="mt-3">Readiness unavailable. Retry to retrieve the authorized status.</p>}</section>
       </>}
-      {!financialOnly && <section className={panel} aria-labelledby="business-weekly-title"><h2 id="business-weekly-title" className="font-extrabold text-lg text-navy">Weekly Performance Review</h2><p className="text-xs text-muted mt-1">Last complete Monday–Sunday week: {range(dashboard.periods.week)} IST. Previous: {range(dashboard.periods.previousWeek)} IST. Counts use creation, first submission or completion verification timestamps. No growth claims for missing data.</p>{dashboard.weekly.current.available && dashboard.weekly.previous.available ? <div className="overflow-x-auto mt-4"><table className="w-full text-sm text-left"><caption className="sr-only">Weekly recorded operational counts compared with the previous complete week</caption><thead><tr><th scope="col" className="p-2">Metric</th><th scope="col" className="p-2">Last week</th><th scope="col" className="p-2">Previous</th></tr></thead><tbody>{[['Enquiries', 'enquiries'], ['Quotations submitted', 'submittedQuotes'], ['Core confirmed contracts', 'confirmedBookings'], ['Verified completions', 'completedBookings'], ['Verified reviews', 'verifiedReviews']].map(([label, key]) => <tr key={key}><th scope="row" className="p-2 font-medium">{label}</th><td className="p-2">{number(dashboard.weekly.current[key])}</td><td className="p-2">{number(dashboard.weekly.previous[key])}</td></tr>)}</tbody></table></div> : <p role="status" className="mt-3">Insufficient data for comparable weeks.</p>}<p className="mt-3 text-xs text-muted">Weekly conversion and response comparisons are not shown while the enquiry cohorts are immature. Use the matured cohort above. Settlement status is shown separately under Financial Clarity.</p></section>}
-      {!analyticsOnly && !financialOnly && <section className={panel} aria-labelledby="business-improvements-title"><h2 id="business-improvements-title" className="font-extrabold text-lg text-navy">Vendor Improvement</h2><p className="text-xs text-muted mt-1">Recommendations from saved readiness findings. One item per requirement; resolved conditions disappear on refresh. No expansion recommendations are inferred.</p>{dashboard.recommendations.length > 0 ? <ul className="mt-3 space-y-3">{dashboard.recommendations.map(item => <li key={item.id} className="flex flex-wrap gap-2 items-center justify-between"><div className="text-sm flex-1 min-w-0"><p>{item.title}</p><p className="text-xs text-muted">Needs attention · {item.source}</p></div><Link className={button} to={item.href}>{item.action}</Link></li>)}</ul> : <p className="mt-3 text-sm">{readiness ? 'No missing readiness requirements recorded.' : 'Insufficient data for recommendations.'}</p>}</section>}
+      {!financialOnly && <section className={panel} aria-labelledby="business-weekly-title"><h2 id="business-weekly-title" className="font-extrabold text-lg text-navy">Weekly Performance Review</h2>{freshness('weekly')}<p className="text-xs text-muted mt-1">Last complete Monday–Sunday week: {range(dashboard.periods.week)} IST. Previous: {range(dashboard.periods.previousWeek)} IST. Counts use creation, first submission or completion verification timestamps. No growth claims for missing data.</p>{dashboard.weekly.current.available && dashboard.weekly.previous.available ? <div className="overflow-x-auto mt-4"><table className="w-full text-sm text-left"><caption className="sr-only">Weekly recorded operational counts compared with the previous complete week</caption><thead><tr><th scope="col" className="p-2">Metric</th><th scope="col" className="p-2">Last week</th><th scope="col" className="p-2">Previous</th></tr></thead><tbody>{[['Enquiries', 'enquiries'], ['Quotations submitted', 'submittedQuotes'], ['Core confirmed contracts', 'confirmedBookings'], ['Verified completions', 'completedBookings'], ['Verified reviews', 'verifiedReviews']].map(([label, key]) => <tr key={key}><th scope="row" className="p-2 font-medium">{label}</th><td className="p-2">{number(dashboard.weekly.current[key])}</td><td className="p-2">{number(dashboard.weekly.previous[key])}</td></tr>)}</tbody></table></div> : <p role="status" className="mt-3">Insufficient data for comparable weeks.</p>}<p className="mt-3 text-xs text-muted">Weekly conversion and response comparisons are not shown while the enquiry cohorts are immature. Use the matured cohort above. Settlement status is shown separately under Financial Clarity.</p></section>}
+      {!analyticsOnly && !financialOnly && <section className={panel} aria-labelledby="business-improvements-title"><h2 id="business-improvements-title" className="font-extrabold text-lg text-navy">Vendor Improvement</h2>{freshness('recommendations')}<p className="text-xs text-muted mt-1">Recommendations from saved readiness findings. One item per requirement; resolved conditions disappear on refresh. No expansion recommendations are inferred.</p>{dashboard.recommendations.length > 0 ? <ul className="mt-3 space-y-3">{dashboard.recommendations.map(item => <li key={item.id} className="flex flex-wrap gap-2 items-center justify-between"><div className="text-sm flex-1 min-w-0"><p>{item.title}</p><p className="text-xs text-muted">Needs attention · {item.source}</p></div><Link className={button} to={item.href}>{item.action}</Link></li>)}</ul> : <p className="mt-3 text-sm">{readiness ? 'No missing readiness requirements recorded.' : 'Insufficient data for recommendations.'}</p>}</section>}
     </>}
     {!analyticsOnly && !financialOnly && <VendorGoals />}
   </div>;

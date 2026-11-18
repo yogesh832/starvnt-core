@@ -105,7 +105,7 @@ function VendorActivationCard({ activation }) {
   const reasonText =
     activation.missingRequirements?.[0] ||
     (next ? next.label : readiness.matchingEligibility || "Core readiness locked");
-  const percent = activation.completionPercentage ?? 0;
+  const percent = activation.completionPercentage ?? null;
 
   return (
     <div className="@container/readiness rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#161926] p-4 shadow-xs space-y-3">
@@ -150,7 +150,7 @@ function VendorActivationCard({ activation }) {
         <div className="shrink-0 flex flex-wrap @min-[32rem]/readiness:flex-col items-center @min-[32rem]/readiness:items-end justify-between gap-1">
           <div className="flex items-center gap-1.5">
             <span className="text-2xl font-bold tabular-nums text-navy dark:text-white">
-              {percent}%
+              {percent == null ? 'Unavailable' : `${percent}%`}
             </span>
             <span className="text-sm font-semibold text-muted">
               onboarding
@@ -4335,7 +4335,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                 <span
                   className={`@min-[52rem]/profile:hidden text-xs font-bold px-2.5 py-1 rounded-full ${activation.matchingEligible ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
                 >
-                  {activation.completionPercentage ?? 0}%{" "}
+                  Onboarding {activation.completionPercentage == null ? 'Unavailable' : `${activation.completionPercentage}%`}{" "}
                   {activation.matchingEligible ? "Active" : "Locked"}
                 </span>
               )
@@ -4395,7 +4395,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
             ) : (
               <>
                 <div className="flex items-center justify-between gap-2 text-sm font-bold text-navy">
-                  <span>Readiness</span>
+                  <span>Onboarding completion</span>
                   <span
                     className={
                       activation?.matchingEligible
@@ -4403,7 +4403,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                         : "text-amber-600"
                     }
                   >
-                    {activation?.completionPercentage ?? 0}%
+                    {activation?.completionPercentage == null ? 'Unavailable' : `${activation.completionPercentage}%`}
                   </span>
                 </div>
                 <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1.5">

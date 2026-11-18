@@ -58,6 +58,7 @@ import { VendorCalendar } from "./screens/VendorCalendar";
 import { VendorFinancial } from "./screens/VendorFinancial";
 import { VendorAgreements } from './screens/VendorAgreements';
 import { VendorLaunchpad } from './screens/VendorLaunchpad';
+import { VendorSearch, VendorReadiness } from './screens/VendorCommandCenter';
 import { VendorExternalBookings } from './screens/VendorExternalBookings';
 import { VendorSetup } from "./screens/VendorSetup";
 import { VendorAcademy, VendorLesson, VendorMeetings, VendorSocialLinks } from './screens/VendorGrowth';
@@ -418,6 +419,8 @@ function Navigation() {
             <Stack.Screen name="VendorAcademy" component={VendorAcademy} options={{ title: 'Partner Academy' }} />
             <Stack.Screen name="VendorAgreements" component={VendorAgreements} options={{ title: 'Agreements' }} />
             <Stack.Screen name="VendorLaunchpad" component={VendorLaunchpad} options={{ title: 'Partner Launchpad' }} />
+            <Stack.Screen name="VendorSearch" component={VendorSearch} options={{ title: 'Search Vendor OS' }} />
+            <Stack.Screen name="VendorReadiness" component={VendorReadiness} options={{ title: 'Business readiness' }} />
             <Stack.Screen name="VendorExternalBookings" component={VendorExternalBookings} options={{ title: 'External bookings' }} />
             <Stack.Screen name="VendorLesson" component={VendorLesson} options={{ title: 'Academy lesson' }} />
             <Stack.Screen name="VendorMeetings" component={VendorMeetings} options={{ title: 'Growth Meetings' }} />

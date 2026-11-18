@@ -6,6 +6,11 @@ export function vendorDestination(
   const page = url.pathname.replace(/\/$/, "").slice("/vendor/".length);
   const record = url.searchParams.get('record');
   if (record !== null && !/^[a-f\d]{24}$/i.test(record)) return null;
+  if (page === 'readiness') return { screen: 'VendorReadiness' };
+  if (page === 'launchpad') return { screen: 'VendorLaunchpad' };
+  if (page === 'search') return { screen: 'VendorSearch' };
+  if (page === 'learning') return { screen: 'VendorAcademy' };
+  if (page === 'profile' && url.searchParams.get('tab') === 'documents') return { screen: 'VendorFinancial' };
   if (record && page === 'quotes') return { screen: 'VendorQuote', params: { quoteId: record } };
   if (record && page === 'bookings') return { screen: 'VendorBooking', params: { booking: { _id: record } } };
   if (

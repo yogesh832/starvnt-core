@@ -20,6 +20,11 @@ import { vendorDirectory } from '../src/experience/growth.service.js';
 import { evaluateVendorActivation } from '../src/external/services/vendorActivation.service.js';
 import { LearningLesson, LearningFeedback } from '../src/learning/models.js';
 import { Quote } from '../src/external/models/Quote.js';
+import { Opportunity } from '../src/external/models/Opportunity.js';
+import { VendorService } from '../src/external/models/VendorService.js';
+import { VendorReview } from '../src/external/models/VendorReview.js';
+import { VendorMessageThread } from '../src/external/models/VendorMessageThread.js';
+import { FinanceLedgerEntry } from '../src/admin/models/FinanceLedgerEntry.js';
 import { commercialSnapshot } from '../src/external/services/commercialSnapshot.service.js';
 import { maskOpportunityCustomer } from '../src/external/services/opportunityPrivacy.service.js';
 import { buildVendorContext } from '../src/external/aura/vendorContext.js';
@@ -154,10 +159,67 @@ test('readiness has ten independently defined metrics from the canonical evaluat
   const profile = value.metrics.find(m => m.key === 'BUSINESS_PROFILE');
   assert.equal(profile.value, value.profileCompletion);
   assert.equal(value.metrics.find(m => m.key === 'ONBOARDING').value, value.completionPercentage);
+  assert.equal(value.onboardingSteps.total, 6);
+  assert.equal(Math.round(value.onboardingSteps.completed / value.onboardingSteps.total * 100), value.completionPercentage);
   assert.equal(value.metrics.find(m => m.key === 'MATCHING').value, value.matchingEligible ? 'ELIGIBLE' : 'LOCKED');
   assert.equal(value.metrics.find(m => m.key === 'GST').value, 'DECLARATION_REQUIRED');
   assert.ok(value.metrics.every(m => m.definition && m.source.length && m.contributingFields.length && m.computedAt === value.computedAt && m.calculationVersion === value.calculationVersion));
   assert.equal(JSON.stringify(value.metrics).includes(pan), false);
+});
+
+test('search cannot infer a customer name before verified booking or expose identity text in ordinary titles', async () => {
+  const v = await vendor(), name = `Private-${crypto.randomUUID()}`;
+  const booking = await CoreBooking.create({ vendorId: v.organization._id, customerId: oid(), customerName: name, serviceName: 'Service fixture', eventDate: '2027-01-01', totalAmount: 100, bookingStatus: 'CONFIRMED', paymentStatus: 'PENDING' });
+  const load = q => request(app).get('/api/vendor/search').query({ q, type: 'bookings' }).set(v.auth).expect(200);
+  assert.deepEqual((await load(name)).body.sections[0].results, []);
+  booking.bookingStatus = 'CONFIRMED'; booking.paymentStatus = 'PAYMENT_VERIFIED'; await booking.save();
+  const result = (await load(name)).body.sections[0].results;
+  assert.equal(result[0].id, String(booking._id)); assert.equal(JSON.stringify(result).includes(name), false);
+  await VendorService.create({ vendor: v.organization._id, name: `Document reference ${pan}`, category: 'Photography', pricing: { basePrice: 100 } });
+  const serviceResult = (await request(app).get('/api/vendor/search').query({ q: 'Document reference', type: 'services' }).set(v.auth).expect(200)).body;
+  assert.equal(JSON.stringify(serviceResult).includes(pan), false);
+});
+
+test('each dashboard source can fail independently without fabricating zeroes or blanking unrelated sections', async t => {
+  const v = await vendor();
+  for (const [name, model] of [['opportunities', Opportunity], ['quotes', Quote], ['bookings', CoreBooking], ['reviews', VendorReview], ['threads', VendorMessageThread], ['ledger', FinanceLedgerEntry], ['readiness', VendorService]]) {
+    t.mock.method(model, 'find', () => { throw new Error('Synthetic source outage'); });
+    const result = (await request(app).get('/api/vendor/dashboard').set(v.auth).expect(200)).body.dashboard;
+    assert.equal(result.sourceStates[name], 'UNAVAILABLE', name);
+    for (const source of Object.keys(result.sourceStates).filter(source => source !== name)) assert.equal(result.sourceStates[source], 'AVAILABLE', `${name} must not blank ${source}`);
+    if (name === 'opportunities') assert.equal(result.snapshot.actionableEnquiries, null);
+    if (name === 'quotes') assert.equal(result.snapshot.pendingQuotes, null);
+    if (name === 'bookings') assert.equal(result.upcomingBookings, null);
+    if (name === 'reviews') assert.equal(result.quality.reviewCount, null);
+    if (name === 'ledger') assert.equal(result.financial.settlementReleased, null);
+    if (name === 'readiness') assert.equal(result.readiness, null);
+    assert.equal(JSON.stringify(result).includes('Synthetic source outage'), false);
+    t.mock.restoreAll();
+  }
+});
+
+test('search finds quote/invoice references and pages mixed payment sources without losing or leaking records', async () => {
+  const a = await vendor(), b = await vendor(), marker = `phase1-${crypto.randomUUID()}`;
+  const makeQuote = (vendorId, index, order) => ({ vendor: vendorId, customer: oid(), vendorService: oid(), serviceName: `${marker} service`, quoteReference: `${marker}-quote-${index}`, eventDate: '2027-01-01', pricingBreakdown: { basePrice: 100, totalAmount: 100 }, advancePayment: { providerOrderId: order, providerPaymentId: `${marker}-paid-${index}`, status: 'VERIFIED' } });
+  const bookings = await CoreBooking.create(Array.from({ length: 10 }, (_, index) => ({ vendorId: a.organization._id, customerId: oid(), serviceName: `${marker} service`, eventDate: '2027-01-01', totalAmount: 100, taxSummary: { invoiceNumber: `${marker}-invoice-${index}` }, paymentSummary: { providerOrderId: `${marker}-order-${index}`, providerPaymentId: `${marker}-payment-${index}` } })));
+  const quotes = await Quote.create(Array.from({ length: 10 }, (_, index) => makeQuote(a.organization._id, index, `${marker}-quote-order-${index}`)));
+  await Quote.create(makeQuote(a.organization._id, 99, `${marker}-order-0`));
+  await CoreBooking.create({ vendorId: a.organization._id, customerId: oid(), serviceName: `${marker} legacy payment`, eventDate: '2027-01-01', totalAmount: 100, paymentSummary: { providerPaymentId: `${marker}-paid-0` } });
+  const foreign = await Quote.create(makeQuote(b.organization._id, 88, `${marker}-foreign`));
+  const load = query => request(app).get('/api/vendor/search').query(query).set(a.auth).expect(200);
+  const pages = await Promise.all([1, 2, 3].map(page => load({ q: marker, type: 'payments', page })));
+  const rows = pages.flatMap(response => response.body.sections[0].results);
+  assert.equal(rows.length, 20); assert.equal(new Set(rows.map(row => row.id)).size, 20);
+  assert.equal(rows.some(row => row.id === String(foreign._id)), false);
+  assert.deepEqual(pages.map(response => response.body.sections[0].hasMore), [true, true, false]);
+  const reference = (await load({ q: quotes[0].quoteReference, type: 'quotes' })).body.sections[0].results;
+  assert.deepEqual(reference.map(row => row.id), [String(quotes[0]._id)]);
+  const invoice = (await load({ q: `${marker}-invoice-1`, type: 'payments' })).body.sections[0].results;
+  assert.equal(invoice[0].id, String(bookings[1]._id)); assert.equal(invoice[0].invoiceReference, `${marker}-invoice-1`);
+  const legacy = await CoreBooking.create({ vendorId: a.organization._id, customerId: oid(), serviceName: 'Legacy invoice fixture', eventDate: '2027-01-01', totalAmount: 100, taxSummary: { invoiceNumber: `${marker}-no-provider` } });
+  assert.equal((await load({ q: `${marker}-no-provider`, type: 'payments' })).body.sections[0].results[0].id, String(legacy._id));
+  assert.equal(JSON.stringify(rows).includes('accountNumber'), false);
+  await request(app).get('/api/vendor/search').query({ q: marker, page: 101 }).set(a.auth).expect(400);
 });
 
 test('a new non-registered GST declaration revokes old GST proof without pretending to verify identity', async () => {

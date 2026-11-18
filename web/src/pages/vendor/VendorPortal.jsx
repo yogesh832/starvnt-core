@@ -59,16 +59,21 @@ export default function VendorPortal() {
 
   // Profile setup status (same checklist as the dashboard's six operational steps).
   const [setup, setSetup] = useState(null);
+  const setupRequest = useRef(0);
   async function loadSetup() {
+    const request = ++setupRequest.current;
     try {
       const res = await externalApi.call('/vendor/activation-status');
-      if (res?.status?.checklist) setSetup({
-        percent: res.status.completionPercentage ?? 0,
+      if (request !== setupRequest.current) return;
+      if (res?.status?.checklist && Number.isFinite(res.status.completionPercentage)) setSetup({
+        percent: res.status.completionPercentage,
+        onboardingSteps: res.status.onboardingSteps,
         checklist: res.status.checklist,
         matchingEligible: res.status.matchingEligible,
       });
+      else setSetup(null);
     } catch {
-      /* setup card simply stays hidden */
+      if (request === setupRequest.current) setSetup(null);
     }
   }
 
@@ -105,6 +110,32 @@ export default function VendorPortal() {
     setAuraOpen(true);
   }, [setup]);
   const [navOpen, setNavOpen] = useState(false);
+  const [compactNavigation, setCompactNavigation] = useState(() => window.matchMedia('(max-width: 1023px)').matches);
+  const navigationPanel = useRef(null), navigationToggle = useRef(null);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const change = () => { setCompactNavigation(media.matches); if (!media.matches) setNavOpen(false); };
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
+  useEffect(() => {
+    if (!navOpen || !compactNavigation) return;
+    const focusMenu = () => { if (!navigationPanel.current?.contains(document.activeElement)) navigationPanel.current?.querySelector('[aria-label="Close menu"]')?.focus({ preventScroll: true }); };
+    const frame = requestAnimationFrame(focusMenu);
+    // Visibility/transform transitions can reject focus during the first frame.
+    const focusAfterOpen = setTimeout(focusMenu, 350);
+    const keyboard = event => {
+      if (event.key === 'Escape') { event.preventDefault(); setNavOpen(false); navigationToggle.current?.focus(); }
+      if (event.key !== 'Tab') return;
+      const controls = [...(navigationPanel.current?.querySelectorAll('a[href], button:not([disabled])') || [])].filter(element => element.getClientRects().length);
+      const first = controls[0], last = controls.at(-1);
+      if (!first) return;
+      if (event.shiftKey && (document.activeElement === first || !navigationPanel.current?.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !navigationPanel.current?.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', keyboard);
+    return () => { cancelAnimationFrame(frame); clearTimeout(focusAfterOpen); document.removeEventListener('keydown', keyboard); };
+  }, [navOpen, compactNavigation]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [isSidebarMini, setIsSidebarMini] = useState(false);
@@ -383,17 +414,17 @@ export default function VendorPortal() {
 
   return (
     <div className="vendor-shell fixed inset-0 h-dvh w-full min-h-0 flex overflow-hidden bg-lavender">
-      {navOpen && <div className="fixed inset-0 bg-navy/40 z-30 lg:hidden" onClick={() => setNavOpen(false)} />}
+      {navOpen && <div className="fixed inset-0 bg-navy/40 z-30 lg:hidden" onClick={() => { setNavOpen(false); navigationToggle.current?.focus(); }} />}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:static top-0 left-0 h-full min-h-0 z-40 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-all duration-300 ease-in-out ${isSidebarMini ? 'lg:w-20 w-64' : 'w-64'} ${navOpen ? 'visible translate-x-0 shadow-2xl' : 'invisible lg:visible -translate-x-full lg:translate-x-0'}`}>
+      <aside id="vendor-navigation" ref={navigationPanel} aria-label="Vendor navigation" role={navOpen && compactNavigation ? 'dialog' : undefined} aria-modal={navOpen && compactNavigation ? true : undefined} className={`fixed lg:static top-0 left-0 h-full min-h-0 z-40 bg-white flex flex-col shrink-0 border-r border-gray-100 transition-all duration-300 ease-in-out ${isSidebarMini ? 'lg:w-20 w-64' : 'w-64'} ${navOpen ? 'visible translate-x-0 shadow-2xl' : 'invisible lg:visible -translate-x-full lg:translate-x-0'}`}>
         <div className={`px-4 py-4 flex items-center ${isSidebarMini ? 'lg:justify-center' : 'justify-between'} border-b border-gray-100 lg:border-none relative h-[68px] shrink-0`}>
           <div className={`${isSidebarMini ? 'lg:hidden' : 'block'}`}>
             <LogoWord sub="Vendor OS" />
           </div>
           {isSidebarMini && <div className="hidden lg:grid place-items-center shrink-0"><LogoMark size={34} /></div>}
           <button
-            onClick={() => setNavOpen(false)}
+            onClick={() => { setNavOpen(false); navigationToggle.current?.focus(); }}
             className="lg:hidden w-8 h-8 rounded-xl text-muted hover:bg-lavender grid place-items-center transition"
             aria-label="Close menu"
           >
@@ -469,6 +500,9 @@ export default function VendorPortal() {
             className="lg:hidden w-9 h-9 grid place-items-center rounded-xl text-ink/70 hover:bg-lavender transition shrink-0"
             onClick={() => setNavOpen(true)}
             aria-label="Open navigation menu"
+            aria-controls="vendor-navigation"
+            aria-expanded={navOpen}
+            ref={navigationToggle}
           >
             <Icon name="menu" size={20} />
           </button>

@@ -109,4 +109,5 @@ const vendorDocumentSchema = new Schema(
 );
 
 vendorDocumentSchema.set('toJSON', { transform: (_doc, value) => publicVendorDocument(value) });
+vendorDocumentSchema.index({ vendor: 1, _id: -1 });
 export const VendorDocument = externalConn.model('VendorDocument', vendorDocumentSchema);

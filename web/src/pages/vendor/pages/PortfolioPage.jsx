@@ -1009,9 +1009,9 @@ export default function PortfolioPage() {
               }`}
             />
             <span className="font-bold text-navy">
-              Profile Completion:{' '}
+              Onboarding Completion:{' '}
               <span className={activation.is100Percent ? 'text-emerald-600' : 'text-primary'}>
-                {activation.completionPercentage ?? 0}%
+                {activation.completionPercentage == null ? 'Unavailable' : `${activation.completionPercentage}%`}
               </span>
             </span>
             <span className="text-muted text-[11px]">·</span>

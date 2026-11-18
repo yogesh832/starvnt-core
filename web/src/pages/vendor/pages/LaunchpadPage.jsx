@@ -68,7 +68,7 @@ export default function LaunchpadPage() {
                     </span>
                   </div>
                   <h2 className="text-xl font-bold text-gray-900">
-                    {data.isCompleted ? '🎉 Launchpad Completed!' : `${data.daysRemaining} days remaining in launchpad`}
+                    {data.isCompleted ? '🎉 Launchpad Completed!' : data.daysRemaining == null ? 'Launchpad timeline not established' : `${data.daysRemaining} days remaining in suggested roadmap`}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
                     Track saved setup and verified STARVNT activity. Matching, activation and benefits follow their separate approved policies.
@@ -80,7 +80,7 @@ export default function LaunchpadPage() {
                     {data.progressPercent === null ? 'Unknown' : `${data.progressPercent}%`}
                   </div>
                   <span className="text-xs text-gray-500">
-                    {data.completedCount} of {data.totalSteps} steps completed
+                    {data.completedCount} known complete of {data.totalSteps}{data.unknownCount ? ` · ${data.unknownCount} unknown` : ''}
                   </span>
                 </div>
               </div>
@@ -149,6 +149,8 @@ export default function LaunchpadPage() {
                             <p className="text-xs mt-2">Status: {step.status} · Responsible: {step.responsibleRole?.replaceAll('_', ' ')}</p>
                             {step.pendingReason && <p className="text-xs mt-2">{step.pendingReason}</p>}
                             {step.completionObservedAt && <p className="text-xs mt-2">First observed complete: {new Date(step.completionObservedAt).toLocaleString()}. Historical completion time is not established.</p>}
+                            {step.completionRecordedAt && <p className="text-xs mt-2">Current completion recorded: {new Date(step.completionRecordedAt).toLocaleString()} · Observed from saved evidence.</p>}
+                            {step.historyTruncated && <p className="text-xs">Showing the latest 100 evidence changes.</p>}
                             {step.history && <details className="text-xs mt-2"><summary className="min-h-11 cursor-pointer">Evidence history</summary><ul>{step.history.map((entry, index) => <li key={index}>{new Date(entry.at).toLocaleString()} · {entry.action} · {entry.completed ? 'Complete' : 'Pending'} · {entry.actor}</li>)}</ul></details>}
                             <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                               {step.description}

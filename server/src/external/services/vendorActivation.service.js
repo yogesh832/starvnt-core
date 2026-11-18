@@ -254,6 +254,7 @@ export async function evaluateVendorActivation(vendorId) {
       leadActivationStatus,
     },
     completionPercentage,
+    onboardingSteps: { completed: completedCount, total: steps.length },
     is100Percent: completionPercentage === 100,
     checklist: {
       profile: hasProfile,

@@ -10,7 +10,7 @@ export function VendorLaunchpad({ navigation }: any) {
     if (step.key === 'BUILD_PROFILE') navigation.navigate('Profile');
     else if (step.key === 'COMPLETE_VERIFICATION') navigation.navigate('VendorFinancial');
     else if (step.key === 'CONFIGURE_COVERAGE') navigation.navigate('VendorSetup', { kind: 'coverage' });
-    else if (step.key === 'OPERATIONS_READY') navigation.navigate('VendorModule', { module: 'services' });
+    else if (step.key === 'OPERATIONS_READY') navigation.navigate('VendorReadiness');
     else navigation.navigate('VendorModule', { module: step.key === 'ADD_SERVICES' ? 'services' : step.key === 'UPLOAD_PORTFOLIO' ? 'portfolio' : step.key === 'FIRST_QUOTE' ? 'quotes' : step.key === 'FIRST_BOOKING' ? 'bookings' : 'reviews' });
   }
   return <Page {...resource} title="Partner Launchpad" subtitle="Saved setup and verified STARVNT activity. Eligibility and benefits follow separate policies.">
@@ -24,6 +24,8 @@ export function VendorLaunchpad({ navigation }: any) {
       <Txt muted>Responsible: {step.responsibleRole.replaceAll('_', ' ')}</Txt>
       {!!step.pendingReason && <Txt>{step.pendingReason}</Txt>}
       {!!step.completionObservedAt && <Txt muted>First observed complete: {new Date(step.completionObservedAt).toLocaleString()}. Historical completion time is not established.</Txt>}
+      {!!step.completionRecordedAt && <Txt muted>Current completion recorded: {new Date(step.completionRecordedAt).toLocaleString()} · Observed from saved evidence.</Txt>}
+      {step.historyTruncated && <Txt muted>Showing the latest 100 evidence changes.</Txt>}
       {(step.history || []).map((event: Data, index: number) => <Txt key={index} muted>{new Date(event.at).toLocaleString()} · {event.action} · {event.completed ? 'Complete' : 'Pending'}</Txt>)}
       <Button title="Open this section" secondary onPress={() => open(step)} />
       {step.sourceStatus === 'UNAVAILABLE' && <Button title="Retry evidence" secondary onPress={() => void resource.refresh()} />}

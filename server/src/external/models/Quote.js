@@ -123,6 +123,7 @@ const quoteSchema = new Schema(
 );
 
 quoteSchema.index({ vendor: 1, creationRequestKey: 1 }, { unique: true, partialFilterExpression: { creationRequestKey: { $type: 'string' } } });
+quoteSchema.index({ vendor: 1, _id: -1 });
 quoteSchema.index({ 'creationEffects.state': 1, 'creationEffects.lastQueueAttemptAt': 1, createdAt: 1, _id: 1 }, { partialFilterExpression: { 'creationEffects.state': 'PENDING' } });
 quoteSchema.set('toJSON', { transform: (_doc, value) => { delete value.creationRequestKey; delete value.creationRequestHash; delete value.creationRequestActor; delete value.creationEffects; return value; } });
 quoteSchema.pre('validate', async function () {

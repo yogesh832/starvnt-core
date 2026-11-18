@@ -138,5 +138,6 @@ const portfolioItemSchema = new Schema(
 
 // Location-linked evidence index (Spec §7)
 portfolioItemSchema.index({ vendor: 1, 'location.locality': 1, 'location.venue': 1 });
+portfolioItemSchema.index({ vendor: 1, _id: -1 });
 
 export const PortfolioItem = externalConn.model('PortfolioItem', portfolioItemSchema);

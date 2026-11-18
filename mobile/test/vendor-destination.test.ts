@@ -39,3 +39,11 @@ test("vendor links cannot route to another role or arbitrary destinations", () =
   ])
     assert.equal(vendorDestination(path), null);
 });
+
+test('command-center metric and Launchpad actions reach existing native destinations', () => {
+  assert.deepEqual(vendorDestination('/vendor/readiness'), { screen: 'VendorReadiness' });
+  assert.deepEqual(vendorDestination('/vendor/launchpad'), { screen: 'VendorLaunchpad' });
+  assert.deepEqual(vendorDestination('/vendor/search'), { screen: 'VendorSearch' });
+  assert.deepEqual(vendorDestination('/vendor/profile?tab=documents'), { screen: 'VendorFinancial' });
+  assert.deepEqual(vendorDestination('/vendor/learning'), { screen: 'VendorAcademy' });
+});

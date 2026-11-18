@@ -261,4 +261,5 @@ const coreBookingSchema = new Schema(
 
 coreBookingSchema.index({ customerBookingId: 1 }, { unique: true, partialFilterExpression: { customerBookingId: { $type: 'objectId' } } });
 coreBookingSchema.index({ reservationId: 1 }, { unique: true, partialFilterExpression: { reservationId: { $type: 'objectId' } } });
+coreBookingSchema.index({ vendorId: 1, _id: -1 });
 export const CoreBooking = adminConn.model('CoreBooking', coreBookingSchema);

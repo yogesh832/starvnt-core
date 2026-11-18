@@ -26,14 +26,14 @@ export async function getLaunchpadProgress(vendorId) {
   }
 
   const isFoundingPartner = Boolean(vendor.foundingPartner?.isFoundingPartner);
-  const offerStartedAt = vendor.foundingPartner?.offerStartedAt || vendor.createdAt || new Date();
-  const offerExpiresAt = vendor.foundingPartner?.offerExpiresAt || new Date(new Date(offerStartedAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+  const offerStartedAt = vendor.foundingPartner?.offerStartedAt || vendor.createdAt || null;
+  const offerExpiresAt = vendor.foundingPartner?.offerExpiresAt || (offerStartedAt ? new Date(new Date(offerStartedAt).getTime() + 30 * 24 * 60 * 60 * 1000) : null);
   const now = new Date();
 
   const totalDurationDays = 30;
-  const elapsedMs = Math.max(0, now.getTime() - new Date(offerStartedAt).getTime());
-  const daysElapsed = Math.min(totalDurationDays, Math.floor(elapsedMs / (24 * 60 * 60 * 1000)));
-  const daysRemaining = Math.max(0, Math.ceil((new Date(offerExpiresAt).getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+  const elapsedMs = offerStartedAt ? Math.max(0, now.getTime() - new Date(offerStartedAt).getTime()) : null;
+  const daysElapsed = elapsedMs === null ? null : Math.min(totalDurationDays, Math.floor(elapsedMs / (24 * 60 * 60 * 1000)));
+  const daysRemaining = offerExpiresAt ? Math.max(0, Math.ceil((new Date(offerExpiresAt).getTime() - now.getTime()) / (24 * 60 * 60 * 1000))) : null;
 
   // Query evidence in parallel
   const sources = await Promise.allSettled([
@@ -68,7 +68,7 @@ export async function getLaunchpadProgress(vendorId) {
       key: 'UPLOAD_PORTFOLIO',
       phase: 'Build',
       label: 'Showcase your work',
-      description: 'Upload high-resolution images or videos of past events.',
+      description: 'Save a public portfolio item. Publication and media rights are separate decisions.',
       completed: portfolioCount >= 1,
       actionLink: '/vendor/portfolio',
     },
@@ -100,7 +100,7 @@ export async function getLaunchpadProgress(vendorId) {
       key: 'FIRST_QUOTE',
       phase: 'Grow',
       label: 'Send your first quotation',
-      description: 'Respond to an opportunity or generate a custom quote.',
+      description: 'Submit a quotation for an enquiry assigned to your business.',
       completed: quotesCount >= 1,
       actionLink: '/vendor/quotes',
     },
@@ -141,7 +141,12 @@ export async function getLaunchpadProgress(vendorId) {
     const observation = observations?.get(step.key);
     step.historyStatus = observations ? 'AVAILABLE' : 'UNAVAILABLE';
     step.completionObservedAt = observation?.firstCompletedObservedAt || null;
-    step.history = observation?.history || null;
+    const history = observation?.history || [];
+    const latestCompletion = history.filter((event, index) => event.completed === true && (index === 0 || history[index - 1].completed !== true)).at(-1);
+    step.completionRecordedAt = step.completed === true ? latestCompletion?.at || null : null;
+    step.completionTimeSource = step.completionRecordedAt ? 'OBSERVED_FROM_RECORDED_EVIDENCE' : 'NOT_ESTABLISHED';
+    step.history = observations ? history.slice(-100) : null;
+    step.historyTruncated = history.length > 100;
     // Observation time is not the historical source completion time.
     step.completedAt = null;
   }
@@ -154,13 +159,15 @@ export async function getLaunchpadProgress(vendorId) {
   return {
     calculationVersion: launchpadCalculationVersion, computedAt: now, partial, historyStatus: observations ? 'AVAILABLE' : 'UNAVAILABLE',
     isFoundingPartner,
-    cohort: vendor.foundingPartner?.cohort || 'Alpha Cohort',
+    cohort: vendor.foundingPartner?.cohort || null,
+    timelineSource: vendor.foundingPartner?.offerStartedAt ? 'RECORDED_ENROLLMENT' : vendor.createdAt ? 'ACCOUNT_CREATED_ROADMAP' : 'UNKNOWN',
     offerStartedAt,
     offerExpiresAt,
     daysElapsed,
     daysRemaining,
     totalDurationDays,
     completedCount,
+    unknownCount: steps.filter(step => step.completed === null).length,
     totalSteps: steps.length,
     progressPercent,
     isCompleted,

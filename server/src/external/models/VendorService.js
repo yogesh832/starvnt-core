@@ -47,5 +47,6 @@ const vendorServiceSchema = new Schema(
 );
 
 vendorServiceSchema.index({ vendor: 1, category: 1 });
+vendorServiceSchema.index({ vendor: 1, _id: -1 });
 
 export const VendorService = externalConn.model('VendorService', vendorServiceSchema);

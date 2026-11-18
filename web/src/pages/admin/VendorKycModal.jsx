@@ -385,7 +385,7 @@ export default function VendorKycModal({ vendor, onClose, onRefresh }) {
           <section className="border rounded-2xl p-4 space-y-3 text-sm">
             <h3 className="font-bold">Profile activation review</h3>
             <p>Current status: {readiness?.activationState || organization.status}</p>
-            <p>Profile completion: {readiness?.completionPercentage ?? '—'}% · Verification: {readiness?.readiness?.verificationStatus || 'Unknown'}</p>
+            <p>Onboarding completion: {readiness?.completionPercentage == null ? 'Unavailable' : `${readiness.completionPercentage}%`} · Verification: {readiness?.readiness?.verificationStatus || 'Unknown'}</p>
             <ul>{readiness?.missingRequirements?.map(item => <li key={item}>• {item}</li>)}</ul>
             <p className="text-xs text-muted">Verification and profile completion do not activate the vendor. Use an authorised activation decision below.</p>
             {can('vendors.approve') && <div className="flex flex-wrap gap-2">{[['APPROVE', 'Approve activation'], ['REJECT', 'Reject profile'], ['REQUEST_INFORMATION', 'Request information'], ['SUSPEND', 'Suspend']].map(([action, label]) => <button key={action} disabled={processing} onClick={() => activate(action)} className="border rounded-xl px-3 py-2">{label}</button>)}</div>}

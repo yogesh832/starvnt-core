@@ -3,8 +3,7 @@ import { NextGrowthMeetingCard } from './GrowthMeetings.jsx';
 import { ContinueWatchingCard } from './Academy.jsx';
 import { notificationAction } from '../vendorNotificationUi.js';
 import ProfileStatus from '../../../components/ProfileStatus.jsx';
-import { VENDOR_SETUP_STEPS } from '../../../../../server/src/common/vendorSetupSteps.js';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../../components/Icon.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
@@ -586,13 +585,17 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const [services, setServices] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
-  const [activation, setActivation] = useState(null);
+  const [storedActivation, setActivation] = useState(null);
   const [vendorProfile, setVendorProfile] = useState(null);
   const [gotItAcknowledged, setGotItAcknowledged] = useState(() => localStorage.getItem('vendorOnboardingDismissed') === 'true');
   const [loading, setLoading] = useState(true);
   const [failedSources, setFailedSources] = useState([]);
+  const [sourceSync, setSourceSync] = useState({});
+  const activation = failedSources.includes('activation') ? null : storedActivation;
+  const liveRequest = useRef(0);
 
   const loadLiveDashboard = useCallback(async () => {
+    const request = ++liveRequest.current;
     try {
       setLoading(true);
       // Fetch all authentic live data in parallel
@@ -615,8 +618,12 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         externalApi.call('/vendor/services').catch(() => ({ ok: false })),
         externalApi.call('/vendor/notifications').catch(() => ({ ok: false })),
       ]);
+      if (request !== liveRequest.current) return;
 
-      setFailedSources([['activation', actRes], ['profile', profRes], ['enquiries', oppsRes], ['quotes', quotesRes], ['bookings', bkRes], ['availability', blRes], ['services', svcRes], ['notifications', notifRes]].filter(([, result]) => !result?.ok).map(([name]) => name));
+      const sourceLoaded = { activation: Boolean(actRes?.ok && actRes.status && Number.isFinite(actRes.status.completionPercentage)), profile: Boolean(profRes?.ok && profRes.vendor), enquiries: Boolean(oppsRes?.ok && Array.isArray(oppsRes.opportunities)), quotes: Boolean(quotesRes?.ok && Array.isArray(quotesRes.quotes)), bookings: Boolean(bkRes?.ok && Array.isArray(bkRes.bookings)), availability: Boolean(blRes?.ok && Array.isArray(blRes.blockouts)), services: Boolean(svcRes?.ok && Array.isArray(svcRes.services)), notifications: Boolean(notifRes?.ok && Array.isArray(notifRes.notifications)) };
+      setFailedSources(Object.keys(sourceLoaded).filter(name => !sourceLoaded[name]));
+      const syncedAt = new Date().toISOString();
+      setSourceSync(previous => ({ ...previous, ...Object.fromEntries(Object.keys(sourceLoaded).filter(name => sourceLoaded[name]).map(name => [name, syncedAt])) }));
 
       // 0. Activation & Profile
       if (actRes?.ok && actRes.status) {
@@ -677,8 +684,6 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           };
         });
         setEnquiries(liveEnqs);
-      } else {
-        setEnquiries([]);
       }
 
       // 2. Quotes (strictly authentic DB records)
@@ -697,8 +702,6 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           action: q.status === 'DRAFT' ? 'Submit Quote' : q.status === 'SUBMITTED' ? 'Awaiting Customer' : 'View Quote',
         }));
         setQuotes(liveQuotes);
-      } else {
-        setQuotes([]);
       }
 
       // 3. Bookings (strictly authentic DB records)
@@ -723,8 +726,6 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           executionStatus: b.executionStatus,
         }));
         setBookings(liveBks);
-      } else {
-        setBookings([]);
       }
 
       // 6. Notifications
@@ -732,14 +733,11 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       if (notifRes?.ok && Array.isArray(notifRes.notifications)) {
         setNotifications(notifRes.notifications);
         setUnreadNotifCount(notifRes.unreadCount || 0);
-      } else {
-        setNotifications([]);
-        setUnreadNotifCount(0);
       }
     } catch (err) {
       console.warn('[DashboardHome] Load error:', err.message);
     } finally {
-      setLoading(false);
+      if (request === liveRequest.current) setLoading(false);
     }
   }, []);
 
@@ -823,8 +821,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   // Live profile completion calculations
   const completionPercentage = activation?.completionPercentage !== undefined
     ? activation.completionPercentage
-    : 0;
-  const isMatchingEligible = Boolean(activation?.matchingEligible || activation?.isCommerciallyActive);
+    : null;
+  const isMatchingEligible = activation?.matchingEligible === true;
 
   const checklist = activation?.checklist || {
     profile: false,
@@ -836,7 +834,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   };
 
   const isDocVerified = Boolean(checklist.verified);
-  const completedStepsCount = VENDOR_SETUP_STEPS.filter(step => step.done(checklist)).length;
+  const completedStepsCount = activation?.onboardingSteps?.completed ?? null;
+  const recordFreshness = name => <p role="status" className="text-xs text-muted">{failedSources.includes(name) ? 'Source unavailable; saved records may be stale. ' : loading ? 'Refreshing saved records. ' : ''}Last successful sync: {sourceSync[name] ? new Date(sourceSync[name]).toLocaleString() : 'Not yet established'}{failedSources.includes(name) && <button type="button" className="underline min-h-11 ml-2" disabled={loading} onClick={loadLiveDashboard}>Retry {name}</button>}</p>;
 
   const currentLocalDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const upcomingBookings = bookings.filter(row => row.bookingStatus === 'CONFIRMED' && row.executionStatus !== 'COMPLETION_VERIFIED' && row.eventDate >= currentLocalDay).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
@@ -902,7 +901,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                 ) : !activation ? <span className="text-xs font-bold text-muted">Operating status unavailable</span> : completionPercentage === 100 ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
                     <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    Profile setup 100% · {activation?.activationState?.replaceAll('_', ' ') || 'Status unavailable'}
+                    Onboarding 100% · {activation?.activationState?.replaceAll('_', ' ') || 'Status unavailable'}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
@@ -970,7 +969,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                       ? 'Activation approved'
                       : completionPercentage === 0
                       ? 'Action Required: Initial Setup (0% Completed)'
-                      : completionPercentage === 100 ? `PROFILE COMPLETE · ${activation?.activationState?.replaceAll('_', ' ') || 'STATUS UNAVAILABLE'}` : `ONBOARDING IN PROGRESS (${completionPercentage}% COMPLETED)`}
+                      : completionPercentage === 100 ? `ONBOARDING COMPLETE · ${activation?.activationState?.replaceAll('_', ' ') || 'STATUS UNAVAILABLE'}` : `ONBOARDING IN PROGRESS (${completionPercentage}% COMPLETED)`}
                   </span>
                   <span className="text-xs font-extrabold text-navy dark:text-white">
                     {isMatchingEligible ? 'Ready for Bookings' : `${completedStepsCount} of 6 Steps Configured`}
@@ -978,7 +977,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                 </div>
                 <h2 className="text-base sm:text-lg font-extrabold text-navy dark:text-white tracking-tight mt-1">
                   {isMatchingEligible
-                    ? 'Profile 100% Complete — Your Brand is Active and Matchable'
+                    ? 'Onboarding Complete — Activation Approved'
                     : completionPercentage === 100
                     ? 'Operating profile complete — review your activation status above'
                     : completionPercentage === 0
@@ -1034,7 +1033,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             <div className="mt-5 pt-4 border-t border-gray-100 space-y-2">
               <div className="flex justify-between text-xs font-semibold">
                 <span className="text-muted">
-                  Overall Completion Progress ({completedStepsCount} of 6 steps completed)
+                  Onboarding Completion ({completedStepsCount} of 6 setup groups complete)
                 </span>
                 <span className={isMatchingEligible ? 'text-emerald-600 font-extrabold' : completionPercentage === 0 ? 'text-muted font-bold' : 'text-primary font-extrabold'}>
                   {completionPercentage}% / 100%
@@ -1296,6 +1295,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
               </div>
 
               <div className="space-y-3 min-w-0">
+                {recordFreshness('enquiries')}
                 {enquiries.slice(0, 3).map((e) => (
                   <div
                     key={e.id}
@@ -1341,7 +1341,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                       <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 space-y-2 text-left">
                         <div className="font-extrabold flex items-center gap-1.5 text-amber-950">
                           <Icon name="lock" size={14} className="text-amber-800 shrink-0" />
-                          <span>Inbound Enquiries Locked (Profile {completionPercentage}%)</span>
+                          <span>Inbound Enquiries Locked ({completionPercentage == null ? 'Readiness unavailable' : `Onboarding ${completionPercentage}%`})</span>
                         </div>
                         <p className="text-[11px] text-amber-800 leading-relaxed">
                           Customer matching requires a complete operating profile, identity and bank verification, and an authorised activation approval. Review your current status above for the next step.
@@ -1391,6 +1391,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
               </div>
 
               <div className="space-y-3 min-w-0">
+                {recordFreshness('bookings')}
                 {upcomingBookings.slice(0, 3).map((b) => (
                   <div
                     key={b.id}
@@ -1439,7 +1440,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
               <div className="w-7 h-7 rounded-xl bg-orange-50 text-orange-600 grid place-items-center">
                 <Icon name="quotes" size={15} />
               </div>
-              <h2 className="font-extrabold text-base text-navy">Active Quotes Pipeline</h2>
+              <h2 className="font-extrabold text-base text-navy">Active Quotes Pipeline</h2>{recordFreshness('quotes')}
               {quotes.length > 0 && (
                 <span className="text-[10px] font-extrabold bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">
                   {quotes.length}

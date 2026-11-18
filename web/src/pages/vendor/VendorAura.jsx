@@ -27,7 +27,7 @@ const START_SETUP = 'Help me complete my profile setup';
 function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
   const steps = SETUP_STEPS.map((s) => ({ ...s, isDone: Boolean(s.done(setup.checklist)) }));
   const next = steps.find((s) => !s.isDone);
-  const doneCount = steps.filter((s) => s.isDone).length;
+  const doneCount = setup.onboardingSteps?.completed;
   const nextLabel = next ? next.title.replace('Brand name, category & city', 'Profile').replace('Add a service with a price', 'Service') : 'Ready';
   const matchingStatus = !setup.checklist.verified ? 'verification pending'
     : setup.matchingEligible ? 'ready for matching' : 'matching locked';
@@ -35,11 +35,11 @@ function SetupCard({ setup, expanded, onToggle, onAura, onManual, busy }) {
     <div className="mx-3 mt-2 rounded-xl border border-primary/15 bg-white/95 px-2.5 py-2 shadow-xs shrink-0">
       <div className="flex items-center gap-2 min-w-0">
         <div className="h-1.5 w-14 rounded-full bg-lavender overflow-hidden shrink-0">
-          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.max(4, setup.percent)}%` }} />
+          <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${setup.percent}%` }} />
         </div>
         <div className="min-w-0 flex-1 text-[11px] text-muted">
-          <span className="font-extrabold text-navy">Profile {setup.percent}%</span>
-          <span> · {doneCount}/{steps.length} done</span>
+          <span className="font-extrabold text-navy">Onboarding {setup.percent}%</span>
+          {doneCount !== undefined && <span> · {doneCount}/{setup.onboardingSteps.total} done</span>}
           {!next ? <span> · {matchingStatus}</span> : <span> · next: {nextLabel}</span>}
         </div>
         {next ? (

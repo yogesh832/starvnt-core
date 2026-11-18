@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { verifyVendorPhaseOne } from './verify-vendor-phase1-scenarios.js';
 const root = resolve(import.meta.dirname, '../..');
 const output = resolve(root, 'tmp/vendor-main17-implementation/browser');
 mkdirSync(output, { recursive: true });
@@ -60,6 +61,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.addInitScript(token => localStorage.setItem('starvnt_external_access_token', token), session.accessToken);
   const page = await context.newPage();
+  await verifyVendorPhaseOne({ page, vendor, accessToken: session.accessToken, checks, output });
   await page.goto('http://127.0.0.1:5199/vendor/learning');
   await page.getByLabel('Collection', { exact: true }).selectOption('recommended');
   await page.getByText('Suggested topics: Bank Verification', { exact: true }).waitFor();

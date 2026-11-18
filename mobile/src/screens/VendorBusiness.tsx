@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Linking } from 'react-native';
 import { external } from '../api/runtime';
 import type { Data } from '../api/client';
@@ -7,6 +7,8 @@ import { emptyGoal, goalMetrics, goalPayload, istTimestamp, metricDuration, metr
 import { VENDOR_SUPPORT } from '../../../shared/vendorSupport.js';
 import { Button, Card, Choice, Empty, ErrorNotice, Field, human, id, Page, Pill, Txt, useAction, useResource } from '../ui';
 import { VendorGrowthCards } from './VendorGrowth';
+import { useSession } from '../auth/Session';
+import { dashboardSnapshot, dashboardWidgetMessage, isVendorDashboard, type DashboardSnapshot } from '../../../shared/vendorDashboardFreshness.js';
 
 function Metric({ label, value, detail, destination, open }: { label: string; value: string; detail: string; destination: string; open: (path: string) => void }) {
   return <Card><Txt muted size={13}>{label}</Txt><Txt bold size={23}>{value}</Txt><Txt muted size={12}>{detail}</Txt><Button title={`View ${label.toLowerCase()}`} secondary onPress={() => open(destination)} /></Card>;
@@ -74,40 +76,50 @@ function PaymentRecords({ open }: { open: (path: string) => void }) {
 }
 
 export function VendorBusinessPage({ navigation, mode = 'home' }: { navigation: any; mode?: 'home' | 'analytics' | 'payments' }) {
+  const { user, logoutRevision } = useSession();
+  const api = useMemo(() => ({ ...external }), [user?._id, user?.id, logoutRevision]);
   const [period, setPeriod] = useState('30');
-  const r = useResource(external, `/vendor/dashboard?periodDays=${period}`);
+  const r = useResource(api, `/vendor/dashboard?periodDays=${period}`);
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
+  const scope = `${user?._id || user?.id || ''}:${logoutRevision}:${period}`;
+  const raw = r.data.ok && isVendorDashboard(r.data.dashboard) ? r.data.dashboard : null;
+  const contractError = !r.loading && r.data.ok && !raw ? 'Business data could not be read. Refresh to retry.' : '';
+  useEffect(() => { if (raw) setSnapshot(previous => dashboardSnapshot(previous, raw, scope)); }, [raw, scope]);
   const a = useAction();
-  const d: Data | null = !r.loading && !r.error && r.data.ok && r.data.dashboard ? r.data.dashboard : null;
+  const d: Data | null = snapshot?.scope === scope ? snapshot.view : null;
   const open = (path: string) => { const destination = vendorDestination(path); if (destination) navigation.navigate(destination.screen, destination.params); };
   const metric = (label: string, value: string, detail: string, destination: string) => <Metric key={label} label={label} value={value} detail={detail} destination={destination} open={open} />;
-  const readiness = d?.readiness;
+  const readiness = r.error || contractError ? null : d?.readiness;
   const home = mode === 'home';
+  const freshness = (key: string) => <><Txt muted size={12}>{dashboardWidgetMessage(snapshot?.widgets[key], Boolean(r.error || contractError))}</Txt>{(r.error || contractError || snapshot?.widgets[key]?.status !== 'READY') && <Button title={`Retry ${key} widget`} secondary disabled={r.loading || r.refreshing} onPress={r.refresh} />}</>;
   return <Page {...r} error={undefined} loading={false} title={home ? readiness?.businessName || 'Your business, in focus.' : mode === 'analytics' ? 'Business analytics' : 'Payments & settlements'} subtitle="Authoritative business performance and operations. Pull to refresh saved data.">
     <ErrorNotice message={r.error} retry={r.refresh} />
+    <ErrorNotice message={contractError} retry={r.refresh} />
     {r.loading && <Txt>Loading authorized business data…</Txt>}
     <Choice label="Measurement period" values={['7', '30', '60', '90']} labels={{ '7': '7 days', '30': '30 days', '60': '60 days', '90': '90 days' }} value={period} onChange={setPeriod} />
     <Button title={r.refreshing ? 'Refreshing business data…' : 'Refresh business data'} secondary disabled={r.loading || r.refreshing} onPress={r.refresh} />
+    {home && <><Button title="Search Vendor OS" secondary onPress={() => navigation.navigate('VendorSearch')} /><Button title="Business readiness" secondary onPress={() => navigation.navigate('VendorReadiness')} /></>}
     {home && <VendorGrowthCards navigation={navigation} />}
     {!r.loading && !r.error && !d && <ErrorNotice message="Business data is unavailable. Retry to retrieve the saved dashboard." retry={r.refresh} />}
     {d && <>
       <Txt muted>Updated {istTimestamp(d.generatedAt)} IST. Refresh for the latest saved status.</Txt>
       {Object.values(d.sourceStates).some(state => state !== 'AVAILABLE') && <ErrorNotice message={`Some sources are unavailable or exceed the safe record limit: ${Object.entries(d.sourceStates).filter(([, state]) => state !== 'AVAILABLE').map(([key]) => key).join(', ')}. Affected metrics are unavailable.`} retry={r.refresh} />}
       {home && <>
-        <Card><Txt bold size={23}>Today’s Action Center</Txt><Txt muted>Current statuses, ordered by priority. Only saved response SLA deadlines are shown. Up to 20 deduplicated actions.</Txt>
+        <Card><Txt bold size={23}>Today’s Action Center</Txt>{freshness('actions')}<Txt muted>Current statuses, ordered by priority. Only saved response SLA deadlines are shown. Up to 20 deduplicated actions.</Txt>
           {d.actions.map((action: Data) => <Card key={action.id}><Txt bold size={18}>{action.title}</Txt><Txt>{action.reason}</Txt><Txt muted>{human(action.module)} · {action.sourceId.slice(-8)} · {human(action.status)} · Needs attention</Txt>{action.dueAt && <Txt muted>Response SLA: {istTimestamp(action.dueAt)} IST</Txt>}<Button title={`Open ${action.module} record ${action.sourceId.slice(-8)}`} secondary onPress={() => open(action.href)} /></Card>)}
           {!d.actions.length && <Txt muted>{Object.values(d.sourceStates).some(state => state !== 'AVAILABLE') ? 'No actions established from the available sources.' : 'No actions requiring attention in the supported records.'}</Txt>}
         </Card>
-        <Card><Txt bold size={23}>Business Health Snapshot</Txt><Txt muted>Current state across saved records.</Txt>
+        <Card><Txt bold size={23}>Business Health Snapshot</Txt>{freshness('snapshot')}<Txt muted>Current state across saved records.</Txt>
           {metric('Enquiries requiring action', metricNumber(d.snapshot.actionableEnquiries), 'New or viewed enquiries awaiting response', '/vendor/enquiries')}
           {metric('Quotes awaiting action', metricNumber(d.snapshot.pendingQuotes), 'Saved draft quotations awaiting submission', '/vendor/quotes')}
           {metric('Upcoming confirmed bookings', metricNumber(d.snapshot.upcomingBookings), 'Today or later in IST; excludes verified completion', '/vendor/bookings')}
         </Card>
-        <Card><Txt bold size={23}>Upcoming Confirmed Bookings</Txt>
+        <Card><Txt bold size={23}>Upcoming Confirmed Bookings</Txt>{freshness('upcomingBookings')}
           {d.upcomingBookings === null ? <Txt>Booking data unavailable.</Txt> : d.upcomingBookings.length === 0 ? <Txt muted>No upcoming confirmed bookings.</Txt> : d.upcomingBookings.map((booking: Data) => <Card key={booking.id}><Txt>{booking.eventDate} · {human(booking.status)}</Txt><Button title={`Open booking ${booking.id.slice(-8)}`} secondary onPress={() => open(booking.href)} /></Card>)}
           <Txt muted>Next five confirmed contracts, ordered by event date (IST).</Txt>
         </Card>
       </>}
-      {mode !== 'payments' && <Card><Txt bold size={23}>Lead & Sales Performance</Txt><Txt muted>Enquiry cohort: {metricPeriod(d.periods.cohort)}. A 30-day attribution window is allowed for each enquiry, so the latest 30 days are excluded. Cancelled contracts are excluded; confirmation uses Core contract creation time.</Txt>
+      {mode !== 'payments' && <Card><Txt bold size={23}>Lead & Sales Performance</Txt>{freshness('sales')}<Txt muted>Enquiry cohort: {metricPeriod(d.periods.cohort)}. A 30-day attribution window is allowed for each enquiry, so the latest 30 days are excluded. Cancelled contracts are excluded; confirmation uses Core contract creation time.</Txt>
         {!d.sales.available ? <Txt>Insufficient data: {d.sales.reason}</Txt> : <>
           {metric('Enquiries received', metricNumber(d.sales.enquiries), 'Distinct enquiries created in the mature cohort', '/vendor/enquiries')}
           {metric('Enquiries with submitted quotes', metricNumber(d.sales.quotedEnquiries), 'Recorded submission within 30 days; one per enquiry', '/vendor/quotes')}
@@ -119,7 +131,7 @@ export function VendorBusinessPage({ navigation, mode = 'home' }: { navigation: 
           {metric('Declined with recorded reason', metricNumber(d.sales.declinedWithReason), 'No inferred loss reasons', '/vendor/enquiries')}
         </>}
       </Card>}
-      {mode !== 'analytics' && <Card><Txt bold size={23}>Financial Clarity</Txt><Txt muted>{metricPeriod(d.periods.selected)} · INR. Contract metrics describe current confirmed contracts created in this period; ledger totals use posting dates. Verified payments on these contracts are not period cash flow.</Txt>
+      {mode !== 'analytics' && <Card><Txt bold size={23}>Financial Clarity</Txt>{freshness('financial')}<Txt muted>{metricPeriod(d.periods.selected)} · INR. Contract metrics describe current confirmed contracts created in this period; ledger totals use posting dates. Verified payments on these contracts are not period cash flow.</Txt>
         {!d.financial.available && <Txt>{d.financial.reason}</Txt>}
         {[
           ['Confirmed booking value', 'bookingValue', 'Distinct current confirmed contracts'],
@@ -134,14 +146,14 @@ export function VendorBusinessPage({ navigation, mode = 'home' }: { navigation: 
         <Txt muted>Separate settlement initiation is unavailable in the existing lifecycle. Profit cannot be calculated without reliable actual direct costs.</Txt>
       </Card>}
       {home && <>
-        <Card><Txt bold size={23}>Service Quality & Customer Trust</Txt>
+        <Card><Txt bold size={23}>Service Quality & Customer Trust</Txt>{freshness('quality')}
           {metric('Verified STARVNT rating', d.quality.rating == null ? d.quality.reviewCount === 0 ? 'No verified reviews yet.' : 'Unavailable' : `${d.quality.rating} / 5`, `${metricNumber(d.quality.reviewCount)} published verified reviews · all time`, '/vendor/reviews')}
           {metric('Completed bookings', metricNumber(d.quality.completedBookings), 'Core verified completion · all time', '/vendor/bookings')}
           {metric('Unresolved booking issues', metricNumber(d.quality.unresolvedIssues), 'Authorized Core protection workflow', '/vendor/bookings')}
           {d.quality.recent.map((review: Data) => <Card key={review.id}><Txt>{review.rating} / 5 · {istTimestamp(review.createdAt)} IST</Txt><Txt muted>{review.replied ? 'Reply saved' : 'Open review to respond'}</Txt><Button title="Open verified reviews" secondary onPress={() => open('/vendor/reviews')} /></Card>)}
           <Txt muted>On-time execution and feedback trends: insufficient evidence. Missing history is not a service failure.</Txt>
         </Card>
-        <Card><Txt bold size={23}>Profile & Operating Readiness</Txt>
+        <Card><Txt bold size={23}>Profile & Operating Readiness</Txt>{freshness('readiness')}
           {!readiness ? <Txt>Readiness unavailable. Refresh to retry.</Txt> : <>
             {[
               ['Business profile completion', `${readiness.profileCompletion}%`], ['Onboarding completion', `${readiness.completionPercentage}%`], ['Business verification', readiness.readiness.verificationStatus],
@@ -162,11 +174,11 @@ export function VendorBusinessPage({ navigation, mode = 'home' }: { navigation: 
           </>}
         </Card>
       </>}
-      {mode !== 'payments' && <Card><Txt bold size={23}>Weekly Performance Review</Txt><Txt muted>Last complete week: {metricPeriod(d.periods.week)}. Previous: {metricPeriod(d.periods.previousWeek)}. Recorded creation, first submission, review creation and completion verification timestamps; no fabricated growth percentages.</Txt>
+      {mode !== 'payments' && <Card><Txt bold size={23}>Weekly Performance Review</Txt>{freshness('weekly')}<Txt muted>Last complete week: {metricPeriod(d.periods.week)}. Previous: {metricPeriod(d.periods.previousWeek)}. Recorded creation, first submission, review creation and completion verification timestamps; no fabricated growth percentages.</Txt>
         {d.weekly.current.available && d.weekly.previous.available ? [['Enquiries', 'enquiries'], ['Quotations submitted', 'submittedQuotes'], ['Core confirmed contracts', 'confirmedBookings'], ['Verified completions', 'completedBookings'], ['Verified reviews', 'verifiedReviews']].map(([label, key]) => <Card key={key}><Txt bold>{label}</Txt><Txt>Last week: {metricNumber(d.weekly.current[key])}</Txt><Txt>Previous week: {metricNumber(d.weekly.previous[key])}</Txt></Card>) : <Txt>Insufficient data for comparable weeks.</Txt>}
         <Txt muted>Weekly conversion and response comparisons are withheld while cohorts are immature. Use the mature cohort above. Settlement status is shown under Financial Clarity.</Txt>
       </Card>}
-      {home && <Card><Txt bold size={23}>Vendor Improvement</Txt><Txt muted>Recommendations use saved readiness findings, one per requirement. Resolved conditions disappear on refresh. No expansion recommendations are inferred.</Txt>
+      {home && <Card><Txt bold size={23}>Vendor Improvement</Txt>{freshness('recommendations')}<Txt muted>Recommendations use saved readiness findings, one per requirement. Resolved conditions disappear on refresh. No expansion recommendations are inferred.</Txt>
         {d.recommendations.map((item: Data) => <Card key={item.id}><Txt bold>{item.title}</Txt><Txt muted>Needs attention · {item.source}</Txt><Button title={item.action} secondary onPress={() => open(item.href)} /></Card>)}
         {!d.recommendations.length && <Txt muted>{readiness ? 'No missing readiness requirements recorded.' : 'Insufficient data for recommendations.'}</Txt>}
       </Card>}

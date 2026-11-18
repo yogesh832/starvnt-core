@@ -80,6 +80,8 @@ export function VendorWork({ navigation }: any) {
       title="Your workspace"
       subtitle="Everything behind a brilliant event."
     >
+      <MenuRow title="Search Vendor OS" icon="search-outline" onPress={() => navigation.navigate('VendorSearch')} />
+      <MenuRow title="Business readiness" icon="checkmark-circle-outline" onPress={() => navigation.navigate('VendorReadiness')} />
       {[
         ["origins", "Operating locations"],
         ["resources", "Team & resources"],

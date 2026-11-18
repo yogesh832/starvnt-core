@@ -66,5 +66,6 @@ const opportunitySchema = new Schema(
   { timestamps: true }
 );
 opportunitySchema.index({ crmSourceKey: 1 }, { unique: true, partialFilterExpression: { crmSourceKey: { $type: 'string' } } });
+opportunitySchema.index({ vendor: 1, _id: -1 });
 
 export const Opportunity = externalConn.model('Opportunity', opportunitySchema);

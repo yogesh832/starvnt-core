@@ -837,7 +837,7 @@ export function AdminKyc({ route }: any) {
         multiline
       />
       <ErrorNotice message={a.error} />
-      <Card><Txt bold size={21}>Profile activation</Txt><Pill>{human(r.data.activation?.activationState || r.data.organization?.status)}</Pill><Txt>Profile completion: {r.data.activation?.completionPercentage ?? 0}%</Txt><Txt>Verification: {human(r.data.activation?.readiness?.verificationStatus)}</Txt>{(r.data.activation?.missingRequirements || []).map((item: string) => <Txt key={item}>• {item}</Txt>)}<Txt muted>KYC verification and activation are separate decisions.</Txt>
+      <Card><Txt bold size={21}>Profile activation</Txt><Pill>{human(r.data.activation?.activationState || r.data.organization?.status)}</Pill><Txt>Onboarding completion: {r.data.activation?.completionPercentage == null ? 'Unavailable' : `${r.data.activation.completionPercentage}%`}</Txt><Txt>Verification: {human(r.data.activation?.readiness?.verificationStatus)}</Txt>{(r.data.activation?.missingRequirements || []).map((item: string) => <Txt key={item}>• {item}</Txt>)}<Txt muted>KYC verification and activation are separate decisions.</Txt>
       {can('vendors.approve') && ['APPROVE', 'REJECT', 'REQUEST_INFORMATION', 'SUSPEND'].map(decision => <Button key={decision} title={human(decision)} secondary busy={a.busy} onPress={() => confirm('Change profile activation?', human(decision), () => { void a.run(async () => { if (!notes.trim()) throw new Error('Enter a reason.'); await internal.call(`/external-users/organizations/${vendorId}/activation`, 'POST', { action: decision, reason: notes, idempotencyKey: `${Date.now()}-${Math.random()}` }); r.refresh(); }); })} />)}
       </Card>
       {(r.data.documents || []).map((doc: Data) => (

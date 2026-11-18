@@ -13,6 +13,7 @@ import { Quote } from '../src/external/models/Quote.js';
 import { CoreBooking } from '../src/admin/models/CoreBooking.js';
 import { VendorReview } from '../src/external/models/VendorReview.js';
 import { signExternalAccessToken } from '../src/external/utils/tokens.js';
+import { LaunchpadObservation } from '../src/experience/launchpadEvidence.js';
 
 let mongo, app;
 before(async () => {
@@ -63,6 +64,20 @@ test('Launchpad endpoint still requires an authenticated Vendor session', async 
   await request(app).get('/api/vendor/launchpad').expect(401);
 });
 
+test('legacy missing timeline and unavailable history never manufacture dates or erase current source evidence', async t => {
+  const f = await fixture();
+  await VendorOrganization.collection.updateOne({ _id: f.vendor._id }, { $unset: { createdAt: '', foundingPartner: '' } });
+  const load = () => request(app).get('/api/vendor/launchpad').set(f.auth).expect(200);
+  let data = (await load()).body;
+  assert.equal(data.timelineSource, 'UNKNOWN'); assert.equal(data.offerStartedAt, null); assert.equal(data.daysRemaining, null); assert.equal(data.cohort, null);
+  t.mock.method(LaunchpadObservation, 'find', () => { throw new Error('Synthetic evidence history outage'); });
+  data = (await load()).body;
+  assert.equal(data.historyStatus, 'UNAVAILABLE');
+  assert.equal(data.steps.find(step => step.key === 'BUILD_PROFILE').sourceStatus, 'READY');
+  assert.ok(data.steps.every(step => step.completedAt === null && step.completionRecordedAt === null && step.history === null));
+  assert.equal((await VendorOrganization.findById(f.vendor._id).lean()).createdAt, undefined);
+});
+
 test('elapsed days, unverified bookings and unverified published reviews cannot grant growth milestones', async () => {
   const f = await fixture();
   await VendorOrganization.updateOne({ _id: f.vendor._id }, { $set: { 'foundingPartner.offerStartedAt': new Date('2020-01-01'), 'foundingPartner.offerExpiresAt': new Date('2020-01-31') } });
@@ -92,10 +107,13 @@ test('Launchpad retains observed evidence changes without rewriting history or t
   data = (await load()).body;
   const complete = data.steps.find(s => s.key === 'ADD_SERVICES');
   assert.equal(complete.status, 'COMPLETE'); assert.ok(complete.completionObservedAt); assert.equal(complete.completedAt, null);
+  assert.equal(complete.completionRecordedAt, complete.completionObservedAt);
+  assert.equal(complete.completionTimeSource, 'OBSERVED_FROM_RECORDED_EVIDENCE');
   await VendorService.updateOne({ _id: service._id }, { $set: { status: 'ARCHIVED' } });
   data = (await load()).body;
   const reverted = data.steps.find(s => s.key === 'ADD_SERVICES');
   assert.equal(reverted.status, 'PENDING'); assert.equal(reverted.history.length, 3);
+  assert.equal(reverted.completionRecordedAt, null);
   assert.equal(reverted.completionObservedAt, complete.completionObservedAt);
   const isolated = (await request(app).get(`${endpoint}?vendorId=${f.vendor._id}`).set(other.auth).expect(200)).body;
   assert.equal(isolated.steps.find(s => s.key === 'ADD_SERVICES').history.length, 1);
