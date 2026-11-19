@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   return {
     plugins: [react(), tailwindcss()],
+    // Keep responsive images and fonts independently cacheable. Inlining every
+    // srcset candidate forces small screens to download the unused variants.
+    build: {
+      assetsInlineLimit: filePath => /\.(avif|webp|woff2?)$/i.test(filePath) ? false : undefined,
+    },
     server: {
       port: Number(env.VITE_DEV_PORT || 5173),
       strictPort: true,
