@@ -16,6 +16,11 @@ const initialCss = find(/^index-.*\.css$/);
 const initialJs = find(/^index-.*\.js$/);
 const vendorJs = find(/^VendorPortal-.*\.js$/);
 const workspaceCss = find(/^workspace-.*\.css$/);
+// Every responsive candidate must remain independently cacheable, not inlined
+// into the entry script even when its compressed file is below Vite's default.
+for (const name of ['brand-mark-64', 'brand-mark-128', 'brand-mark-192', 'vendor-landing-hero-640', 'vendor-landing-hero-1200']) {
+  find(new RegExp(`^${name}-.*\\.avif$`));
+}
 for (const [file, limit] of [[initialCss, 130_000], [initialJs, 225_000], [vendorJs, 250_000]]) {
   assert.ok(statSync(file).size <= limit, `${file} exceeds its reviewed delivery budget (${limit} bytes).`);
 }

@@ -30,7 +30,7 @@ Chunk sizes are not the sum of all requests for every section. A section may req
 
 ## Verification and reproduction
 
-`npm test -w web` passed 36 tests. `npm run build -w web` and `npm run check:performance -w web` passed. Browser review checked desktop/mobile light and dark layouts, the 320px header, responsive image selection, sign-in navigation and local image delivery. Production CI additionally checks the authenticated dashboard and protected routes before deployment.
+`npm test -w web` passed 36 tests. Mobile typechecking and 115 tests passed; brand synchronization preserves the existing native title, splash background and palettes. `npm run build -w web` and `npm run check:performance -w web` passed. Browser review checked desktop/mobile light and dark layouts, the 320px header, responsive image selection, sign-in navigation and local image delivery. Production CI additionally checks the authenticated dashboard and protected routes before deployment.
 
 ```powershell
 npm test -w web
