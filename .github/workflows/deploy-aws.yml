@@ -29,6 +29,8 @@ jobs:
         run: npm test
       - name: Frontend production build
         run: npm run build -w web
+      - name: Check Vendor delivery budgets and deferred theme integrity
+        run: npm run check:performance -w web
       - name: Install isolated production browser verification tools
         run: |
           npm install --prefix tmp/vendor-os-tools --no-save --package-lock=false --ignore-scripts playwright@1.64.1

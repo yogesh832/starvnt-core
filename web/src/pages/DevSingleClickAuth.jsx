@@ -728,3 +728,4 @@ export default function DevSingleClickAuth() {
     </div>
   );
 }
+import '../workspace.css';

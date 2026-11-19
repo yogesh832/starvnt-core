@@ -396,7 +396,7 @@ export function ReviewsPage() {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2.5">
                             {photoUrl ? (
-                              <img src={photoUrl} alt={authorName} className="w-9 h-9 rounded-full object-cover shadow-xs" />
+                              <img src={photoUrl} alt={authorName} loading="lazy" decoding="async" className="w-9 h-9 rounded-full object-cover shadow-xs" />
                             ) : (
                               <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-800 grid place-items-center text-xs font-bold shadow-xs">
                                 {authorName[0]?.toUpperCase() || 'G'}

@@ -1,3 +1,4 @@
+import '../../workspace.css';
 import BookingWorkflow from '../../components/BookingWorkflow.jsx';
 import VendorCompliance from './VendorCompliance.jsx';
 import RevenueCrm from './RevenueCrm.jsx';

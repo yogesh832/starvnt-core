@@ -1,4 +1,5 @@
 import { loadAuthScript } from '../../lib/authScripts.js';
+import vendorAuthPhoto from '../../assets/images/vendor-auth-photo-1200.webp';
 import { portalLoginUrl } from '../../lib/portalAccess.js';
 import VendorCategoryPicker from "../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useRef } from "react";
@@ -544,7 +545,7 @@ export default function ExternalLogin() {
             style={{
               backgroundImage: `linear-gradient(to bottom, var(--auth-photo-top, rgba(14, 19, 48, 0.92)) 0%, var(--auth-photo-mid, rgba(14, 19, 48, 0.65)) 45%, var(--auth-photo-clear, rgba(14, 19, 48, 0.40)) 70%, var(--auth-photo-bottom, rgba(14, 19, 48, 0.94)) 100%), url('${
                 accountType === "VENDOR"
-                  ? "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=1600&q=85"
+                  ? vendorAuthPhoto
                   : "https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1600&q=85"
               }')`,
               backgroundSize: "cover",
@@ -727,7 +728,7 @@ export default function ExternalLogin() {
                   className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     authMethod === "EMAIL"
                       ? "bg-white text-navy shadow-xs border border-gray-200/80 font-bold"
-                      : "text-muted hover:text-navy hover:bg-white/40"
+                      : "text-ink/80 dark:text-gray-300 hover:text-navy hover:bg-white/40"
                   }`}
                 >
                   <svg
@@ -754,7 +755,7 @@ export default function ExternalLogin() {
                   className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     authMethod === "PHONE"
                       ? "bg-white text-navy shadow-xs border border-gray-200/80 font-bold"
-                      : "text-muted hover:text-navy hover:bg-white/40"
+                      : "text-ink/80 dark:text-gray-300 hover:text-navy hover:bg-white/40"
                   }`}
                 >
                   <svg
@@ -781,7 +782,7 @@ export default function ExternalLogin() {
                   className={`py-2 px-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     authMethod === "GOOGLE"
                       ? "bg-white text-navy shadow-xs border border-gray-200/80 font-bold"
-                      : "text-muted hover:text-navy hover:bg-white/40"
+                      : "text-ink/80 dark:text-gray-300 hover:text-navy hover:bg-white/40"
                   }`}
                 >
                   <svg

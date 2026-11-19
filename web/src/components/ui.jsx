@@ -1,6 +1,9 @@
 import mark64 from '../assets/images/brand-mark-64.webp';
 import mark128 from '../assets/images/brand-mark-128.webp';
 import mark192 from '../assets/images/brand-mark-192.webp';
+import markAvif64 from '../assets/images/brand-mark-64.avif';
+import markAvif128 from '../assets/images/brand-mark-128.avif';
+import markAvif192 from '../assets/images/brand-mark-192.avif';
 
 export const BRAND_ASSETS = {
   mark: mark64,
@@ -10,7 +13,9 @@ export const BRAND_ASSETS = {
 
 export function LogoMark({ size = 22, className = '' }) {
   return (
-    <img
+    <picture className="contents">
+      <source type="image/avif" srcSet={`${markAvif64} 64w, ${markAvif128} 128w, ${markAvif192} 192w`} sizes={`${size}px`} />
+      <img
       src={BRAND_ASSETS.mark}
       srcSet={`${mark64} 64w, ${mark128} 128w, ${mark192} 192w`}
       sizes={`${size}px`}
@@ -20,7 +25,8 @@ export function LogoMark({ size = 22, className = '' }) {
       height={size}
       className={`rounded-lg object-cover shadow-[0_0_20px_rgba(14,165,233,0.34)] ring-1 ring-cyan-300/35 ${className}`}
       style={{ width: size, height: size }}
-    />
+      />
+    </picture>
   );
 }
 
@@ -29,9 +35,10 @@ export function LogoWord({
   sub = 'Events. Simplified.',
   size = 'text-xl',
   markSize = 34,
+  compact = false,
 }) {
   return (
-    <div className={`flex items-center gap-3 ${light ? 'text-white' : 'text-primary'}`}>
+    <div className={`flex items-center ${compact ? 'gap-2 sm:gap-3' : 'gap-3'} ${light ? 'text-white' : 'text-primary'}`}>
       <LogoMark size={markSize} />
       <div>
         <div
@@ -44,7 +51,7 @@ export function LogoWord({
           StarVnt
         </div>
         <div
-          className={`text-[9px] leading-tight font-semibold tracking-[0.18em] uppercase ${
+          className={`text-[9px] leading-tight font-semibold tracking-[0.18em] uppercase ${compact ? 'hidden sm:block' : ''} ${
             light ? 'text-white/70' : 'text-muted'
           }`}
         >

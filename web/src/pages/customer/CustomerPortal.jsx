@@ -1,3 +1,4 @@
+import '../../workspace.css';
 import Customer360 from './Customer360.jsx';
 import Discovery from './Discovery.jsx';
 import AuraMark from '../../components/AuraMark.jsx';

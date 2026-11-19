@@ -1115,6 +1115,7 @@ export default function PortfolioPage() {
                   <div className="relative aspect-16/9 bg-gray-100 overflow-hidden">
                     <img
                       src={getMediaThumbnail(p.coverUrl, 'IMAGE')}
+                      loading="lazy" decoding="async"
                       alt={p.projectName}
                       onError={(e) => {
                         e.currentTarget.src = getMediaThumbnail('', 'IMAGE');
@@ -1291,6 +1292,7 @@ export default function PortfolioPage() {
                   <div className="relative aspect-4/3 bg-gray-100 overflow-hidden">
                     <img
                       src={getMediaThumbnail(item.url, item.mediaType, item.thumbnailUrl)}
+                      loading="lazy" decoding="async"
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     />
@@ -1638,6 +1640,7 @@ export default function PortfolioPage() {
                             <div className="relative aspect-16/9 bg-gray-100 overflow-hidden">
                               <img
                                 src={getMediaThumbnail(item.url, item.mediaType, item.thumbnailUrl)}
+                      loading="lazy" decoding="async"
                                 alt={item.title}
                                 className="w-full h-full object-cover"
                               />
@@ -2007,6 +2010,7 @@ export default function PortfolioPage() {
                       <div className="relative aspect-4/3 overflow-hidden">
                         <img
                           src={getMediaThumbnail(item.url, item.mediaType, item.thumbnailUrl)}
+                      loading="lazy" decoding="async"
                           alt={item.title}
                           onError={(e) => {
                             e.currentTarget.src = getMediaThumbnail('', item.mediaType);
@@ -2148,6 +2152,7 @@ export default function PortfolioPage() {
             </button>
             <img
               src={activePhotoModal.url}
+              decoding="async"
               alt={activePhotoModal.title || 'Showcase Photo'}
               className="max-h-[82vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
             />

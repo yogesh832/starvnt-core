@@ -1,39 +1,43 @@
+import '../../workspace.css';
 import VendorGlobalSearch from './VendorGlobalSearch.jsx';
-import Agreements from './pages/Agreements.jsx';
-import BookingWorkflow from '../../components/BookingWorkflow.jsx';
-import CustomerGrowth from './pages/CustomerGrowth.jsx';
 import { VENDOR_QR_ENABLED } from '../../../../server/src/common/vendorQrRelease.js';
-import DiscoveryRewards from './pages/DiscoveryRewards.jsx';
-import VendorIdentity from './pages/VendorIdentity.jsx';
-import Academy from './pages/Academy.jsx';
-import GrowthMeetings from './pages/GrowthMeetings.jsx';
-import LaunchpadPage from './pages/LaunchpadPage.jsx';
 import AuraMark from '../../components/AuraMark.jsx';
-import { useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { NavLink, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import Icon from '../../components/Icon.jsx';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import { externalApi } from '../../lib/api.js';
 import DashboardHome from './pages/DashboardHome.jsx';
-import Enquiries from './pages/Enquiries.jsx';
-import Quotes from './pages/Quotes.jsx';
-import Bookings from './pages/Bookings.jsx';
-import CalendarPage from './pages/CalendarPage.jsx';
-import ExternalBookings from './pages/ExternalBookings.jsx';
-import ReadinessPage from './pages/ReadinessPage.jsx';
-import PortfolioPage from './pages/PortfolioPage.jsx';
-import { AnalyticsPage, PaymentsPage, ReviewsPage } from './pages/InsightPages.jsx';
-import {
-  ServicesPage,
-  AvailabilityPage,
-  DocumentsPage,
-  ProfilePage,
-  SettingsPage,
-} from './pages/BusinessPages.jsx';
 import VendorAura from './VendorAura.jsx';
-import VendorUpdates from './VendorUpdates.jsx';
 import { unreadBadgeLabel } from './vendorNotificationUi.js';
+
+// Keep the command center available immediately; load each other section when
+// opened rather than downloading every workflow, editor and map at sign-in.
+const Agreements = lazy(() => import('./pages/Agreements.jsx'));
+const BookingWorkflow = lazy(() => import('../../components/BookingWorkflow.jsx'));
+const CustomerGrowth = lazy(() => import('./pages/CustomerGrowth.jsx'));
+const DiscoveryRewards = lazy(() => import('./pages/DiscoveryRewards.jsx'));
+const VendorIdentity = lazy(() => import('./pages/VendorIdentity.jsx'));
+const Academy = lazy(() => import('./pages/Academy.jsx'));
+const GrowthMeetings = lazy(() => import('./pages/GrowthMeetings.jsx'));
+const LaunchpadPage = lazy(() => import('./pages/LaunchpadPage.jsx'));
+const Enquiries = lazy(() => import('./pages/Enquiries.jsx'));
+const Quotes = lazy(() => import('./pages/Quotes.jsx'));
+const Bookings = lazy(() => import('./pages/Bookings.jsx'));
+const CalendarPage = lazy(() => import('./pages/CalendarPage.jsx'));
+const ExternalBookings = lazy(() => import('./pages/ExternalBookings.jsx'));
+const ReadinessPage = lazy(() => import('./pages/ReadinessPage.jsx'));
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage.jsx'));
+const AnalyticsPage = lazy(() => import('./pages/InsightPages.jsx').then(module => ({ default: module.AnalyticsPage })));
+const PaymentsPage = lazy(() => import('./pages/InsightPages.jsx').then(module => ({ default: module.PaymentsPage })));
+const ReviewsPage = lazy(() => import('./pages/InsightPages.jsx').then(module => ({ default: module.ReviewsPage })));
+const ServicesPage = lazy(() => import('./pages/BusinessPages.jsx').then(module => ({ default: module.ServicesPage })));
+const AvailabilityPage = lazy(() => import('./pages/BusinessPages.jsx').then(module => ({ default: module.AvailabilityPage })));
+const DocumentsPage = lazy(() => import('./pages/BusinessPages.jsx').then(module => ({ default: module.DocumentsPage })));
+const ProfilePage = lazy(() => import('./pages/BusinessPages.jsx').then(module => ({ default: module.ProfilePage })));
+const SettingsPage = lazy(() => import('./pages/BusinessPages.jsx').then(module => ({ default: module.SettingsPage })));
+const VendorUpdates = lazy(() => import('./VendorUpdates.jsx'));
 
 export default function VendorPortal() {
   const { user, logout } = useExternalAuth();
@@ -656,6 +660,7 @@ export default function VendorPortal() {
 
         {/* Workspace Routes */}
         <main ref={workspaceRef} aria-label="Vendor workspace" className="flex-1 min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-28 lg:pb-0">
+          <Suspense fallback={<div role="status" className="p-6 text-sm text-muted">Loading section…</div>}>
           <Routes>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<DashboardHome business={businessName} onAskAura={askAura} />} />
@@ -690,6 +695,7 @@ export default function VendorPortal() {
             <Route path="profile/social-links" element={<VendorIdentity key="social-links" />} />
             <Route path="settings" element={<SettingsPage user={user} business={businessName} />} />
           </Routes>
+          </Suspense>
         </main>
 
 

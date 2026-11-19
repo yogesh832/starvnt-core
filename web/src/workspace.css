@@ -1,0 +1,7 @@
+/* Load workspace-only utility classes with the authenticated route chunks.
+   Reference the common theme without emitting a second reset or palette. */
+@reference './theme.css';
+@source './';
+@layer utilities {
+  @tailwind utilities;
+}

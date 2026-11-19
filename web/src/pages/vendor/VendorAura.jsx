@@ -1,8 +1,7 @@
-import VendorAuraLocation from '../../components/VendorAuraLocation.jsx';
 import { requestsVendorLocation, vendorCopy } from '../../../../server/src/common/vendorAuraUi.js';
 import { conversationLanguage } from '../../../../server/src/common/auraLanguage.js';
 import AuraMark from '../../components/AuraMark.jsx';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { createAuraLive, sameAuraValue } from '../../../../shared/auraLive.ts';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
@@ -11,6 +10,8 @@ import { externalApi } from '../../lib/api.js';
 import { useVoiceAgent, VoiceAgentOverlay } from '../../components/VoiceAgent.jsx';
 import { stopAuraSpeaking, transcribeAuraAudio } from '../../lib/voice.js';
 import { getAuraPrompts } from './vendorAuraPrompts.js';
+
+const VendorAuraLocation = lazy(() => import('../../components/VendorAuraLocation.jsx'));
 
 /**
  * Vendor Aura+: answers from the vendor's own data and links to the page
@@ -1264,8 +1265,10 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
             if (m.role === 'model' && !m.content) return null;
             return <div key={i} className="space-y-3"><Bubble m={m} onAction={goTo} />
               {m.role === 'model' && i === messages.length - 1 && showingLocationPicker &&
+                <Suspense fallback={<p role="status" className="text-sm text-muted">Loading location picker…</p>}>
                 <VendorAuraLocation key={`${sessionId}-${i}`} language={conversationLanguage('',messages)} disabled={sending}
-                  onSelect={location => send(`${vendorCopy(conversationLanguage('',messages),'useLocation')}: ${location.address}, ${location.city}`, {locationSelection:location})} />}
+                  onSelect={location => send(`${vendorCopy(conversationLanguage('',messages),'useLocation')}: ${location.address}, ${location.city}`, {locationSelection:location})} />
+                </Suspense>}
             </div>;
           })}
           {pending && !sending && (

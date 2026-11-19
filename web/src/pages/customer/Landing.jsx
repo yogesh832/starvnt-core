@@ -1,5 +1,7 @@
 import hero640 from '../../assets/images/vendor-landing-hero-640.webp';
 import hero1200 from '../../assets/images/vendor-landing-hero-1200.webp';
+import heroAvif640 from '../../assets/images/vendor-landing-hero-640.avif';
+import heroAvif1200 from '../../assets/images/vendor-landing-hero-1200.avif';
 import AuraMark from '../../components/AuraMark.jsx';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -117,7 +119,8 @@ export default function Landing() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Tell us what you want to arrange..."
-              className="flex-1 outline-none text-sm sm:text-base placeholder:text-muted/60 min-w-0"
+              aria-label="Describe your event"
+              className="flex-1 outline-none text-sm sm:text-base placeholder:text-muted min-w-0"
             />
             <button type="button" onClick={() => beginPlan(input.trim())} className="text-muted hover:text-primary p-1 cursor-pointer transition shrink-0" aria-label="Voice input">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -151,7 +154,9 @@ export default function Landing() {
 
         {/* Right Column: Hero Image — hidden on small mobile */}
         <div className="relative hidden sm:block rounded-3xl overflow-hidden shadow-2xl border-4 border-white aspect-4/3 lg:aspect-square">
-          <picture className="contents"><source media="(min-width: 640px)" srcSet={`${hero640} 640w, ${hero1200} 1200w`} sizes="(min-width: 1024px) 45vw, 90vw" /><img
+          <picture className="contents">
+          <source type="image/avif" media="(min-width: 640px)" srcSet={`${heroAvif640} 640w, ${heroAvif1200} 1200w`} sizes="(min-width: 1280px) 512px, (min-width: 1024px) calc(45vw - 65px), calc(100vw - 64px)" />
+          <source media="(min-width: 640px)" srcSet={`${hero640} 640w, ${hero1200} 1200w`} sizes="(min-width: 1280px) 512px, (min-width: 1024px) calc(45vw - 65px), calc(100vw - 64px)" /><img
             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/%3E"
             width="1200" height="800" fetchPriority="high"
             alt="Beautiful Wedding Setup"

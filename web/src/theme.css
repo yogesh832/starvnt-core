@@ -1,10 +1,27 @@
 @import './assets/fonts/inter.css';
-@import 'tailwindcss';
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme) theme(static);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @import './dark-theme.css';
+
+/* Public routes load only their utilities. Dashboard utilities are route-loaded
+   from workspace.css, while palette, resets and shared dark rules stay here. */
+@source './App.jsx';
+@source './main.jsx';
+@source './components';
+@source './auth';
+@source './pages/external';
+@source './pages/customer/Landing.jsx';
+@source './pages/PrivacyPolicy.jsx';
+@source './pages/PublicPolicyPage.jsx';
+@source './pages/PublicVendorProfile.jsx';
+@source './pages/ExperiencePage.jsx';
+@source './pages/admin/AdminLogin.jsx';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme {
+@theme static {
   --color-primary: #5a4bd1;
   --color-primary-dark: #4639b8;
   --color-primary-soft: #eceafe;

@@ -494,7 +494,7 @@ export default function Messages({ onMessagesRead, embedded = false, initialThre
                                       onClick={() => setLightboxUrl(imgUrl)}
                                       className="relative rounded-2xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/5 cursor-pointer group shadow-xs"
                                     >
-                                      <img src={imgUrl} alt="Attachment" className="w-full max-h-56 object-cover group-hover:scale-105 transition duration-300" />
+                                      <img src={imgUrl} alt="Attachment" loading="lazy" decoding="async" className="w-full max-h-56 object-cover group-hover:scale-105 transition duration-300" />
                                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
                                         <span className="bg-black/70 text-white text-[10px] font-bold px-2.5 py-1 rounded-full backdrop-blur-xs flex items-center gap-1">
                                           <Icon name="maximize" size={10} /> View image
@@ -507,7 +507,7 @@ export default function Messages({ onMessagesRead, embedded = false, initialThre
 
                               {parsed.videos.map((vidUrl, i) => (
                                 <div key={i} className="rounded-2xl overflow-hidden bg-black border border-gray-700 max-w-xs my-1">
-                                  <video src={vidUrl} controls className="w-full max-h-48 object-contain" />
+                                  <video src={vidUrl} controls preload="none" playsInline className="w-full max-h-48 object-contain" />
                                 </div>
                               ))}
 
