@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { verifyVendorSeo } from './verify-vendor-seo.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const output = resolve(root, 'tmp/qa/vendor-business-dashboard');
@@ -256,6 +257,7 @@ try {
   report.checks.push({ name: 'Vendor session on /customer resolves to its authorized vendor dashboard, not an empty redirect loop', passed: true });
 
   }
+  await verifyVendorSeo({ page, output, report });
   const guest = await browser.newContext({ viewport: { width: 1366, height: 768 } });
   const guestPage = await guest.newPage(); guestPage.setDefaultTimeout(10000);
   const guestErrors = []; guestPage.on('pageerror', error => guestErrors.push(error.message));

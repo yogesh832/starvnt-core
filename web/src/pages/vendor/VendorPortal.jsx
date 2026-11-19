@@ -17,6 +17,7 @@ import { unreadBadgeLabel } from './vendorNotificationUi.js';
 const Agreements = lazy(() => import('./pages/Agreements.jsx'));
 const BookingWorkflow = lazy(() => import('../../components/BookingWorkflow.jsx'));
 const CustomerGrowth = lazy(() => import('./pages/CustomerGrowth.jsx'));
+const SeoGrowth = lazy(() => import('./pages/SeoGrowth.jsx'));
 const DiscoveryRewards = lazy(() => import('./pages/DiscoveryRewards.jsx'));
 const VendorIdentity = lazy(() => import('./pages/VendorIdentity.jsx'));
 const Academy = lazy(() => import('./pages/Academy.jsx'));
@@ -391,6 +392,7 @@ export default function VendorPortal() {
     { to: 'customers', label: 'Customer 360', icon: 'customers' },
     ...(VENDOR_QR_ENABLED ? [{ to: 'experience-qr', label: 'Experience QR', icon: 'reviews' }] : []),
     { to: 'growth', label: 'Customer growth', icon: 'analytics' },
+    { to: 'seo', label: 'SEO & GEO growth', icon: 'search' },
     { to: 'learning', label: 'Learning & Growth', icon: 'documents' },
     { to: 'discovery-rewards', label: 'Discovery & rewards', icon: 'star' },
     { to: 'portfolio', label: 'Portfolio', icon: 'gallery' },
@@ -676,6 +678,7 @@ export default function VendorPortal() {
             <Route path="customers" element={<CustomerGrowth />} />
             {VENDOR_QR_ENABLED && <Route path="experience-qr" element={<CustomerGrowth mode="qr" />} />}
             <Route path="growth" element={<CustomerGrowth mode="growth" />} />
+            <Route path="seo" element={<SeoGrowth />} />
             {/* Share Your Business is deferred to Phase 2. */}
             <Route path="share" element={<Navigate to="/vendor/profile/social-links" replace />} />
             <Route path="learning" element={<Academy />} />
