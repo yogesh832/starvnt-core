@@ -46,8 +46,9 @@ green. A passing build alone does not prove that production was deployed.
 
 `app.starvnt.com` serves the backend. Public privacy paths and their static
 assets must be routed to the frontend so the published policy URL also works.
-`vendor.starvnt.com` serves the frontend and proxies API requests to the backend.
-The separate partner domain is outside this deployment's scope.
+`vendor.starvnt.com` and `partner.starvnt.com` serve the Vendor OS frontend
+and proxy API requests to the backend. The workflow checks both hostnames,
+including the deployed revision and API health through the partner hostname.
 
 ## Recovery
 

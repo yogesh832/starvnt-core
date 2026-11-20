@@ -101,6 +101,9 @@ jobs:
           curl --fail --retry 5 --retry-all-errors --retry-delay 5 https://vendor.starvnt.com/
           actual=$(curl --fail --silent https://vendor.starvnt.com/deployment.json | jq -r .commit)
           [[ "$actual" == "$DEPLOY_SHA" ]]
+          partner=$(curl --fail --silent --resolve partner.starvnt.com:443:35.154.67.51 https://partner.starvnt.com/deployment.json | jq -r .commit)
+          [[ "$partner" == "$DEPLOY_SHA" ]]
+          curl --fail --silent --resolve partner.starvnt.com:443:35.154.67.51 https://partner.starvnt.com/api/health | jq -e '.ok == true'
           curl --fail --silent https://app.starvnt.com/privacy-policy | grep -q '<div id="root">'
           echo "### Deployed $DEPLOY_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo 'Backend health, frontend, privacy route and revision checks passed.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Backend health, both vendor domains, privacy route and revision checks passed.' >> "$GITHUB_STEP_SUMMARY"
