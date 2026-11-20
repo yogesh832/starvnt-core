@@ -119,15 +119,19 @@ export default function App() {
 function ApplicationRoutes() {
   const { search } = useLocation();
   const policyAudience = new URLSearchParams(search).get('for');
+  const host = window.location.hostname;
+  const vendorHost = /^(vendor|vendors|partner)\.starvnt\.com$/i.test(host);
   return (
     <Routes>
-      {/* Public landing — guests plan here, partner/admin subdomains redirect appropriately */}
+      {/* Vendor domains open the vendor portal; the customer landing stays on starvnt.com. */}
       <Route 
         path="/" 
         element={
-          window.location.hostname.startsWith('admin.')
+          host.startsWith('admin.')
               ? <Navigate to="/admin" replace />
-              : <Landing />
+              : vendorHost
+                ? <Navigate to="/vendor" replace />
+                : <Landing />
         } 
       />
       {/* External domain — one auth UI, two portals */}

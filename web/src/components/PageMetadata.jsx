@@ -6,7 +6,9 @@ import { PORTAL_SURFACE } from '../lib/portalAccess.js';
 export default function PageMetadata() {
   const { pathname } = useLocation();
   useEffect(() => {
-    const origin = PORTAL_SURFACE === 'VENDOR' ? 'https://vendor.starvnt.com' : 'https://starvnt.com';
+    const origin = PORTAL_SURFACE === 'VENDOR'
+      ? (window.location.hostname === 'partner.starvnt.com' ? 'https://partner.starvnt.com' : 'https://vendor.starvnt.com')
+      : 'https://starvnt.com';
     const publicPage = ['/', '/privacy', '/privacy-policy', '/terms'].includes(pathname) || /^\/vendors\/[^/]+\/?$/.test(pathname);
     let canonical = document.querySelector('link[rel="canonical"]');
     if (!canonical) {
