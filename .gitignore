@@ -72,3 +72,6 @@ desktop.ini
 
 # Disposable unified acceptance preview assets
 web/dist-unified-preview/
+
+# Proposal Studio generated PDFs (private customer documents)
+server/var/

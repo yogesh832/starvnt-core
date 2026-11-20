@@ -34,6 +34,8 @@ import adminCouponsRoutes from './admin/routes/coupons.routes.js';
 import { requireAdminAuth, requirePermission } from './admin/middleware/requireAdminAuth.js';
 import { metricsMiddleware, renderPrometheusMetrics } from './metrics.js';
 import { pushRoutes } from './notifications/push.routes.js';
+import adminProposalStudioRoutes from './proposals/routes.admin.js';
+import { vendorAgreementRoutes, customerProposalRoutes, customerReferenceRoutes } from './proposals/routes.external.js';
 
 export function createApp() {
   const app = express();
@@ -107,6 +109,10 @@ export function createApp() {
   app.get('/api/vendor/me', requireExternalAuth, requireAccountType('VENDOR'), (req, res) => {
     res.json({ ok: true, user: req.externalUser.toSafeJSON() });
   });
+  // Proposal Studio: customer proposals + vendor agreements (path-scoped auth).
+  app.use('/api/customer', customerProposalRoutes);
+  app.use('/api/customer', customerReferenceRoutes);
+  app.use('/api/vendor', vendorAgreementRoutes);
   // Customer App + Aura+ (events, plan, chat)
   app.use('/api/customer', customerRouter);
   app.use('/api/customer', foundationCustomerRoutes);
@@ -136,6 +142,7 @@ export function createApp() {
   app.use('/api/admin/events', adminEventsRoutes);
   app.use('/api/admin/disputes', adminDisputesRoutes);
   app.use('/api/admin/policy', adminPolicyRoutes);
+  app.use('/api/admin/proposal-studio', adminProposalStudioRoutes);
   app.use('/api/admin/settings', adminSettingsRoutes);
   app.use('/api/admin/reports', adminReportsRoutes);
   app.use('/api/admin/external-users', adminExternalUsersRoutes);

@@ -17,15 +17,15 @@ export function activityAnswer(message, activity, language = 'en') {
   const needsReply = kind === 'enquiry' && /pending|need.*reply|reply.*pending/i.test(message);
   const matching = activity.items.filter(row => (!kind || row.kind === kind || (kind === 'payment' && row.paymentStatus)) && (!newOnly || row.status === 'NEW') && (!unreadOnly || row.status === 'UNREAD') && (!needsReply || ['NEW', 'VIEWED'].includes(row.status)) && (!reference || row.reference?.toLowerCase() === reference.toLowerCase()));
   const rows = matching.slice(0, 3);
-  const hi = language === 'hi', hinglish = language === 'hinglish';
-  const opening = hi ? 'अभी के सेव किए गए रिकॉर्ड के अनुसार:' : hinglish ? 'Abhi ke saved records ke mutabik:' : 'According to the current saved records:';
+  const hi = language === 'hi', hinglish = language === 'hinglish', bn = language === 'bn';
+  const opening = bn ? 'এখনকার সংরক্ষিত রেকর্ড অনুযায়ী:' : hi ? 'अभी के सेव किए गए रिकॉर्ड के अनुसार:' : hinglish ? 'Abhi ke saved records ke mutabik:' : 'According to the current saved records:';
   const lines = rows.map(row => {
     const state = [row.status, row.paymentStatus && `payment: ${row.paymentStatus}`, row.executionStatus && `work: ${row.executionStatus}`, row.settlementStatus && `settlement: ${row.settlementStatus}`].filter(Boolean).join('; ').toLowerCase().replaceAll('_', ' ');
     return `${row.title}${row.reference ? ` (${row.reference})` : ''}: ${state}${row.total != null ? ` · ₹${row.total.toLocaleString('en-IN')}` : ''}`;
   });
   const countKey = newOnly ? 'newEnquiries' : { quote: 'quotes', booking: 'bookings', notification: 'unread' }[kind];
   const wantsCount = /how many|कितन|kitn/i.test(message) && countKey && !reference && !needsReply && (kind !== 'notification' || unreadOnly);
-  const countText = wantsCount ? `${hi ? 'कुल' : hinglish ? 'Kul' : 'Total'}: ${activity.counts[countKey]}.\n` : '';
-  const quoteNote = kind === 'enquiry' && nouns.quote.test(message) && Number.isInteger(activity.counts?.quotes) ? `\n${activity.counts.quotes === 0 ? hi ? 'अभी वेंडर का कोई कोट नहीं आया है।' : hinglish ? 'Abhi vendor ka koi quote nahi aaya hai.' : 'No vendor quote has arrived yet.' : `Saved quotes: ${activity.counts.quotes}`}` : '';
-  return { reply: countText + (lines.length ? `${opening}\n${lines.join('\n')}` : hi ? 'हाल के रिकॉर्ड में ऐसा कोई रिकॉर्ड नहीं है।' : hinglish ? 'Recent records mein aisa koi record nahi hai.' : 'There are no matching records in the recent activity window.') + quoteNote, actions: [...new Map(rows.filter(row => row.href).map(row => [row.href, { label: 'View records', to: row.href }])).values()].slice(0, 3) };
+  const countText = wantsCount ? `${bn ? 'মোট' : hi ? 'कुल' : hinglish ? 'Kul' : 'Total'}: ${activity.counts[countKey]}.\n` : '';
+  const quoteNote = kind === 'enquiry' && nouns.quote.test(message) && Number.isInteger(activity.counts?.quotes) ? `\n${activity.counts.quotes === 0 ? bn ? 'এখনও ভেন্ডরের কোনো কোট আসেনি।' : hi ? 'अभी वेंडर का कोई कोट नहीं आया है।' : hinglish ? 'Abhi vendor ka koi quote nahi aaya hai.' : 'No vendor quote has arrived yet.' : `Saved quotes: ${activity.counts.quotes}`}` : '';
+  return { reply: countText + (lines.length ? `${opening}\n${lines.join('\n')}` : bn ? 'সাম্প্রতিক রেকর্ডে এমন কিছু নেই।' : hi ? 'हाल के रिकॉर्ड में ऐसा कोई रिकॉर्ड नहीं है।' : hinglish ? 'Recent records mein aisa koi record nahi hai.' : 'There are no matching records in the recent activity window.') + quoteNote, actions: [...new Map(rows.filter(row => row.href).map(row => [row.href, { label: 'View records', to: row.href }])).values()].slice(0, 3) };
 }

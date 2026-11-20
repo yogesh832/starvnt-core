@@ -4,7 +4,7 @@ import { ServiceCoverage } from '../external/models/ServiceCoverage.js';
 import { CoreBooking } from '../admin/models/CoreBooking.js';
 import { VendorBlockout } from '../external/models/VendorBlockout.js';
 import { VendorReview } from '../external/models/VendorReview.js';
-import { QuoteProposal } from '../external/models/QuoteProposal.js';
+import { Quote } from '../external/models/Quote.js';
 import { vendorGrowthEvidence } from '../external/services/discoveryReadiness.service.js';
 
 /**
@@ -38,7 +38,7 @@ export async function getLaunchpadProgress(vendorId) {
     vendorGrowthEvidence(vendorId).catch(() => ({ matchingEligible: false, milestones: [] })),
     PortfolioItem.countDocuments({ vendor: vendorId, visibility: 'PUBLIC' }),
     ServiceCoverage.countDocuments({ vendor: vendorId }),
-    QuoteProposal.countDocuments({ vendorId }),
+    Quote.countDocuments({ vendor: vendorId, status: { $ne: 'DRAFT' } }),
     Promise.all([
       CoreBooking.countDocuments({ vendorId, bookingStatus: 'CONFIRMED' }),
       VendorBlockout.countDocuments({ vendor: vendorId, recordType: 'EXTERNAL_COMMITMENT' })

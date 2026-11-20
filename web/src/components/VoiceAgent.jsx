@@ -119,8 +119,10 @@ export function useVoiceAgent({ onUtterance, lang = 'en-IN' }) {
     if (!activeRef.current) return;
     const expected = sessionRevision.current;
     setExpanded(false);
-    if (/[\u0900-\u097f]/.test(said)) conversationLanguageRef.current = 'hi';
+    if (/[\u0980-\u09ff]/.test(said)) conversationLanguageRef.current = 'bn';
+    else if (/[\u0900-\u097f]/.test(said)) conversationLanguageRef.current = 'hi';
     else if (/\b(mujhe|mera|meri|chahiye|hai|haan|nahi|karna|shaadi|aap)\b/i.test(said)) conversationLanguageRef.current = 'hinglish';
+    else if (/\b(ami|amar|amader|apnar|kemon|biye|korbo|korte|lagbe|bolun|hobe)\b/i.test(said)) conversationLanguageRef.current = 'bn';
     else if (said.trim().split(/\s+/).length >= 4) conversationLanguageRef.current = 'en';
     setStatus('thinking');
     setReply('');
@@ -128,7 +130,7 @@ export function useVoiceAgent({ onUtterance, lang = 'en-IN' }) {
     let progressTimer = null;
     let hasSpokenProgress = false;
 
-    const PROGRESS_PHRASES = conversationLanguageRef.current === 'hi' ? ['ठीक है, मैं आपके लिए जानकारी देख रही हूँ।'] : conversationLanguageRef.current === 'hinglish' ? ['Theek hai, main aapke liye jaankari dekh rahi hoon.'] : [
+    const PROGRESS_PHRASES = conversationLanguageRef.current === 'bn' ? ['ঠিক আছে, আমি আপনার জন্য তথ্য দেখছি।'] : conversationLanguageRef.current === 'hi' ? ['ठीक है, मैं आपके लिए जानकारी देख रही हूँ।'] : conversationLanguageRef.current === 'hinglish' ? ['Theek hai, main aapke liye jaankari dekh rahi hoon.'] : [
       'Okay, let me get that information for you.',
       'Sure, let me check that for you.',
       'Got it, I’m looking into that for you.',
@@ -445,7 +447,7 @@ export function VoiceAgentOverlay({ agent, title = 'Aura+', subtitle = 'Voice mo
         <div className="flex items-center gap-2">
           {onToggleLang && (
             <button onClick={onToggleLang} className="rounded-full border border-white/20 px-2.5 py-1 text-[11px] font-semibold text-white/80 hover:bg-white/10 transition">
-              {lang === 'hi-IN' ? 'हिंदी' : 'English'}
+              {lang === 'hi-IN' ? 'हिंदी' : lang === 'bn-IN' ? 'বাংলা' : 'English'}
             </button>
           )}
           {embedded && (

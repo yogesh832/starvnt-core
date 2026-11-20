@@ -57,6 +57,11 @@ export function resolveEventSwitch(text, events, { currentId, previousId, pendin
 
 export const eventChoices = events => events.map(event => ({ id: id(event), title: event.title || event.eventType || 'Event', city: event.city || '', date: event.eventDate || '', status: event.status }));
 export function switchReply(language, event, choices, notFound = false) {
+  if (language === 'bn') {
+    if (event) return `এখন আমি “${event.title}”-এর পরিকল্পনা করছি। এর কার্ড নিচে দেখে নিন।`;
+    if (!choices.length) return 'এখনও কোনো ইভেন্ট পাওয়া যায়নি। কোন অনুষ্ঠানের পরিকল্পনা করতে চান?';
+    return `${notFound ? 'ওই নামে কোনো ইভেন্ট পাওয়া যায়নি। ' : ''}কোন ইভেন্ট নিয়ে কাজ করবেন? নাম বলুন বা নিচে দেখে নিন।`;
+  }
   if (event) return language === 'hi' ? `अब मैं “${event.title}” की प्लानिंग कर रही हूँ। उसका कार्ड नीचे देख लें।` : language === 'hinglish' ? `Ab main “${event.title}” ki planning kar rahi hoon. Uska card neeche dekh lein.` : `We're now planning “${event.title}”. Its details are on the card below.`;
   if (!choices.length) return language === 'hi' ? 'अभी कोई इवेंट नहीं मिला। किस इवेंट की प्लानिंग करनी है?' : language === 'hinglish' ? 'Abhi koi event nahi mila. Kis event ki planning karni hai?' : 'You have no saved events yet. What would you like to plan?';
   return language === 'hi' ? `${notFound ? 'उस नाम का इवेंट नहीं मिला। ' : ''}किस इवेंट पर चलें? नाम बोलें या नीचे देख लें।` : language === 'hinglish' ? `${notFound ? 'Us naam ka event nahi mila. ' : ''}Kis event par chalein? Naam bolein ya neeche dekh lein.` : `${notFound ? "I couldn't find that event. " : ''}Which event would you like to work on? Say its name or check the suggestions below.`;

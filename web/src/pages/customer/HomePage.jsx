@@ -24,6 +24,7 @@ import AuraChat from './AuraChat.jsx';
 import SelectOptionButton from './SelectOptionButton.jsx';
 import CustomerHero from './CustomerHero.jsx';
 import EventSummary from './CustomerEventSummary.jsx';
+import { MyProposalCard } from './ProposalPage.jsx';
 
 const TONE = { amber: 'text-amber-600 dark:text-amber-400', emerald: 'text-emerald-600 dark:text-emerald-400', primary: 'text-primary dark:text-[#a5b4fc]', muted: 'text-muted dark:text-slate-400' };
 const card = 'bg-white dark:bg-[#151827] rounded-3xl shadow-sm border border-gray-100/70 dark:border-white/10';
@@ -579,6 +580,7 @@ export default function HomePage({ firstName }) {
   if (loading) return <CustomerDashboardSkeleton />;
   return (
     <div className="space-y-5">
+      <MyProposalCard preferEventId={current?.id} />
       {current ? <Workspace firstName={firstName} event={current} key={current.id} /> : <Welcome firstName={firstName} onEventChanged={() => refresh()} />}
     </div>
   );

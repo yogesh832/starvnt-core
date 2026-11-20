@@ -26,6 +26,7 @@ import ManualPlanPage from './ManualPlanPage.jsx';
 import UpdatesPage from './UpdatesPage.jsx';
 import MePage from './MePage.jsx';
 import VendorsPage from './VendorsPage.jsx';
+import ProposalPage from './ProposalPage.jsx';
 import { DocumentsPage, FavoritesPage, SettingsPage } from './PlaceholderPages.jsx';
 import { CurrentEventProvider, GoToSection, useCurrentEvent } from './currentEvent.jsx';
 import { customerApi } from './customerApi.js';
@@ -356,6 +357,7 @@ function Shell() {
               <Route path="go/:section" element={<GoToSection />} />
               <Route path="updates" element={<UpdatesPage onRead={refreshUnread} />} />
               <Route path="documents" element={<DocumentsPage />} />
+              <Route path="proposals/:id" element={<ProposalPage />} />
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="me" element={<MePage user={user} logout={logout} />} />

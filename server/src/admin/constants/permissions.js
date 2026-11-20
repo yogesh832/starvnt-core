@@ -40,6 +40,11 @@ const CATALOG = {
   settings: ['read', 'update'],
   financePolicies: ['read', 'update', 'approve'],
   financeCoupons: ['read', 'manage'],
+  // Proposal Studio
+  proposals: ['read', 'compose', 'publish'],
+  agreements: ['read', 'manage'],
+  commercial: ['read', 'prepare', 'approve'],
+  assets: ['read', 'manage'],
 };
 
 /** Flat list of every valid "resource.action" permission string. */
@@ -91,6 +96,13 @@ export const ADMIN_ROLE_PRESETS = {
       'reports.read',
       'reports.create',
       'reports.export',
+      'proposals.read',
+      'proposals.compose',
+      'agreements.read',
+      'commercial.read',
+      'commercial.prepare',
+      'assets.read',
+      'assets.manage',
     ],
   },
   OPERATIONS_ADMIN: {
@@ -113,6 +125,13 @@ export const ADMIN_ROLE_PRESETS = {
       'automation.read',
       'automation.manage',
       'audit.read',
+      'proposals.read',
+      'proposals.compose',
+      'proposals.publish',
+      'agreements.read',
+      'agreements.manage',
+      'assets.read',
+      'assets.manage',
     ],
   },
   VENDOR_VERIFICATION_ADMIN: {
@@ -148,6 +167,10 @@ export const ADMIN_ROLE_PRESETS = {
       'settlements.release',
       'revenue.read',
       'audit.read',
+      'proposals.read',
+      'agreements.read',
+      'commercial.read',
+      'commercial.approve',
     ],
   },
   SUPPORT_ADMIN: {
@@ -180,6 +203,7 @@ export const ADMIN_ROLE_PRESETS = {
       'reports.export',
       'audit.read',
       'settings.read',
+      'proposals.read',
     ],
   },
 };

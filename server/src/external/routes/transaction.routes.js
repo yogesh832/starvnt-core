@@ -19,7 +19,7 @@ import { activeAccountType } from '../models/ExternalUser.js';
 import { normalizeCategory } from '../../customer/services/planCatalog.js';
 import { CoreBooking } from '../../admin/models/CoreBooking.js';
 import { matchVendorsForRequirement } from '../services/matching.service.js';
-import { createQuote, transitionQuote } from '../services/quoteStateMachine.service.js';
+import { createQuote, isQuoteExpired, transitionQuote } from '../services/quoteStateMachine.service.js';
 import { startService, submitCompletionEvidence, validateCompletionFromCore } from '../../admin/services/executionSettlement.service.js';
 import { maskOpportunityCustomer } from '../services/opportunityPrivacy.service.js';
 import { recordLifecycleEventMessage } from '../../customer/services/circle.service.js';
@@ -773,6 +773,10 @@ router.post('/customer/vendor-quotes/:id/accept', requireExternalAuth, requireAc
     if (reuseAcceptedReservation(quote, acceptedReservation)) {
       return res.json({ ok: true, quote: quoteForCustomer(quote), eventId: event._id, reservationId: acceptedReservation._id });
     }
+    if (isQuoteExpired(quote)) {
+      await transitionQuote(quote._id, 'EXPIRED', { actor: 'SYSTEM', reason: 'Quote validity period ended before acceptance' }).catch(() => null);
+      return res.status(409).json({ error: 'QUOTE_EXPIRED', message: 'This quote has expired. Ask the vendor for an updated quote.' });
+    }
 
     const vendorId = quote.vendor?._id || quote.vendor;
     const readiness = await evaluateVendorActivation(vendorId);
@@ -1204,8 +1208,12 @@ router.post('/vendor/quotes/:id/revise', requireExternalAuth, requireAccountType
       ? `Vendor revised offer: ${cleanMessage}`
       : `Vendor revised offer to ₹${pricing.totalAmount.toLocaleString('en-IN')}`;
 
-    const currentPolicy = await getCommercialPolicyForCategory(quote.category || vendor.category);
-    await assertQuoteSubmission({ ...quote.toObject(), category: quote.category || vendor.category, advancePolicy: currentPolicy });
+    const vendorPolicySource = quote.category
+      ? null
+      : await VendorOrganization.findById(vendorId).select('category').lean().catch(() => null);
+    const policyCategory = quote.category || vendorPolicySource?.category || '';
+    const currentPolicy = await getCommercialPolicyForCategory(policyCategory);
+    await assertQuoteSubmission({ ...quote.toObject(), category: policyCategory, advancePolicy: currentPolicy });
     const previousStatus = quote.status;
     quote.pricingBreakdown = pricing;
     quote.notes = cleanMessage;

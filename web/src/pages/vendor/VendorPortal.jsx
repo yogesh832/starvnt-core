@@ -11,6 +11,7 @@ import { externalApi } from '../../lib/api.js';
 import DashboardHome from './pages/DashboardHome.jsx';
 import Enquiries from './pages/Enquiries.jsx';
 import Quotes from './pages/Quotes.jsx';
+import AgreementsPage from './pages/AgreementsPage.jsx';
 import Bookings from './pages/Bookings.jsx';
 import CalendarPage from './pages/CalendarPage.jsx';
 import ExternalBookings from './pages/ExternalBookings.jsx';
@@ -288,6 +289,7 @@ export default function VendorPortal() {
     { to: 'launchpad', label: 'Launchpad', icon: 'check' },
     { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
     { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
+    { to: 'agreements', label: 'Agreements', icon: 'documents' },
     { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
     { to: 'external-bookings', label: 'External bookings', icon: 'calendar' },
     { to: 'readiness', label: 'Business readiness', icon: 'check' },
@@ -568,6 +570,7 @@ export default function VendorPortal() {
             <Route path="launchpad" element={<LaunchpadPage />} />
             <Route path="enquiries" element={<Enquiries />} />
             <Route path="quotes" element={<Quotes />} />
+            <Route path="agreements" element={<AgreementsPage />} />
             <Route path="bookings" element={<Bookings />} />
             <Route path="calendar" element={<CalendarPage />} />
             <Route path="external-bookings" element={<ExternalBookings />} />

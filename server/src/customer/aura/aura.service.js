@@ -118,7 +118,7 @@ function composeReply(reply, { event, nextQuestion: q, assumedDate, language = '
   const parts = [reply.trim()];
   if (assumedDate) {
     const year = assumedDate.slice(0, 4);
-    parts.push(language === 'hi' ? `मैं तारीख के लिए ${year} मान रही हूँ। कृपया कार्ड में तारीख जाँच लें।` : language === 'hinglish' ? `Main tareekh ke liye ${year} maan rahi hoon. Kripya card mein date check kar lein.` : `I've assumed the year ${year} for the date — please check it on the card.`);
+    parts.push(language === 'hi' ? `मैं तारीख के लिए ${year} मान रही हूँ। कृपया कार्ड में तारीख जाँच लें।` : language === 'bn' ? `তারিখের জন্য আমি ${year} সাল ধরে নিচ্ছি। অনুগ্রহ করে কার্ডে তারিখটা দেখে নিন।` : language === 'hinglish' ? `Main tareekh ke liye ${year} maan rahi hoon. Kripya card mein date check kar lein.` : `I've assumed the year ${year} for the date — please check it on the card.`);
   }
   const asking = !event || event.status === 'draft';
   const alreadyAsksQuestion = /[?？]/.test(reply);
@@ -136,6 +136,7 @@ function isWeakReply(reply = '') {
 function deterministicReply({ activeEvent, extracted = {}, text = '', language = 'en' }) {
   if (language === 'hi') return activeEvent ? 'जो जानकारी मिल सकी, उसे कार्ड पर दिखा रही हूँ। आपकी मंज़ूरी के बिना कोई बुकिंग नहीं होगी।' : 'मैं आपका इवेंट प्लान करने में मदद कर सकती हूँ।';
   if (language === 'hinglish') return activeEvent ? 'Jo jaankari mil saki, use card par dikha rahi hoon. Aapki manzoori ke bina koi booking nahi hogi.' : 'Main aapka event plan karne mein madad kar sakti hoon.';
+  if (language === 'bn') return activeEvent ? 'যে তথ্য পেয়েছি, তা আপনার ইভেন্ট কার্ডে দেখাচ্ছি। আপনার অনুমতি ছাড়া কোনো বুকিং হবে না।' : 'আমি আপনার অনুষ্ঠান পরিকল্পনায় সাহায্য করতে পারি।';
   return activeEvent ? "I've added the details I could save to your event card. Nothing is booked until you approve it." : 'I can help you plan your event.';
 }
 
@@ -387,7 +388,9 @@ export async function chat(customer, { sessionId, message, eventId, switchEventI
       ? 'अभी प्लानिंग असिस्टेंट से संपर्क करने में परेशानी हो रही है। कृपया अपना इवेंट कार्ड जाँच लें या थोड़ी देर में फिर कोशिश करें।'
       : language === 'hinglish'
         ? 'Abhi planning assistant se sampark karne mein dikkat aa rahi hai. Apna event card check kar lein ya thodi der mein phir koshish karein.'
-        : FALLBACK_REPLY;
+        : language === 'bn'
+          ? 'এই মুহূর্তে প্ল্যানিং অ্যাসিস্ট্যান্টের সঙ্গে যোগাযোগে সমস্যা হচ্ছে। অনুগ্রহ করে আপনার ইভেন্ট কার্ড দেখে নিন বা একটু পরে আবার চেষ্টা করুন।'
+          : FALLBACK_REPLY;
   } else if (isWeakReply(reply)) {
     reply = deterministicReply({ activeEvent: after.activeEvent, extracted: x, text, language });
   }

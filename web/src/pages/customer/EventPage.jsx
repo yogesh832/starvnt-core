@@ -15,6 +15,7 @@ import {
 } from './customerUi.jsx';
 import UnderstandingCard, { EditForm } from './UnderstandingCard.jsx';
 import CustomerEventSummary from './CustomerEventSummary.jsx';
+import { MyProposalCard, EventReferences } from './ProposalPage.jsx';
 import { attentionLink, formatINR, planStatus } from './format.js';
 
 const TONE = { amber: 'text-amber-600', emerald: 'text-emerald-600', primary: 'text-primary', muted: 'text-muted' };
@@ -201,6 +202,7 @@ export default function EventPage() {
         <BackLink to="/customer/events">All events</BackLink>
         <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={() => setEditing(true)}><LocationDetails event={event} /></CustomerEventSummary>
         <UnderstandingCard understanding={understanding} event={event} onChanged={reload} editing={editing} onEditingChange={setEditing} />
+        <EventReferences eventId={event.id} />
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <div className="text-sm font-bold text-navy mb-2">Tell Aura+ more</div>
           <AskBox eventId={event.id} placeholder="e.g. We need a photographer and the venue is…" />
@@ -230,6 +232,7 @@ export default function EventPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <BackLink to="/customer/events">All events</BackLink>
+      <MyProposalCard eventId={event.id} />
       <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={editable ? () => setEditing(value => !value) : undefined}><LocationDetails event={event} /></CustomerEventSummary>
       {event.status === 'in_progress' && (
         <Link to={`/customer/events/${event.id}/event-day`} className="flex items-center gap-2 rounded-2xl bg-red-50 text-red-600 px-4 py-3 text-sm font-bold">
@@ -243,6 +246,7 @@ export default function EventPage() {
         </div>
       )}
 
+      <EventReferences eventId={event.id} />
       <div className="grid lg:grid-cols-[1fr_320px] gap-4 items-start">
         <div className="space-y-4 min-w-0">
           <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-5">
