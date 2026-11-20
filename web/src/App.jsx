@@ -7,9 +7,9 @@ import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext.jsx';
 import { LogoWord } from './components/ui.jsx';
 
 import Landing from './pages/customer/Landing.jsx';
-
 import { VENDOR_QR_ENABLED } from '../../server/src/common/vendorQrRelease.js';
 
+const PartnerLanding = lazy(() => import('./pages/vendor/PartnerLanding.jsx'));
 const ExternalLogin = lazy(() => import('./pages/external/Login.jsx'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy.jsx'));
 const CustomerPortal = lazy(() => import('./pages/customer/CustomerPortal.jsx'));
@@ -120,17 +120,17 @@ function ApplicationRoutes() {
   const { search } = useLocation();
   const policyAudience = new URLSearchParams(search).get('for');
   const host = window.location.hostname;
-  const vendorHost = /^(vendor|vendors|partner)\.starvnt\.com$/i.test(host);
+  const vendorHost = /^(vendor|vendors|partner)\.(?:starvnt\.com|localhost)$/i.test(host);
   return (
     <Routes>
-      {/* Vendor domains open the vendor portal; the customer landing stays on starvnt.com. */}
+      {/* Each public domain opens its own landing page before sign-in. */}
       <Route 
         path="/" 
         element={
           host.startsWith('admin.')
               ? <Navigate to="/admin" replace />
               : vendorHost
-                ? <Navigate to="/vendor" replace />
+                ? <PartnerLanding />
                 : <Landing />
         } 
       />
