@@ -23,15 +23,17 @@ if (import.meta.hot) import.meta.hot.dispose(() => speech.stop());
 /**
  * Transcribes recorded audio via ElevenLabs Speech-to-Text (`/ai/transcribe`).
  * @param {Blob} audioBlob
+ * @param {string} [languageCode] Spoken language, or empty for automatic detection
  * @returns {Promise<string>} Transcribed text
  */
-export async function transcribeAuraAudio(audioBlob) {
+export async function transcribeAuraAudio(audioBlob, languageCode) {
   if (!audioBlob) throw new Error('No audio recorded');
   const form = new FormData();
   const ext = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
   form.append('file', audioBlob, `recording.${ext}`);
 
-  const res = await externalApi.raw('/ai/transcribe', {
+  const path = languageCode ? `/ai/transcribe?language=${encodeURIComponent(languageCode)}` : '/ai/transcribe';
+  const res = await externalApi.raw(path, {
     method: 'POST',
     body: form,
   });

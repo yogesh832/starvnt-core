@@ -239,7 +239,7 @@ function useVoice({ onInterim, onError }) {
   //       'converse' = voice chat: send when the customer stops talking, reply aloud.
   const [listening, setListening] = useState(null); // null | 'dictate' | 'converse'
   const [speaking, setSpeaking] = useState(false);
-  const [lang, setLang] = useState('en-IN');
+  const [lang, setLang] = useState('');
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -304,7 +304,7 @@ function useVoice({ onInterim, onError }) {
         if (blob.size < 500) return;
         try {
           onInterim(`${prefix}Transcribing…`);
-          const text = await transcribeAuraAudio(blob);
+          const text = await transcribeAuraAudio(blob, lang);
           if (text) {
             onInterim(`${prefix}${text}`);
 
@@ -633,7 +633,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
   sendRef.current = send;
 
   // Voice mode (orb): a continuous spoken conversation; each turn goes through send().
-  const agent = useVoiceAgent({ lang: voice.lang, onUtterance: (t, extra) => sendRef.current?.(t, extra) });
+  const agent = useVoiceAgent({ transcriptionLanguage: voice.lang, onUtterance: (t, extra) => sendRef.current?.(t, extra) });
   const sendInteractive = (message, extra) => agent.open ? agent.submit(message, extra) : send(message, extra);
   const switchEvent = event => sendInteractive(`Switch to ${event.title}`, { switchEventId: event.id });
 
@@ -945,15 +945,18 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
           />
           {voice.supported && (
             <>
-              <button
-                type="button"
-                onClick={() => voice.setLang(voice.lang === 'en-IN' ? 'hi-IN' : voice.lang === 'hi-IN' ? 'bn-IN' : 'en-IN')}
-                className="hidden sm:inline-flex items-center gap-1 h-9 rounded-full px-3 text-xs font-semibold text-ink/70 dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10 shrink-0 transition"
-                title="Voice language — English / Hindi / Bengali"
+              <select
+                aria-label="Voice transcription language"
+                value={voice.lang}
+                onChange={(event) => voice.setLang(event.target.value)}
+                disabled={agent.open || Boolean(voice.listening)}
+                className="h-9 max-w-24 shrink-0 rounded-full bg-transparent px-1.5 text-xs font-semibold text-ink/70 dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10 cursor-pointer disabled:opacity-50"
               >
-                <span className="w-4 h-4 rounded-full border border-current grid place-items-center text-[8px] font-bold">{voice.lang === 'en-IN' ? 'A' : voice.lang === 'hi-IN' ? 'अ' : 'অ'}</span>
-                {voice.lang === 'en-IN' ? 'English' : voice.lang === 'hi-IN' ? 'हिंदी' : 'বাংলা'}
-              </button>
+                <option value="">Auto</option>
+                <option value="en">English</option>
+                <option value="hi">हिंदी</option>
+                <option value="bn">বাংলা</option>
+              </select>
               <button
                 type="button"
                 onClick={() => (voice.listening === 'dictate' ? voice.stop() : voice.start('dictate', input))}

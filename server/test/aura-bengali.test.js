@@ -1,11 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import express from 'express';
+import request from 'supertest';
 import { conversationLanguage, localizeAuraQuestion, auraLanguageInstruction } from '../src/common/auraLanguage.js';
 // Unmodified pre-Bengali module (git HEAD): Hindi/Hinglish/English behaviour must match it exactly.
 import * as before from '../test-data/auraLanguage.head.js';
 import { switchReply } from '../src/customer/aura/eventSwitch.js';
 import { vendorTruthReply } from '../src/customer/aura/vendorTruth.js';
-import { ttsModelFor } from '../src/external/services/voice.service.js';
+import { createVoiceRouter } from '../src/external/routes/voice.routes.js';
+import { transcribeAudio, ttsModelFor } from '../src/external/services/voice.service.js';
 
 const hist = (...lines) => lines.map((content, i) => ({ role: i % 2 ? 'model' : 'user', content }));
 
@@ -82,4 +85,28 @@ test('voice uses a Bengali-capable TTS model only for Bengali text', () => {
     if (saved.m === undefined) delete process.env.ELEVENLABS_TTS_MODEL; else process.env.ELEVENLABS_TTS_MODEL = saved.m;
     if (saved.b === undefined) delete process.env.ELEVENLABS_TTS_MODEL_BN; else process.env.ELEVENLABS_TTS_MODEL_BN = saved.b;
   }
+});
+
+test('voice transcription forwards an explicit Bengali choice and auto-detects by default', async () => {
+  const providerLanguages = [];
+  const app = express();
+  app.use(createVoiceRouter({
+    authenticate: (_req, _res, next) => next(),
+    transcribe: (file, options) => transcribeAudio(file, {
+      ...options,
+      apiKey: 'test-only',
+      request: async (_url, init) => {
+        providerLanguages.push(init.body.get('language_code'));
+        return Response.json({ text: 'পরীক্ষা', language_code: 'ben' });
+      },
+    }),
+  }));
+
+  const transcribe = (url) => request(app).post(url)
+    .attach('file', Buffer.from('test audio'), { filename: 'test.webm', contentType: 'audio/webm' });
+
+  await transcribe('/transcribe?language=bn').expect(200);
+  await transcribe('/transcribe').expect(200);
+  await transcribe('/transcribe?language=invalid').expect(400);
+  assert.deepEqual(providerLanguages, ['bn', null]);
 });

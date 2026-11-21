@@ -14,9 +14,13 @@ export function createVoiceRouter({ authenticate = requireExternalAuth, speak = 
     return res.status(status).json({ error: code, message: String(error.code || '').startsWith('VOICE_') ? error.message : 'Voice is unavailable. Please try again.' });
   }
   router.post('/transcribe', authenticate, limit, (req, res) => {
+    const languageCode = req.query.language;
+    if (languageCode !== undefined && !['en', 'hi', 'bn'].includes(languageCode)) {
+      return failure(res, { status: 400, code: 'VOICE_LANGUAGE_INVALID', message: 'Choose Auto, English, Hindi or Bengali.' });
+    }
     upload.single('file')(req, res, async error => {
       if (error) return failure(res, error);
-      try { res.setHeader('Cache-Control', 'no-store'); res.json(await transcribe(req.file)); }
+      try { res.setHeader('Cache-Control', 'no-store'); res.json(await transcribe(req.file, { languageCode })); }
       catch (error) { failure(res, error); }
     });
   });

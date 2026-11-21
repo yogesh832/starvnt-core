@@ -31,6 +31,7 @@ export async function transcribeAudio(file, options) {
   const form = new FormData();
   form.append('file', new Blob([file.buffer], { type: file.mimetype }), 'aura-recording');
   form.append('model_id', process.env.ELEVENLABS_STT_MODEL || 'scribe_v2');
+  if (options?.languageCode) form.append('language_code', options.languageCode);
   form.append('tag_audio_events', 'false');
   form.append('diarize', 'false');
   const response = await requestVoice('/speech-to-text', { method: 'POST', body: form }, options);

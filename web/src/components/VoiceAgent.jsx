@@ -20,7 +20,7 @@ export const voiceAgentSupported =
 /**
  * @param {(text: string) => Promise<string|null>} onUtterance  send the words, resolve with the reply to speak
  */
-export function useVoiceAgent({ onUtterance, lang = 'en-IN' }) {
+export function useVoiceAgent({ onUtterance, transcriptionLanguage }) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [status, updateStatus] = useState('idle'); // idle | listening | thinking | speaking
@@ -49,8 +49,8 @@ export function useVoiceAgent({ onUtterance, lang = 'en-IN' }) {
   const speakRaf = useRef(null);
   const onUtteranceRef = useRef(onUtterance);
   onUtteranceRef.current = onUtterance;
-  const langRef = useRef(lang);
-  langRef.current = lang;
+  const transcriptionLanguageRef = useRef(transcriptionLanguage);
+  transcriptionLanguageRef.current = transcriptionLanguage;
 
   // Microphone level for the orb (best effort — recognition works without it).
   async function startMeter() {
@@ -210,7 +210,7 @@ export function useVoiceAgent({ onUtterance, lang = 'en-IN' }) {
           setStatus('thinking');
           setTranscript('Transcribing…');
           try {
-            const text = await transcribeAuraAudio(blob);
+            const text = await transcribeAuraAudio(blob, transcriptionLanguageRef.current);
             if (!activeRef.current || expected !== sessionRevision.current) return;
             if (text && text.trim()) {
               setTranscript(text);
