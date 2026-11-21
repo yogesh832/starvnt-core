@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { hasPdfPageNumber } from '../common/pdfText.js';
 import fsSync from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -156,7 +157,7 @@ export function runQa({ snapshot, html, text, pages, layout, preliminary, forbid
   add('no_text_overflow', layout.overflow === 0, true, `${layout.overflow} overflowing cell(s)`);
   const blank = pages.filter((p) => normalizeSpace(p).replace(/STARVNT.*?Page \d+ of \d+/g, '').trim().length < 15).length;
   add('no_blank_pages', blank === 0, true, `${blank} near-empty page(s)`);
-  const numbered = pages.every((p, i) => normalizeSpace(p).includes(`Page ${i + 1} of ${pages.length}`));
+  const numbered = pages.every((p, i) => hasPdfPageNumber(p, i + 1, pages.length));
   add('page_numbering', numbered, true, `${pages.length} page(s)`);
   if (preliminary) add('preliminary_watermark_every_page', pages.every((p) => normalizeSpace(p).includes(PRELIMINARY_WATERMARK)), true);
   else add('no_preliminary_marking', !flat.includes(PRELIMINARY_WATERMARK), true);
