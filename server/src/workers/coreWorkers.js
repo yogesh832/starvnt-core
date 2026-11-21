@@ -9,6 +9,8 @@ import { OutboxEvent } from '../admin/models/OutboxEvent.js';
 import { processOutboxBatch } from '../automation/services/outbox.service.js';
 import { expireStaleReservations } from '../customer/repositories/commerce.repo.js';
 import { expireStaleOpportunities } from '../external/services/opportunitySla.service.js';
+import { expireStaleVendorQuotes } from '../external/services/quoteStateMachine.service.js';
+import { expireStaleAgreements } from '../proposals/agreement.service.js';
 import { incrementMetric } from '../metrics.js';
 import { configureWorker, markWorkerError, markWorkerStarted, markWorkerSuccess } from './workerHealth.js';
 import { startPushWorker } from '../notifications/push.worker.js';
@@ -103,6 +105,10 @@ export function startCoreWorkers() {
           incrementMetric('starvnt_reservations_expired_total', {}, result.modifiedCount);
         }
         await expireStaleOpportunities();
+        const quotes = await expireStaleVendorQuotes();
+        if (quotes.expired) incrementMetric('starvnt_vendor_quotes_expired_total', {}, quotes.expired);
+        const agreements = await expireStaleAgreements();
+        if (agreements.expired) incrementMetric('starvnt_vendor_agreements_expired_total', {}, agreements.expired);
         markWorkerSuccess('reservation-expiry', Date.now() - startedAt);
       } catch (err) {
         markWorkerError('reservation-expiry', err, Date.now() - startedAt);

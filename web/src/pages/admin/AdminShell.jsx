@@ -19,6 +19,7 @@ import AuditLogs from './AuditLogs.jsx';
 import Notifications from './Notifications.jsx';
 import Operations from './Operations.jsx';
 import Finance from './Finance.jsx';
+import ProposalStudio from './ProposalStudio.jsx';
 import { loadAdminNotifications, notificationReadKey } from '../../lib/adminNotifications.js';
 
 /**
@@ -34,6 +35,7 @@ const MODULES = [
   { path: 'vendors', label: 'Vendors', icon: 'vendors', anyOf: ['vendors.read'] },
   { path: 'events', label: 'Events', icon: 'events', anyOf: ['events.read'] },
   { path: 'bookings', label: 'Bookings', icon: 'bookings', anyOf: ['bookings.read'] },
+  { path: 'proposal-studio', label: 'Proposal Studio', icon: 'documents', anyOf: ['proposals.read'] },
   { path: 'finance', label: 'Finance', icon: 'payments', anyOf: ['payments.read', 'settlements.read', 'financePolicies.read', 'financeCoupons.read', 'settings.read'] },
   { path: 'operations', label: 'Operations', icon: 'operations', anyOf: ['execution.read', 'automation.read'] },
   { path: 'product-outcomes', label: 'Product outcomes', icon: 'reports', anyOf: ['analytics.read', 'reports.read'] },
@@ -354,6 +356,7 @@ export default function AdminShell() {
               <Route path="events" element={<ModuleTable kind="events" />} />
               <Route path="bookings" element={<ModuleTable kind="bookings" />} />
               <Route path="finance" element={<Finance />} />
+              <Route path="proposal-studio" element={<ProposalStudio />} />
               <Route path="payments" element={<Navigate to="/admin/finance" replace />} />
               <Route path="operations" element={<Operations />} />
               <Route path="product-outcomes" element={<ProductMetrics />} />

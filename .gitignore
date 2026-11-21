@@ -73,3 +73,6 @@ desktop.ini
 # Disposable unified acceptance preview assets
 web/dist-unified-preview/
 web/dist-vendor/
+
+# Proposal Studio generated files (private customer documents)
+server/var/

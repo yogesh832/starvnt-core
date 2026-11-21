@@ -23,6 +23,7 @@ import SelectOptionButton from './SelectOptionButton.jsx';
 import { EventHomeHeader, WelcomeHome, PastEventHome } from './HomeOverview.jsx';
 import { nextHomeAction } from './homeActions.js';
 import EventSummary from './CustomerEventSummary.jsx';
+import { MyProposalCard } from './ProposalPage.jsx';
 
 const TONE = { amber: 'text-amber-600 dark:text-amber-400', emerald: 'text-emerald-600 dark:text-emerald-400', primary: 'text-primary dark:text-[#a5b4fc]', muted: 'text-muted dark:text-slate-400' };
 const card = 'bg-white dark:bg-[#151827] rounded-3xl shadow-sm border border-gray-100/70 dark:border-white/10';
@@ -480,5 +481,10 @@ export default function HomePage({ firstName }) {
   if (!events.length) return <WelcomeHome firstName={firstName} />;
   if (!current) return <div className="customer-home-panel"><h1>Select an event to continue.</h1><Link to="/customer/events">Open My Events</Link></div>;
   if (['completed', 'cancelled'].includes(current.status)) return <PastEventHome event={current} events={events} />;
-  return <Workspace firstName={firstName} event={current} key={current.id} />;
+  return (
+    <div className="space-y-5">
+      <MyProposalCard preferEventId={current.id} />
+      <Workspace firstName={firstName} event={current} key={current.id} />
+    </div>
+  );
 }

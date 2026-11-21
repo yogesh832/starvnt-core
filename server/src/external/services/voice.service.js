@@ -48,7 +48,13 @@ export async function synthesizeSpeech(value, options) {
   console.log(`[Aura Voice 🔊 TTS] Synthesizing speech (${value.trim().length} chars): "${value.trim().slice(0, 100)}${value.trim().length > 100 ? '...' : ''}"`);
   const response = await requestVoice(`/text-to-speech/${encodeURIComponent(voice)}`, {
     method: 'POST', headers: { Accept: 'audio/mpeg', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: value.trim(), model_id: process.env.ELEVENLABS_TTS_MODEL || 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.5 } }),
+    body: JSON.stringify({ text: value.trim(), model_id: ttsModelFor(value), voice_settings: { stability: 0.5, similarity_boost: 0.5 } }),
   }, options);
   return Buffer.from(await response.arrayBuffer());
+}
+
+/** eleven_multilingual_v2 has no Bengali; Bengali-script replies use a model that does (eleven_v3 lists bn). */
+export function ttsModelFor(text) {
+  if (/[ঀ-৿]/.test(String(text))) return process.env.ELEVENLABS_TTS_MODEL_BN || 'eleven_v3';
+  return process.env.ELEVENLABS_TTS_MODEL || 'eleven_multilingual_v2';
 }

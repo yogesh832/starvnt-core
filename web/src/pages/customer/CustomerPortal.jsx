@@ -22,6 +22,7 @@ const AuraChat = lazy(() => import('./AuraChat.jsx'));
 const HomePage = lazy(() => import('./HomePage.jsx'));
 const EventsPage = lazy(() => import('./EventsPage.jsx'));
 const EventPage = lazy(() => import('./EventPage.jsx'));
+const ProposalPage = lazy(() => import('./ProposalPage.jsx'));
 const EventPlanPage = lazy(() => import('./EventPlanPage.jsx'));
 const EventHistoryPage = lazy(() => import('./EventHistoryPage.jsx'));
 const ServicesPage = lazy(() => import('./ServicesPage.jsx'));
@@ -368,6 +369,7 @@ function Shell() {
               <Route path="go/:section" element={<GoToSection />} />
               <Route path="updates" element={<UpdatesPage onRead={refreshUnread} />} />
               <Route path="documents" element={<DocumentsPage />} />
+              <Route path="proposals/:id" element={<ProposalPage />} />
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="settings/notifications" element={<NotificationSettingsPage />} />

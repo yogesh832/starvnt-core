@@ -810,7 +810,7 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
             )}
             {chips.length > 0 && (
               <>
-              <p className="text-[10px] text-muted dark:text-slate-400">{nextQ?.language === 'hi' ? 'चाहें तो यह देख लें — या अपना जवाब बोलें या लिखें।' : nextQ?.language === 'hinglish' ? 'Chahein to yeh dekh lein — ya apna jawab bolein ya likhein.' : 'A few ideas, if helpful. You can also speak or type your own answer.'}</p>
+              <p className="text-[10px] text-muted dark:text-slate-400">{nextQ?.language === 'hi' ? 'चाहें तो यह देख लें — या अपना जवाब बोलें या लिखें।' : nextQ?.language === 'bn' ? 'চাইলে এগুলো দেখে নিন — অথবা নিজের উত্তর বলুন বা লিখুন।' : nextQ?.language === 'hinglish' ? 'Chahein to yeh dekh lein — ya apna jawab bolein ya likhein.' : 'A few ideas, if helpful. You can also speak or type your own answer.'}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl">
                 {chips.map((c) => (
                   <button
@@ -947,12 +947,12 @@ export default function AuraChat({ firstName, eventId: embeddedEventId = null, e
             <>
               <button
                 type="button"
-                onClick={() => voice.setLang(voice.lang === 'en-IN' ? 'hi-IN' : 'en-IN')}
+                onClick={() => voice.setLang(voice.lang === 'en-IN' ? 'hi-IN' : voice.lang === 'hi-IN' ? 'bn-IN' : 'en-IN')}
                 className="hidden sm:inline-flex items-center gap-1 h-9 rounded-full px-3 text-xs font-semibold text-ink/70 dark:text-slate-300 hover:bg-lavender dark:hover:bg-white/10 shrink-0 transition"
-                title="Voice language — English / Hindi"
+                title="Voice language — English / Hindi / Bengali"
               >
-                <span className="w-4 h-4 rounded-full border border-current grid place-items-center text-[8px] font-bold">{voice.lang === 'en-IN' ? 'A' : 'अ'}</span>
-                {voice.lang === 'en-IN' ? 'English' : 'हिंदी'}
+                <span className="w-4 h-4 rounded-full border border-current grid place-items-center text-[8px] font-bold">{voice.lang === 'en-IN' ? 'A' : voice.lang === 'hi-IN' ? 'अ' : 'অ'}</span>
+                {voice.lang === 'en-IN' ? 'English' : voice.lang === 'hi-IN' ? 'हिंदी' : 'বাংলা'}
               </button>
               <button
                 type="button"

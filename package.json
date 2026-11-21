@@ -27,7 +27,8 @@
     "backup:db": "npm run backup:db -w server",
     "seed:super-admin": "npm run seed -w server",
     "seed:vendor": "npm run seed:vendor -w server",
-    "seed:customer-demo": "npm run seed:customer-demo -w server"
+    "seed:customer-demo": "npm run seed:customer-demo -w server",
+    "seed:proposal-demo": "npm run seed:proposal-demo -w server"
   },
   "engines": {
     "node": ">=20"
