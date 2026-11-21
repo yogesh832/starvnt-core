@@ -72,3 +72,6 @@ desktop.ini
 
 # Disposable unified acceptance preview assets
 web/dist-unified-preview/
+
+# Private generated proposal files
+server/var/

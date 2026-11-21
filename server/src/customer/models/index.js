@@ -45,6 +45,9 @@ const customerEventSchema = new Schema(
     },
     specialRequirements: { type: String, trim: true, maxlength: 1000, default: null },
     notes: { type: String, trim: true, maxlength: 1000, default: null },
+    // Visual direction for Proposal Studio (e.g. "Royal Luxury"); optional.
+    theme: { type: String, trim: true, maxlength: 60, default: null },
+    colourPalette: { type: [String], default: [] },
     idempotencyKey: { type: String, trim: true, maxlength: 160, default: null },
   },
   { timestamps: true, collection: 'customer_events' }

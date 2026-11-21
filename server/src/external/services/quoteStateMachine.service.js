@@ -63,6 +63,36 @@ const ALLOWED_TRANSITIONS = {
   EXPIRED: [],  // Terminal
 };
 
+export function isQuoteExpired(quote, now = new Date()) {
+  return ['DRAFT', 'SUBMITTED'].includes(quote?.status)
+    && Boolean(quote?.validUntil)
+    && new Date(quote.validUntil).getTime() <= now.getTime();
+}
+
+/**
+ * Moves open quotes past their validUntil to EXPIRED, recording history.
+ * Approved quotes are never expired; acceptance already happened.
+ */
+export async function expireStaleVendorQuotes({ now = new Date(), limit = 200 } = {}) {
+  const stale = await Quote.find({ status: { $in: ['DRAFT', 'SUBMITTED'] }, validUntil: { $lte: now } })
+    .select('_id status')
+    .limit(limit)
+    .lean();
+  let expired = 0;
+  for (const { _id, status } of stale) {
+    const result = await Quote.updateOne(
+      { _id, status, validUntil: { $lte: now } },
+      {
+        $inc: { __v: 1 },
+        $set: { status: 'EXPIRED' },
+        $push: { history: { fromStatus: status, toStatus: 'EXPIRED', changedBy: 'SYSTEM', reason: 'Quote validity period ended', timestamp: now } },
+      }
+    );
+    expired += result.modifiedCount;
+  }
+  return { expired };
+}
+
 /**
  * Creates a new Quote proposal.
  */
@@ -172,7 +202,15 @@ export async function transitionQuote(quoteId, targetStatus, { actor = 'SYSTEM',
   }
 
   const currentStatus = quote.status;
-  if (targetStatus === 'APPROVED') assertCommercialSnapshot(quote);
+  if (targetStatus === 'APPROVED') {
+    if (currentStatus === 'EXPIRED' || isQuoteExpired(quote)) {
+      const error = new Error('This quote has expired. Ask the vendor for an updated quote.');
+      error.statusCode = 409;
+      error.code = 'QUOTE_EXPIRED';
+      throw error;
+    }
+    assertCommercialSnapshot(quote);
+  }
   let submissionPolicy = null;
   if (targetStatus === 'SUBMITTED') submissionPolicy = await assertQuoteSubmission({ ...quote.toObject(), category: quote.category || quote.vendor?.category });
   const allowedNext = ALLOWED_TRANSITIONS[currentStatus] || [];
