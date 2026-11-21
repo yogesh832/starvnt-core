@@ -374,29 +374,17 @@ export default function VendorPortal() {
 
   const navItems = [
     { to: 'dashboard', label: 'Home', icon: 'dashboard' },
-    { to: 'launchpad', label: 'Launchpad', icon: 'check' },
     { to: 'enquiries', label: 'Leads & CRM', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
-    { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
-    ...(!compactNavigation ? [{ to: 'execution', label: 'Service execution', icon: 'bookings' }] : []),
-    { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
-    { to: 'external-bookings', label: 'External bookings', icon: 'calendar' },
-    { to: 'readiness', label: 'Business readiness', icon: 'check' },
-    { to: 'agreements', label: 'Business & Legal · Agreements', icon: 'documents' },
-    { to: 'customers', label: 'Customer 360', icon: 'customers' },
-    // Phase 2 (Deferred): Event ticketing, ticket bookings, ticket QR generation/scanning, ticket orders/refunds
-    ...(VENDOR_QR_ENABLED ? [{ to: 'experience-qr', label: 'Experience QR', icon: 'reviews' }] : []),
-    { to: 'growth', label: 'Customer growth', icon: 'analytics' },
-    { to: 'seo', label: 'SEO & GEO growth', icon: 'search' },
-    { to: 'learning', label: 'Learning & Growth', icon: 'documents' },
-    { to: 'discovery-rewards', label: 'Discovery & rewards', icon: 'star' },
+    { to: 'quotes', label: 'Quotes & Proposals', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
+    { to: 'bookings', label: 'Bookings & Operations', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
+    { to: 'payments', label: 'Finance & Payments', icon: 'payments' },
     { to: 'portfolio', label: 'Portfolio', icon: 'gallery' },
     { to: 'services', label: 'Services', icon: 'services' },
     { to: 'availability', label: 'Availability', icon: 'availability' },
-    { to: 'payments', label: 'Payments', icon: 'payments' },
     { to: 'reviews', label: 'Reviews', icon: 'star' },
     { to: 'analytics', label: 'Analytics', icon: 'reports' },
     { to: 'updates', label: 'Messages & updates', icon: 'bell', badge: badgeCounts.unreadNotificationsCount || badgeCounts.messagesCount || null },
-    { to: 'profile', label: 'Profile & Hub', icon: 'profile' },
+    { to: 'profile', label: 'Profile & Settings', icon: 'profile' },
   ];
 
   const notificationProps = {

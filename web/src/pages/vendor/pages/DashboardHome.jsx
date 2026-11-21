@@ -3,7 +3,6 @@ import VendorReadinessSummary from '../VendorReadinessSummary.jsx';
 import { NextGrowthMeetingCard } from './GrowthMeetings.jsx';
 import { ContinueWatchingCard } from './Academy.jsx';
 import { notificationAction } from '../vendorNotificationUi.js';
-import ProfileStatus from '../../../components/ProfileStatus.jsx';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../../components/Icon.jsx';
@@ -871,7 +870,6 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
   return (
     <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
-      <div className="col-span-full hidden lg:block"><ProfileStatus /></div>
       {/* Main Operations Stream */}
       <div className="space-y-6 min-w-0 w-full">
 
