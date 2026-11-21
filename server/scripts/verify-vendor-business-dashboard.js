@@ -142,10 +142,10 @@ try {
   check('Collapsed sidebar remains pinned while dashboard is scrolled', await page.locator('.vendor-shell > aside').evaluate(element => element.getBoundingClientRect().top), 0);
   await page.getByTitle('Toggle Sidebar', { exact: true }).click();
   await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().width - 256) < 1);
-  await page.getByRole('link', { name: 'Quotes & Proposals', exact: true }).click();
+  await page.locator('aside nav a[href="/vendor/quotes"]').click();
   await page.getByRole('heading', { name: 'Quotes & Proposals', exact: true }).waitFor();
   check('Changing sidebar section opens at the top of the workspace', await workspace.evaluate(element => element.scrollTop), 0);
-  await page.getByRole('link', { name: 'Home', exact: true }).first().click();
+  await page.locator('aside nav a[href="/vendor/dashboard"]').click();
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   await workspace.evaluate(element => { element.scrollTop = 0; });
   await page.setViewportSize({ width: 1440, height: 1000 });
