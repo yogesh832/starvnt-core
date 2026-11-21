@@ -502,16 +502,16 @@ export default function ExternalLogin() {
   }
 
   const inputCls =
-    "w-full rounded-xl border border-gray-200/90 dark:border-white/10 bg-gray-50/40 dark:bg-white/5 px-4 py-2.5 text-sm text-navy dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition";
+    "w-full rounded-xl border border-gray-200/90 bg-gray-50/40 px-4 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition";
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white flex flex-col justify-between relative dark:from-[#0b0d14] dark:via-[#0f1120] dark:to-[#0b0d14]">
+    <div className="min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white flex flex-col justify-between relative dark:from-navy dark:via-navy-deep dark:to-navy">
       {/* Integrated Navigation Bar matching Landing */}
       <PublicNavbar activePage="login" onPlanClick={() => navigate("/")} />
 
       {/* Main Container */}
       <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="w-full max-w-4xl lg:max-w-5xl bg-white dark:bg-[#161926] rounded-3xl sm:rounded-[32px] border border-gray-100/90 dark:border-white/5 shadow-2xl shadow-primary/10 dark:shadow-black/40 overflow-hidden grid md:grid-cols-[42%_1fr]">
+        <div className="w-full max-w-4xl lg:max-w-5xl bg-white rounded-3xl sm:rounded-[32px] border border-gray-100/90 shadow-2xl shadow-primary/10 overflow-hidden grid md:grid-cols-[42%_1fr]">
           {/* Left: Brand & Luxury Visual Panel */}
           <aside
             className="auth-photo-panel relative p-7 sm:p-9 text-white flex flex-col justify-between overflow-hidden min-h-[300px] md:min-h-[620px] transition-all duration-700"
@@ -648,12 +648,12 @@ export default function ExternalLogin() {
           </aside>
 
           {/* Right: Auth Form Panel */}
-          <main className="p-6 sm:p-10 flex flex-col justify-center bg-white dark:bg-[#161926]">
+          <main className="p-6 sm:p-10 flex flex-col justify-center bg-white">
             <div className="w-full">
               {/* Customer OS sign-in */}
-              <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-white/10 gap-4">
+              <div className="flex items-center justify-between pb-4 border-b border-gray-100 gap-4">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-navy dark:text-white tracking-tight">
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-navy tracking-tight">
                     {mode === "login"
                       ? "Sign in to STARVNT"
                       : "Create an Account"}
@@ -665,11 +665,11 @@ export default function ExternalLogin() {
                   </p>
                 </div>
 
-                <span className="rounded-xl bg-lavender dark:bg-white/10 px-3 py-1.5 text-xs font-bold text-navy dark:text-slate-200">{accountType === 'VENDOR' ? 'Vendor OS' : 'Customer OS'}</span>
+                <span className="rounded-xl bg-lavender px-3 py-1.5 text-xs font-bold text-navy">{accountType === 'VENDOR' ? 'Vendor OS' : 'Customer OS'}</span>
               </div>
 
               {/* 3 Authentication Option Tabs */}
-              <div className="mt-4 grid grid-cols-3 gap-1.5 p-1 bg-lavender/80 dark:bg-white/5 rounded-2xl border border-gray-200/50 dark:border-white/10">
+              <div className="mt-4 grid grid-cols-3 gap-1.5 p-1 bg-lavender/80 rounded-2xl border border-gray-200/50">
                 <button
                   type="button"
                   onClick={() => {
