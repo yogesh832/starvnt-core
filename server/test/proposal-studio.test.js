@@ -148,14 +148,14 @@ test('Proposal Studio end to end: gates block until approvals, then version-boun
   assert.ok((await readiness()).reasons.every((x) => x.status === 'pending'), 'G1: pending agreements block');
 
   // Vendors see only their own agreements.
-  const mine = await request(app).get('/api/vendor/agreements').set(auth(vendors.catering.token)).expect(200);
+  const mine = await request(app).get('/api/vendor/proposal-agreements').set(auth(vendors.catering.token)).expect(200);
   assert.equal(mine.body.agreements.length, 1);
   assert.equal(mine.body.agreements[0].category, 'catering');
-  await request(app).post(`/api/vendor/agreements/${agreementIds.decor}/decision`).set(auth(vendors.catering.token)).send({ decision: 'APPROVE' }).expect(404);
+  await request(app).post(`/api/vendor/proposal-agreements/${agreementIds.decor}/decision`).set(auth(vendors.catering.token)).send({ decision: 'APPROVE' }).expect(404);
 
-  await request(app).post(`/api/vendor/agreements/${agreementIds.catering}/decision`).set(auth(vendors.catering.token)).send({ decision: 'APPROVE' }).expect(200);
-  await request(app).post(`/api/vendor/agreements/${agreementIds.decor}/decision`).set(auth(vendors.decor.token)).send({ decision: 'APPROVE' }).expect(200);
-  await request(app).post(`/api/vendor/agreements/${agreementIds.photography}/decision`).set(auth(vendors.photography.token)).send({ decision: 'REJECT', note: 'Date clash' }).expect(200);
+  await request(app).post(`/api/vendor/proposal-agreements/${agreementIds.catering}/decision`).set(auth(vendors.catering.token)).send({ decision: 'APPROVE' }).expect(200);
+  await request(app).post(`/api/vendor/proposal-agreements/${agreementIds.decor}/decision`).set(auth(vendors.decor.token)).send({ decision: 'APPROVE' }).expect(200);
+  await request(app).post(`/api/vendor/proposal-agreements/${agreementIds.photography}/decision`).set(auth(vendors.photography.token)).send({ decision: 'REJECT', note: 'Date clash' }).expect(200);
 
   // G2: rejected agreement blocks.
   r = await readiness();
@@ -167,7 +167,7 @@ test('Proposal Studio end to end: gates block until approvals, then version-boun
   assert.equal(revised.body.agreement.version, 2);
   assert.equal((await VendorAgreement.findById(agreementIds.photography).lean()).status, 'SUPERSEDED');
   await request(app).post(`${S}/agreements/${revised.body.agreement._id}/send`).set(auth(maker)).expect(200);
-  await request(app).post(`/api/vendor/agreements/${revised.body.agreement._id}/decision`).set(auth(vendors.photography.token)).send({ decision: 'APPROVE' }).expect(200);
+  await request(app).post(`/api/vendor/proposal-agreements/${revised.body.agreement._id}/decision`).set(auth(vendors.photography.token)).send({ decision: 'APPROVE' }).expect(200);
 
   // G5: commercial approval missing.
   r = await readiness();

@@ -110,7 +110,7 @@ What the tests prove:
 | Area | Base path |
 |---|---|
 | Admin | `/api/admin/proposal-studio/*`: readiness, manifest, agreements, commercial, generate, render, preview, pdf, publish, change requests, access log |
-| Vendor | `/api/vendor/agreements*`: list, approve / reject / request revision |
+| Vendor | `/api/vendor/proposal-agreements*`: list, approve / reject / request revision |
 | Customer | `/api/customer/proposals*`: list, view, pdf, decision, change requests, ask |
 
 ## 7. Images: vendor photos, AI concepts, customer references
@@ -140,5 +140,5 @@ Images are stored privately in `server/var/assets/` (git-ignored; set `PROPOSAL_
 
 ## 8. Known limits (next phase)
 
-- **Vendor portal agreements screen** (`web/src/pages/vendor/pages/AgreementsPage.jsx`): the screen exists, but `/vendor` is disabled on the customer branch by the branch policy. It becomes visible when promoted to `codex/development` or `main`. In the demo, vendor approval is done by the seed or through the API.
+- **Vendor portal agreements screen** (`web/src/pages/vendor/pages/AgreementsPage.jsx`): the screen exists, but `/vendor` is disabled on the customer branch by the branch policy. Vendor OS exposes it at `/vendor/proposal-agreements`. In the demo, vendor approval is done by the seed or through the API.
 - **Mobile app (Expo):** proposal screens are not built yet. The web customer pages are mobile-responsive.

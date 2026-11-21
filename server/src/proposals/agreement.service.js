@@ -124,7 +124,7 @@ export async function sendAgreement(agreementId, { actor }) {
     priority: 'HIGH',
     title: 'Agreement requires your approval',
     message: `Please review and approve the ${agreement.category} agreement for an upcoming STARVNT event.`,
-    link: `/vendor/agreements/${agreement._id}`,
+    link: `/vendor/proposal-agreements`,
     idempotencyKey: `agreement-sent-${agreement._id}-${agreement.version}`,
   }).catch(() => null);
   return sent;

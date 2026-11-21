@@ -17,14 +17,14 @@ export default function AgreementsPage() {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(null);
-  const load = useCallback(() => externalApi.call('/vendor/agreements').then((r) => setRows(r.agreements)).catch((e) => setError(e.message)), []);
+  const load = useCallback(() => externalApi.call('/vendor/proposal-agreements').then((r) => setRows(r.agreements)).catch((e) => setError(e.message)), []);
   useEffect(() => { load(); }, [load]);
 
   const decide = async (id, decision) => {
     const note = decision === 'APPROVE' ? '' : window.prompt(decision === 'REJECT' ? 'Why are you rejecting this agreement?' : 'What should be revised?') || '';
     if (decision !== 'APPROVE' && !note) return;
     setBusy(id); setError('');
-    try { await externalApi.call(`/vendor/agreements/${id}/decision`, { method: 'POST', body: { decision, note } }); await load(); } catch (e) { setError(e.message); } finally { setBusy(null); }
+    try { await externalApi.call(`/vendor/proposal-agreements/${id}/decision`, { method: 'POST', body: { decision, note } }); await load(); } catch (e) { setError(e.message); } finally { setBusy(null); }
   };
 
   return (

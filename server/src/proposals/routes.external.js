@@ -15,23 +15,23 @@ const ctx = (req) => ({ ip: req.ip, userAgent: req.headers['user-agent'] || '' }
 
 // ── Vendor: own agreements only ───────────────────────────────────────────
 export const vendorAgreementRoutes = express.Router();
-vendorAgreementRoutes.use('/agreements', requireExternalAuth, requireAccountType('VENDOR'));
+vendorAgreementRoutes.use('/proposal-agreements', requireExternalAuth, requireAccountType('VENDOR'));
 const vendorOrg = (req) => {
   const id = req.externalUser.vendorOrganization;
   if (!id) throw proposalError('NO_VENDOR_ORGANIZATION', 'No vendor organization on this account.', 403);
   return id;
 };
 
-vendorAgreementRoutes.get('/agreements', handle(async (req, res) => {
+vendorAgreementRoutes.get('/proposal-agreements', handle(async (req, res) => {
   const rows = await VendorAgreement.find({ vendor: vendorOrg(req), status: { $ne: 'DRAFT' } }).sort({ updatedAt: -1 }).limit(200).lean();
   res.json({ agreements: rows.map(agreementForVendor) });
 }));
-vendorAgreementRoutes.get('/agreements/:id', handle(async (req, res) => {
+vendorAgreementRoutes.get('/proposal-agreements/:id', handle(async (req, res) => {
   const a = await VendorAgreement.findOne({ _id: req.params.id, vendor: vendorOrg(req), status: { $ne: 'DRAFT' } }).lean();
   if (!a) throw proposalError('AGREEMENT_NOT_FOUND', 'Agreement not found.', 404);
   res.json({ agreement: agreementForVendor(a) });
 }));
-vendorAgreementRoutes.post('/agreements/:id/decision', handle(async (req, res) => {
+vendorAgreementRoutes.post('/proposal-agreements/:id/decision', handle(async (req, res) => {
   const a = await vendorDecideAgreement(req.params.id, vendorOrg(req), req.body || {}, { actor: String(req.externalUser._id) });
   res.json({ agreement: agreementForVendor(a) });
 }));
