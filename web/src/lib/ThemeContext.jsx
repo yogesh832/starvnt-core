@@ -15,7 +15,7 @@ export function ThemeProvider({ children }) {
     }
   });
 
-  const dark = locked || preferredDark;
+  const dark = locked || (location.pathname !== '/' && preferredDark);
   useLayoutEffect(() => {
     const root = document.documentElement;
     const themeColor = document.querySelector('meta[name="theme-color"]');

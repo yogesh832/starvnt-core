@@ -6,6 +6,5 @@ export const vendorPalette = Object.freeze({
   action:'#7357aa',actionHover:'#8366b9',danger:'#f2a9b0',success:'#90cbb3',warning:'#d9be83',
 });
 export function isVendorThemeRoute(pathname,search='') {
-  if (/^\/(?:customer|admin|auth-test|api|experience)(?:\/|$)/.test(pathname)) return false;
-  return new URLSearchParams(search).get('as')!=='customer' && new URLSearchParams(search).get('for')!=='customer';
+  return /^\/vendor(?:\/|$)/.test(pathname);
 }

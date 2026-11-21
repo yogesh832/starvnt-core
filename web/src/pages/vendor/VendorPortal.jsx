@@ -1,5 +1,6 @@
 import '../../workspace.css';
 import VendorGlobalSearch from './VendorGlobalSearch.jsx';
+import { SUPPORT_CONTACT } from '../../config/support.js';
 import { VENDOR_QR_ENABLED } from '../../../../server/src/common/vendorQrRelease.js';
 import AuraMark from '../../components/AuraMark.jsx';
 import { lazy, Suspense, useState, useEffect, useRef } from 'react';
@@ -530,6 +531,9 @@ export default function VendorPortal() {
 
             <button
               className="hidden sm:grid w-9 h-9 place-items-center rounded-xl hover:bg-lavender text-ink/60 transition shrink-0"
+              type="button"
+              aria-label="Help & Support"
+              onClick={() => { window.location.href = `mailto:${SUPPORT_CONTACT.email}`; }}
               title="Help & Support"
             >
               <Icon name="help" size={18} />
