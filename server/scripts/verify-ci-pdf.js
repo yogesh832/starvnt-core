@@ -11,7 +11,7 @@ if (existsSync(rendererUrl)) {
     const { pdf, layout } = await renderPdf(html, meta, { preliminary: false });
     const { text, pages } = await pdfText(pdf);
     const qa = runQa({ snapshot, html, text, pages, layout, preliminary: false });
-    console.log(JSON.stringify({ preflight: 'PDF renderer', ...qa, pages: pages.length, layout }));
+    console.log(JSON.stringify({ preflight: 'PDF renderer', ...qa, pages: pages.length, layout, pageNumberText: pages.map(page => page.match(/Page.{0,90}/g) || []), pageEnds: pages.map(page => page.slice(-180)) }));
     if (!qa.passed) process.exitCode = 1;
   } finally { await closeRenderer(); }
 } else {
