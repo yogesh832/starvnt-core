@@ -6,7 +6,7 @@ import ThemeIcon from './ThemeIcon.jsx';
 
 export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
   const { user } = useExternalAuth();
-  const { dark, toggle: toggleTheme } = useTheme();
+  const { dark, locked, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const vendorSite = true;
 
@@ -39,13 +39,13 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {user ? (
           <>
-            <button
+            {!locked && <button
               onClick={toggleTheme}
               className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 text-muted dark:text-gray-300 grid place-items-center hover:bg-lavender dark:hover:bg-white/20 transition cursor-pointer"
               title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               <ThemeIcon dark={dark} />
-            </button>
+            </button>}
             <button
               onClick={() => navigate(user.accountType === 'VENDOR' ? '/vendor' : '/customer')}
               className="rounded-xl bg-primary hover:bg-primary-dark text-white text-xs sm:text-sm font-bold px-3 sm:px-4 py-2 sm:py-2.5 transition shadow-sm shadow-primary/20 cursor-pointer whitespace-nowrap"
@@ -70,13 +70,13 @@ export default function PublicNavbar({ onPlanClick, activePage = 'landing' }) {
                 Sign in
               </Link>
             )}
-            <button
+            {!locked && <button
               onClick={toggleTheme}
               className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 text-muted dark:text-gray-300 grid place-items-center hover:bg-lavender dark:hover:bg-white/20 transition cursor-pointer"
               title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               <ThemeIcon dark={dark} />
-            </button>
+            </button>}
             <button
               onClick={handlePlan}
               aria-label="Plan an Event"

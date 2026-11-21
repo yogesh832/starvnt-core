@@ -1,17 +1,21 @@
 /* Scoped to the public Vendor landing page. The approved reference artwork is
    preserved verbatim; responsive HTML supplies the text and all interactions. */
 .partner-landing {
-  --partner-ink: #141025;
+  --partner-ink: #f2f1f7;
   --partner-navy: #18142e;
-  --partner-cream: #fcf7f5;
-  --partner-purple: #54229d;
+  --partner-cream: #10111e;
+  --partner-purple: #bfaadf;
   --partner-gold: #f8ce67;
   color: var(--partner-ink);
   background: var(--partner-cream);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   font-size: 14px;
   line-height: 1.45;
-  color-scheme: light;
+  color-scheme: dark;
   isolation: isolate;
 }
 .partner-landing a { text-decoration: none; }
@@ -19,7 +23,7 @@
 .partner-landing :is(a, button, summary):focus-visible { outline: 3px solid #a970ee; outline-offset: 4px; }
 .partner-landing :is(h1, h2, h3, p, ul, ol, figure, blockquote) { margin: 0; }
 .partner-landing ul, .partner-landing ol { padding: 0; list-style: none; }
-.partner-landing section { scroll-margin-top: 88px; }
+.partner-landing :is(section, #success-stories) { scroll-margin-top: 88px; }
 .partner-container { width: min(100% - 112px, 1280px); margin-inline: auto; }
 .partner-icon { width: 28px; height: 28px; flex-shrink: 0; }
 .partner-reference-art { position: relative; overflow: hidden; flex-shrink: 0; }
@@ -111,9 +115,14 @@
 .partner-category-list li { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #e9e1df; border-radius: 10px; padding: 12px 7px; background: #fffcfa77; font-size: 11px; font-weight: 650; white-space: nowrap; box-shadow: 0 2px 3px #23133404; }
 .partner-category-list .partner-icon { width: 23px; height: 23px; color: #57209a; }
 .partner-trust-row { display: grid; grid-template-columns: 1.04fr 1.6fr; gap: 36px; margin-top: 27px; }
-.partner-testimonial { position: relative; padding: 22px; border: 1px solid #e8e0de; border-radius: 14px; background: #fffcfa66; box-shadow: 0 2px 3px #23133404; }
-.partner-testimonial h3 { font-size: 17px; font-weight: 750; line-height: 1.25; }
-.partner-testimonial p { margin-top: 10px; font-size: 13px; line-height: 1.55; }
+.partner-testimonial { position: relative; padding: 19px 18px 12px 66px; border: 1px solid #e8e0de; border-radius: 14px; background: #fffcfa66; box-shadow: 0 2px 3px #23133404; }
+.partner-quote-mark { position: absolute; top: 2px; left: 19px; font-family: Georgia, serif; font-size: 67px; color: #ac77d8; line-height: 1; }
+.partner-testimonial blockquote { font-size: 13px; line-height: 1.35; font-weight: 550; }
+.partner-testimonial figcaption { display: flex; gap: 9px; align-items: center; margin-top: 12px; margin-left: -47px; }
+.partner-testimonial figcaption .partner-reference-art { width: 37px; border-radius: 50%; }
+.partner-testimonial figcaption strong { display: block; font-size: 13px; }
+.partner-testimonial figcaption div > span { display: block; font-size: 10px; margin-top: 2px; }
+.partner-stars { color: #eaa500; margin-left: auto; letter-spacing: 1px; font-size: 17px; }
 .partner-trust-benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; }
 .partner-trust-benefits article { padding-inline: 32px; border-left: 1px solid #d8cfd9; }
 .partner-trust-benefits article > .partner-icon { width: 31px; height: 31px; color: #54239b; margin-bottom: 5px; }
@@ -181,6 +190,7 @@
   .partner-trust-benefits article { padding-inline: 24px; }
   .partner-trust-benefits h3 { font-size: 12px; }
   .partner-trust-benefits p { font-size: 11px; }
+  .partner-testimonial blockquote { font-size: 12px; }
   .partner-stars { font-size: 14px; }
   .partner-footer nav { gap: 16px; }
 }
@@ -298,7 +308,13 @@
   .partner-category-list li { font-size: 12px; padding-block: 13px; justify-content: flex-start; padding-left: 13px; gap: 10px; }
   .partner-category-list .partner-icon { width: 24px; height: 24px; }
   .partner-trust-row { gap: 25px; margin-top: 26px; }
-  .partner-testimonial { padding: 21px; width: 100%; }
+  .partner-testimonial { padding: 21px 16px 14px 57px; width: 100%; }
+  .partner-testimonial blockquote { font-size: 13px; line-height: 1.55; }
+  .partner-quote-mark { left: 13px; top: 8px; }
+  .partner-testimonial figcaption { margin-left: -41px; }
+  .partner-stars { font-size: 13px; letter-spacing: 0; }
+  .partner-testimonial figcaption strong { font-size: 12px; }
+  .partner-testimonial figcaption div > span { font-size: 9px; }
   .partner-trust-benefits { grid-template-columns: 1fr; gap: 22px; padding: 5px 5px 18px; }
   .partner-trust-benefits article { padding-inline: 44px 0; position: relative; border: 0; }
   .partner-trust-benefits article > .partner-icon { position: absolute; left: 0; top: 1px; }

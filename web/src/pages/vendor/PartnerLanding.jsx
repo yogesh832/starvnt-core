@@ -2,8 +2,14 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
 import { SUPPORT_CONTACT } from '../../config/support.js';
-import approvedArtwork from '../../assets/images/partner-landing-approved-reference.png';
+import venue768 from '../../assets/images/partner-venue-768.webp';
+import venue1536 from '../../assets/images/partner-venue-1536.webp';
+import hero768 from '../../assets/images/partner-hero-768.webp';
+import hero1536 from '../../assets/images/partner-hero-1536.webp';
+import testimonialAvatar from '../../assets/images/partner-testimonial-avatar.webp';
+import { LogoWord } from '../../components/ui.jsx';
 import './partnerLanding.css';
+import './partnerTheme.css';
 
 const SIGNUP = '/signup?as=vendor&next=%2Fvendor';
 const LOGIN = '/login?as=vendor&next=%2Fvendor';
@@ -42,24 +48,26 @@ function Icon({ name, className = '', ...props }) {
   return <svg className={`partner-icon ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>{ICONS[name] || ICONS.sparkle}</svg>;
 }
 
-/** Display untouched regions of the user-approved artwork. No replacement imagery.
- * Text and interactive elements surrounding the artwork are semantic HTML.
- */
-function ReferenceArt({ x, y, width, height, alt, className = '', eager = false }) {
-  return <div className={`partner-reference-art ${className}`} role="img" aria-label={alt} style={{ aspectRatio: `${width} / ${height}` }}>
-    <img src={approvedArtwork} alt="" width="1024" height="1536" loading={eager ? 'eager' : 'lazy'} decoding="async" draggable="false" style={{ width: `${1024 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
-  </div>;
-}
-
 function Brand({ footer = false }) {
   return <Link to="/" className="partner-brand" aria-label="STARVNT Partner Platform home">
-    <ReferenceArt x={footer ? 57 : 60} y={footer ? 1489 : 6} width={footer ? 133 : 129} height={footer ? 37 : 37} alt={footer ? 'STARVNT. Events. Simplified.' : 'STARVNT Partner Platform'} eager />
+    <LogoWord light sub={footer ? 'Events. Simplified.' : 'Partner Platform'} markSize={36} size="text-xl" />
   </Link>;
+}
+
+function BusinessPreview() {
+  return <aside className="partner-business-preview" aria-label="Illustrative workspace with example data"><div><Icon name="sparkle" /><strong>Your Business on STARVNT</strong></div><span className="partner-preview-caption">Workspace preview · example data</span>{[['message','New enquiry','12'],['image','Quotation sent','8'],['calendar','Booking confirmed','4']].map(([icon,label,count])=><div className="partner-business-preview-row" key={label}><Icon name={icon}/><span>{label}</span><b>{count}</b><Icon name="chevron"/></div>)}</aside>;
+}
+
+function WorkspacePreview() {
+  return <div className="partner-device-scene" aria-label="Illustrative STARVNT workspace on laptop and phone, with example data">
+    <div className="partner-laptop"><div className="partner-laptop-display"><aside><Brand/><ul>{['Dashboard','Enquiries','Quotes','Bookings','Services','Portfolio','Analytics'].map((label,i)=><li key={label} data-selected={i===0}><Icon name={['grid','message','image','calendar','grid','image','growth'][i]}/>{label}</li>)}</ul></aside><div className="partner-demo-dashboard"><span className="partner-demo-eyebrow">WORKSPACE PREVIEW · EXAMPLE DATA</span><h3>My Business</h3><div className="partner-demo-metrics">{[['12','New enquiries'],['8','Quotes sent'],['4','Bookings confirmed']].map(([n,label])=><div key={label}><strong>{n}</strong><span>{label}</span></div>)}</div><div className="partner-demo-chart"><strong>Enquiries trend</strong><svg viewBox="0 0 400 120" role="img" aria-label="Illustrative upward enquiries trend"><path d="M0 25H400M0 65H400M0 105H400" stroke="currentColor" opacity=".12"/><path d="M4 103 60 90 110 94 160 66 210 75 270 45 325 35 395 12" fill="none" stroke="#b49bdc" strokeWidth="3"/>{[[4,103],[60,90],[110,94],[160,66],[210,75],[270,45],[325,35],[395,12]].map(([cx,cy])=><circle key={cx} cx={cx} cy={cy} r="4" fill="#c8b5e9"/>)}</svg></div><div className="partner-demo-enquiries"><strong>Recent enquiries</strong><div><span>Client</span><span>Event type</span><span>Status</span></div><div><span>Example client</span><span>Wedding</span><span>New</span></div></div></div></div><div className="partner-laptop-base"/></div>
+    <div className="partner-demo-phone"><Brand/><h3>My Business</h3>{[['message','Enquiries'],['image','Quotes'],['calendar','Bookings'],['growth','Analytics']].map(([icon,label])=><div key={label}><Icon name={icon}/><span>{label}</span><span>›</span></div>)}<small>Workspace preview</small></div>
+  </div>;
 }
 
 const NAV = [
   ['Benefits', '#benefits'], ['How It Works', '#how-it-works'], ['Workspace', '#workspace'],
-  ['Founding Program', '#founding-program'], ['FAQs', '#faqs'],
+  ['Founding Program', '#founding-program'], ['Success Stories', '#success-stories'], ['FAQs', '#faqs'],
 ];
 
 const BENEFITS = [
@@ -117,7 +125,7 @@ export default function PartnerLanding() {
 
     <main id="partner-main">
       <section className="partner-hero" aria-labelledby="partner-hero-title">
-        <div className="partner-hero-visual"><ReferenceArt x={448} y={50} width={576} height={302} alt="Event photographer and event planner reviewing a camera at a floral event venue, beside an illustrative STARVNT business workspace" eager /></div>
+        <div className="partner-hero-visual"><img className="partner-hero-photo" src={hero1536} srcSet={`${hero768} 768w, ${hero1536} 1536w`} sizes="(max-width:640px) 100vw, 57vw" width="1536" height="1024" fetchPriority="high" decoding="async" alt="Photographer and event planner reviewing a camera at a floral event venue"/><BusinessPreview/></div>
         <div className="partner-container partner-hero-inner">
           <div className="partner-hero-copy">
             <p className="partner-eyebrow">For event professionals <span /></p>
@@ -128,7 +136,7 @@ export default function PartnerLanding() {
               <a className="partner-button partner-button-outline" href="#how-it-works">See How It Works</a>
             </div>
             <ul className="partner-hero-promises" aria-label="Partner benefits">
-              {['Relevant Enquiries', 'Business Workspace', 'Growth Support'].map(text => <li key={text}><Icon name="check" />{text}</li>)}
+              {['Verified Leads', 'Business Workspace', 'Growth Support'].map(text => <li key={text}><Icon name="check" />{text}</li>)}
             </ul>
           </div>
         </div>
@@ -152,7 +160,7 @@ export default function PartnerLanding() {
             <p>Manage your event business, from enquiries<br className="partner-desktop-break" /> to confirmed bookings.</p>
             <ul>{['Real-time enquiries and lead details', 'Create and share professional quotations', 'Booking and event management', 'Performance insights and business growth'].map(text => <li key={text}><span className="partner-check-dot"><Icon name="check" /></span>{text}</li>)}</ul>
           </div>
-          <div className="partner-workspace-visual"><ReferenceArt x={414} y={542} width={610} height={250} alt="Illustrative STARVNT Partner Workspace on a laptop and phone, showing enquiries, quotations, bookings and an enquiries trend chart" /></div>
+          <div className="partner-workspace-visual"><WorkspacePreview/></div>
         </div>
       </section>
 
@@ -169,7 +177,7 @@ export default function PartnerLanding() {
       </section>
 
       <section className="partner-founding" id="founding-program" aria-labelledby="partner-founding-title">
-        <div className="partner-founding-visual"><ReferenceArt x={575} y={969} width={449} height={187} alt="The approved floral wedding venue with a warm chandelier-lit canopy and reception tables" /></div>
+        <div className="partner-founding-visual"><img src={venue1536} srcSet={`${venue768} 768w, ${venue1536} 1536w`} sizes="(max-width:640px) 100vw, 48vw" alt="Floral wedding reception canopy with warm chandelier lighting and elegantly arranged tables" width="1536" height="768" loading="lazy" decoding="async"/></div>
         <div className="partner-container partner-founding-inner">
           <div className="partner-founding-copy">
             <h2 id="partner-founding-title"><Icon name="crown" />Founding Partner Program</h2>
@@ -186,11 +194,12 @@ export default function PartnerLanding() {
         <div className="partner-container">
           <div className="partner-section-heading partner-section-heading-accent"><h2 id="partner-categories-title">Built for Every Event Professional</h2></div>
           <ul className="partner-category-list">{CATEGORIES.map(([icon, label]) => <li key={label}><Icon name={icon} /><span>{label}</span></li>)}</ul>
-          <div className="partner-trust-row">
-            <div className="partner-testimonial">
-              <h3>One place for your event business</h3>
-              <p>Showcase your services, respond to enquiries and keep confirmed work organized in Vendor OS.</p>
-            </div>
+          <div className="partner-trust-row" id="success-stories">
+            <figure className="partner-testimonial">
+              <span className="partner-quote-mark" aria-hidden="true">“</span>
+              <blockquote>“STARVNT has given our business a professional platform, quality enquiries and a much better way to manage bookings.”</blockquote>
+              <figcaption><img src={testimonialAvatar} alt="Arjun Dutta" width="33" height="33" loading="lazy" decoding="async"/><div><strong>Arjun Dutta</strong><span>Event Decorator, Kolkata</span></div><span className="partner-stars" aria-label="5 out of 5 stars">★★★★★</span></figcaption>
+            </figure>
             <div className="partner-trust-benefits">
               {[['shield', 'Verified & Trusted', 'A curated network of verified event professionals.'], ['people', 'Relevant Opportunities', 'Enquiries from genuine event requirements.'], ['support', 'Dedicated Support', 'A partner success team to help you grow.']].map(([icon, title, text]) => <article key={title}><Icon name={icon} /><h3>{title}</h3><p>{text}</p></article>)}
             </div>
