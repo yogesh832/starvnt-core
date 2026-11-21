@@ -1,15 +1,15 @@
 /* Vendor entry screens share the dashboard's navy/purple palette. */
-html.dark[data-product-theme="vendor"] #root .vendor-auth {background:radial-gradient(ellipse at 90% 0,#49295e66,transparent 50%),#0e1020!important;color:#f5f0fc}
+html.dark[data-product-theme="vendor"] #root .vendor-auth {background:radial-gradient(ellipse at 90% 0,#49295e66,transparent 50%),#0e1020!important;color:var(--sv-ink)}
 html.dark[data-product-theme="vendor"] #root .vendor-auth>header {background:#151629f5!important;border-color:#4b3a5c!important}
-html.dark[data-product-theme="vendor"] #root .vendor-auth-card {background:#211e35!important;border-color:#675078!important;box-shadow:0 18px 50px #080a1b55!important}
-html.dark[data-product-theme="vendor"] #root .vendor-auth-form {background:linear-gradient(145deg,#2b223e,#1c1c32 70%)!important;color:#f5f0fc}
+html.dark[data-product-theme="vendor"] #root .vendor-auth-card {background:var(--sv-surface)!important;border-color:#675078!important;box-shadow:0 18px 50px #080a1b55!important}
+html.dark[data-product-theme="vendor"] #root .vendor-auth-form {background:linear-gradient(145deg,#342747,var(--sv-surface) 70%)!important;color:var(--sv-ink)}
 html.dark[data-product-theme="vendor"] #root .vendor-auth .auth-photo-panel {--auth-photo-top:#1b173cbd;--auth-photo-mid:#241a3e55;--auth-photo-clear:#211a3333;--auth-photo-bottom:#17172dcf}
-html.dark[data-product-theme="vendor"] #root .vendor-auth :is(input,select,textarea) {background:#17182b!important;border-color:#655176!important;color:#f5f0fc!important;caret-color:#d8b8f4}
-html.dark[data-product-theme="vendor"] #root .vendor-auth input::placeholder {color:#b9aecb!important;opacity:1}
+html.dark[data-product-theme="vendor"] #root .vendor-auth :is(input,select,textarea) {background:var(--sv-input)!important;border-color:var(--sv-border-strong)!important;color:var(--sv-ink)!important;caret-color:#d8b8f4}
+html.dark[data-product-theme="vendor"] #root .vendor-auth input::placeholder {color:var(--sv-muted)!important;opacity:1}
 html.dark[data-product-theme="vendor"] #root .vendor-auth :is(input,select,textarea):focus {border-color:#c098df!important;box-shadow:0 0 0 3px #a16cc324!important}
 html.dark[data-product-theme="vendor"] #root .vendor-auth :is(.bg-primary,.bg-primary-dark) {background:linear-gradient(135deg,#8856b8,#63388e)!important;color:#fff!important;border-color:#af7dcc!important}
 html.dark[data-product-theme="vendor"] #root .vendor-auth .bg-primary:hover {background:linear-gradient(135deg,#9566c1,#74479d)!important}
 html.dark[data-product-theme="vendor"] #root .vendor-auth :is(button,a):focus-visible {outline:2px solid #e2c9f2;outline-offset:3px}
 html.dark[data-product-theme="vendor"] #root .vendor-auth .text-ink\/80 {color:#d4c7e2!important}
-html.dark[data-product-theme="vendor"] #root .vendor-auth .border-gray-200 {border-color:#655176!important}
+html.dark[data-product-theme="vendor"] #root .vendor-auth .border-gray-200 {border-color:var(--sv-border-strong)!important}
 html.dark[data-product-theme="vendor"] #root .vendor-auth-form [class*="from-purple-900"] {background:linear-gradient(120deg,#382447,#242035)!important;border-color:#79548d!important;box-shadow:none!important}
