@@ -6,5 +6,9 @@ export const vendorPalette = Object.freeze({
   action:'#7649a9',actionHover:'#8759b9',danger:'#efa9bc',success:'#8bceb0',warning:'#e0c48d',
 });
 export function isVendorThemeRoute(pathname,search='') {
-  return /^\/vendor(?:\/|$)/.test(pathname);
+  if (/^\/vendor(?:\/|$)/.test(pathname)) return true;
+  if (!/^\/(?:login|signup)\/?$/.test(pathname)) return false;
+  const params = new URLSearchParams(search);
+  const account = (params.get('as') || params.get('role') || params.get('type') || 'vendor').toLowerCase();
+  return account === 'vendor';
 }

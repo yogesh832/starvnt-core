@@ -8,6 +8,7 @@ import { useExternalAuth } from "../../auth/ExternalAuthContext.jsx";
 import { useTheme } from "../../lib/ThemeContext.jsx";
 import PublicNavbar from "../../components/PublicNavbar.jsx";
 import PublicFooter from "../../components/PublicFooter.jsx";
+import './vendorAuthTheme.css';
 import { LogoWord } from "../../components/ui.jsx";
 import { DEV_SHORTCUTS_ENABLED } from "../../lib/devShortcuts.js";
 import { useSignupDocuments } from "../../lib/useSignupDocuments.js";
@@ -532,13 +533,13 @@ export default function ExternalLogin() {
     "w-full rounded-xl border border-gray-200/90 bg-gray-50/40 px-4 py-2.5 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition";
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white flex flex-col justify-between relative dark:from-navy dark:via-navy-deep dark:to-navy">
+    <div className={`${accountType === 'VENDOR' ? 'vendor-auth ' : ''}min-h-screen bg-gradient-to-b from-[#efeaff] via-lavender to-white flex flex-col justify-between relative dark:from-navy dark:via-navy-deep dark:to-navy`}>
       {/* Integrated Navigation Bar matching Landing */}
       <PublicNavbar activePage="login" onPlanClick={() => navigate("/")} />
 
       {/* Main Container */}
       <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="w-full max-w-4xl lg:max-w-5xl bg-white rounded-3xl sm:rounded-[32px] border border-gray-100/90 shadow-2xl shadow-primary/10 overflow-hidden grid md:grid-cols-[42%_1fr]">
+        <div className="vendor-auth-card w-full max-w-4xl lg:max-w-5xl bg-white rounded-3xl sm:rounded-[32px] border border-gray-100/90 shadow-2xl shadow-primary/10 overflow-hidden grid md:grid-cols-[42%_1fr]">
           {/* Left: Brand & Luxury Visual Panel */}
           <aside
             className="auth-photo-panel relative p-7 sm:p-9 text-white flex flex-col justify-between overflow-hidden min-h-[300px] md:min-h-[620px] transition-all duration-700"
@@ -675,7 +676,7 @@ export default function ExternalLogin() {
           </aside>
 
           {/* Right: Auth Form Panel */}
-          <main className="p-6 sm:p-10 flex flex-col justify-center bg-white">
+          <main className="vendor-auth-form p-6 sm:p-10 flex flex-col justify-center bg-white">
             <div className="w-full">
               {/* Developer POV Test Login Workbench Banner Button */}
               {DEV_SHORTCUTS_ENABLED && <>
