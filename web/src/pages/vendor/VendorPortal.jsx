@@ -374,7 +374,7 @@ export default function VendorPortal() {
 
   const navItems = [
     { to: 'dashboard', label: 'Home', icon: 'dashboard' },
-    { to: 'enquiries', label: 'Leads & CRM', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
+    // { to: 'enquiries', label: 'Leads & CRM', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
     { to: 'quotes', label: 'Quotes & Proposals', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
     { to: 'bookings', label: 'Bookings & Operations', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
     { to: 'payments', label: 'Finance & Payments', icon: 'payments' },
@@ -715,7 +715,7 @@ export default function VendorPortal() {
             <span>Home</span>
           </NavLink>
 
-          <NavLink
+          {/* <NavLink
             to="enquiries"
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
@@ -732,7 +732,7 @@ export default function VendorPortal() {
               )}
             </div>
             <span>Leads</span>
-          </NavLink>
+          </NavLink> */}
 
           <NavLink
             to="quotes"
