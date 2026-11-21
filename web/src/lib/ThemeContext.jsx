@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useLayoutEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { isVendorThemeRoute } from '../../../shared/vendorTheme.js';
+import { applyVendorTheme } from './vendorThemeRuntime.js';
 
 const ThemeContext = createContext({ dark: false, toggle: () => {} });
 
@@ -22,6 +23,7 @@ export function ThemeProvider({ children }) {
     themeColor?.setAttribute('content', locked ? '#0e1020' : dark ? '#000000' : '#f4f5fb');
     if (locked) root.dataset.productTheme = 'vendor';
     else delete root.dataset.productTheme;
+    const restorePalette = locked ? applyVendorTheme(root) : null;
     if (dark) {
       root.classList.add('dark');
     } else {
@@ -30,6 +32,7 @@ export function ThemeProvider({ children }) {
     try {
       if (!locked) localStorage.setItem('starvnt-theme', preferredDark ? 'dark' : 'light');
     } catch {}
+    return () => restorePalette?.();
   }, [dark, locked, preferredDark]);
 
   return (

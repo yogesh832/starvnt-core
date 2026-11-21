@@ -1,9 +1,9 @@
 /* Default Vendor OS dark theme, aligned with the operations handbook visuals.
    More specific than shared html.dark rules; never changes Customer/Admin. */
 html.dark[data-product-theme="vendor"] {
-  --sv-bg:#0e1020; --sv-surface:#211e35; --sv-panel:#17182b; --sv-elevated:#2b2542;
-  --sv-input:#141526; --sv-ink:#f5f0fc; --sv-muted:#bdb2ce;
-  --sv-border:#433852; --sv-border-strong:#655176; --sv-link:#d8b8f4;
+  --sv-bg:#0e1020; --sv-surface:#29223f; --sv-panel:#1b1b32; --sv-elevated:#392b50;
+  --sv-input:#17172c; --sv-ink:#f5f0fc; --sv-muted:#c7bbd8;
+  --sv-border:#544164; --sv-border-strong:#8c729d; --sv-link:#d8b8f4;
   --sv-action:#7649a9; --sv-action-hover:#8759b9; --sv-on-action:#fff; --sv-selected:#342342;
   --sv-danger:#efa9bc; --sv-success:#8bceb0;
   --vendor-button-soft:#e2c9f2; --vendor-on-button-soft:#2b173b;
@@ -81,7 +81,7 @@ html.dark[data-product-theme="vendor"] #root .vendor-mobile-metrics>a {backgroun
 html.dark[data-product-theme="vendor"] #root .vendor-shell main .bg-white {background:linear-gradient(130deg,#28223d,var(--sv-surface) 70%)!important;border-color:#514060!important}
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.bg-primary,.bg-primary-dark) {background:linear-gradient(135deg,#8151b3,#65368f)!important;border-color:#a178c1!important;color:#fff!important;box-shadow:inset 0 1px #ffffff18!important}
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.bg-primary,.bg-primary-dark):hover {background:linear-gradient(135deg,#9062bf,#75449f)!important}
-html.dark[data-product-theme="vendor"] #root .vendor-shell .vendor-command-readiness {background:linear-gradient(125deg,#332447,#211e35 75%)!important;border-color:#6d4e85}
+html.dark[data-product-theme="vendor"] #root .vendor-shell .vendor-command-readiness {background:linear-gradient(125deg,#332447,#29223f 75%)!important;border-color:#6d4e85}
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.vendor-readiness-actions a,main a.bg-primary-soft) {background:var(--vendor-button-soft)!important;color:var(--vendor-on-button-soft)!important;border-color:#eedafa!important;box-shadow:inset 0 1px #ffffff55}
 html.dark[data-product-theme="vendor"] #root .vendor-shell .vendor-readiness-ring circle+circle {stroke:#c09be3}
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.vendor-source-tabs [aria-current=page],aside nav a[aria-current=page]) {background:linear-gradient(125deg,#74489e,#492866)!important;color:#f8eeff!important;border-color:#9162b6!important;box-shadow:inset 0 1px #ffffff18}
@@ -89,3 +89,7 @@ html.dark[data-product-theme="vendor"] #root .vendor-shell nav[aria-label="Vendo
 html.dark[data-product-theme="vendor"] #root .vendor-shell nav[aria-label="Vendor navigation"] a[aria-current=page] {background:linear-gradient(135deg,#7648a5,#492664)!important;color:#f8eeff!important;box-shadow:inset 0 1px #c8a0e433;border-radius:12px}
 html.dark[data-product-theme="vendor"] #root .vendor-shell>div>div.fixed.bottom-0 {background:#111322f5!important;border-color:#44314f!important;box-shadow:0 -4px 20px #08091333!important}
 html.dark[data-product-theme="vendor"] #root .vendor-shell>div>div.fixed.bottom-0 a[aria-current=page] {background:linear-gradient(135deg,#7648a5,#492664)!important;color:#f8eeff!important;box-shadow:inset 0 1px #c8a0e433;border-radius:12px}
+
+html.dark[data-product-theme="vendor"] #root :is(.vendor-modal-panel,.vendor-aura-panel){background:linear-gradient(135deg,var(--sv-elevated),var(--sv-panel) 65%)!important;border-color:var(--sv-border-strong)!important;color:var(--sv-ink)}
+html.dark[data-product-theme="vendor"] #root .vendor-shell :is(thead,select option){background:var(--sv-elevated)!important;color:var(--sv-ink)}
+html.dark[data-product-theme="vendor"] #root .vendor-shell main :is(th,td){border-color:var(--sv-border)!important}
