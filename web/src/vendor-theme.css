@@ -6,6 +6,8 @@ html.dark[data-product-theme="vendor"] {
   --sv-border:#323447; --sv-border-strong:#484a61; --sv-link:#c6b6ed;
   --sv-action:#7357aa; --sv-action-hover:#8366b9; --sv-on-action:#fff; --sv-selected:#29233e;
   --sv-danger:#f2a9b0; --sv-success:#90cbb3;
+  --color-ink:var(--sv-ink); --color-navy:var(--sv-ink); --color-navy-deep:var(--sv-bg);
+  --color-muted:var(--sv-muted); --color-lavender:var(--sv-bg);
   color-scheme:dark; font-synthesis:none; text-rendering:optimizeLegibility;
   -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
@@ -18,6 +20,23 @@ html.dark[data-product-theme="vendor"] #root .vendor-shell>aside,
 html.dark[data-product-theme="vendor"] #root .vendor-shell header {
   background:#141622f5!important;border-color:var(--sv-border)!important;box-shadow:none;
 }
+/* Opacity utility variants previously inherited the original light ink token.
+   Keep icons, table actions and placeholders legible across internal screens. */
+html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.text-ink\/40,.text-ink\/50,.text-ink\/60,.text-ink\/70,.text-ink\/80,.text-navy\/40,.text-navy\/50,.text-navy\/60) {color:#c6c2d3!important}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header {overflow:visible;isolation:isolate}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button {color:#e3deef;min-height:42px;min-width:42px;border:1px solid #454052;background:#242332;transition:background-color .15s,border-color .15s,color .15s;overflow:visible}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button:hover {background:#343044!important;color:#fff!important;border-color:#8b77ab}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button:active {background:#41364f!important}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button:focus-visible {outline:2px solid #d4bcef;outline-offset:3px}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button:disabled {color:#b3aebe;opacity:.55;cursor:not-allowed}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button>svg {color:inherit;stroke-width:1.8;flex-shrink:0}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header [aria-label*="profile menu"] {border-radius:13px;padding:5px 9px}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header [aria-label*="profile menu"]>div:first-child:not(img) {background:#4e3a67!important;color:#fff!important}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button[title$="unread notifications"]>span {background:#b9405d!important;color:#fff!important;box-shadow:0 0 0 2px #141622;min-width:20px;min-height:20px;font-size:10px;font-weight:700}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header input::placeholder {color:#b4adca!important;opacity:1}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header [aria-expanded="true"] {background:#3a2d4c!important;border-color:#ae90d2;color:#f4eaff}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header [role="region"] {background:#1a1c2d!important;color:#f2f1f7!important;border-color:#5a4c6a!important;box-shadow:0 14px 36px #0005}
+@media(max-width:380px){html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header{gap:6px;padding-inline:8px}html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button{min-width:40px;min-height:40px}}
 html.dark[data-product-theme="vendor"] #root .vendor-shell>aside nav a[aria-current=page] {
   color:#eee5ff!important;background:#35294c!important;box-shadow:inset 3px 0 #a389cf;
 }
