@@ -1,9 +1,9 @@
 /** Vendor product design contract. Customer/Admin keep their own theme preferences. */
 export const vendorPalette = Object.freeze({
-  bg:'#0e1020',card:'#29223f',panel:'#1b1b32',elevated:'#392b50',input:'#17172c',
-  ink:'#f5f0fc',navy:'#f5f0fc',muted:'#c7bbd8',line:'#544164',lineStrong:'#8c729d',
-  accent:'#d8b8f4',accentDark:'#62348a',onAccent:'#ffffff',soft:'#342342',
-  action:'#7649a9',actionHover:'#8759b9',danger:'#efa9bc',success:'#8bceb0',warning:'#e0c48d',
+  bg:'#0b0d14',card:'#161926',panel:'#1b1e2e',elevated:'#222638',input:'#121520',
+  ink:'#edf2fa',navy:'#edf2fa',muted:'#a5b1c8',line:'#262a3d',lineStrong:'#38405d',
+  accent:'#818cf8',accentDark:'#6366f1',onAccent:'#ffffff',soft:'#292845',
+  action:'#6051d5',actionHover:'#5142bd',danger:'#efa9bc',success:'#8bceb0',warning:'#e0c48d',
 });
 export function isVendorThemeRoute(pathname,search='') {
   if (/^\/vendor(?:\/|$)/.test(pathname)) return true;

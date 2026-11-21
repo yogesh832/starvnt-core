@@ -20,7 +20,7 @@ export function ThemeProvider({ children }) {
   useLayoutEffect(() => {
     const root = document.documentElement;
     const themeColor = document.querySelector('meta[name="theme-color"]');
-    themeColor?.setAttribute('content', locked ? '#0e1020' : dark ? '#000000' : '#f4f5fb');
+    themeColor?.setAttribute('content', locked ? '#0b0d14' : dark ? '#000000' : '#f4f5fb');
     if (locked) root.dataset.productTheme = 'vendor';
     else delete root.dataset.productTheme;
     const restorePalette = locked ? applyVendorTheme(root) : null;
