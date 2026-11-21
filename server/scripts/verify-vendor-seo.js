@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { vendorPalette } from '../../shared/vendorTheme.js';
 
 // Uses the caller's ephemeral database and real authenticated browser session.
 export async function verifyVendorSeo({ page, output, report }) {
@@ -53,10 +54,10 @@ export async function verifyVendorSeo({ page, output, report }) {
     await page.setViewportSize({ width, height });
     await page.reload();
     await page.getByRole('heading', { name: 'SEO evidence', exact: true }).waitFor();
-    assert.equal(await page.evaluate(() => document.documentElement.classList.contains('dark')), theme === 'dark');
+    assert.deepEqual(await page.evaluate(() => ({ dark: document.documentElement.classList.contains('dark'), product: document.documentElement.dataset.productTheme, background: getComputedStyle(document.documentElement).getPropertyValue('--sv-bg').trim(), preference: localStorage.getItem('starvnt-theme') })), { dark: true, product: 'vendor', background: vendorPalette.bg, preference: theme });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     const filename = `seo-${theme}-${width}.png`;
     await page.screenshot({ path: resolve(output, filename) }); report.screenshots.push(filename);
   }
-  report.checks.push({ name: 'SEO workspace fits desktop and 320/390px phones in existing light and dark themes', passed: true });
+  report.checks.push({ name: 'SEO workspace fits desktop and 320/390px phones with the locked Vendor palette while preserving user preferences', passed: true });
 }
