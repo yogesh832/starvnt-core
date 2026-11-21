@@ -142,16 +142,16 @@ try {
   check('Collapsed sidebar remains pinned while dashboard is scrolled', await page.locator('.vendor-shell > aside').evaluate(element => element.getBoundingClientRect().top), 0);
   await page.getByTitle('Toggle Sidebar', { exact: true }).click();
   await page.waitForFunction(() => Math.abs(document.querySelector('aside').getBoundingClientRect().width - 256) < 1);
-  await page.getByRole('link', { name: 'Launchpad', exact: true }).click();
-  await page.getByRole('heading', { name: '30-Day Partner Launchpad', exact: true }).waitFor();
+  await page.getByRole('link', { name: 'Quotes & Proposals', exact: true }).click();
+  await page.getByRole('heading', { name: 'Quotes & Proposals', exact: true }).waitFor();
   check('Changing sidebar section opens at the top of the workspace', await workspace.evaluate(element => element.scrollTop), 0);
-  await page.getByRole('link', { name: 'Dashboard', exact: true }).first().click();
+  await page.getByRole('link', { name: 'Home', exact: true }).first().click();
   await page.getByRole('heading', { name: 'Business Health Snapshot', exact: true }).waitFor();
   await workspace.evaluate(element => { element.scrollTop = 0; });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByTitle('Ask Aura+', { exact: true }).click();
   await page.getByRole('button', { name: 'Minimize Aura', exact: true }).click();
-  const auraLauncher = page.getByRole('button', { name: 'Open Aura+', exact: true });
+  const auraLauncher = page.getByRole('button', { name: 'Ask Aura+ AI Assistant', exact: true });
   await page.mouse.move(700, 300);
   const launcherGeometry = () => auraLauncher.evaluate(button => {
     const outer = button.getBoundingClientRect(), orb = button.querySelector('.aura-mark').getBoundingClientRect();
