@@ -37,13 +37,27 @@ rollback() {
   trap - ERR
   echo 'Deployment failed; restoring previous images and routing.'
   cat "$backup/Caddyfile" > "$caddy"
-  cp "$backup/previous.yml" "$active"
+  if [[ -f "$backup/active.yml" ]]; then
+    cp "$backup/active.yml" "$active"
+  else
+    cp "$backup/previous.yml" "$active"
+  fi
   docker compose -p "$project" -f "$base" -f "$active" up -d --no-build --pull never backend web || true
   # Keep the failed command's nonzero exit status visible in GitHub.
   exit "$result"
 }
 trap rollback ERR
-printf 'services:\n  backend:\n    image: starvnt-backend:%s\n  web:\n    image: starvnt-web:%s\n' "$sha" "$sha" > "$active"
+cat > "$active" <<EOF
+services:
+  backend:
+    image: starvnt-backend:$sha
+    volumes:
+      - proposal_artifacts:/app/server/var
+  web:
+    image: starvnt-web:$sha
+volumes:
+  proposal_artifacts:
+EOF
 cat "$release/deploy/aws/Caddyfile" > "$caddy"
 docker compose -p "$project" -f "$base" -f "$active" up -d --no-build --pull never backend web
 

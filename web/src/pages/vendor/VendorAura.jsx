@@ -334,7 +334,7 @@ function clampPanelPosition(pos, width, height) {
   };
 }
 
-export default function VendorAura({ open, onClose, page, userId, prompt, setup, conversationRequest }) {
+export default function VendorAura({ open, onClose, onOpen, page, userId, prompt, setup, conversationRequest }) {
   const navigate = useNavigate();
   const [sessionId, setSessionId] = useState(() => readSession(userId));
   const currentSession = useRef(sessionId); currentSession.current = sessionId;
@@ -751,10 +751,15 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
     }
   }
 
-  // When an explicit prompt arrives, ensure Aura is visible and not minimized
+  const prevOpenRef = useRef(open);
+  // Only expand when transitioning from closed to open or when an explicit prompt arrives
   useEffect(() => {
-    if (open && (prompt?.text || conversationRequest) && dockMode === 'minimized') {
-      updateDockMode('docked');
+    const wasOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
+    if ((!wasOpen && open) || prompt?.text || conversationRequest) {
+      if (dockMode === 'minimized') {
+        updateDockMode('docked');
+      }
     }
   }, [open, prompt, conversationRequest, dockMode]);
 
@@ -1002,17 +1007,18 @@ export default function VendorAura({ open, onClose, page, userId, prompt, setup,
     return () => window.removeEventListener('resize', handleWindowResize);
   }, [panelWidth, panelHeight]);
 
-  if (!open) return null;
-
-  // Minimized Floating Button
-  if (dockMode === 'minimized') {
+  // Corner Floating Button: ALWAYS accessible by default across Vendor OS
+  if (!open || dockMode === 'minimized') {
     return (
       <button
         type="button"
-        onClick={() => updateDockMode('docked')}
-        className="fixed right-3 bottom-20 lg:bottom-5 lg:right-5 z-50 w-[72px] h-[72px] p-0 leading-none rounded-full bg-white/5 backdrop-blur-md text-white grid place-items-center shadow-lg shadow-black/10 border border-white/10 hover:bg-white/10 hover:scale-105 active:scale-95 transition-all focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary group"
-        title="Open Aura+"
-        aria-label="Open Aura+"
+        onClick={() => {
+          if (onOpen) onOpen();
+          updateDockMode('docked');
+        }}
+        className="fixed right-3 bottom-20 lg:bottom-5 lg:right-5 z-50 w-[72px] h-[72px] p-0 leading-none rounded-full bg-[#13172e]/85 backdrop-blur-md text-white grid place-items-center shadow-2xl shadow-purple-950/40 border border-white/15 hover:border-purple-400/40 hover:bg-[#1a203d]/90 hover:scale-105 active:scale-95 transition-all focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary group cursor-pointer"
+        title="Ask Aura+ AI Assistant"
+        aria-label="Ask Aura+ AI Assistant"
       >
         <AuraMark variant="orb" motion size={60} />
         {pending && (
