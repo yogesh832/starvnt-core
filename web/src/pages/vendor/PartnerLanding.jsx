@@ -136,7 +136,7 @@ export default function PartnerLanding() {
               <a className="partner-button partner-button-outline" href="#how-it-works">See How It Works</a>
             </div>
             <ul className="partner-hero-promises" aria-label="Partner benefits">
-              {['Verified Leads', 'Business Workspace', 'Growth Support'].map(text => <li key={text}><Icon name="check" />{text}</li>)}
+              {['Relevant Enquiries', 'Business Workspace', 'Growth Support'].map(text => <li key={text}><Icon name="check" />{text}</li>)}
             </ul>
           </div>
         </div>
