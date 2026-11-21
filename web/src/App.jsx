@@ -6,10 +6,9 @@ import { useExternalAuth } from './auth/ExternalAuthContext.jsx';
 import { AdminAuthProvider, useAdminAuth } from './auth/AdminAuthContext.jsx';
 import { LogoWord } from './components/ui.jsx';
 
-import Landing from './pages/customer/Landing.jsx';
-
 import { VENDOR_QR_ENABLED } from '../../server/src/common/vendorQrRelease.js';
 
+const PartnerLanding = lazy(() => import('./pages/vendor/PartnerLanding.jsx'));
 const ExternalLogin = lazy(() => import('./pages/external/Login.jsx'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy.jsx'));
 const CustomerPortal = lazy(() => import('./pages/customer/CustomerPortal.jsx'));
@@ -127,7 +126,7 @@ function ApplicationRoutes() {
         element={
           window.location.hostname.startsWith('admin.')
               ? <Navigate to="/admin" replace />
-              : <Landing />
+              : <PartnerLanding />
         } 
       />
       {/* External domain — one auth UI, two portals */}

@@ -4,7 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-const dist = fileURLToPath(new URL('../dist/', import.meta.url));
+const dist = process.env.STARVNT_PERFORMANCE_DIST
+  ? resolve(process.env.STARVNT_PERFORMANCE_DIST)
+  : fileURLToPath(new URL('../dist/', import.meta.url));
 const html = readFileSync(join(dist, 'index.html'), 'utf8');
 const assets = readdirSync(join(dist, 'assets'));
 const find = expression => {
@@ -16,11 +18,17 @@ const initialCss = find(/^index-.*\.css$/);
 const initialJs = find(/^index-.*\.js$/);
 const vendorJs = find(/^VendorPortal-.*\.js$/);
 const workspaceCss = find(/^workspace-.*\.css$/);
-// Every responsive candidate must remain independently cacheable, not inlined
-// into the entry script even when its compressed file is below Vite's default.
-for (const name of ['brand-mark-64', 'brand-mark-128', 'brand-mark-192', 'vendor-landing-hero-640', 'vendor-landing-hero-1200']) {
+// Responsive standalone photos and official brand assets remain cacheable.
+for (const name of ['brand-mark-64', 'brand-mark-128', 'brand-mark-192']) {
   find(new RegExp(`^${name}-.*\\.avif$`));
 }
+const heroPhoto = find(/^partner-hero-1536-.*\.webp$/);
+const mobileHero = find(/^partner-hero-768-.*\.webp$/);
+const venuePhoto = find(/^partner-venue-1536-.*\.webp$/);
+find(/^partner-venue-768-.*\.webp$/);
+assert.ok(statSync(heroPhoto).size < 250_000, 'Hero exceeds optimized photo budget.');
+assert.ok(statSync(mobileHero).size < 100_000, 'Mobile hero exceeds optimized photo budget.');
+assert.ok(!assets.some(name => /^partner-landing-approved-reference-/.test(name)), 'Full-page reference must not be downloaded by the live landing.');
 for (const [file, limit] of [[initialCss, 130_000], [initialJs, 225_000], [vendorJs, 250_000]]) {
   assert.ok(statSync(file).size <= limit, `${file} exceeds its reviewed delivery budget (${limit} bytes).`);
 }
@@ -51,6 +59,7 @@ console.log(JSON.stringify({
   initialCss: { bytes: statSync(initialCss).size, gzipBytes: gzipSync(common).length },
   initialJs: { bytes: statSync(initialJs).size, gzipBytes: gzipSync(readFileSync(initialJs)).length },
   vendorShellJs: { bytes: statSync(vendorJs).size, gzipBytes: gzipSync(readFileSync(vendorJs)).length },
+  landingPhotos: { heroBytes: statSync(heroPhoto).size, mobileHeroBytes: statSync(mobileHero).size, venueBytes: statSync(venuePhoto).size, independentlyCacheable: true },
   themeReferencesChecked: references.size,
   publicStylesheets: publicStyles.length,
   status: 'PASS',

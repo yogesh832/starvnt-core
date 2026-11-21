@@ -8,7 +8,7 @@
     <!-- Browser chrome and SEO titles must not change the native app's identity or splash. -->
     <meta name="starvnt:mobile-title" content="StarVnt Entertainment — Events. Simplified." />
     <meta name="starvnt:mobile-launch-background" content="#020316" />
-    <script>try{if(localStorage.getItem('starvnt-theme')==='dark'){document.documentElement.classList.add('dark');document.querySelector('meta[name="theme-color"]').content='#000000'}}catch{}</script>
+    <script>try{const q=new URLSearchParams(location.search);const vendor=!/^\/(?:customer|admin|auth-test|api|experience)(?:\/|$)/.test(location.pathname)&&q.get('as')!=='customer'&&q.get('for')!=='customer';if(vendor){document.documentElement.dataset.productTheme='vendor';document.documentElement.classList.add('dark');document.querySelector('meta[name="theme-color"]').content='#10111e'}else if(localStorage.getItem('starvnt-theme')==='dark'){document.documentElement.classList.add('dark');document.querySelector('meta[name="theme-color"]').content='#000000'}}catch{}</script>
     <meta name="description" content="Manage event enquiries, quotations, bookings and payment records with STARVNT Vendor OS." />
     <meta property="og:title" content="STARVNT Vendor OS — Manage Your Event Business" />
     <meta property="og:description" content="Manage event enquiries, quotations, bookings and payment records with STARVNT Vendor OS." />
@@ -25,7 +25,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="/brand/favicon-64.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png" />
     <link rel="preload" href="/src/assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" as="image" type="image/avif" href="/src/assets/images/vendor-landing-hero-640.avif" imagesrcset="/src/assets/images/vendor-landing-hero-640.avif 640w, /src/assets/images/vendor-landing-hero-1200.avif 1200w" imagesizes="(min-width: 1280px) 512px, (min-width: 1024px) calc(45vw - 65px), calc(100vw - 64px)" media="(min-width: 640px)" fetchpriority="high" />
+    <link rel="preload" as="image" type="image/webp" href="/src/assets/images/partner-hero-1536.webp" imagesrcset="/src/assets/images/partner-hero-768.webp 768w, /src/assets/images/partner-hero-1536.webp 1536w" imagesizes="(max-width:640px) 100vw, 57vw" fetchpriority="high" />
     <link rel="canonical" href="https://vendor.starvnt.com/" />
     <title>STARVNT Vendor OS — Manage Your Event Business</title>
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","@id":"https://vendor.starvnt.com/#website","url":"https://vendor.starvnt.com/","name":"STARVNT Vendor OS","description":"Manage event enquiries, quotations, bookings and payment records with STARVNT Vendor OS.","inLanguage":"en"}</script>

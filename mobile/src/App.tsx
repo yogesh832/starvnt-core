@@ -15,7 +15,7 @@ import { Inter_600SemiBold } from "@expo-google-fonts/inter/600SemiBold";
 import { Inter_700Bold } from "@expo-google-fonts/inter/700Bold";
 import { Inter_800ExtraBold } from "@expo-google-fonts/inter/800ExtraBold";
 import { LogoWord } from "./BrandLogo";
-import { ThemeProvider, useTheme } from "./Theme";
+import { ThemeProvider, VendorThemeBoundary, useTheme } from "./Theme";
 import { useWebBrandHead } from "./useWebBrandHead";
 import brand from "./brand.generated.json";
 import {
@@ -95,8 +95,9 @@ const Tabs = createBottomTabNavigator();
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function ThemeToggle() {
-  const { mode, toggle } = useTheme();
+  const { mode, toggle, locked } = useTheme();
   const c = usePalette();
+  if (locked) return null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -524,6 +525,10 @@ class ErrorBoundary extends React.Component<
     );
   }
 }
+function VendorProductTheme({ children }: React.PropsWithChildren) {
+  const session = useSession();
+  return <VendorThemeBoundary enabled={session.activeDomain !== 'admin' && session.user?.accountType === 'VENDOR'}>{children}</VendorThemeBoundary>;
+}
 export default function App() {
   useWebBrandHead();
   const [fontsLoaded, fontError] = useFonts({
@@ -551,7 +556,7 @@ export default function App() {
           <SessionProvider>
             <PushProvider>
               <PlanningIntentProvider>
-                <Navigation />
+                <VendorProductTheme><Navigation /></VendorProductTheme>
               </PlanningIntentProvider>
             </PushProvider>
           </SessionProvider>

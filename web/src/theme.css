@@ -4,6 +4,7 @@
 @import 'tailwindcss/preflight.css' layer(base);
 @import 'tailwindcss/utilities.css' layer(utilities) source(none);
 @import './dark-theme.css';
+@import './vendor-theme.css';
 
 /* Public routes load only their utilities. Dashboard utilities are route-loaded
    from workspace.css, while palette, resets and shared dark rules stay here. */

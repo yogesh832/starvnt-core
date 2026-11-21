@@ -3,9 +3,10 @@ import { Appearance, Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import * as SystemUI from "expo-system-ui";
 import brand from "./brand.generated.json";
+import { vendorPalette } from '../../shared/vendorTheme.js';
 
 type Mode = "light" | "dark";
-const Context = createContext({ mode: "light" as Mode, toggle: () => {} });
+const Context = createContext({ mode: "light" as Mode, locked: false, vendor: false, toggle: () => {} });
 function browserMode(): Mode {
   try {
     return Platform.OS === "web" &&
@@ -59,6 +60,8 @@ export function ThemeProvider({ children }: React.PropsWithChildren) {
     <Context.Provider
       value={{
         mode,
+        locked: false,
+        vendor: false,
         toggle: () => setMode((v) => (v === "light" ? "dark" : "light")),
       }}
     >
@@ -67,8 +70,22 @@ export function ThemeProvider({ children }: React.PropsWithChildren) {
   );
 }
 export const useTheme = () => useContext(Context);
+export function VendorThemeBoundary({ enabled, children }: React.PropsWithChildren<{ enabled: boolean }>) {
+  const inherited = useTheme();
+  useEffect(() => {
+    const background = enabled ? vendorPalette.bg : brand[inherited.mode].bg;
+    if (Platform.OS !== 'web') {
+      Appearance.setColorScheme(enabled ? 'dark' : inherited.mode);
+      void SystemUI.setBackgroundColorAsync(background).catch(() => {});
+    } else {
+      document.documentElement.style.colorScheme = enabled ? 'dark' : inherited.mode;
+      document.body.style.backgroundColor = background;
+    }
+  }, [enabled, inherited.mode]);
+  return <Context.Provider value={enabled ? { mode: 'dark', locked: true, vendor: true, toggle: () => {} } : inherited}>{children}</Context.Provider>;
+}
 export function usePalette() {
-  const { mode } = useTheme();
+  const { mode, vendor } = useTheme();
   const dark = mode === "dark";
   return {
     ...brand[mode], dark,
@@ -78,5 +95,6 @@ export function usePalette() {
     lineStrong: dark ? brand.dark.lineStrong : brand.light.line,
     action: dark ? brand.dark.action : brand.light.accent,
     success: dark ? brand.dark.success : "#059669",
+    ...(vendor ? vendorPalette : {}),
   };
 }
