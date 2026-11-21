@@ -1,4 +1,5 @@
 import '../../workspace.css';
+import './vendorOperations.css';
 import VendorGlobalSearch from './VendorGlobalSearch.jsx';
 import { SUPPORT_CONTACT } from '../../config/support.js';
 import { VENDOR_QR_ENABLED } from '../../../../server/src/common/vendorQrRelease.js';
@@ -104,17 +105,8 @@ export default function VendorPortal() {
     return () => window.removeEventListener('openVendorAura', onOpenAura);
   }, []);
 
-  // New vendor (setup incomplete): open Aura+ once per sign-in so it can walk them through setup.
-  useEffect(() => {
-    if (!setup || setup.percent >= 100) return;
-    try {
-      if (sessionStorage.getItem('vendor_aura_setup_opened')) return;
-      sessionStorage.setItem('vendor_aura_setup_opened', '1');
-    } catch {
-      return;
-    }
-    setAuraOpen(true);
-  }, [setup]);
+  // Readiness stays visible first. Aura opens only when the vendor asks, rather
+  // than covering the command center automatically on a new account.
   const [navOpen, setNavOpen] = useState(false);
   const [compactNavigation, setCompactNavigation] = useState(() => window.matchMedia('(max-width: 1023px)').matches);
   const navigationPanel = useRef(null), navigationToggle = useRef(null);
@@ -381,16 +373,17 @@ export default function VendorPortal() {
   }
 
   const navItems = [
-    { to: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { to: 'dashboard', label: 'Home', icon: 'dashboard' },
     { to: 'launchpad', label: 'Launchpad', icon: 'check' },
-    { to: 'enquiries', label: 'Enquiries', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
+    { to: 'enquiries', label: 'Leads & CRM', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
     { to: 'quotes', label: 'Quotes', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
-    { to: 'execution', label: 'Service execution', icon: 'bookings' },
+    ...(!compactNavigation ? [{ to: 'execution', label: 'Service execution', icon: 'bookings' }] : []),
     { to: 'bookings', label: 'Bookings', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
     { to: 'external-bookings', label: 'External bookings', icon: 'calendar' },
     { to: 'readiness', label: 'Business readiness', icon: 'check' },
     { to: 'agreements', label: 'Business & Legal · Agreements', icon: 'documents' },
     { to: 'customers', label: 'Customer 360', icon: 'customers' },
+    // Phase 2 (Deferred): Event ticketing, ticket bookings, ticket QR generation/scanning, ticket orders/refunds
     ...(VENDOR_QR_ENABLED ? [{ to: 'experience-qr', label: 'Experience QR', icon: 'reviews' }] : []),
     { to: 'growth', label: 'Customer growth', icon: 'analytics' },
     { to: 'seo', label: 'SEO & GEO growth', icon: 'search' },
@@ -513,10 +506,12 @@ export default function VendorPortal() {
           >
             <Icon name="menu" size={20} />
           </button>
-          <div className="flex-1 max-w-xs sm:max-w-sm md:max-w-md flex items-center gap-2.5 bg-gray-50 border border-gray-200/80 rounded-xl px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-navy min-w-0 shadow-inner focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/40 transition-all dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:focus-within:bg-gray-900">
+          <div className="hidden lg:flex flex-1 max-w-md items-center gap-2.5 bg-gray-50 border border-gray-200/80 rounded-xl px-3 py-2 text-sm text-navy min-w-0 shadow-inner focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/40 transition-all dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:focus-within:bg-gray-900">
             <Icon name="search" size={15} className="shrink-0 text-muted" />
             <VendorGlobalSearch />
           </div>
+
+          <span className="lg:hidden text-sm font-bold text-navy truncate">Vendor Business OS</span>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 ml-auto shrink-0">
             {/* Aura+ assistant */}
@@ -680,10 +675,17 @@ export default function VendorPortal() {
             <Route path="readiness" element={<ReadinessPage />} />
             <Route path="agreements" element={<Agreements />} />
             <Route path="customers" element={<CustomerGrowth />} />
+            {/* PHASE 2 MODULES (STRICTLY DEFERRED & EXCLUDED FROM PHASE 1):
+                1. Event ticketing & ticket booking
+                2. Ticket QR generation & on-site scanning
+                3. Ticket orders & ticket payments
+                4. Ticket refunds & ticket settlements
+                5. Ticketing-specific workflows, admissions & scanner modules
+                Keep ordinary vendor quotes, client bookings and service payments separate. */}
             {VENDOR_QR_ENABLED && <Route path="experience-qr" element={<CustomerGrowth mode="qr" />} />}
             <Route path="growth" element={<CustomerGrowth mode="growth" />} />
             <Route path="seo" element={<SeoGrowth />} />
-            {/* Share Your Business is deferred to Phase 2. */}
+            {/* Share Your Business & Public Ticketing are deferred to Phase 2. */}
             <Route path="share" element={<Navigate to="/vendor/profile/social-links" replace />} />
             <Route path="learning" element={<Academy />} />
             <Route path="learning/meetings" element={<GrowthMeetings />} />
@@ -722,7 +724,7 @@ export default function VendorPortal() {
             }
           >
             <Icon name="dashboard" size={19} />
-            <span>Dashboard</span>
+            <span>Home</span>
           </NavLink>
 
           <NavLink
@@ -744,13 +746,8 @@ export default function VendorPortal() {
             <span>Leads</span>
           </NavLink>
 
-          <button type="button" aria-label="Aura+" aria-pressed={auraOpen} onClick={(event) => { event.stopPropagation(); setAuraOpen((open) => !open); }} className="aura-nav-button relative flex min-w-0 flex-1 flex-col items-center -mt-5 text-[10px] font-bold text-primary dark:text-[#c4b5fd]">
-            <AuraMark variant="orb" motion size={60} state={auraOpen ? 'active' : 'idle'} />
-            <span>Aura+</span>
-          </button>
-
           <NavLink
-            to="bookings"
+            to="quotes"
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
                 isActive ? 'text-primary dark:text-[#a5b4fc]' : 'text-muted dark:text-slate-400 hover:text-navy dark:hover:text-white'
@@ -758,15 +755,20 @@ export default function VendorPortal() {
             }
           >
             <div className="relative inline-flex items-center justify-center">
-              <Icon name="bookings" size={19} />
-              {navBadge('bookings', badgeCounts.bookingsCount) > 0 && (
+              <Icon name="quotes" size={19} />
+              {navBadge('quotes', badgeCounts.quotesCount) > 0 && (
                 <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-[#161926] shadow-xs">
-                  {navBadge('bookings', badgeCounts.bookingsCount)}
+                  {navBadge('quotes', badgeCounts.quotesCount)}
                 </span>
               )}
             </div>
-            <span>Bookings</span>
+            <span>Quotes</span>
           </NavLink>
+
+          <button type="button" aria-label="Aura+" aria-pressed={auraOpen} onClick={(event) => { event.stopPropagation(); setAuraOpen((open) => !open); }} className="aura-nav-button relative flex min-w-0 flex-1 flex-col items-center -mt-5 text-[10px] font-bold text-primary dark:text-[#c4b5fd]">
+            <AuraMark variant="orb" motion size={60} state={auraOpen ? 'active' : 'idle'} />
+            <span>Aura+</span>
+          </button>
 
           <button
             onClick={() => setNavOpen(true)}
@@ -779,7 +781,7 @@ export default function VendorPortal() {
 
       </div>
 
-      <VendorAura open={auraOpen} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} setup={setup} conversationRequest={auraConversationRequest} />
+      <VendorAura open={auraOpen} onOpen={() => setAuraOpen(true)} onClose={() => setAuraOpen(false)} page={currentPage} userId={user?.id} prompt={auraPrompt} setup={setup} conversationRequest={auraConversationRequest} />
     </div>
   );
 }

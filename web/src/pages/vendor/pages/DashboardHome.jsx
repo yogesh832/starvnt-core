@@ -1,4 +1,5 @@
 import VendorBusinessDashboard from '../VendorBusinessDashboard.jsx';
+import VendorReadinessSummary from '../VendorReadinessSummary.jsx';
 import { NextGrowthMeetingCard } from './GrowthMeetings.jsx';
 import { ContinueWatchingCard } from './Academy.jsx';
 import { notificationAction } from '../vendorNotificationUi.js';
@@ -23,7 +24,7 @@ function SkeletonLine({ className = '' }) {
 
 function VendorDashboardSkeleton({ business = 'Your Brand' }) {
   return (
-    <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
+    <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
       <div className="space-y-6 min-w-0 w-full">
         <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-xs border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -590,6 +591,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   const [gotItAcknowledged, setGotItAcknowledged] = useState(() => localStorage.getItem('vendorOnboardingDismissed') === 'true');
   const [loading, setLoading] = useState(true);
   const [failedSources, setFailedSources] = useState([]);
+  const [restrictedSources, setRestrictedSources] = useState([]);
   const [sourceSync, setSourceSync] = useState({});
   const activation = failedSources.includes('activation') ? null : storedActivation;
   const liveRequest = useRef(0);
@@ -611,7 +613,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       ] = await Promise.all([
         externalApi.call('/vendor/activation-status').catch(() => ({ ok: false })),
         externalApi.call('/vendor/profile').catch(() => ({ ok: false })),
-        externalApi.call('/vendor/opportunities').catch(() => ({ ok: false })),
+        externalApi.call('/vendor/opportunities').catch(error => ({ ok: false, error: error.data?.error, status: error.status })),
         externalApi.call('/quotes').catch(() => ({ ok: false })),
         externalApi.call('/vendor/bookings').catch(() => ({ ok: false })),
         externalApi.call('/vendor/availability/blockouts').catch(() => ({ ok: false })),
@@ -621,7 +623,9 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
       if (request !== liveRequest.current) return;
 
       const sourceLoaded = { activation: Boolean(actRes?.ok && actRes.status && Number.isFinite(actRes.status.completionPercentage)), profile: Boolean(profRes?.ok && profRes.vendor), enquiries: Boolean(oppsRes?.ok && Array.isArray(oppsRes.opportunities)), quotes: Boolean(quotesRes?.ok && Array.isArray(quotesRes.quotes)), bookings: Boolean(bkRes?.ok && Array.isArray(bkRes.bookings)), availability: Boolean(blRes?.ok && Array.isArray(blRes.blockouts)), services: Boolean(svcRes?.ok && Array.isArray(svcRes.services)), notifications: Boolean(notifRes?.ok && Array.isArray(notifRes.notifications)) };
-      setFailedSources(Object.keys(sourceLoaded).filter(name => !sourceLoaded[name]));
+      const restricted = oppsRes?.status === 403 && oppsRes.error === 'ACTIVATION_REQUIRED' ? ['enquiries'] : [];
+      setRestrictedSources(restricted);
+      setFailedSources(Object.keys(sourceLoaded).filter(name => !sourceLoaded[name] && !restricted.includes(name)));
       const syncedAt = new Date().toISOString();
       setSourceSync(previous => ({ ...previous, ...Object.fromEntries(Object.keys(sourceLoaded).filter(name => sourceLoaded[name]).map(name => [name, syncedAt])) }));
 
@@ -835,7 +839,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
   const isDocVerified = Boolean(checklist.verified);
   const completedStepsCount = activation?.onboardingSteps?.completed ?? null;
-  const recordFreshness = name => <p role="status" className="text-xs text-muted">{failedSources.includes(name) ? 'Source unavailable; saved records may be stale. ' : loading ? 'Refreshing saved records. ' : ''}Last successful sync: {sourceSync[name] ? new Date(sourceSync[name]).toLocaleString() : 'Not yet established'}{failedSources.includes(name) && <button type="button" className="underline min-h-11 ml-2" disabled={loading} onClick={loadLiveDashboard}>Retry {name}</button>}</p>;
+  const recordFreshness = name => <p role="status" className="text-xs text-muted">{restrictedSources.includes(name) ? 'Access is locked until activation approval. ' : failedSources.includes(name) ? 'Source unavailable; saved records may be stale. ' : loading ? 'Refreshing saved records. ' : ''}Last successful sync: {sourceSync[name] ? new Date(sourceSync[name]).toLocaleString() : 'Not yet established'}{failedSources.includes(name) && <button type="button" className="underline min-h-11 ml-2" disabled={loading} onClick={loadLiveDashboard}>Retry {name}</button>}</p>;
 
   const currentLocalDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const upcomingBookings = bookings.filter(row => row.bookingStatus === 'CONFIRMED' && row.executionStatus !== 'COMPLETION_VERIFIED' && row.eventDate >= currentLocalDay).sort((a, b) => a.eventDate.localeCompare(b.eventDate));
@@ -866,8 +870,8 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
   }
 
   return (
-    <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6">
-      <div className="col-span-full"><ProfileStatus /></div>
+    <div className="p-3 sm:p-5 lg:p-6 w-full max-w-[1600px] mx-auto min-w-0 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
+      <div className="col-span-full hidden lg:block"><ProfileStatus /></div>
       {/* Main Operations Stream */}
       <div className="space-y-6 min-w-0 w-full">
 
@@ -943,14 +947,15 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         </div>
 
         {failedSources.length > 0 && <div role="alert" className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">Could not refresh: {failedSources.join(', ')}. Related record lists may be unavailable or stale. <button className="underline font-bold" onClick={loadLiveDashboard} disabled={loading}>Retry record lists</button></div>}
-        <VendorBusinessDashboard />
+        <VendorReadinessSummary status={activation} unavailable={!activation} compact onRetry={loadLiveDashboard} />
+        <VendorBusinessDashboard compactHome />
 
         {/* Aura+ assistant */}
         {onAskAura && <AskAuraCard onAsk={onAskAura} />}
 
         {/* 6-STEP MANDATORY ONBOARDING READINESS */}
         {activation && (!isMatchingEligible || !gotItAcknowledged) && (
-          <div className={`rounded-3xl p-5 sm:p-6 border transition shadow-sm ${
+          <div className={`hidden lg:block rounded-3xl p-5 sm:p-6 border transition shadow-sm ${
             isMatchingEligible
               ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50'
               : 'bg-gradient-to-br from-purple-50/70 via-white to-amber-50/40 dark:from-[#1e1b2e] dark:via-[#161926] dark:to-[#1e1f2b] border-primary/25 dark:border-primary/40'
@@ -1505,10 +1510,10 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
 
       </div>
 
-      {/* Right Column Operational Sidebar: Responsive Grid below xl, docked sidebar on xl+ */}
-      <aside className="min-w-0 w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-5 xl:space-y-5 xl:gap-0">
+      {/* Right Column Operational Sidebar: Compact cards with natural heights that never stretch vertically */}
+      <aside className="min-w-0 w-full self-start flex flex-col gap-5 md:grid md:grid-cols-2 md:gap-5 xl:flex xl:flex-col xl:gap-5">
         {/* Quick Actions Shortcuts */}
-        <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 min-w-0">
+        <div className="bg-white rounded-3xl p-5 shadow-xs border border-gray-100 min-w-0 h-fit">
           <div className="flex items-center justify-between mb-3.5">
             <h3 className="font-extrabold text-sm text-navy">Quick Actions</h3>
             <span className="text-[10px] font-bold text-muted uppercase tracking-wider">Shortcuts</span>
@@ -1535,17 +1540,17 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
         </div>
 
         {/* Live Interactive Mini Calendar */}
-        <div className="min-w-0">
+        <div className="min-w-0 h-fit">
           {failedSources.includes('bookings') || failedSources.includes('availability') ? <p role="status" className="rounded-2xl bg-white p-4 text-sm">Calendar data unavailable. Retry record lists to refresh.</p> : <MiniCalendar bookings={bookings} blockouts={blockouts} />}
         </div>
 
         {/* Scheduled Upcoming Events */}
-        <div className="min-w-0">
+        <div className="min-w-0 h-fit">
           {!failedSources.includes('bookings') && <ScheduledEventsCard bookings={upcomingBookings} />}
         </div>
 
         {/* Notifications & System Alerts */}
-        <div className="min-w-0">
+        <div className="min-w-0 h-fit">
           <NotificationsCard
             unavailable={failedSources.includes('notifications')}
             notifications={notifications}
@@ -1555,11 +1560,11 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
           />
         </div>
 
-        <NextGrowthMeetingCard />
-        <ContinueWatchingCard />
+        <div className="min-w-0 h-fit"><NextGrowthMeetingCard /></div>
+        <div className="min-w-0 h-fit"><ContinueWatchingCard /></div>
 
         {/* Conversion Funnel Performance */}
-        <div className="md:col-span-2 xl:col-span-1 min-w-0">
+        <div className="md:col-span-2 xl:col-span-1 min-w-0 h-fit">
           <Link to="/vendor/analytics" className="block rounded-3xl border border-gray-100 bg-white p-5 text-sm font-bold text-primary">View cohort-based sales analytics →</Link>
         </div>
       </aside>
