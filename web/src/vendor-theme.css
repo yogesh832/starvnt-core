@@ -1,19 +1,20 @@
-/* Locked Vendor OS theme: restrained navy surfaces and one lavender accent.
+/* Default Vendor OS dark theme, aligned with the operations handbook visuals.
    More specific than shared html.dark rules; never changes Customer/Admin. */
 html.dark[data-product-theme="vendor"] {
-  --sv-bg:#10111e; --sv-surface:#1a1c2d; --sv-panel:#151724; --sv-elevated:#222438;
-  --sv-input:#121421; --sv-ink:#f2f1f7; --sv-muted:#b1afc3;
-  --sv-border:#323447; --sv-border-strong:#484a61; --sv-link:#c6b6ed;
-  --sv-action:#7357aa; --sv-action-hover:#8366b9; --sv-on-action:#fff; --sv-selected:#29233e;
-  --sv-danger:#f2a9b0; --sv-success:#90cbb3;
+  --sv-bg:#0e1020; --sv-surface:#211e35; --sv-panel:#17182b; --sv-elevated:#2b2542;
+  --sv-input:#141526; --sv-ink:#f5f0fc; --sv-muted:#bdb2ce;
+  --sv-border:#433852; --sv-border-strong:#655176; --sv-link:#d8b8f4;
+  --sv-action:#7649a9; --sv-action-hover:#8759b9; --sv-on-action:#fff; --sv-selected:#342342;
+  --sv-danger:#efa9bc; --sv-success:#8bceb0;
+  --vendor-button-soft:#e2c9f2; --vendor-on-button-soft:#2b173b;
   --color-ink:var(--sv-ink); --color-navy:var(--sv-ink); --color-navy-deep:var(--sv-bg);
   --color-muted:var(--sv-muted); --color-lavender:var(--sv-bg);
   color-scheme:dark; font-synthesis:none; text-rendering:optimizeLegibility;
   -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
-html.dark[data-product-theme="vendor"] body {background:#10111e;color:#f2f1f7}
+html.dark[data-product-theme="vendor"] body {background:var(--sv-bg);color:var(--sv-ink)}
 html.dark[data-product-theme="vendor"] #root .vendor-shell {
-  background:radial-gradient(ellipse at 85% 0,#30204144,transparent 45%),var(--sv-bg)!important;
+  background:radial-gradient(ellipse at 85% 0,#49295e55,transparent 48%),var(--sv-bg)!important;
   font-size:14px; line-height:1.55;
 }
 html.dark[data-product-theme="vendor"] #root .vendor-shell>aside,
@@ -35,7 +36,7 @@ html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header [aria-labe
 html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button[title$="unread notifications"]>span {background:#b9405d!important;color:#fff!important;box-shadow:0 0 0 2px #141622;min-width:20px;min-height:20px;font-size:10px;font-weight:700}
 html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header input::placeholder {color:#b4adca!important;opacity:1}
 html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header [aria-expanded="true"] {background:#3a2d4c!important;border-color:#ae90d2;color:#f4eaff}
-html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header [role="region"] {background:#1a1c2d!important;color:#f2f1f7!important;border-color:#5a4c6a!important;box-shadow:0 14px 36px #0005}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header [role="region"] {background:var(--sv-surface)!important;color:var(--sv-ink)!important;border-color:#5a4c6a!important;box-shadow:0 14px 36px #0005}
 @media(max-width:380px){html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header{gap:6px;padding-inline:8px}html.dark[data-product-theme="vendor"] #root .vendor-shell>div>header button{min-width:40px;min-height:40px}}
 html.dark[data-product-theme="vendor"] #root .vendor-shell>aside nav a[aria-current=page] {
   color:#eee5ff!important;background:#35294c!important;box-shadow:inset 3px 0 #a389cf;
@@ -48,7 +49,7 @@ html.dark[data-product-theme="vendor"] #root .vendor-shell>div>nav a[aria-curren
 }
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(h1,h2,h3) {letter-spacing:-.025em;line-height:1.3}
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.shadow-lg,.shadow-xl,.shadow-2xl,.shadow-sm,.shadow-xs) {box-shadow:0 4px 14px #00000012}
-html.dark[data-product-theme="vendor"] #root :is(.vendor-shell,.vendor-modal-panel,.vendor-aura-panel) :is(.bg-primary,.bg-primary-dark) {background:#7357aa!important;color:#fff!important}
+html.dark[data-product-theme="vendor"] #root :is(.vendor-shell,.vendor-modal-panel,.vendor-aura-panel) :is(.bg-primary,.bg-primary-dark) {background:var(--sv-action)!important;color:#fff!important}
 html.dark[data-product-theme="vendor"] #root :is(.vendor-shell,.vendor-modal-panel) :is(.bg-primary-soft,.bg-primary\/5,.bg-primary\/10) {background:#2b243d!important;color:#d8c9f3!important}
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.bg-white,.bg-white\/95,.bg-white\/90,.bg-white\/80,.bg-white\/70) {background:var(--sv-surface)!important;border-color:var(--sv-border)!important}
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.bg-emerald-50,.bg-green-50,.bg-teal-50) {background:#1d302c!important;color:#a5d5c0!important;border-color:#3b5b50!important}
@@ -60,7 +61,7 @@ html.dark[data-product-theme="vendor"] #root .vendor-shell :is(input,select,text
 html.dark[data-product-theme="vendor"] #root .vendor-shell :is(input[type=checkbox],input[type=radio],input[type=range]) {min-height:0;accent-color:#ad96d6}
 html.dark[data-product-theme="vendor"] #root .vendor-work-page-heading {border-color:var(--sv-border)}
 html.dark[data-product-theme="vendor"] #root .vendor-command-readiness {
-  --command-accent:#d5c2f4;background:linear-gradient(125deg,#292238,#1a1c2d 70%)!important;
+  --command-accent:#d5c2f4;background:linear-gradient(125deg,#292238,var(--sv-surface) 70%)!important;
   border-color:#4a3c5f;box-shadow:none;color:var(--sv-ink);
 }
 html.dark[data-product-theme="vendor"] #root .vendor-command-readiness :is(p,dt,.vendor-today-heading>span) {color:#b9b2c9}
@@ -68,10 +69,23 @@ html.dark[data-product-theme="vendor"] #root .vendor-readiness-decisions>div {ba
 html.dark[data-product-theme="vendor"] #root .vendor-readiness-actions a {background:#3c2e53;color:#e8dafc}
 html.dark[data-product-theme="vendor"] #root .vendor-readiness-ring circle+circle {stroke:#af95d3}
 html.dark[data-product-theme="vendor"] #root .vendor-section-kicker {color:#bda6db}
-html.dark[data-product-theme="vendor"] #root .vendor-wizard-panel {background:#1a1c2d;border-color:#3d354c;box-shadow:none}
-html.dark[data-product-theme="vendor"] #root .vendor-wizard .vendor-wizard-primary {background:#7357aa;color:#fff}
-html.dark[data-product-theme="vendor"] #root .vendor-source-tabs {background:#171925;border-color:#373145}
+html.dark[data-product-theme="vendor"] #root .vendor-wizard-panel {background:var(--sv-surface);border-color:#3d354c;box-shadow:none}
+html.dark[data-product-theme="vendor"] #root .vendor-wizard .vendor-wizard-primary {background:var(--sv-action);color:#fff}
+html.dark[data-product-theme="vendor"] #root .vendor-source-tabs {background:var(--sv-panel);border-color:#373145}
 html.dark[data-product-theme="vendor"] #root .vendor-source-tabs [aria-current=page] {background:#48335f;color:#f4edff;box-shadow:none}
 html.dark[data-product-theme="vendor"] #root .vendor-source-notice {background:#302b211c;border-color:#6d6044;color:#dccb9e}
 html.dark[data-product-theme="vendor"] #root .vendor-mobile-metrics>a {background:#1b1e2e;border-color:#393247}
 @media(prefers-reduced-motion:reduce){html[data-product-theme="vendor"] *,html[data-product-theme="vendor"] *::before,html[data-product-theme="vendor"] *::after{scroll-behavior:auto!important}}
+
+/* Handbook hierarchy: purple feature surfaces, lavender actions, navy canvas. */
+html.dark[data-product-theme="vendor"] #root .vendor-shell main .bg-white {background:linear-gradient(130deg,#28223d,var(--sv-surface) 70%)!important;border-color:#514060!important}
+html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.bg-primary,.bg-primary-dark) {background:linear-gradient(135deg,#8151b3,#65368f)!important;border-color:#a178c1!important;color:#fff!important;box-shadow:inset 0 1px #ffffff18!important}
+html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.bg-primary,.bg-primary-dark):hover {background:linear-gradient(135deg,#9062bf,#75449f)!important}
+html.dark[data-product-theme="vendor"] #root .vendor-shell .vendor-command-readiness {background:linear-gradient(125deg,#332447,#211e35 75%)!important;border-color:#6d4e85}
+html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.vendor-readiness-actions a,main a.bg-primary-soft) {background:var(--vendor-button-soft)!important;color:var(--vendor-on-button-soft)!important;border-color:#eedafa!important;box-shadow:inset 0 1px #ffffff55}
+html.dark[data-product-theme="vendor"] #root .vendor-shell .vendor-readiness-ring circle+circle {stroke:#c09be3}
+html.dark[data-product-theme="vendor"] #root .vendor-shell :is(.vendor-source-tabs [aria-current=page],aside nav a[aria-current=page]) {background:linear-gradient(125deg,#74489e,#492866)!important;color:#f8eeff!important;border-color:#9162b6!important;box-shadow:inset 0 1px #ffffff18}
+html.dark[data-product-theme="vendor"] #root .vendor-shell nav[aria-label="Vendor navigation"] {background:#111322f5!important;border-color:#44314f}
+html.dark[data-product-theme="vendor"] #root .vendor-shell nav[aria-label="Vendor navigation"] a[aria-current=page] {background:linear-gradient(135deg,#7648a5,#492664)!important;color:#f8eeff!important;box-shadow:inset 0 1px #c8a0e433;border-radius:12px}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>div.fixed.bottom-0 {background:#111322f5!important;border-color:#44314f!important;box-shadow:0 -4px 20px #08091333!important}
+html.dark[data-product-theme="vendor"] #root .vendor-shell>div>div.fixed.bottom-0 a[aria-current=page] {background:linear-gradient(135deg,#7648a5,#492664)!important;color:#f8eeff!important;box-shadow:inset 0 1px #c8a0e433;border-radius:12px}
