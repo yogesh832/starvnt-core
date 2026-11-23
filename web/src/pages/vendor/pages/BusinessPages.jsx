@@ -9,6 +9,7 @@ import MapLocationPicker, {
   pinIcon,
 } from "../../../components/MapLocationPicker.jsx";
 import { useTheme } from "../../../lib/ThemeContext.jsx";
+import VendorIdentity from "./VendorIdentity.jsx";
 import L from "leaflet";
 
 function SkeletonLine({ className = "" }) {
@@ -260,7 +261,7 @@ function VendorActivationCard({ activation }) {
             <div className="font-bold text-navy dark:text-white">
               Next step: {next.label}
             </div>
-            <div className="text-muted mt-1">{next.detail}</div>
+            <div className="text-muted dark:text-slate-300 mt-1">{next.detail}</div>
           </div>
           <a
             href={next.href}
@@ -3602,7 +3603,7 @@ export function SettingsManager({ isTab = false }) {
             </div>
             <button
               onClick={toggleTheme}
-              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${dark ? "bg-primary" : "bg-gray-200"}`}
+              className={`w-11 h-6 rounded-full relative transition cursor-pointer ${dark ? "bg-primary" : "bg-gray-300 dark:bg-gray-700"}`}
             >
               <span
                 className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${dark ? "left-6" : "left-1"}`}
@@ -4290,6 +4291,12 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
       desc: "GST, PAN & verification",
     },
     {
+      id: "social-links",
+      label: "Social Media & Web",
+      icon: "link",
+      desc: "Social profiles & public links",
+    },
+    {
       id: "settings",
       label: "Account & Settings",
       icon: "settings",
@@ -4449,7 +4456,7 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
                   <button
                     type="button"
                     onClick={toggleTheme}
-                    className={`w-11 h-6 rounded-full relative transition cursor-pointer shrink-0 ${dark ? "bg-primary" : "bg-gray-200"}`}
+                    className={`w-11 h-6 rounded-full relative transition cursor-pointer shrink-0 ${dark ? "bg-primary" : "bg-gray-300 dark:bg-gray-700"}`}
                     aria-label={
                       dark ? "Switch to light mode" : "Switch to dark mode"
                     }
@@ -4842,7 +4849,10 @@ export function ProfilePage({ user, business = "", defaultTab = "profile" }) {
           {/* TAB 3: Documents & KYC Verification */}
           {activeTab === "documents" && <DocumentsManager isTab />}
 
-          {/* TAB 4: Account Settings */}
+          {/* TAB 4: Social Media Links & Public Storefront */}
+          {activeTab === "social-links" && <VendorIdentity isTab />}
+
+          {/* TAB 5: Account Settings */}
           {activeTab === "settings" && <SettingsManager isTab />}
         </div>
       </div>

@@ -1,6 +1,7 @@
 import ExternalBookingFields from './ExternalBookingFields.jsx';
 import { useState } from 'react';
 import { externalApi } from '../lib/api.js';
+import ExternalBookingWizard from './ExternalBookingWizard.jsx';
 
 export default function CommitmentForm({ initial, services = [], resources = [], onSaved, onCancel, externalOnly = false }) {
   const [form, setForm] = useState(() => ({ date: '', endDate: '', allDay: true, startTime: '09:00', endTime: '18:00', timezone: 'Asia/Kolkata', recordType: externalOnly ? 'EXTERNAL_COMMITMENT' : 'VENDOR_BLOCK', scope: 'BUSINESS', reason: externalOnly ? 'External Customer Booking' : 'Personal / Vacation', resourceIds: [], external: {}, ...initial, externalBooking: { acquisitionChannel: initial?._id ? 'LEGACY_UNKNOWN' : 'DIRECT', lifecycle: initial?._id ? 'CONFIRMED' : 'ENQUIRY', totalAmount: 0, lineItems: [], ...initial?.externalBooking, allocations: initial?.externalBooking?.allocations?.length ? initial.externalBooking.allocations : (initial?.resourceIds || []).map(resource => ({ resource, units: 1 })) }, vendorService: initial?.vendorService?._id || initial?.vendorService || '', idempotencyKey: crypto.randomUUID() }));
@@ -20,6 +21,7 @@ export default function CommitmentForm({ initial, services = [], resources = [],
     } catch (err) { setError([err.data?.message || err.message, ...(err.data?.conflicts || []).map(c => `${c.detail || c.type}${c.recordId ? ` (${c.recordId})` : ''}`)].join(' · ')); }
     finally { setBusy(false); }
   }
+  if (externalOnly || form.recordType === 'EXTERNAL_COMMITMENT') return <ExternalBookingWizard initial={initial || form} services={services} resources={resources} onSaved={onSaved} onCancel={onCancel} />;
   return <form onSubmit={submit} className="space-y-4">
     <h2 className="font-extrabold text-lg">{externalOnly ? initial?._id ? 'Edit external booking / reschedule' : 'Add external booking' : initial ? 'Edit availability record' : 'Block Availability / Add External Booking'}</h2>
     <label className="grid gap-1 text-sm">Record type<select disabled={externalOnly || Boolean(initial)} className="border rounded-lg p-2" value={form.recordType} onChange={e => setForm({ ...form, recordType: e.target.value })}><option value="VENDOR_BLOCK">Operational / personal block</option><option value="EXTERNAL_COMMITMENT">External customer booking (reported)</option></select></label>

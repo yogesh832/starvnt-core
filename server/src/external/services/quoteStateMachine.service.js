@@ -1,6 +1,7 @@
 import { commercialSnapshot, assertCommercialSnapshot } from './commercialSnapshot.service.js';
 import { serviceMatchingEligible } from '../../common/vendorReadiness.js';
 import { Quote } from '../models/Quote.js';
+import { NearbyRequest } from '../../locationCommerce/models.js';
 import { Opportunity } from '../models/Opportunity.js';
 import { isObjectIdOrHexString } from 'mongoose';
 import { publishOutboxEvent, processOutboxBatch } from '../../automation/services/outbox.service.js';
@@ -22,8 +23,9 @@ export async function recoverQuoteCreation(vendorId, command) {
 
 export async function assertInitialQuoteSource({ opportunityId, vendorId, customerId, vendorServiceId, eventDate, expectedEnquiryUpdatedAt }) {
   if (!isObjectIdOrHexString(opportunityId)) throw schedulingError('OWNED_ENQUIRY_REQUIRED', 'Choose an enquiry assigned to this vendor before creating a quotation.', 400);
-  const source = await Opportunity.findOne({ _id: opportunityId, vendor: vendorId }).select('customer vendorService status slaExpiresAt eventDate serviceLocation updatedAt').lean();
+  const source = await Opportunity.findOne({ _id: opportunityId, vendor: vendorId }).select('customer vendorService status slaExpiresAt eventDate serviceLocation updatedAt nearbyRequest').lean();
   if (!source) throw schedulingError('OPPORTUNITY_NOT_FOUND', 'This enquiry is unavailable.', 404);
+  if (source.nearbyRequest && !await NearbyRequest.exists({ _id: source.nearbyRequest, status: { $in: ['OPEN', 'EXHAUSTED'] }, expiresAt: { $gt: new Date() } })) throw schedulingError('REQUEST_CLOSED', 'This nearby request is closed or expired.', 409);
   if (String(source.customer) !== String(customerId)) throw schedulingError('QUOTE_CUSTOMER_MISMATCH', 'The quotation recipient must match its enquiry.', 400);
   if (String(source.vendorService) !== String(vendorServiceId)) throw schedulingError('QUOTE_SERVICE_MISMATCH', 'The quotation service must match its enquiry.', 400);
   const sourceTime = source.updatedAt == null ? null : new Date(source.updatedAt);

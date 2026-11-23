@@ -131,6 +131,7 @@ function MainTabs() {
     Overview: admin ? AdminHome : vendor ? VendorHome : CustomerHome,
     CoreUpdates: AdminNotifications, Work: VendorWork, Events: EventsScreen,
     AuraTab: ChatScreen, Updates: UpdatesScreen, Me: AccountScreen,
+    VendorLeads: VendorLeadsTab, VendorQuotes: VendorQuotesTab,
   };
   const tabs = dashboardTabs(workspace);
   return (
@@ -169,8 +170,18 @@ function MainTabs() {
           }}
         />
       ))}
+      {vendor && !admin && <>
+        <Tabs.Screen name="Updates" component={UpdatesScreen} options={{ title: 'Messages & updates' }} />
+        <Tabs.Screen name="Me" component={AccountScreen} options={{ title: 'Account' }} />
+      </>}
     </Tabs.Navigator>
   );
+}
+function VendorLeadsTab({ navigation }: any) {
+  return <VendorModule navigation={navigation} route={{ params: { module: 'enquiries' } }} />;
+}
+function VendorQuotesTab({ navigation }: any) {
+  return <VendorModule navigation={navigation} route={{ params: { module: 'quotes' } }} />;
 }
 const pushNavigation = createNavigationContainerRef<any>();
 function Navigation() {

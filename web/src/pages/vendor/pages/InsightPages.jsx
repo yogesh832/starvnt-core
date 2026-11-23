@@ -1,4 +1,5 @@
 import VendorBusinessDashboard from '../VendorBusinessDashboard.jsx';
+import NearbyPerformance from '../NearbyPerformance.jsx';
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Page, Card} from './shared.jsx';
@@ -473,5 +474,5 @@ export function ReviewsPage() {
 
 /* ── Analytics (Live Metric Grounding) ───────────────────────────────────── */
 export function AnalyticsPage() {
-  return <Page title="Analytics" sub="Server-calculated cohorts, documented attribution and complete weekly periods."><VendorBusinessDashboard analyticsOnly /></Page>;
+  return <Page title="Analytics" sub="Server-calculated cohorts, documented attribution and complete weekly periods."><NearbyPerformance /><VendorBusinessDashboard analyticsOnly /></Page>;
 }

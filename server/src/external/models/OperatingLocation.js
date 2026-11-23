@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { externalConn } from '../../db/index.js';
+import { geoPoint } from '../../locationCommerce/rules.js';
 
 const { Schema } = mongoose;
 
@@ -24,6 +25,7 @@ const operatingLocationSchema = new Schema(
       lat: { type: Number, default: 0 },
       lng: { type: Number, default: 0 },
     },
+    geoPoint: { type: { type: String, enum: ['Point'] }, coordinates: { type: [Number], default: undefined } },
     isPrimary: { type: Boolean, default: false },
     operatingStatus: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
     publicVisibility: { type: String, enum: ['CITY_ONLY', 'EXACT'], default: 'CITY_ONLY' },
@@ -32,4 +34,6 @@ const operatingLocationSchema = new Schema(
   { timestamps: true }
 );
 
+operatingLocationSchema.pre('validate', function () { this.geoPoint = geoPoint(this.coordinates); });
+operatingLocationSchema.index({ geoPoint: '2dsphere' });
 export const OperatingLocation = externalConn.model('OperatingLocation', operatingLocationSchema);

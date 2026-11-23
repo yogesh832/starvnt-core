@@ -1,4 +1,5 @@
 import revenueCrmRoutes from './admin/routes/revenueCrm.routes.js';
+import { nearbyCustomerRoutes, nearbyVendorRoutes, nearbyAdminRoutes } from './locationCommerce/routes.js';
 import { adminAgreementRoutes } from './foundation/agreement.routes.js';
 import vendorCollaborationRoutes from './external/routes/eventCollaboration.routes.js';
 import adminModerationRoutes from './admin/routes/eventModeration.routes.js';
@@ -81,6 +82,9 @@ export function createApp() {
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use(cookieParser());
+  app.use('/api/customer/nearby', nearbyCustomerRoutes);
+  app.use('/api/vendor/nearby', nearbyVendorRoutes);
+  app.use('/api/admin/location-commerce', nearbyAdminRoutes);
   if (config.metricsEnabled) app.use(metricsMiddleware);
 
   app.get('/api/health', (req, res) =>

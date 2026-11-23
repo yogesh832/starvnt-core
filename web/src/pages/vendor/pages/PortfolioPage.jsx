@@ -482,6 +482,9 @@ export default function PortfolioPage() {
   const [coverUrl, setCoverUrl] = useState('');
   const [mediaItems, setMediaItems] = useState([]); // List of { id, url, thumbnailUrl, mediaType, title, provider }
   const [creatingProject, setCreatingProject] = useState(false);
+  const [visibility, setVisibility] = useState('PUBLIC');
+  const [marketingPermission, setMarketingPermission] = useState(false);
+  const [clientConsentVerified, setClientConsentVerified] = useState(true);
 
   // URL Input State in Project Modal
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -502,6 +505,9 @@ export default function PortfolioPage() {
   const [standaloneUrl, setStandaloneUrl] = useState('');
   const [standaloneTitle, setStandaloneTitle] = useState('');
   const [standaloneMediaType, setStandaloneMediaType] = useState('AUTO');
+  const [standaloneVisibility, setStandaloneVisibility] = useState('PUBLIC');
+  const [standaloneMarketingPermission, setStandaloneMarketingPermission] = useState(false);
+  const [standaloneClientConsent, setStandaloneClientConsent] = useState(true);
   const [showProjectUrlInput, setShowProjectUrlInput] = useState(false);
   const [projectUrl, setProjectUrl] = useState('');
   const [projectUrlTitle, setProjectUrlTitle] = useState('');
@@ -737,9 +743,12 @@ export default function PortfolioPage() {
           url,
           title: standaloneTitle.trim() || `${vendorCategory} Showcase`,
           mediaType: isVid ? 'VIDEO' : 'IMAGE',
-          city: vendorProfile?.city || 'Mumbai',
+          city: vendorProfile?.city || 'Kolkata',
           eventType: currCategoryConfig.defaultEventType,
           style: currCategoryConfig.defaultStyle,
+          visibility: standaloneVisibility,
+          marketingPermission: standaloneMarketingPermission,
+          clientConsentVerified: standaloneClientConsent,
         },
       });
 
@@ -890,6 +899,9 @@ export default function PortfolioPage() {
           mediaItems: formattedItems,
           tags: [eventType, style, city, vendorCategory, 'Showcase'],
           status: 'PUBLISHED',
+          visibility,
+          marketingPermission,
+          clientConsentVerified,
         },
       });
 
@@ -1744,6 +1756,42 @@ export default function PortfolioPage() {
                 />
               </div>
 
+              {/* Visibility & Marketing Permissions */}
+              <div className="p-3 bg-lavender/40 rounded-xl border border-gray-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-navy">Visibility & Client Privacy</label>
+                  <select
+                    value={visibility}
+                    onChange={(e) => setVisibility(e.target.value)}
+                    className="bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold text-navy outline-none"
+                  >
+                    <option value="PUBLIC">Public (Profile & Discovery Live)</option>
+                    <option value="UNLISTED">Unlisted (Direct Link / Quotes Only)</option>
+                    <option value="PRIVATE">Private (Internal Vendor Vault)</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5 pt-1 border-t border-gray-200/60 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer text-muted hover:text-navy">
+                    <input
+                      type="checkbox"
+                      checked={marketingPermission}
+                      onChange={(e) => setMarketingPermission(e.target.checked)}
+                      className="rounded border-gray-300 text-primary focus:ring-primary w-4 h-4"
+                    />
+                    <span>Allow STARVNT marketing feature rights (social showcases, case studies, PR)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-muted hover:text-navy">
+                    <input
+                      type="checkbox"
+                      checked={clientConsentVerified}
+                      onChange={(e) => setClientConsentVerified(e.target.checked)}
+                      className="rounded border-gray-300 text-primary focus:ring-primary w-4 h-4"
+                    />
+                    <span>Client consent confirmed for public showcase and portfolio display</span>
+                  </label>
+                </div>
+              </div>
+
               <div className="vendor-modal-actions pt-2 flex gap-3">
                 <button
                   type="button"
@@ -1815,6 +1863,38 @@ export default function PortfolioPage() {
                   <option value="VIDEO">Video</option>
                   <option value="IMAGE">Photo</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-muted font-semibold mb-1">Visibility</label>
+                <select
+                  value={standaloneVisibility}
+                  onChange={(e) => setStandaloneVisibility(e.target.value)}
+                  className="w-full bg-lavender/60 border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-navy outline-none"
+                >
+                  <option value="PUBLIC">Public</option>
+                  <option value="UNLISTED">Unlisted</option>
+                  <option value="PRIVATE">Private</option>
+                </select>
+              </div>
+              <div className="space-y-1.5 pt-1 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer text-muted hover:text-navy">
+                  <input
+                    type="checkbox"
+                    checked={standaloneMarketingPermission}
+                    onChange={(e) => setStandaloneMarketingPermission(e.target.checked)}
+                    className="rounded border-gray-300 text-primary focus:ring-primary w-4 h-4"
+                  />
+                  <span>Allow STARVNT marketing feature rights</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-muted hover:text-navy">
+                  <input
+                    type="checkbox"
+                    checked={standaloneClientConsent}
+                    onChange={(e) => setStandaloneClientConsent(e.target.checked)}
+                    className="rounded border-gray-300 text-primary focus:ring-primary w-4 h-4"
+                  />
+                  <span>Client consent confirmed</span>
+                </label>
               </div>
               <div className="vendor-modal-actions pt-2 flex gap-2">
                 <button

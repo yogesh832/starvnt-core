@@ -272,12 +272,16 @@ router.post('/vendor/portfolio/project', requireExternalAuth, requireAccountType
       mediaUrls = [],
       mediaItems = [],
       tags = [],
+      visibility = 'PUBLIC',
+      marketingPermission = false,
+      clientConsentVerified = false,
       status = 'PUBLISHED',
     } = req.body || {};
 
     if (!projectName) {
       return res.status(400).json({ error: 'PROJECT_NAME_REQUIRED' });
     }
+    const safeVisibility = ['PUBLIC', 'PRIVATE', 'UNLISTED'].includes(visibility) ? visibility : 'PUBLIC';
     if (!['UPLOADED', 'PROCESSING', 'VENDOR_REVIEW', 'PUBLISHED'].includes(status)) {
       return res.status(400).json({ error: 'INVALID_PORTFOLIO_STATUS', message: 'Verification and booking evidence are assigned by Core.' });
     }
@@ -343,6 +347,9 @@ router.post('/vendor/portfolio/project', requireExternalAuth, requireAccountType
         eventDate: eventDate ? new Date(eventDate) : new Date(),
         tags: Array.isArray(tags) && tags.length > 0 ? tags : [eventType, style, city, 'Aura+ Featured'],
         isFeatured: i === 0 || url === coverUrl,
+        visibility: safeVisibility,
+        marketingPermission: Boolean(marketingPermission),
+        clientConsentVerified: Boolean(clientConsentVerified),
         status,
       });
       createdItems.push(item);
@@ -388,15 +395,19 @@ router.post('/vendor/portfolio/item', requireExternalAuth, requireAccountType('V
       eventType = 'Wedding',
       style = 'Candid',
       mediaType,
-      city = 'Mumbai',
+      city = 'Kolkata',
       venue = 'Venue',
       tags = [],
+      visibility = 'PUBLIC',
+      marketingPermission = false,
+      clientConsentVerified = false,
     } = req.body || {};
 
     if (!url) {
       return res.status(400).json({ error: 'URL_REQUIRED' });
     }
 
+    const safeVisibility = ['PUBLIC', 'PRIVATE', 'UNLISTED'].includes(visibility) ? visibility : 'PUBLIC';
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
     const isVid =
       mediaType === 'VIDEO' ||
@@ -425,11 +436,55 @@ router.post('/vendor/portfolio/item', requireExternalAuth, requireAccountType('V
       style,
       location: { venue, city },
       tags: Array.isArray(tags) && tags.length > 0 ? tags : [eventType, style, city],
+      visibility: safeVisibility,
+      marketingPermission: Boolean(marketingPermission),
+      clientConsentVerified: Boolean(clientConsentVerified),
       status: 'PUBLISHED',
     });
 
     const activation = await evaluateVendorActivation(vendorId);
     res.status(201).json({ ok: true, item: compactPortfolioItem(item), activation });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Updates an individual portfolio item (visibility, marketing permission, title, description).
+ */
+router.patch('/vendor/portfolio/items/:id', requireExternalAuth, requireAccountType('VENDOR'), async (req, res, next) => {
+  try {
+    const vendorId = req.externalUser.vendorOrganization;
+    if (!vendorId) {
+      return res.status(403).json({ error: 'NO_VENDOR_ORGANIZATION' });
+    }
+
+    const { id } = req.params;
+    const { visibility, marketingPermission, clientConsentVerified, title, description, isFeatured } = req.body || {};
+    const updates = {};
+
+    if (visibility !== undefined) {
+      if (!['PUBLIC', 'PRIVATE', 'UNLISTED'].includes(visibility)) {
+        return res.status(400).json({ error: 'INVALID_VISIBILITY', message: 'Visibility must be PUBLIC, PRIVATE, or UNLISTED.' });
+      }
+      updates.visibility = visibility;
+    }
+    if (marketingPermission !== undefined) updates.marketingPermission = Boolean(marketingPermission);
+    if (clientConsentVerified !== undefined) updates.clientConsentVerified = Boolean(clientConsentVerified);
+    if (typeof title === 'string') updates.title = title.trim();
+    if (typeof description === 'string') updates.description = description.trim();
+    if (typeof isFeatured === 'boolean') updates.isFeatured = isFeatured;
+
+    const item = await PortfolioItem.findOneAndUpdate(
+      { _id: id, $or: [{ vendor: vendorId }, { vendorOrganization: vendorId }] },
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+    if (!item) {
+      return res.status(404).json({ error: 'ITEM_NOT_FOUND' });
+    }
+
+    res.json({ ok: true, item: compactPortfolioItem(item) });
   } catch (err) {
     next(err);
   }

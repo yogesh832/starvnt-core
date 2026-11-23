@@ -1,24 +1,32 @@
 const HINDI = /[\u0900-\u097f]/;
 const HINGLISH = /\b(mujhe|mera|meri|mere|hamara|humara|shaadi|shadi|chahiye|karna|karni|karo|batao|kitne|kitna|kaise|kahan|hain|nahi|nahin|haan|hoga|hogi|aap|hai|kripya|madad|karein|intezaam|jaankari)\b/i;
 
-/** Short facts and chip answers retain the conversation language. */
+/** Short facts and chip answers retain the conversation language. Respects explicit user language choice. */
 export function conversationLanguage(message = '', history = [], preferredLanguage = null) {
   const previousReply = [...history].reverse().find(m => m.role !== 'user')?.content || '';
   let language = preferredLanguage || (/[\u0980-\u09ff]/.test(previousReply) ? 'bn' : HINDI.test(previousReply) ? 'hi' : HINGLISH.test(previousReply) ? 'hinglish' : 'en');
+  const hasLockedPreference = Boolean(preferredLanguage && ['hi', 'bn', 'hinglish'].includes(preferredLanguage));
+
   for (const text of [...history.filter(m => m.role === 'user').map(m => String(m.content || '')), message]) {
     if (!text.trim()) continue;
     const explicitRoman = /\b(?:roman (?:hindi|script)|hinglish)\b/i.test(text);
-    const explicitHindi = /\b(?:in hindi|hindi please)\b/i.test(text);
+    const explicitHindi = /\b(?:in hindi|hindi please|hindi mein)\b/i.test(text);
+    const explicitBengali = /\b(?:in (?:bengali|bangla)|bangla(?:y)? please|bangla(?:y)? bolun)\b/i.test(text);
+    const explicitEnglish = /\b(in english|english (please|mein|me)|reply.*english|speak.*english)\b/i.test(text);
+
     if (explicitRoman) { language = 'hinglish'; continue; }
     if (explicitHindi) { language = 'hi'; continue; }
-    if (/\b(in english|english (please|mein|me)|reply.*english|speak.*english)\b/i.test(text)) { language = 'en'; }
-    else if (/[\u0980-\u09ff]/.test(text)) { language = 'bn'; }
+    if (explicitBengali) { language = 'bn'; continue; }
+    if (explicitEnglish) { language = 'en'; continue; }
+
+    if (/[\u0980-\u09ff]/.test(text)) { language = 'bn'; }
     else if (HINDI.test(text)) { language = 'hi'; }
     else if (HINGLISH.test(text)) {
       if (!/^(haan|nahi|nahin|ji|haan ji)[.!\s]*$/i.test(text)) { language = 'hinglish'; }
-    // Place names and short factual fragments can contain four or more words
-    // without being an English language switch ("kapkote bazar ke paas").
-    } else if (/\b(i(?:'m| am| would| want| need| have| had| will| offer)|we (?:are|want|need|have|will)|(?:can|could|would) you|how (?:do|can|should) (?:i|we)|help me|please (?:find|show|help|tell)|(?:show|find|tell|recommend) (?:me|us)|(?:it|this|that) (?:is|will|should))\b/i.test(text)) { language = 'en'; }
+    // Only fall back to English on generic phrases if user has NOT locked an explicit preference
+    } else if (!hasLockedPreference && /\b(i(?:'m| am| would| want| need| have| had| will| offer)|we (?:are|want|need|have|will)|(?:can|could|would) you|how (?:do|can|should) (?:i|we)|help me|please (?:find|show|help|tell)|(?:show|find|tell|recommend) (?:me|us)|(?:it|this|that) (?:is|will|should))\b/i.test(text)) {
+      language = 'en';
+    }
   }
   return language;
 }

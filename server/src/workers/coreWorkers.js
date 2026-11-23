@@ -1,4 +1,5 @@
 import { remindStaffFollowUps } from '../admin/services/revenueCrm.service.js';
+import { runNearbyBatch } from '../locationCommerce/requests.js';
 import { reconcileWorkflowBatch } from '../admin/services/bookingWorkflowEffects.service.js';
 import { runReminderBatch, runEventDeadlineBatch } from '../notifications/reminders.worker.js';
 import { runDiscoveryNotificationBatch } from '../experience/discoveryNotifications.worker.js';
@@ -32,6 +33,16 @@ async function releaseStaleOutboxLocks() {
 }
 
 export function startCoreWorkers() {
+  let nearbyBusy = false;
+  configureWorker('nearby-matching', { enabled: true });
+  const nearby = async () => {
+    if (nearbyBusy) return;
+    nearbyBusy = true; const started = Date.now(); markWorkerStarted('nearby-matching');
+    try { await runNearbyBatch(); markWorkerSuccess('nearby-matching', Date.now() - started); }
+    catch (err) { markWorkerError('nearby-matching', err, Date.now() - started); }
+    finally { nearbyBusy = false; }
+  };
+  setInterval(nearby, 30000).unref(); setTimeout(nearby, 3000).unref();
   let discoveryBusy = false;
   const discovery = async () => { if (discoveryBusy) return; discoveryBusy = true; try { await runDiscoveryNotificationBatch(); } catch (err) { console.warn('[discovery-notifications]', err.message); } finally { discoveryBusy = false; } };
   setInterval(discovery, 300000).unref();

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Page, Card } from './shared.jsx';
 import { StatusChip } from '../../../components/ui.jsx';
 import Icon from '../../../components/Icon.jsx';
@@ -29,6 +29,7 @@ export default function Enquiries() {
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [accessLocked, setAccessLocked] = useState(false);
   const [retry, setRetry] = useState(0);
   const [expanded, setExpanded] = useState(null);
   const [quoteModalOpp, setQuoteModalOpp] = useState(null);
@@ -58,6 +59,7 @@ export default function Enquiries() {
       try {
         setLoading(true);
         setLoadError('');
+        setAccessLocked(false);
         const res = await externalApi.call('/vendor/opportunities');
         if (!active) return;
         if (!res.ok || !Array.isArray(res.opportunities)) throw new Error('Enquiry records could not be confirmed.');
@@ -86,13 +88,18 @@ export default function Enquiries() {
             basePrice: o.basePrice || 0,
             fit: Number.isFinite(o.fit) ? o.fit : null,
             coverageStatus: o.coverageStatus,
+            nearbyRequest: o.nearbyRequest,
+            distanceKm: o.matchingDistanceKm,
+            budgetRange: o.budgetRange,
+            deadline: o.slaExpiresAt,
+            interest: o.slaResponse,
             extendedService: o.extendedService || null,
           }));
           setOpportunities(mapped);
           if (mapped[0]) setExpanded(mapped[0].id);
         }
       } catch (err) {
-        if (active) setLoadError(err.message || 'Enquiry records are unavailable.');
+        if (active) { setLoadError(err.message || 'Enquiry records are unavailable.'); setAccessLocked(err.status === 403 && err.data?.error === 'ACTIVATION_REQUIRED'); if (err.status === 403) setOpportunities([]); }
       } finally {
         if (active) setLoading(false);
       }
@@ -192,8 +199,8 @@ export default function Enquiries() {
 
   return (
     <Page
-      title="Enquiries & Structured Opportunities"
-      sub="Pre-qualified opportunities with service, location, date, guests, capability, coverage, availability, and travel."
+      title="Leads & CRM"
+      sub="Review requirements, respond with context and prepare a linked quotation."
       action={
         <select aria-label="Filter enquiries by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border border-gray-200 bg-white text-navy text-sm px-3 py-2.5">
           <option value="ALL">All enquiries</option>
@@ -209,7 +216,7 @@ export default function Enquiries() {
           <span>{feedback.message}</span>
         </div>
       )}
-      {loadError && <div role="alert" className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{loadError} {opportunities.length > 0 && 'Previously loaded records may be stale.'} <button type="button" className="min-h-11 underline font-semibold" disabled={loading} onClick={() => setRetry(value => value + 1)}>Retry enquiry records</button></div>}
+      {loadError && <div role={accessLocked ? 'status' : 'alert'} className={`mb-4 rounded-2xl border p-4 text-sm ${accessLocked ? 'border-primary/20 bg-primary-soft text-navy' : 'border-red-200 bg-red-50 text-red-800'}`}><strong className="block mb-1">{accessLocked ? 'Enquiries open after activation approval' : 'Enquiry records unavailable'}</strong>{loadError} {opportunities.length > 0 && 'Previously loaded records may be stale.'} {accessLocked && <Link to="/vendor/readiness" className="inline-flex items-center min-h-11 font-bold underline mr-3">Review readiness →</Link>}<button type="button" className="min-h-11 underline font-semibold" disabled={loading} onClick={() => setRetry(value => value + 1)}>Retry enquiry records</button></div>}
 
       <div className="space-y-4">
         {!loading && !loadError && opportunities.length > 0 && !opportunities.some((o) => statusFilter === 'ALL' || o.status.toUpperCase() === statusFilter) && <Card><p className="text-sm text-muted">No enquiries match this status.</p></Card>}
@@ -256,6 +263,7 @@ export default function Enquiries() {
 
             {expanded === o.id && (
               <div className="border-t border-gray-100 p-4 sm:p-5 bg-gray-50/30">
+                {o.nearbyRequest && <div className="rounded-xl border border-primary/15 bg-primary-soft p-4 mb-4 text-xs space-y-2"><strong className="block text-primary">Nearby customer request</strong><p>{o.distanceKm ?? 'Unknown'} km straight-line · Budget {o.budgetRange?.min==null?'Not specified':`₹${o.budgetRange.min.toLocaleString('en-IN')}`} – {o.budgetRange?.max==null?'Not specified':`₹${o.budgetRange.max.toLocaleString('en-IN')}`}</p><p>Respond by {o.deadline?new Date(o.deadline).toLocaleString():'Deadline unavailable'}. Customer contact and exact venue remain private.</p>{o.interest==='PENDING'&&!['EXPIRED','DECLINED'].includes(o.status)&&<button className="min-h-11 rounded-xl bg-primary text-white px-4" disabled={submitting} onClick={async()=>{setSubmitting(true);try{await externalApi.call(`/vendor/nearby/opportunities/${o.dbId}/respond`,{method:'POST',body:{response:'ACCEPT'}});setFeedback({message:'Interest recorded. Submit a quotation next; this is not a booking.'});setRetry(n=>n+1);}catch(e){setFeedback({message:e.data?.message||e.message,error:true});}finally{setSubmitting(false);}}}>Accept enquiry / interested</button>}{o.interest==='CAN_EXECUTE'&&<p>Interest recorded. A quotation and verified payment are still required.</p>}</div>}
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
                   {[
                     ['Customer Name', o.customerName],

@@ -104,7 +104,7 @@ html.dark .vendor-readiness-journey [data-complete=true] > span { background: #1
    ========================================================================== */
 
 /* Layer 1: Canvas & Ambient Lighting */
-.vendor-shell {
+html.dark .vendor-shell {
   background: radial-gradient(circle at 12% 8%, rgba(124, 58, 237, 0.18) 0%, transparent 42%),
               radial-gradient(circle at 88% 90%, rgba(99, 102, 241, 0.14) 0%, transparent 48%),
               radial-gradient(circle at 50% 35%, rgba(139, 92, 246, 0.06) 0%, transparent 55%),
@@ -113,39 +113,39 @@ html.dark .vendor-readiness-journey [data-complete=true] > span { background: #1
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
-.vendor-shell main {
+html.dark .vendor-shell main {
   background: transparent !important;
 }
 
 /* Custom Sleek Scrollbar */
-.vendor-shell ::-webkit-scrollbar {
+html.dark .vendor-shell ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-.vendor-shell ::-webkit-scrollbar-track {
+html.dark .vendor-shell ::-webkit-scrollbar-track {
   background: rgba(9, 12, 25, 0.6);
 }
-.vendor-shell ::-webkit-scrollbar-thumb {
+html.dark .vendor-shell ::-webkit-scrollbar-thumb {
   background: rgba(139, 92, 246, 0.28);
   border-radius: 999px;
 }
-.vendor-shell ::-webkit-scrollbar-thumb:hover {
+html.dark .vendor-shell ::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 92, 246, 0.45);
 }
 
 /* Layer 2: Desktop Sidebar & Top Header Elevation */
-.vendor-shell aside {
+html.dark .vendor-shell aside {
   background: rgba(12, 15, 32, 0.96) !important;
   border-color: rgba(139, 92, 246, 0.15) !important;
   backdrop-filter: blur(24px) !important;
   box-shadow: 4px 0 28px rgba(0, 0, 0, 0.45) !important;
 }
 
-.vendor-shell aside > div:first-child {
+html.dark .vendor-shell aside > div:first-child {
   border-color: rgba(139, 92, 246, 0.12) !important;
 }
 
-.vendor-shell header {
+html.dark .vendor-shell header {
   background: rgba(11, 14, 29, 0.90) !important;
   border-color: rgba(139, 92, 246, 0.14) !important;
   backdrop-filter: blur(24px) !important;
@@ -153,21 +153,21 @@ html.dark .vendor-readiness-journey [data-complete=true] > span { background: #1
   color: #f8fafc !important;
 }
 
-.vendor-shell aside nav a[aria-current="page"],
-.vendor-shell aside nav a.active {
+html.dark .vendor-shell aside nav a[aria-current="page"],
+html.dark .vendor-shell aside nav a.active {
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.32) 0%, rgba(99, 102, 241, 0.20) 100%) !important;
   color: #ede9fe !important;
   border: 1px solid rgba(167, 139, 250, 0.35) !important;
   box-shadow: 0 4px 16px rgba(124, 58, 237, 0.25) !important;
 }
 
-.vendor-shell aside nav a:not([aria-current="page"]):hover {
+html.dark .vendor-shell aside nav a:not([aria-current="page"]):hover {
   background: rgba(139, 92, 246, 0.10) !important;
   color: #f8fafc !important;
 }
 
 /* Layer 3: Base Cards & Major Content Containers */
-.vendor-shell :is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-white\/85, .bg-white\/80, .bg-white\/70):not(.aura-mark *):not(button.bg-white):not(input) {
+html.dark .vendor-shell :is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-white\/85, .bg-white\/80, .bg-white\/70):not(.aura-mark *):not(button.bg-white):not(input) {
   background-color: #12162a !important;
   border-color: rgba(139, 92, 246, 0.16) !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
@@ -175,44 +175,44 @@ html.dark .vendor-readiness-journey [data-complete=true] > span { background: #1
 }
 
 /* Layer 4: Sub-cards, Nested Tiles & Stat Containers */
-.vendor-shell :is(.bg-gray-50, .bg-gray-50\/50, .bg-gray-50\/30, .bg-gray-100, .bg-lavender, .bg-lavender\/20, .bg-lavender\/30, .bg-lavender\/40, .bg-lavender\/50, .bg-lavender\/60, .bg-lavender\/70, .bg-lavender\/80):not(.aura-mark *):not(button.bg-lavender) {
+html.dark .vendor-shell :is(.bg-gray-50, .bg-gray-50\/50, .bg-gray-50\/30, .bg-gray-100, .bg-lavender, .bg-lavender\/20, .bg-lavender\/30, .bg-lavender\/40, .bg-lavender\/50, .bg-lavender\/60, .bg-lavender\/70, .bg-lavender\/80):not(.aura-mark *):not(button.bg-lavender) {
   background-color: #181d36 !important;
   border-color: rgba(139, 92, 246, 0.18) !important;
   color: #f1f5f9 !important;
 }
 
-.vendor-shell :is(.border-gray-100, .border-gray-200, .border-gray-200\/80, .border-gray-200\/90, .border-gray-300) {
+html.dark .vendor-shell :is(.border-gray-100, .border-gray-200, .border-gray-200\/80, .border-gray-200\/90, .border-gray-300) {
   border-color: rgba(139, 92, 246, 0.16) !important;
 }
 
-.vendor-shell :is(.hover\:bg-gray-50:hover, .hover\:bg-lavender:hover, .hover\:bg-gray-100:hover, .hover\:bg-gray-50\/50:hover) {
+html.dark .vendor-shell :is(.hover\:bg-gray-50:hover, .hover\:bg-lavender:hover, .hover\:bg-gray-100:hover, .hover\:bg-gray-50\/50:hover) {
   background-color: #1f2545 !important;
   border-color: rgba(167, 139, 250, 0.32) !important;
 }
 
 /* Layer 5: High-Contrast Typography & Hierarchy */
-.vendor-shell :is(.text-navy, .text-gray-900, .text-slate-900, .text-ink) {
+html.dark .vendor-shell :is(.text-navy, .text-gray-900, .text-slate-900, .text-ink) {
   color: #f8fafc !important;
 }
 
-.vendor-shell :is(.text-muted, .text-gray-500, .text-slate-500) {
+html.dark .vendor-shell :is(.text-muted, .text-gray-500, .text-slate-500) {
   color: #94a3b8 !important;
 }
 
-.vendor-shell :is(.text-gray-600, .text-slate-600, .text-gray-700, .text-slate-700) {
+html.dark .vendor-shell :is(.text-gray-600, .text-slate-600, .text-gray-700, .text-slate-700) {
   color: #cbd5e1 !important;
 }
 
-.vendor-shell h1,
-.vendor-shell h2,
-.vendor-shell h3,
-.vendor-shell h4 {
+html.dark .vendor-shell h1,
+html.dark .vendor-shell h2,
+html.dark .vendor-shell h3,
+html.dark .vendor-shell h4 {
   color: #ffffff !important;
   letter-spacing: -0.02em;
 }
 
 /* Layer 6: Violet Action Buttons & Gradient Pills */
-.vendor-shell :is(.bg-primary, .bg-primary-dark) {
+html.dark .vendor-shell :is(.bg-primary, .bg-primary-dark) {
   background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%) !important;
   color: #ffffff !important;
   border: 1px solid rgba(196, 181, 253, 0.3) !important;
@@ -220,89 +220,89 @@ html.dark .vendor-readiness-journey [data-complete=true] > span { background: #1
   font-weight: 700;
 }
 
-.vendor-shell :is(.hover\:bg-primary-dark:hover, .hover\:bg-primary:hover) {
+html.dark .vendor-shell :is(.hover\:bg-primary-dark:hover, .hover\:bg-primary:hover) {
   background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%) !important;
   box-shadow: 0 6px 22px rgba(124, 58, 237, 0.5) !important;
 }
 
-.vendor-shell :is(.bg-primary-soft, .bg-primary-soft\/20, .bg-primary-soft\/50, .bg-primary-soft\/60, .bg-primary-soft\/80) {
+html.dark .vendor-shell :is(.bg-primary-soft, .bg-primary-soft\/20, .bg-primary-soft\/50, .bg-primary-soft\/60, .bg-primary-soft\/80) {
   background-color: rgba(124, 58, 237, 0.18) !important;
   color: #c4b5fd !important;
   border: 1px solid rgba(167, 139, 250, 0.28) !important;
 }
 
 /* Layer 7: Form Inputs, Search Bar & Inset Fields */
-.vendor-shell :is(input:not([type=checkbox]):not([type=radio]), select, textarea) {
+html.dark .vendor-shell :is(input:not([type=checkbox]):not([type=radio]), select, textarea) {
   background-color: #0e1224 !important;
   border: 1px solid rgba(139, 92, 246, 0.22) !important;
   color: #f8fafc !important;
   border-radius: 0.75rem !important;
 }
 
-.vendor-shell :is(input:not([type=checkbox]):not([type=radio]), select, textarea):focus {
+html.dark .vendor-shell :is(input:not([type=checkbox]):not([type=radio]), select, textarea):focus {
   border-color: #8b5cf6 !important;
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.24) !important;
   background-color: #121630 !important;
 }
 
-.vendor-shell :is(input, textarea)::placeholder {
+html.dark .vendor-shell :is(input, textarea)::placeholder {
   color: #64748b !important;
 }
 
 /* Layer 8: Semantic Colored Accents (Chips, Badges, Metrics) */
 /* Violet / Purple Accent */
-.vendor-shell .bg-purple-50,
-.vendor-shell .bg-indigo-50 {
+html.dark .vendor-shell .bg-purple-50,
+html.dark .vendor-shell .bg-indigo-50 {
   background: rgba(168, 85, 247, 0.14) !important;
   border-color: rgba(168, 85, 247, 0.3) !important;
   color: #d8b4fe !important;
 }
 
 /* Cyan / Blue Accent */
-.vendor-shell .bg-sky-50,
-.vendor-shell .bg-blue-50 {
+html.dark .vendor-shell .bg-sky-50,
+html.dark .vendor-shell .bg-blue-50 {
   background: rgba(56, 189, 248, 0.14) !important;
   border-color: rgba(56, 189, 248, 0.3) !important;
   color: #7dd3fc !important;
 }
 
 /* Emerald / Green Accent */
-.vendor-shell .bg-emerald-50,
-.vendor-shell .bg-emerald-50\/50,
-.vendor-shell .bg-emerald-50\/80,
-.vendor-shell .bg-green-50,
-.vendor-shell .bg-teal-50 {
+html.dark .vendor-shell .bg-emerald-50,
+html.dark .vendor-shell .bg-emerald-50\/50,
+html.dark .vendor-shell .bg-emerald-50\/80,
+html.dark .vendor-shell .bg-green-50,
+html.dark .vendor-shell .bg-teal-50 {
   background: rgba(52, 211, 153, 0.14) !important;
   border-color: rgba(52, 211, 153, 0.3) !important;
   color: #6ee7b7 !important;
 }
 
 /* Amber / Gold Accent */
-.vendor-shell .bg-amber-50,
-.vendor-shell .bg-amber-50\/40,
-.vendor-shell .bg-yellow-50,
-.vendor-shell .bg-orange-50 {
+html.dark .vendor-shell .bg-amber-50,
+html.dark .vendor-shell .bg-amber-50\/40,
+html.dark .vendor-shell .bg-yellow-50,
+html.dark .vendor-shell .bg-orange-50 {
   background: rgba(251, 191, 36, 0.14) !important;
   border-color: rgba(251, 191, 36, 0.3) !important;
   color: #fde047 !important;
 }
 
 /* Rose / Red Accent */
-.vendor-shell .bg-rose-50,
-.vendor-shell .bg-red-50 {
+html.dark .vendor-shell .bg-rose-50,
+html.dark .vendor-shell .bg-red-50 {
   background: rgba(244, 63, 94, 0.14) !important;
   border-color: rgba(244, 63, 94, 0.3) !important;
   color: #fda4af !important;
 }
 
 /* Status Chips Overrides */
-.vendor-shell :is(.status-chip, [data-status]) {
+html.dark .vendor-shell :is(.status-chip, [data-status]) {
   font-weight: 700 !important;
   border-radius: 999px !important;
 }
 
 /* Layer 9: Readiness, Steppers & Action Center */
-.vendor-shell .vendor-command-readiness {
+html.dark .vendor-shell .vendor-command-readiness {
   --command-accent: #c4b5fd;
   background: linear-gradient(135deg, #161b36 0%, #11152a 75%) !important;
   border: 1px solid rgba(139, 92, 246, 0.28) !important;
@@ -310,88 +310,88 @@ html.dark .vendor-readiness-journey [data-complete=true] > span { background: #1
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
-.vendor-shell .vendor-readiness-decisions > div {
+html.dark .vendor-shell .vendor-readiness-decisions > div {
   background: rgba(139, 92, 246, 0.09) !important;
   border-color: rgba(139, 92, 246, 0.22) !important;
 }
 
-.vendor-shell .vendor-readiness-actions a {
+html.dark .vendor-shell .vendor-readiness-actions a {
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.38) 0%, rgba(99, 102, 241, 0.25) 100%) !important;
   color: #ede9fe !important;
   border: 1px solid rgba(167, 139, 250, 0.38) !important;
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25) !important;
 }
 
-.vendor-shell .vendor-readiness-journey li > span {
+html.dark .vendor-shell .vendor-readiness-journey li > span {
   background: rgba(255, 255, 255, 0.08) !important;
   color: #94a3b8 !important;
 }
 
-.vendor-shell .vendor-readiness-journey [data-complete=true] > span {
+html.dark .vendor-shell .vendor-readiness-journey [data-complete=true] > span {
   background: rgba(52, 211, 153, 0.22) !important;
   color: #34d399 !important;
   box-shadow: 0 0 10px rgba(52, 211, 153, 0.3) !important;
 }
 
 /* Layer 10: Aura+ AI Hero Cards & Tip Banners */
-.vendor-shell .aura-card-banner,
-.vendor-shell :is([class*="from-purple-50"], [class*="to-[#9b6dff]"]) {
+html.dark .vendor-shell .aura-card-banner,
+html.dark .vendor-shell :is([class*="from-purple-50"], [class*="to-[#9b6dff]"]) {
   background: linear-gradient(135deg, rgba(124, 58, 237, 0.24) 0%, rgba(99, 102, 241, 0.12) 100%) !important;
   border: 1px solid rgba(167, 139, 250, 0.32) !important;
   box-shadow: 0 6px 24px rgba(124, 58, 237, 0.18) !important;
 }
 
 /* Layer 11: Stepper & Timeline Progress */
-.vendor-shell .vendor-timeline-step,
-.vendor-shell .vendor-stepper {
+html.dark .vendor-shell .vendor-timeline-step,
+html.dark .vendor-shell .vendor-stepper {
   border-color: rgba(139, 92, 246, 0.2) !important;
 }
 
 /* Layer 12: Mobile Bottom Navigation Bar Glassmorphism */
-.vendor-shell .lg\:hidden.fixed.bottom-0 {
+html.dark .vendor-shell .lg\:hidden.fixed.bottom-0 {
   background: rgba(10, 13, 28, 0.94) !important;
   backdrop-filter: blur(24px) !important;
   border-top: 1px solid rgba(139, 92, 246, 0.18) !important;
   box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5) !important;
 }
 
-.vendor-shell .lg\:hidden.fixed.bottom-0 a.text-primary,
-.vendor-shell .lg\:hidden.fixed.bottom-0 a[aria-current="page"] {
+html.dark .vendor-shell .lg\:hidden.fixed.bottom-0 a.text-primary,
+html.dark .vendor-shell .lg\:hidden.fixed.bottom-0 a[aria-current="page"] {
   color: #c4b5fd !important;
 }
 
-.vendor-shell .lg\:hidden.fixed.bottom-0 a:not(.text-primary):not([aria-current="page"]) {
+html.dark .vendor-shell .lg\:hidden.fixed.bottom-0 a:not(.text-primary):not([aria-current="page"]) {
   color: #94a3b8 !important;
 }
 
-.vendor-shell .lg\:hidden.fixed.bottom-0 a:hover {
+html.dark .vendor-shell .lg\:hidden.fixed.bottom-0 a:hover {
   color: #ffffff !important;
 }
 
 /* Layer 13: Calendar Widget (Page 24 Image 3) */
-.vendor-shell .calendar-widget,
-.vendor-shell .mini-calendar-container {
+html.dark .vendor-shell .calendar-widget,
+html.dark .vendor-shell .mini-calendar-container {
   background: #12162a !important;
   border: 1px solid rgba(139, 92, 246, 0.18) !important;
   border-radius: 1.25rem !important;
 }
 
-.vendor-shell .calendar-day-active {
+html.dark .vendor-shell .calendar-day-active {
   background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%) !important;
   color: #ffffff !important;
   box-shadow: 0 2px 10px rgba(124, 58, 237, 0.4) !important;
 }
 
 /* Layer 14: Filter Pills & Category Switchers */
-.vendor-shell .vendor-source-tabs,
-.vendor-shell .filter-pills-row {
+html.dark .vendor-shell .vendor-source-tabs,
+html.dark .vendor-shell .filter-pills-row {
   background: #0d1022 !important;
   border: 1px solid rgba(139, 92, 246, 0.16) !important;
   border-radius: 999px !important;
 }
 
-.vendor-shell .vendor-source-tabs [aria-current="page"],
-.vendor-shell .filter-pill-active {
+html.dark .vendor-shell .vendor-source-tabs [aria-current="page"],
+html.dark .vendor-shell .filter-pill-active {
   background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%) !important;
   color: #ffffff !important;
   box-shadow: 0 3px 12px rgba(124, 58, 237, 0.35) !important;

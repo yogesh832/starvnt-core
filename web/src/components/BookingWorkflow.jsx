@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, externalApi } from '../lib/api.js';
 import { useAdminAuth } from '../auth/AdminAuthContext.jsx';
 import EventCollaboration from './EventCollaboration.jsx';
@@ -30,6 +30,7 @@ export default function BookingWorkflow({ admin = false }) {
   const [decision, setDecision] = useState('SERVICE_ACCEPTED');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uploadRights, setUploadRights] = useState(false);
   const intent = useRef(null);
   const load = useCallback(async () => {
     const result = await api.call(`${base}/bookings`);
@@ -58,6 +59,7 @@ export default function BookingWorkflow({ admin = false }) {
   }
   async function upload(file) {
     if (!file || !eventId) return;
+    if (!uploadRights) { setError('Confirm your permission to share this private evidence.'); return; }
     setBusy(true); setError('');
     try {
       const body = new FormData();
@@ -79,9 +81,10 @@ export default function BookingWorkflow({ admin = false }) {
   }
   const evidenceFor = target => files.filter(file => file.purpose === target).map(({ assetId, note }) => ({ assetId, note }));
   return <section className="space-y-4">
-    <h1 className="text-xl font-bold">Service execution and review</h1>
+    <h1 className="text-xl font-bold">{admin ? 'Service execution and review' : selected ? 'Booking operations' : 'Execution workspace'}</h1>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-800">{error}</p>}
-    <label className="block text-sm">Booking<select className={field} value={selected} onChange={event => setParams({ booking: event.target.value })}>
+    {!admin && !selected && <div className="lg:hidden rounded-2xl border bg-white p-5"><h2 className="font-bold">Start with your confirmed booking</h2><p className="text-sm text-muted mt-2">Open its booking card to manage event-day progress, evidence and delivery.</p><Link to="/vendor/bookings" className="inline-flex min-h-11 items-center text-primary font-bold">View bookings →</Link></div>}
+    <label className={`${admin ? 'block' : 'hidden lg:block'} text-sm`}>Booking<select className={field} value={selected} onChange={event => setParams({ booking: event.target.value })}>
       <option value="">Choose a booking</option>{bookings.map(row => <option key={row._id} value={row._id}>{row.bookingReference} · {row.serviceName} · {row.eventDate}</option>)}
     </select></label>
     {execution && <>
@@ -117,7 +120,8 @@ export default function BookingWorkflow({ admin = false }) {
         <select aria-label="Evidence purpose" className={field} value={purpose} onChange={event => setPurpose(event.target.value)}>
           <option value="COMPLETION_EVIDENCE">Completion evidence</option><option value="CASE_EVIDENCE">Case evidence</option>{admin && <option value="FINANCE_EVIDENCE">Finance reconciliation evidence</option>}
         </select>
-        <label className="block text-sm">Upload a file you are authorized to share with the booking reviewers<input className="block mt-2" type="file" accept="image/*,video/mp4,application/pdf" disabled={busy || !eventId} onChange={event => { upload(event.target.files?.[0]); event.target.value = ''; }} /></label>
+        <label className="flex items-start gap-2 text-sm min-h-11"><input type="checkbox" checked={uploadRights} onChange={event => setUploadRights(event.target.checked)} disabled={busy} />I am authorized to share this private evidence with the booking reviewers.</label>
+        <label className="block text-sm">Upload a file you are authorized to share with the booking reviewers<input className="block mt-2" type="file" accept="image/*,video/mp4,application/pdf" disabled={busy || !eventId || !uploadRights} onChange={event => { upload(event.target.files?.[0]); event.target.value = ''; }} /></label>
         {files.map(file => <p className="text-sm" key={file.assetId}>{file.note} · ready to attach</p>)}
       </div>
       <div className="rounded-xl border bg-white p-4 space-y-3">

@@ -77,10 +77,11 @@ export { VendorHome } from "./Dashboards";
 export function VendorWork({ navigation }: any) {
   return (
     <Page
-      title="Your workspace"
-      subtitle="Everything behind a brilliant event."
+      title="More from your Business OS"
+      subtitle="Bookings, finance, your business setup and growth."
     >
-      <MenuRow title="Search Vendor OS" icon="search-outline" onPress={() => navigation.navigate('VendorSearch')} />
+      <MenuRow title="Messages & updates" icon="chatbubbles-outline" onPress={() => navigation.navigate('Updates')} />
+      <MenuRow title="My account & settings" icon="person-outline" onPress={() => navigation.navigate('Me')} />
       <MenuRow title="Business readiness" icon="checkmark-circle-outline" onPress={() => navigation.navigate('VendorReadiness')} />
       {[
         ["origins", "Operating locations"],

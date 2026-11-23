@@ -325,8 +325,7 @@ export function VendorCalendar({ navigation }: any) {
         title="Add external customer commitment"
         secondary
         onPress={() => {
-          setForm((value) => ({ ...value, date: selected, endDate: selected, editId: "", revision: 0, idempotencyKey: `${Date.now()}-${Math.random()}` }));
-          setMode("slot");
+          navigation.navigate('VendorExternalBookings', { create: true, date: selected });
         }}
       />
       {mode && (

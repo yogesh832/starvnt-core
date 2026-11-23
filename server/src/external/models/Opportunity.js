@@ -17,6 +17,9 @@ const opportunitySchema = new Schema(
     customerEvent: { type: Schema.Types.ObjectId, ref: 'CustomerEvent', default: null, index: true },
     customerRequirement: { type: Schema.Types.ObjectId, ref: 'EventRequirement', default: null },
     crmSourceKey: { type: String },
+    nearbyRequest: { type: Schema.Types.ObjectId, ref: 'NearbyRequest', default: null, index: true },
+    matchingDistanceKm: { type: Number, default: null },
+    budgetRange: { min: Number, max: Number },
     serviceName: { type: String, required: true },
     eventDate: { type: String, required: true, index: true }, // Format: YYYY-MM-DD
     serviceLocation: {

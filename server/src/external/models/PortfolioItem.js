@@ -106,6 +106,14 @@ const portfolioItemSchema = new Schema(
       enum: ['PUBLIC', 'PRIVATE', 'UNLISTED'],
       default: 'PUBLIC',
     },
+    marketingPermission: {
+      type: Boolean,
+      default: false,
+    },
+    clientConsentVerified: {
+      type: Boolean,
+      default: false,
+    },
     status: {
       type: String,
       enum: [

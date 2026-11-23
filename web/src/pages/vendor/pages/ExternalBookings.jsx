@@ -25,11 +25,18 @@ export default function ExternalBookings() {
     setLoading(true);
     const params = new URLSearchParams(); if (filter) params.set('lifecycle', filter); if (source) params.set('source', source); if (after) params.set('after', after);
     try {
-      const [list, totals, catalogue, equipment, old] = await Promise.all([
+      const results = await Promise.allSettled([
         externalApi.call(`/vendor/external-bookings?${params}`), externalApi.call('/vendor/external-bookings/financial-summary'), externalApi.call('/vendor/services'), externalApi.call('/vendor/resources'), externalApi.call('/vendor/external-bookings/legacy'),
       ]);
       if (current !== generation.current) return;
-      setRows(previous => after ? [...previous, ...list.bookings] : list.bookings); setNext(list.nextCursor); setSummary(totals); setServices(catalogue.services || []); setResources(equipment.resources || []); setLegacy(old.bookings || []); setError('');
+      const [list, totals, catalogue, equipment, old] = results;
+      const failures = [];
+      if (list.status === 'fulfilled' && list.value.ok && Array.isArray(list.value.bookings)) { setRows(previous => after ? [...previous, ...list.value.bookings] : list.value.bookings); setNext(list.value.nextCursor); } else failures.push('Booking list');
+      if (totals.status === 'fulfilled' && totals.value.ok && ['contractedAmount','pipelineAmount','reportedReceivedAmount','refundedAmount','outstandingAmount'].every(key => Number.isFinite(totals.value[key]))) setSummary(totals.value); else failures.push('Financial summary');
+      if (catalogue.status === 'fulfilled' && Array.isArray(catalogue.value.services)) setServices(catalogue.value.services); else failures.push('Service catalogue');
+      if (equipment.status === 'fulfilled' && Array.isArray(equipment.value.resources)) setResources(equipment.value.resources); else failures.push('Team/resources');
+      if (old.status === 'fulfilled' && Array.isArray(old.value.bookings)) setLegacy(old.value.bookings); else failures.push('Legacy records');
+      setError(failures.length ? `Unavailable: ${failures.join(', ')}. Other sections remain usable; saved data may be stale. Refresh to retry.` : '');
       if (selected?._id) { const detail = await externalApi.call(`/vendor/external-bookings/${selected._id}`); if (current === generation.current) setSelected(previous => previous?._id === detail.booking._id ? detail.booking : previous); }
     } catch (err) { if (current === generation.current) setError(err.data?.message || err.message); }
     finally { if (current === generation.current) setLoading(false); }
@@ -50,11 +57,11 @@ export default function ExternalBookings() {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3 text-sm"><Link className="underline text-primary" to="/vendor/calendar">Unified calendar</Link><Link className="underline text-primary" to="/vendor/readiness">Business readiness</Link><button disabled={loading || busy} className="underline" onClick={() => refresh()}>Refresh</button></div>
       {error && <p role="alert" className="text-red-700">{error}</p>}{message && <p role="status" className="text-green-700">{message}</p>}
-      {summary && <section aria-label="All external booking totals" className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">{[['Contracted value', summary.contractedAmount], ['Reported receipts', summary.reportedReceivedAmount], ['Reported refunds', summary.refundedAmount], ['Contract outstanding', summary.outstandingAmount]].map(([label, amount]) => <Card key={label}><p className="text-xs text-muted">{label} · all external bookings</p><p className="font-extrabold text-xl mt-1">{money(amount)}</p></Card>)}</section>}
+      {summary && <section aria-label="All external booking totals" className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">{[['Contracted value', summary.contractedAmount, 'Confirmed, in progress and completed'], ['Non-contracted record value', summary.pipelineAmount, 'Other records not cancelled; not booked revenue'], ['Reported receipts', summary.reportedReceivedAmount, 'All saved external bookings'], ['Reported refunds', summary.refundedAmount, 'All saved external bookings'], ['Contract outstanding', summary.outstandingAmount, 'Confirmed, in progress and completed']].map(([label, amount, definition]) => <Card key={label}><p className="text-xs text-muted">{label} · {definition}</p><p className="font-extrabold text-xl mt-1">{money(amount)}</p></Card>)}</section>}
       {editing && <Card><CommitmentForm key={selected?._id || 'new'} externalOnly initial={selected} services={services} resources={resources} onSaved={async row => { choose(row); setMessage('External booking saved.'); await refresh(); }} onCancel={() => setEditing(false)} /></Card>}
       <Card><div className="flex flex-wrap gap-3 mb-4"><label className="text-sm">Stage<select className="block border rounded-lg p-2" value={filter} onChange={e => setFilter(e.target.value)}><option value="">All stages</option>{Object.keys(EXTERNAL_STAGES).map(s => <option value={s} key={s}>{human(s)}</option>)}</select></label><label className="text-sm">Source<select className="block border rounded-lg p-2" value={source} onChange={e => setSource(e.target.value)}><option value="">All sources</option>{EXTERNAL_SOURCES.map(s => <option value={s} key={s}>{human(s)}</option>)}</select></label></div>
         {loading && <p role="status" className="text-sm">Refreshing external records…</p>}
-        {!loading && rows.length === 0 && <p className="text-sm text-muted">No external bookings in this view.</p>}
+        {!loading && rows.length === 0 && !error && <p className="text-sm text-muted">No external bookings in this view.</p>}
         <div className="grid lg:grid-cols-2 gap-3">{rows.map(row => <button key={row._id} className={`border rounded-xl p-4 text-left min-w-0 ${selected?._id === row._id ? 'border-primary bg-primary-soft' : ''}`} onClick={() => choose(row)}><strong className="block break-words">{row.externalBooking?.eventName || row.external?.eventType || 'External event'} · {row.date}</strong><p className="text-sm break-words">{row.external?.customerName || 'Contact not supplied'} · {human(row.externalBooking.lifecycle)} · {human(row.externalBooking.acquisitionChannel)}</p><p className="text-xs mt-1">Value {money(row.financials.totalAmount)} · Outstanding {money(row.financials.outstandingAmount)}{row.financials.overdue && ' · overdue'}</p></button>)}</div>
         {next && <button className={`${button} mt-3`} disabled={loading} onClick={() => refresh(next)}>Load more</button>}
       </Card>

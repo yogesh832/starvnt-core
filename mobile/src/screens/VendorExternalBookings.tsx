@@ -7,17 +7,22 @@ import { external } from '../api/runtime';
 import type { Data } from '../api/client';
 import { EventDateField } from '../EventFields';
 import { ExternalMutation } from '../externalMutation';
+import { VendorExternalBookingWizard } from './VendorExternalBookingWizard';
 import { externalAcquisitionChannels, externalLifecycleTransitions } from '../../../shared/externalBookingLifecycle.js';
 import { externalDocumentKinds } from '../../../shared/externalDocuments.js';
 import { Button, Card, Choice, Empty, ErrorNotice, Field, Page, Txt, date, human, money, useAction, useResource } from '../ui';
 
 const localDate = (now = new Date()) => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 const localTime = () => new Date().toTimeString().slice(0, 5);
-export function VendorExternalBookings({ navigation }: any) {
+export function VendorExternalBookings({ navigation, route }: any) {
   const [stage, setStage] = useState(''), [source, setSource] = useState(''), [cursor, setCursor] = useState(''), [selected, setSelected] = useState('');
+  const [creating, setCreating] = useState(false);
+  useEffect(() => { if (route?.params?.create) setCreating(true); }, [route?.params?.create]);
   const query = new URLSearchParams(Object.fromEntries(Object.entries({ lifecycle: stage, source, after: cursor }).filter(([, value]) => value)));
   const resource = useResource(external, `/vendor/external-bookings?${query}`);
+  if (creating) return <VendorExternalBookingWizard initialDate={route?.params?.date} onCancel={() => { setCreating(false); navigation.setParams({ create: false }); }} onSaved={row => { setCreating(false); navigation.setParams({ create: false }); setSelected(row._id); void resource.refresh(); }} />;
   return <Page {...resource} title="External bookings" subtitle="Your reported work stays separate from STARVNT booking and payment verification.">
+    <Button title="Add External Booking" onPress={() => setCreating(true)} />
     <Button title="Add or reschedule in calendar" secondary onPress={() => navigation.navigate('VendorCalendar')} />
     <Choice label="Stage" value={stage} values={['', ...Object.keys(externalLifecycleTransitions)]} labels={{ '': 'All stages' }} onChange={value => { setStage(value); setCursor(''); setSelected(''); }} />
     <Choice label="Source" value={source} values={['', ...externalAcquisitionChannels]} labels={{ '': 'All sources' }} onChange={value => { setSource(value); setCursor(''); setSelected(''); }} />

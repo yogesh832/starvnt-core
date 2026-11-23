@@ -9,6 +9,7 @@ import AcademyAdmin from './AcademyAdmin.jsx';
 import GrowthMeetingsAdmin from './GrowthMeetingsAdmin.jsx';
 import Foundation from './Foundation.jsx';
 import Availability from './Availability.jsx';
+import LocationCommerce from './LocationCommerce.jsx';
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAdminAuth } from '../../auth/AdminAuthContext.jsx';
@@ -35,6 +36,7 @@ const MODULES = [
   { path: 'notifications', label: 'Notifications', icon: 'bell', anyOf: null },
   { path: 'customers', label: 'Customers', icon: 'customers', anyOf: ['customers.read'] },
   { path: 'availability', label: 'Availability & External Commitments', icon: 'calendar', anyOf: ['vendors.read'] },
+  { path: 'location-commerce', label: 'Location & Matching', icon: 'vendors', anyOf: ['vendors.read'] },
   { path: 'vendors', label: 'Vendors', icon: 'vendors', anyOf: ['vendors.read'] },
   { path: 'vendor-compliance', label: 'Vendor compliance', icon: 'documents', anyOf: ['vendorCompliance.read'] },
   { path: 'events', label: 'Events', icon: 'events', anyOf: ['events.read'] },
@@ -357,6 +359,7 @@ export default function AdminShell() {
               <Route path="notifications" element={<Notifications items={notificationItems} loading={notificationsLoading} error={notificationError} refresh={loadNotifications} open={goNotification} markAllRead={() => markRead(notificationItems)} />} />
               <Route path="customers" element={<ModuleTable kind="customers" />} />
               <Route path="availability" element={<Availability />} />
+              <Route path="location-commerce" element={<LocationCommerce />} />
               <Route path="vendors" element={<ModuleTable kind="vendors" />} />
               <Route path="vendor-compliance" element={<VendorCompliance />} />
               <Route path="events" element={<ModuleTable kind="events" />} />

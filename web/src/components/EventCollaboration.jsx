@@ -10,6 +10,7 @@ export default function EventCollaboration({ admin, eventId, bookingId }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [checks, setChecks] = useState({ privacy: false, safety: false, rights: false });
+  const [uploadRights, setUploadRights] = useState(false);
   const load = useCallback(async () => {
     const [media, conversation] = await Promise.all([
       api.call(`${base}/events/${eventId}/media`),
@@ -24,15 +25,19 @@ export default function EventCollaboration({ admin, eventId, bookingId }) {
   }
   const button = 'rounded-lg border px-3 py-2 text-sm disabled:opacity-40';
   return <section className="rounded-xl border bg-white p-4 space-y-3">
-    <h2 className="font-bold">Event Circle and publication review</h2>
+    <h2 className="font-bold">Private event media & delivery</h2>
+    <p className="text-xs text-muted">Only authorized event members and reviewers can access these files. Customer delivery follows the approved review workflow. Public portfolio, marketing and AI permissions are separate.</p>
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+    {busy && <p role="status" className="text-sm text-primary">Saving or uploading private event content. Please keep this page open…</p>}
     {data && <>
       <p className="text-sm">{data.event?.title || 'Booked event'} · {data.event?.city || ''}</p>
       <label className="block text-sm">Event message<textarea className="w-full rounded-lg border p-2" value={text} onChange={event => setText(event.target.value)} /></label>
       <button className={button} disabled={busy || !text.trim()} onClick={() => act(() => api.call(`${base}/events/${eventId}/messages`, { method: 'POST', body: { body: text, bookingId, idempotencyKey: crypto.randomUUID() } }))}>Send event message</button>
       {messages.map(message => <p className="text-sm" key={message.id || message._id}>{message.body}</p>)}
-      <label className="block text-sm">Submit event media you have permission to share<input type="file" accept="image/*,video/mp4" disabled={busy} onChange={event => {
+      <label className="flex items-start gap-2 text-sm min-h-11"><input type="checkbox" checked={uploadRights} onChange={event => setUploadRights(event.target.checked)} disabled={busy} />I have the rights and event permissions to submit this content for private service delivery and review.</label>
+      <label className="block text-sm">Submit event media you have permission to share<input type="file" accept="image/*,video/mp4" disabled={busy || !uploadRights} onChange={event => {
         const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
+        if (!uploadRights) { setError('Confirm your content rights before uploading.'); return; }
         act(async () => {
           const form = new FormData(); form.append('file', file); form.append('bookingId', bookingId);
           form.append('rightsConfirmed', 'true'); form.append('caption', text); form.append('idempotencyKey', crypto.randomUUID());

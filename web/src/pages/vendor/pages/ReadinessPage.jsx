@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { externalApi } from '../../../lib/api.js';
 import { Page, Card } from './shared.jsx';
 import { human } from '../../../components/ExternalBookingFields.jsx';
+import VendorReadinessSummary from '../VendorReadinessSummary.jsx';
 const button = 'border rounded-xl px-3 min-h-11 text-sm disabled:opacity-50';
 export function ReadinessStates({ status }) {
   if (!status) return null;
   return <dl className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">{[
     ['Account', status.accountStatus || 'Unavailable'], ['Business profile', status.profileCompletion == null ? 'Unavailable' : `${status.profileCompletion}%`], ['Onboarding', status.completionPercentage == null ? 'Unavailable' : `${status.completionPercentage}%`],
     ['Verification', status.readiness?.verificationStatus], ['Activation', status.activationState],
-    ['Operating readiness', status.operatingReadiness], ['Matching eligibility', status.matchingEligible ? 'Eligible' : 'Locked'], ['Marketing eligibility', status.marketingEligible ? 'Eligible' : 'Locked'],
+    ['Operating readiness', status.operatingReadiness], ['Matching eligibility', typeof status.matchingEligible === 'boolean' ? status.matchingEligible ? 'Eligible' : 'Locked' : 'Unavailable'], ['Marketing eligibility', typeof status.marketingEligible === 'boolean' ? status.marketingEligible ? 'Eligible' : 'Locked' : 'Unavailable'],
   ].map(([label, value]) => <div className="border rounded-xl p-3" key={label}><dt className="text-xs text-muted">{label}</dt><dd className="font-bold mt-1 break-words">{String(value || 'Unavailable').replaceAll('_', ' ')}</dd></div>)}</dl>;
 }
 export default function ReadinessPage() {
@@ -33,6 +34,7 @@ export default function ReadinessPage() {
       {error && <p role="alert" className="text-red-700">{error}</p>}{message && <p role="status" className="text-green-700">{message}</p>}
       {sourceErrors.length > 0 && <p role="status">Unavailable sources: {sourceErrors.join(', ')}. Other sections remain usable.</p>}
       {!status ? <Card>{error ? 'Readiness could not be loaded. Use Refresh readiness to retry.' : 'Loading saved readiness…'}</Card> : <>
+        <VendorReadinessSummary status={status} onRetry={() => act(refresh)} />
         <Card><ReadinessStates status={status} /><p className="text-sm text-muted mt-3">An account or completed profile does not grant activation. Matching requires a ready service and authorized activation approval. Marketing additionally requires opt-in and a published public portfolio.</p></Card>
         <Card title="Readiness metric definitions"><p className="text-sm text-muted">Business profile measures three business fields. Onboarding measures six operating setup groups. All values below come from the same Core evaluator.</p><dl className="mt-3 space-y-3">{(status.metrics || []).map(metric => <div key={metric.key} className="border rounded-xl p-3"><dt className="font-bold">{metric.label}: {typeof metric.value === 'number' ? `${metric.value}%` : String(metric.value ?? 'Unavailable').replaceAll('_', ' ')}</dt><dd className="text-sm mt-1"><p>{metric.definition}</p>{metric.pendingReason && <p>{metric.pendingReason}</p>}<p className="text-xs text-muted">Sources: {(metric.source || []).join(', ')} · Calculated {new Date(metric.computedAt).toLocaleString()} · {metric.calculationVersion}</p>{metric.nextAction && <Link className="inline-flex min-h-11 items-center underline text-primary" to={metric.nextAction}>Review {metric.label}</Link>}</dd></div>)}</dl></Card>
         <Card title="Brand & legal identity"><dl className="grid sm:grid-cols-2 gap-3 text-sm"><div><dt className="text-muted">Public brand</dt><dd>{status.brandName}</dd></div><div><dt className="text-muted">Verified legal business name</dt><dd>{status.legalBusinessName || 'No verified legal name recorded'}</dd></div></dl><div className="flex flex-wrap gap-3 mt-3 text-sm"><Link className="underline text-primary" to="/vendor/profile">Edit business profile</Link><Link className="underline text-primary" to="/vendor/documents">Verification documents</Link></div></Card>

@@ -5,7 +5,7 @@ import { dashboardSelection, dashboardTabs } from '../src/dashboardNavigation.ts
 
 test('all three dashboards expose only their own navigation destinations', () => {
   assert.deepEqual(dashboardTabs('customer').map(tab => tab.name), ['Overview', 'Events', 'AuraTab', 'Updates', 'Me']);
-  assert.deepEqual(dashboardTabs('vendor').map(tab => tab.name), ['Overview', 'Work', 'AuraTab', 'Updates', 'Me']);
+  assert.deepEqual(dashboardTabs('vendor').map(tab => tab.name), ['Overview', 'VendorLeads', 'VendorQuotes', 'AuraTab', 'Work']);
   assert.deepEqual(dashboardTabs('admin').map(tab => tab.name), ['Overview', 'CoreUpdates', 'Me']);
 });
 test('detail pages retain the correct active dashboard navigation item', () => {
@@ -14,7 +14,10 @@ test('detail pages retain the correct active dashboard navigation item', () => {
   assert.equal(dashboardSelection('vendor', state('VendorBooking')), 'Work');
   assert.equal(dashboardSelection('admin', state('AdminRecord')), 'Overview');
   assert.equal(dashboardSelection('customer', state('Chat')), 'AuraTab');
-  assert.equal(dashboardSelection('vendor', state('Chat', { kind: 'thread' })), 'Updates');
+  assert.equal(dashboardSelection('vendor', state('Chat', { kind: 'thread' })), 'Work');
+  assert.equal(dashboardSelection('vendor', state('VendorModule', { module: 'enquiries' })), 'VendorLeads');
+  assert.equal(dashboardSelection('vendor', state('VendorQuote')), 'VendorQuotes');
+  assert.equal(dashboardSelection('vendor', state('Profile')), 'Work');
   assert.equal(dashboardSelection('customer', state('Profile')), 'Me');
 });
 test('bottom navigation pops back to the existing Main route instead of stacking another dashboard', () => {

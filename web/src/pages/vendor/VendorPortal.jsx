@@ -7,6 +7,8 @@ import AuraMark from '../../components/AuraMark.jsx';
 import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { NavLink, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useExternalAuth } from '../../auth/ExternalAuthContext.jsx';
+import { useTheme } from '../../lib/ThemeContext.jsx';
+import ThemeIcon from '../../components/ThemeIcon.jsx';
 import Icon from '../../components/Icon.jsx';
 import { LogoMark, LogoWord } from '../../components/ui.jsx';
 import { externalApi } from '../../lib/api.js';
@@ -44,6 +46,7 @@ const VendorUpdates = lazy(() => import('./VendorUpdates.jsx'));
 
 export default function VendorPortal() {
   const { user, logout } = useExternalAuth();
+  const { dark, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const workspaceRef = useRef(null);
@@ -374,7 +377,7 @@ export default function VendorPortal() {
 
   const navItems = [
     { to: 'dashboard', label: 'Home', icon: 'dashboard' },
-    { to: 'enquiries', label: 'Leads & CRM', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
+    // { to: 'enquiries', label: 'Leads & CRM', icon: 'message', badge: navBadge('enquiries', badgeCounts.enquiriesCount) },
     { to: 'quotes', label: 'Quotes & Proposals', icon: 'quotes', badge: navBadge('quotes', badgeCounts.quotesCount) },
     { to: 'bookings', label: 'Bookings & Operations', icon: 'bookings', badge: navBadge('bookings', badgeCounts.bookingsCount) },
     { to: 'payments', label: 'Finance & Payments', icon: 'payments' },
@@ -513,7 +516,7 @@ export default function VendorPortal() {
             </button>
 
             <button
-              className="hidden sm:grid w-9 h-9 place-items-center rounded-xl hover:bg-lavender text-ink/60 transition shrink-0"
+              className="hidden sm:grid w-9 h-9 place-items-center rounded-xl hover:bg-lavender dark:hover:bg-white/10 text-ink/70 dark:text-slate-300 transition shrink-0"
               type="button"
               aria-label="Help & Support"
               onClick={() => { window.location.href = `mailto:${SUPPORT_CONTACT.email}`; }}
@@ -522,10 +525,21 @@ export default function VendorPortal() {
               <Icon name="help" size={18} />
             </button>
 
+            {/* Theme Toggle (Light / Dark Mode) */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender dark:hover:bg-white/10 text-ink/70 dark:text-slate-300 transition cursor-pointer shrink-0"
+              title={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label={dark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              <ThemeIcon dark={dark} size={18} />
+            </button>
+
             {/* Calendar Header Button */}
             <button
               onClick={() => navigate('/vendor/calendar')}
-              className="w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer shrink-0"
+              className="w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender dark:hover:bg-white/10 text-ink/70 dark:text-slate-300 transition cursor-pointer shrink-0"
               title="Vendor Calendar & Blocked Dates"
               aria-label="Vendor Calendar"
             >
@@ -536,7 +550,7 @@ export default function VendorPortal() {
             <button
               type="button"
               onClick={() => { navigate('/vendor/updates'); setProfileOpen(false); setAuraOpen(false); }}
-              className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender text-ink/60 transition cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-primary"
+              className="relative w-9 h-9 grid place-items-center rounded-xl hover:bg-lavender dark:hover:bg-white/10 text-ink/70 dark:text-slate-300 transition cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-primary"
               title={`${badgeCounts.unreadNotificationsCount} unread notifications`}
               aria-label={`Messages and updates, ${badgeCounts.unreadNotificationsCount} unread notifications`}
             >
@@ -630,6 +644,22 @@ export default function VendorPortal() {
                       <Icon name="settings" size={17} />
                       Account Settings
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toggleTheme();
+                        setProfileOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm font-bold text-ink hover:bg-lavender transition cursor-pointer"
+                    >
+                      <span className="flex items-center gap-3">
+                        <ThemeIcon dark={dark} size={17} />
+                        <span>Theme</span>
+                      </span>
+                      <span className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-white/10 text-muted dark:text-gray-300 font-bold">
+                        {dark ? 'Dark Mode' : 'Light Mode'}
+                      </span>
+                    </button>
                   </div>
 
                   <button
@@ -715,7 +745,7 @@ export default function VendorPortal() {
             <span>Home</span>
           </NavLink>
 
-          <NavLink
+          {/* <NavLink
             to="enquiries"
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl text-[10px] font-bold transition ${
@@ -732,7 +762,7 @@ export default function VendorPortal() {
               )}
             </div>
             <span>Leads</span>
-          </NavLink>
+          </NavLink> */}
 
           <NavLink
             to="quotes"

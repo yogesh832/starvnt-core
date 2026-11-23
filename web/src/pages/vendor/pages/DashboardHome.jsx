@@ -892,25 +892,43 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
                 <h1 className="text-base sm:text-xl md:text-2xl font-extrabold text-navy tracking-tight truncate max-w-full sm:max-w-md">
                   Welcome, {business}!
                 </h1>
-                {isMatchingEligible ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Badge 1: Verification Status */}
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border shrink-0 ${
+                    isDocVerified
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isDocVerified ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    {isDocVerified ? 'KYC & Bank Verified' : 'KYC / Bank Pending'}
+                  </span>
+
+                  {/* Badge 2: Account Activation */}
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border shrink-0 ${
+                    activation?.activationState === 'ACTIVE'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activation?.activationState === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    {activation?.activationState === 'ACTIVE' ? 'Account Active' : `Activation: ${activation?.activationState?.replaceAll('_', ' ') || 'Pending Review'}`}
+                  </span>
+
+                  {/* Badge 3: Customer Matching Eligibility */}
+                  {isMatchingEligible ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      Discovery Live
                     </span>
-                    Live & Matchable
-                  </span>
-                ) : !activation ? <span className="text-xs font-bold text-muted">Operating status unavailable</span> : completionPercentage === 100 ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    Onboarding 100% · {activation?.activationState?.replaceAll('_', ' ') || 'Status unavailable'}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    Setup Incomplete ({completionPercentage}%)
-                  </span>
-                )}
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      Matching Locked
+                    </span>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-muted mt-1 flex items-center gap-2 flex-wrap">
                 <span>Vendor Command Center</span>
@@ -1036,7 +1054,7 @@ export default function DashboardHome({ business = 'Your Brand', onAskAura }) {
             <div className="mt-5 pt-4 border-t border-gray-100 space-y-2">
               <div className="flex justify-between text-xs font-semibold">
                 <span className="text-muted">
-                  Onboarding Completion ({completedStepsCount} of 6 setup groups complete)
+                  Operational Readiness ({completedStepsCount} of 6 setup pillars complete)
                 </span>
                 <span className={isMatchingEligible ? 'text-emerald-600 font-extrabold' : completionPercentage === 0 ? 'text-muted font-bold' : 'text-primary font-extrabold'}>
                   {completionPercentage}% / 100%

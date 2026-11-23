@@ -22,6 +22,7 @@ export function BookingWorkflow({ bookingId, admin = false }: { bookingId: strin
   const [milestone, setMilestone] = useState('');
   const [checked, setChecked] = useState<string[]>([]);
   const [files, setFiles] = useState<Data[]>([]);
+  const [uploadPermissions, setUploadPermissions] = useState<string[]>([]);
   const [purpose, setPurpose] = useState(admin && !session.can('operations.manage') ? 'FINANCE_EVIDENCE' : 'COMPLETION_EVIDENCE');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
@@ -44,6 +45,7 @@ export function BookingWorkflow({ bookingId, admin = false }: { bookingId: strin
   }
   const act = (path: string, body: Data) => { void a.run(() => mutate(path, body)); };
   async function upload() {
+    if (!uploadPermissions.includes('I am authorized to share this private evidence')) throw new Error('Confirm your permission to share this evidence first.');
     if (!eventId) throw new Error('Core must link this booking to its event before private uploads are available.');
     const picked = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'video/mp4', 'application/pdf'], copyToCacheDirectory: true });
     if (picked.canceled) return;
@@ -86,7 +88,8 @@ export function BookingWorkflow({ bookingId, admin = false }: { bookingId: strin
     <Card><Txt bold>Private evidence upload</Txt>
       <Choice label="Evidence purpose" value={purpose} values={admin ? ['COMPLETION_EVIDENCE', 'CASE_EVIDENCE', 'FINANCE_EVIDENCE'] : ['COMPLETION_EVIDENCE', 'CASE_EVIDENCE']} onChange={setPurpose} />
       <Txt muted>Upload only files you are authorized to share with the appropriate booking reviewers.</Txt>
-      <Button title="Choose private photo, video or document" secondary busy={a.busy} onPress={() => void a.run(upload)} />
+      <MultiChoice label="Evidence permissions" values={['I am authorized to share this private evidence']} selected={uploadPermissions} onChange={setUploadPermissions} />
+      <Button title="Choose private photo, video or document" secondary busy={a.busy} disabled={!uploadPermissions.length} onPress={() => void a.run(upload)} />
       {files.map(file => <Txt key={file.assetId}>{file.note} · ready to attach</Txt>)}
     </Card>
     <Card><Txt bold>Protection cases</Txt>
