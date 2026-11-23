@@ -900,6 +900,48 @@ export default function ExternalLogin() {
                       >
                         {busy ? "Sending OTP..." : "Send OTP to Email"}
                       </button>
+
+                      {mode === "login" && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-[11px] mb-2">
+                            <span className="font-bold text-muted">Quick-Fill Demo Account:</span>
+                            <Link to="/test-auth" className="text-primary hover:underline font-bold text-[10px]">
+                              1-Click Dev Sign-in →
+                            </Link>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: "👤 Customer", email: "customer@starvnt.com", type: "CUSTOMER" },
+                              { label: "📸 Photography", email: "vendor@starvnt.com", type: "VENDOR" },
+                              { label: "🍽️ Catering", email: "catering@starvnt.com", type: "VENDOR" },
+                              { label: "🌸 Decor", email: "decor@starvnt.com", type: "VENDOR" },
+                              { label: "🏰 Venue", email: "venue@starvnt.com", type: "VENDOR" },
+                              { label: "🎵 Sound", email: "dj@starvnt.com", type: "VENDOR" },
+                              { label: "💄 Makeup", email: "makeup@starvnt.com", type: "VENDOR" },
+                            ].map((item) => (
+                              <button
+                                key={item.email}
+                                type="button"
+                                onClick={() => {
+                                  setAccountType(item.type);
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    email: item.email,
+                                    password: "Password123",
+                                  }));
+                                  setEmailOtpSent(true);
+                                  setEmailOtpVerified(true);
+                                  setPasswordSetupRequired(false);
+                                  clearLoginError();
+                                }}
+                                className="px-2 py-1 text-[11px] rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-primary text-navy font-medium transition cursor-pointer border border-gray-200/60"
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </form>
                   ) : !emailOtpVerified ? (
                     <form
@@ -1003,6 +1045,45 @@ export default function ExternalLogin() {
                             ? "Continue Sign In"
                             : "Create Account"}
                       </button>
+
+                      {mode === "login" && (
+                        <div className="mt-4 pt-3 border-t border-gray-100">
+                          <div className="flex items-center justify-between text-[11px] mb-2">
+                            <span className="font-bold text-muted">Quick-Fill Demo Account:</span>
+                            <Link to="/test-auth" className="text-primary hover:underline font-bold text-[10px]">
+                              1-Click Dev Sign-in →
+                            </Link>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { label: "👤 Customer", email: "customer@starvnt.com", type: "CUSTOMER" },
+                              { label: "📸 Photography", email: "vendor@starvnt.com", type: "VENDOR" },
+                              { label: "🍽️ Catering", email: "catering@starvnt.com", type: "VENDOR" },
+                              { label: "🌸 Decor", email: "decor@starvnt.com", type: "VENDOR" },
+                              { label: "🏰 Venue", email: "venue@starvnt.com", type: "VENDOR" },
+                              { label: "🎵 Sound", email: "dj@starvnt.com", type: "VENDOR" },
+                              { label: "💄 Makeup", email: "makeup@starvnt.com", type: "VENDOR" },
+                            ].map((item) => (
+                              <button
+                                key={item.email}
+                                type="button"
+                                onClick={() => {
+                                  setAccountType(item.type);
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    email: item.email,
+                                    password: "Password123",
+                                  }));
+                                  clearLoginError();
+                                }}
+                                className="px-2 py-1 text-[11px] rounded-lg bg-gray-100 hover:bg-indigo-50 hover:text-primary text-navy font-medium transition cursor-pointer border border-gray-200/60"
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                     </form>
                   )}
@@ -1276,6 +1357,10 @@ export default function ExternalLogin() {
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] text-muted">
+                  <Link to="/test-auth" className="text-primary hover:underline font-bold inline-flex items-center gap-1">
+                    <span>⚡ Quick Dev Auth</span>
+                  </Link>
+                  <span>·</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                   <span>Payment status follows provider confirmation</span>
                 </div>
