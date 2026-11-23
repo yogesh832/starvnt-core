@@ -2,7 +2,7 @@ import { loadAuthScript } from '../../lib/authScripts.js';
 import { portalLoginUrl, PORTAL_SURFACE, portalNextPath } from '../../lib/portalAccess.js';
 import VendorCategoryPicker from "../../components/VendorCategoryPicker.jsx";
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useExternalAuth } from "../../auth/ExternalAuthContext.jsx";
 import { useTheme } from "../../lib/ThemeContext.jsx";
 import PublicNavbar from "../../components/PublicNavbar.jsx";
