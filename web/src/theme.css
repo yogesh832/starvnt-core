@@ -234,10 +234,13 @@ html.dark .border-dashed { border-color: #3b415e !important; }
 /* Specific accented backgrounds that should stay lighter in dark mode */
 html.dark .bg-emerald-50 { background-color: #0f2a1f !important; }
 html.dark .bg-emerald-50\/50 { background-color: rgba(15, 42, 31, 0.5) !important; }
+html.dark .bg-emerald-50\/60 { background-color: rgba(15, 42, 31, 0.6) !important; }
 html.dark .bg-emerald-50\/80 { background-color: rgba(15, 42, 31, 0.8) !important; }
 html.dark .bg-amber-50 { background-color: #2a2210 !important; }
+html.dark .bg-amber-50\/50 { background-color: rgba(42, 34, 16, 0.5) !important; }
 html.dark .bg-amber-50\/60 { background-color: rgba(42, 34, 16, 0.6) !important; }
 html.dark .bg-amber-50\/70 { background-color: rgba(42, 34, 16, 0.7) !important; }
+html.dark .bg-amber-50\/80 { background-color: rgba(42, 34, 16, 0.8) !important; }
 html.dark .bg-amber-100 { background-color: #3a3015 !important; }
 html.dark .bg-sky-50 { background-color: #0f1f2a !important; }
 html.dark .bg-rose-50 { background-color: #2a1015 !important; }

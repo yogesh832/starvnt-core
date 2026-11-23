@@ -267,32 +267,100 @@ html.dark .vendor-shell .bg-blue-50 {
 }
 
 /* Emerald / Green Accent */
-html.dark .vendor-shell .bg-emerald-50,
-html.dark .vendor-shell .bg-emerald-50\/50,
-html.dark .vendor-shell .bg-emerald-50\/80,
-html.dark .vendor-shell .bg-green-50,
-html.dark .vendor-shell .bg-teal-50 {
-  background: rgba(52, 211, 153, 0.14) !important;
-  border-color: rgba(52, 211, 153, 0.3) !important;
+html.dark .vendor-shell :is(
+  .bg-emerald-50,
+  .bg-emerald-50\/20,
+  .bg-emerald-50\/30,
+  .bg-emerald-50\/40,
+  .bg-emerald-50\/50,
+  .bg-emerald-50\/60,
+  .bg-emerald-50\/70,
+  .bg-emerald-50\/80,
+  .bg-emerald-100,
+  .bg-emerald-950\/20,
+  .bg-emerald-950\/30,
+  .bg-emerald-950\/40,
+  .bg-emerald-950\/60,
+  .bg-green-50,
+  .bg-teal-50
+) {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(16, 185, 129, 0.32) !important;
   color: #6ee7b7 !important;
 }
 
+html.dark .vendor-shell :is(
+  .border-emerald-200,
+  .border-emerald-200\/70,
+  .border-emerald-300,
+  .border-emerald-800\/50,
+  .border-emerald-800\/60,
+  .border-emerald-900\/40
+) {
+  border-color: rgba(16, 185, 129, 0.32) !important;
+}
+
 /* Amber / Gold Accent */
-html.dark .vendor-shell .bg-amber-50,
-html.dark .vendor-shell .bg-amber-50\/40,
-html.dark .vendor-shell .bg-yellow-50,
-html.dark .vendor-shell .bg-orange-50 {
-  background: rgba(251, 191, 36, 0.14) !important;
-  border-color: rgba(251, 191, 36, 0.3) !important;
+html.dark .vendor-shell :is(
+  .bg-amber-50,
+  .bg-amber-50\/20,
+  .bg-amber-50\/30,
+  .bg-amber-50\/40,
+  .bg-amber-50\/50,
+  .bg-amber-50\/60,
+  .bg-amber-50\/70,
+  .bg-amber-50\/80,
+  .bg-amber-100,
+  .bg-amber-950\/20,
+  .bg-amber-950\/30,
+  .bg-amber-950\/40,
+  .bg-amber-950\/60,
+  .bg-yellow-50,
+  .bg-orange-50
+) {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.32) !important;
   color: #fde047 !important;
 }
 
+html.dark .vendor-shell :is(
+  .border-amber-200,
+  .border-amber-200\/70,
+  .border-amber-300,
+  .border-amber-800\/50,
+  .border-amber-800\/60,
+  .border-amber-900\/40
+) {
+  border-color: rgba(245, 158, 11, 0.32) !important;
+}
+
 /* Rose / Red Accent */
-html.dark .vendor-shell .bg-rose-50,
-html.dark .vendor-shell .bg-red-50 {
+html.dark .vendor-shell :is(
+  .bg-rose-50,
+  .bg-rose-50\/20,
+  .bg-rose-50\/30,
+  .bg-rose-50\/40,
+  .bg-rose-50\/50,
+  .bg-rose-50\/60,
+  .bg-rose-50\/70,
+  .bg-rose-50\/80,
+  .bg-rose-100,
+  .bg-red-50,
+  .bg-red-50\/90
+) {
   background: rgba(244, 63, 94, 0.14) !important;
-  border-color: rgba(244, 63, 94, 0.3) !important;
+  border-color: rgba(244, 63, 94, 0.32) !important;
   color: #fda4af !important;
+}
+
+html.dark .vendor-shell :is(
+  .border-rose-200,
+  .border-rose-200\/70,
+  .border-rose-300,
+  .border-red-200,
+  .border-red-300
+) {
+  border-color: rgba(244, 63, 94, 0.32) !important;
 }
 
 /* Status Chips Overrides */

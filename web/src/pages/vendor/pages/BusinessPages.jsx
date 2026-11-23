@@ -214,8 +214,8 @@ function VendorActivationCard({ activation }) {
               href={step.done ? undefined : step.href}
               className={`rounded-xl border px-3 py-2 transition ${
                 step.done
-                  ? "border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-300"
-                  : "border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-navy dark:text-gray-200 hover:-translate-y-0.5 hover:shadow-sm"
+                  ? "border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300"
+                  : "border-amber-200 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-950/40 text-amber-950 dark:text-amber-200 hover:-translate-y-0.5 hover:shadow-sm"
               }`}
             >
               <div className="flex items-center gap-2">
@@ -256,12 +256,12 @@ function VendorActivationCard({ activation }) {
         </dl>
       </details>}
       {!matchingEligible && next && (
-        <div className="mt-2 flex flex-col @min-[32rem]/readiness:flex-row @min-[32rem]/readiness:items-center justify-between gap-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/40 p-3">
+        <div className="mt-2 flex flex-col @min-[32rem]/readiness:flex-row @min-[32rem]/readiness:items-center justify-between gap-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 p-3.5">
           <div className="min-w-0 text-sm wrap-anywhere">
-            <div className="font-bold text-navy dark:text-white">
+            <div className="font-bold text-amber-950 dark:text-amber-200">
               Next step: {next.label}
             </div>
-            <div className="text-muted dark:text-slate-300 mt-1">{next.detail}</div>
+            <div className="text-amber-900/80 dark:text-amber-300/90 mt-1">{next.detail}</div>
           </div>
           <a
             href={next.href}
