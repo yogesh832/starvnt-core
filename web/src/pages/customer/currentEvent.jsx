@@ -86,6 +86,7 @@ export function useCurrentEvent() {
 }
 
 const SECTION_PATH = {
+  proposals: 'proposals',
   quotes: 'quotes',
   bookings: 'bookings',
   payments: 'payments',

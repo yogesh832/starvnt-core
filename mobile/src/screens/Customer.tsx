@@ -212,6 +212,7 @@ export function EventsScreen({ navigation }: any) {
 }
 const sections = [
   ["Plan & services", "requirements", "grid-outline"],
+  ["Event proposals", "proposals", "document-attach-outline"],
   ["Discover vendors", "services", "search-outline"],
   ["Plans & quotes", "quotes", "document-text-outline"],
   ["Bookings & payments", "bookings", "wallet-outline"],
@@ -344,6 +345,7 @@ function EventSectionBody({ route, navigation }: any) {
   const { eventId, section, category, title } = route.params;
   const path = `${eventPath(eventId)}/${section}${category ? `?category=${encodeURIComponent(category)}` : ""}`;
   const r = useResource(external, path, section === 'event-day' ? 20000 : 0);
+  const proposalsResource = useResource(external, "/customer/proposals", 0, section === "proposals");
   const a = useAction();
   const act = (path: string, body?: Data) =>
     a.run(async () => {
@@ -351,7 +353,44 @@ function EventSectionBody({ route, navigation }: any) {
       r.refresh();
     });
   let content: React.ReactNode = null;
-  if (section === "requirements" || (section === "services" && !category)) {
+  if (section === "proposals") {
+    const eventProposals = (proposalsResource.data?.proposals || []).filter(
+      (p: Data) => String(p.eventId) === String(eventId)
+    );
+    content = (
+      <>
+        {eventProposals.map((p: Data) => (
+          <Card key={p.proposalId}>
+            <View style={styles.row}>
+              <Icon name="document-attach-outline" size={18} />
+              <Pill>{human(p.status)}</Pill>
+            </View>
+            <Txt bold size={20}>{p.eventTitle || "Event Proposal"}</Txt>
+            <Txt muted size={13}>{p.proposalNumber} · Version {p.version}</Txt>
+            {p.packageTotal != null && (
+              <Txt bold size={16} style={{ color: "#5B1F2E", marginTop: 4 }}>
+                {money(p.packageTotal)}
+              </Txt>
+            )}
+            <Txt size={12} muted style={{ marginTop: 6 }}>
+              Approved commercial proposal with verified vendor deliverables.
+            </Txt>
+            <Button
+              title="Ask Aura+ about proposal"
+              secondary
+              onPress={() => navigation.navigate("Chat", { eventId })}
+            />
+          </Card>
+        ))}
+        {!eventProposals.length && (
+          <Empty
+            title="No proposal issued yet"
+            description="Your proposal will appear here once our event designers prepare your package and commercial approval is completed."
+          />
+        )}
+      </>
+    );
+  } else if (section === "requirements" || (section === "services" && !category)) {
     const rows: Data[] = r.data.requirements || r.data.categories || [];
     content = (
       <>

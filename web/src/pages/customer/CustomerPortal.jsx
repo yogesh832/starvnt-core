@@ -18,6 +18,7 @@ import { takePendingPrompt } from './pendingPrompt.js';
 
 const Customer360 = lazy(() => import('./Customer360.jsx'));
 const Discovery = lazy(() => import('./Discovery.jsx'));
+const NearbyServices = lazy(() => import('./NearbyServices.jsx'));
 const AuraChat = lazy(() => import('./AuraChat.jsx'));
 const HomePage = lazy(() => import('./HomePage.jsx'));
 const EventsPage = lazy(() => import('./EventsPage.jsx'));
@@ -53,9 +54,11 @@ const SIDEBAR = [
   { key: 'home', label: 'Home', icon: 'dashboard', to: '/customer' },
   { key: 'new', label: 'New Event', icon: 'plus', to: '/customer/events/new' },
   { key: 'discovery', label: 'Discover', icon: 'star', to: '/customer/discovery' },
+  { key: 'nearby', label: 'Nearby services', icon: 'vendors', to: '/customer/nearby' },
   { key: 'aura', label: 'Aura+', icon: 'aura', to: '/customer/aura' },
   { key: 'events', label: 'My Events', icon: 'events', to: '/customer/events' },
   { key: 'messages', label: 'Updates', icon: 'message', to: '/customer/updates', badge: true },
+  { key: 'proposals', label: 'Event Proposals', icon: 'documents', to: '/customer/go/proposals' },
   { key: 'quotes', label: 'Plans & Quotes', icon: 'quotes', to: '/customer/go/quotes' },
   { key: 'bookings', label: 'Bookings', icon: 'bookings', to: '/customer/go/bookings' },
   { key: 'payments', label: 'Payments', icon: 'payments', to: '/customer/go/payments' },
@@ -68,8 +71,8 @@ const SIDEBAR = [
 
 const SIDEBAR_GROUPS = [
   { label: 'Workspace', keys: ['home', 'events', 'aura', 'messages', 'me'] },
-  { label: 'Explore & plan', keys: ['new', 'discovery'] },
-  { label: 'Current Event', keys: ['quotes', 'bookings', 'payments', 'vendors', 'timeline'] },
+  { label: 'Explore & plan', keys: ['new', 'nearby', 'discovery'] },
+  { label: 'Current Event', keys: ['proposals', 'quotes', 'bookings', 'payments', 'vendors', 'timeline'] },
   { label: 'Library', keys: ['documents', 'favorites', 'settings'] },
 ];
 const SIDEBAR_BY_KEY = Object.fromEntries(SIDEBAR.map((item) => [item.key, item]));
@@ -355,6 +358,7 @@ function Shell() {
               <Route path="events/:id/services/:serviceId" element={<ServiceDetailPage />} />
               <Route path="events/:id/compare" element={<ComparePage />} />
               <Route path="events/:id/quotes" element={<QuotesPage />} />
+              <Route path="events/:id/proposals" element={<ProposalPage />} />
               <Route path="events/:id/bookings" element={<BookingsPage />} />
               <Route path="events/:id/bookings/:bookingId" element={<BookingWorkflowPage />} />
               <Route path="events/:id/payments" element={<BookingsPage />} />
@@ -369,6 +373,7 @@ function Shell() {
               <Route path="go/:section" element={<GoToSection />} />
               <Route path="updates" element={<UpdatesPage onRead={refreshUnread} />} />
               <Route path="documents" element={<DocumentsPage />} />
+              <Route path="proposals" element={<ProposalPage />} />
               <Route path="proposals/:id" element={<ProposalPage />} />
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="settings" element={<SettingsPage />} />
@@ -377,6 +382,7 @@ function Shell() {
               <Route path="reminders" element={<RemindersPage />} />
               <Route path="customer-360" element={<Customer360 />} />
               <Route path="discovery" element={<Discovery />} />
+              <Route path="nearby" element={<NearbyServices />} />
               <Route path="*" element={<Navigate to="/customer" replace />} />
             </Routes></Suspense>
           </main>

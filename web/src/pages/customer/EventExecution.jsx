@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 
 /**
@@ -153,6 +154,45 @@ export default function EventExecution({ event, onBack }) {
               </p>
             </div>
           </div>
+
+          {/* Quick Shortcuts to Collaboration & Deliverables */}
+          {event?.id && (
+            <div className="bg-lavender/30 dark:bg-[#1a1d2e] rounded-3xl p-5 border border-primary/10 space-y-3">
+              <div className="text-xs font-bold text-navy dark:text-white uppercase tracking-wider">
+                Event Collaboration & Deliverables
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <Link
+                  to={`/customer/events/${event.id}/media`}
+                  className="p-3 bg-white dark:bg-[#202538] rounded-xl border border-gray-100 dark:border-gray-700 font-bold text-primary dark:text-[#a5b4fc] flex items-center justify-between hover:shadow-xs transition"
+                >
+                  <span>Event Photos & Media</span>
+                  <span>→</span>
+                </Link>
+                <Link
+                  to={`/customer/events/${event.id}/collaboration`}
+                  className="p-3 bg-white dark:bg-[#202538] rounded-xl border border-gray-100 dark:border-gray-700 font-bold text-navy dark:text-white flex items-center justify-between hover:shadow-xs transition"
+                >
+                  <span>Event Circle</span>
+                  <span>→</span>
+                </Link>
+                <Link
+                  to={`/customer/events/${event.id}/bookings`}
+                  className="p-3 bg-white dark:bg-[#202538] rounded-xl border border-gray-100 dark:border-gray-700 font-bold text-navy dark:text-white flex items-center justify-between hover:shadow-xs transition"
+                >
+                  <span>Vendor Proof & Work</span>
+                  <span>→</span>
+                </Link>
+                <Link
+                  to={`/customer/events/${event.id}/memory`}
+                  className="p-3 bg-white dark:bg-[#202538] rounded-xl border border-gray-100 dark:border-gray-700 font-bold text-navy dark:text-white flex items-center justify-between hover:shadow-xs transition"
+                >
+                  <span>Event Memories</span>
+                  <span>→</span>
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

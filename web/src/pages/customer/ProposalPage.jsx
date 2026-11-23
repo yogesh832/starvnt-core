@@ -313,7 +313,37 @@ export default function ProposalPage() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const version = params.get('v');
-  const { data, error, loading, reload } = useLoad(() => customerApi.proposal(id, version), [id, version]);
+  const eventParam = params.get('event');
+  const proposalParam = params.get('proposal');
+
+  // Resolve target proposal ID
+  const { data: resolution, loading: resolving, error: resolveError } = useLoad(async () => {
+    if (proposalParam) return { proposalId: proposalParam };
+    if (id && id.startsWith('PRP-')) return { proposalId: id };
+
+    const res = await customerApi.proposals().catch(() => ({ proposals: [] }));
+    const list = res.proposals || [];
+    const targetEventId = eventParam || (id && !id.startsWith('PRP-') ? id : null);
+
+    let match = null;
+    if (targetEventId) {
+      match = list.find((p) => String(p.eventId) === String(targetEventId));
+    } else if (list.length > 0) {
+      match = list[0];
+    }
+
+    return {
+      proposalId: match?.proposalId || (id && id.startsWith('PRP-') ? id : null),
+      targetEventId,
+      hasProposals: list.length > 0,
+    };
+  }, [id, eventParam, proposalParam]);
+
+  const proposalId = resolution?.proposalId;
+  const { data, error, loading, reload } = useLoad(
+    () => (proposalId ? customerApi.proposal(proposalId, version) : Promise.resolve(null)),
+    [proposalId, version]
+  );
   const [tab, setTab] = useState('overview');
   const [panel, setPanel] = useState(params.get('ask') ? 'ask' : null); // 'approve' | 'decline' | 'change' | 'ask'
   const [changeDraft, setChangeDraft] = useState('');
@@ -321,15 +351,38 @@ export default function ProposalPage() {
   const [message, setMessage] = useState(null);
   const [actionError, setActionError] = useState('');
 
-  if (loading && !data) return <PageSkeleton title="Loading your proposal…" />;
-  if (error) return <Empty title="Proposal unavailable">{errorText(error)}</Empty>;
+  if (resolving || (proposalId && loading && !data)) return <PageSkeleton title="Loading your proposal…" />;
+
+  if (!proposalId && !resolving) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-5 pb-6">
+        <BackLink to="/customer">Back to dashboard</BackLink>
+        <Empty
+          title="No proposal issued yet"
+          action={
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link to="/customer/aura?new=1" className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white">Plan with Aura+</Link>
+              {resolution?.targetEventId && (
+                <Link to={`/customer/events/${resolution.targetEventId}/quotes`} className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-navy dark:border-gray-700 dark:text-white">View event quotes</Link>
+              )}
+            </div>
+          }
+        >
+          Your proposal will appear here once our event designers finalize your package and internal commercial approvals are completed.
+        </Empty>
+      </div>
+    );
+  }
+
+  if (error || resolveError) return <Empty title="Proposal unavailable">{errorText(error || resolveError)}</Empty>;
+  if (!data) return <PageSkeleton title="Loading your proposal…" />;
   const s = data.snapshot;
   const filename = `${data.proposalNumber}-v${data.version}.pdf`;
 
   const decide = async (decision, reason = '') => {
     setBusy(true); setActionError('');
     try {
-      const res = await customerApi.decideProposal(id, data.version, { decision, snapshotHash: data.snapshotHash, reason });
+      const res = await customerApi.decideProposal(proposalId, data.version, { decision, snapshotHash: data.snapshotHash, reason });
       setMessage(decision === 'APPROVE' ? res.nextStep : 'You declined this version. Our team will be in touch.');
       setPanel(null);
       reload();
@@ -388,8 +441,8 @@ export default function ProposalPage() {
         </Section>
       )}
 
-      {panel === 'ask' && <AskAura proposalId={id} canChange={data.isCurrent && ['SENT_TO_CUSTOMER', 'CUSTOMER_VIEWED'].includes(data.status)} onDraftChange={(text) => { setChangeDraft(text); setPanel('change'); }} />}
-      {panel === 'change' && <ChangeForm key={changeDraft} initial={changeDraft} proposalId={id} version={data.version} onDone={() => { setPanel(null); setMessage('Change request sent. You will receive a new version once it is reviewed.'); reload(); }} />}
+      {panel === 'ask' && <AskAura proposalId={proposalId} canChange={data.isCurrent && ['SENT_TO_CUSTOMER', 'CUSTOMER_VIEWED'].includes(data.status)} onDraftChange={(text) => { setChangeDraft(text); setPanel('change'); }} />}
+      {panel === 'change' && <ChangeForm key={changeDraft} initial={changeDraft} proposalId={proposalId} version={data.version} onDone={() => { setPanel(null); setMessage('Change request sent. You will receive a new version once it is reviewed.'); reload(); }} />}
       {panel === 'approve' && (
         <div className="rounded-2xl border border-emerald-200 bg-white p-4 dark:bg-[#161926]">
           <p className="text-sm font-bold text-navy dark:text-white">Approve version {data.version} of this proposal?</p>
@@ -410,8 +463,8 @@ export default function ProposalPage() {
       <div className="z-20 rounded-2xl lg:sticky border border-gray-200 bg-white/95 px-3 py-3 shadow-sm backdrop-blur lg:bottom-4 lg:shadow-lg dark:border-gray-800 dark:bg-[#0f1220]/95">
         <div className="flex flex-wrap items-center gap-2">
           {data.hasPdf && <>
-            <button type="button" onClick={() => openPdf(id, data.version, false, filename)} className="rounded-xl border px-3 py-2 text-sm font-bold"><Icon name="eye" size={14} /> View PDF</button>
-            <button type="button" onClick={() => openPdf(id, data.version, true, filename)} className="rounded-xl border px-3 py-2 text-sm font-bold"><Icon name="documents" size={14} /> Download</button>
+            <button type="button" onClick={() => openPdf(proposalId, data.version, false, filename)} className="rounded-xl border px-3 py-2 text-sm font-bold"><Icon name="eye" size={14} /> View PDF</button>
+            <button type="button" onClick={() => openPdf(proposalId, data.version, true, filename)} className="rounded-xl border px-3 py-2 text-sm font-bold"><Icon name="documents" size={14} /> Download</button>
           </>}
           <button type="button" onClick={() => setPanel(panel === 'ask' ? null : 'ask')} className="rounded-xl border px-3 py-2 text-sm font-bold"><Icon name="aura" size={14} /> Ask Aura+</button>
           <div className="ml-auto flex gap-2">
