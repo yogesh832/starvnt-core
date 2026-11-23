@@ -22,7 +22,7 @@ const PublicPolicyPage = lazy(() => import('./pages/PublicPolicyPage.jsx'));
 const PublicVendorProfile = lazy(() => import('./pages/PublicVendorProfile.jsx'));
 const PublicEventContent = lazy(() => import('./pages/customer/EventMediaPage.jsx').then(module => ({ default: module.PublicEventContent })));
 
-const DEV_TOOLS_ENABLED = import.meta.env.DEV;
+const DEV_TOOLS_ENABLED = true;
 
 class ErrorBoundary extends React.Component {
   state = { error: null };
