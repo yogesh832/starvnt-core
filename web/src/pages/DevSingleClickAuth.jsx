@@ -8,7 +8,7 @@ import { externalApi, adminApi } from '../lib/api.js';
 
 const getApiBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL.replace(/\/$/, '');
-  return import.meta.env.MODE === 'production' ? 'https://app.starvnt.com' : 'http://localhost:4000';
+  return import.meta.env.MODE === 'production' ? '' : 'http://localhost:4000';
 };
 
 // ── 15 Pre-Seeded Vendors Across Categories & States ────────────────────────
@@ -302,44 +302,78 @@ export default function DevSingleClickAuth() {
 
     try {
       if (accountType === 'ADMIN') {
+        let adminToken = null;
+        let redirectUrl = '/admin/dashboard';
         const res = await fetch(`${apiBase}/api/admin/auth/dev-auth`, {
           method: 'POST',
           credentials: 'include',
-          signal: AbortSignal.timeout(20000),
+          signal: AbortSignal.timeout(10000),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, role }),
-        });
+        }).catch(() => null);
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.message || `Admin auth failed with status ${res.status}`);
+        if (res && res.ok) {
+          const data = await res.json();
+          adminToken = data.accessToken;
+          redirectUrl = data.redirectTo || redirectUrl;
+        } else {
+          // Fallback: standard admin login
+          const fbRes = await fetch(`${apiBase}/api/admin/auth/login`, {
+            method: 'POST',
+            credentials: 'include',
+            signal: AbortSignal.timeout(10000),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password: 'Password123!' }),
+          });
+          if (!fbRes.ok) {
+            const errData = await fbRes.json().catch(() => ({}));
+            throw new Error(errData.message || `Admin login failed with status ${fbRes.status}`);
+          }
+          const fbData = await fbRes.json();
+          adminToken = fbData.accessToken;
         }
 
-        const data = await res.json();
-        if (data.accessToken) {
-          adminApi.setToken(data.accessToken);
-          localStorage.setItem('starvnt_admin_access_token', data.accessToken);
-          window.location.href = data.redirectTo || '/admin/dashboard';
+        if (adminToken) {
+          adminApi.setToken(adminToken);
+          localStorage.setItem('starvnt_admin_access_token', adminToken);
+          window.location.href = redirectUrl;
         }
       } else {
+        let userToken = null;
+        let redirectUrl = accountType === 'VENDOR' ? '/vendor' : '/customer';
         const res = await fetch(`${apiBase}/api/auth/dev-auth`, {
           method: 'POST',
           credentials: 'include',
-          signal: AbortSignal.timeout(20000),
+          signal: AbortSignal.timeout(10000),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accountType, email, blankProfile }),
-        });
+        }).catch(() => null);
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.message || `Dev auth failed with status ${res.status}`);
+        if (res && res.ok) {
+          const data = await res.json();
+          userToken = data.accessToken;
+          redirectUrl = data.redirectTo || redirectUrl;
+        } else {
+          // Fallback: standard sign-in with default demo credentials
+          const fbRes = await fetch(`${apiBase}/api/auth/login`, {
+            method: 'POST',
+            credentials: 'include',
+            signal: AbortSignal.timeout(10000),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password: 'Password123', accountType }),
+          });
+          if (!fbRes.ok) {
+            const errData = await fbRes.json().catch(() => ({}));
+            throw new Error(errData.message || `Sign-in failed with status ${fbRes.status}`);
+          }
+          const fbData = await fbRes.json();
+          userToken = fbData.accessToken;
         }
 
-        const data = await res.json();
-        if (data.accessToken) {
-          externalApi.setToken(data.accessToken);
-          localStorage.setItem('starvnt_external_access_token', data.accessToken);
-          window.location.href = data.redirectTo || (accountType === 'VENDOR' ? '/vendor' : '/customer');
+        if (userToken) {
+          externalApi.setToken(userToken);
+          localStorage.setItem('starvnt_external_access_token', userToken);
+          window.location.href = redirectUrl;
         }
       }
     } catch (err) {

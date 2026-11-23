@@ -177,12 +177,11 @@ export function friendlyApiMessage(code, status) {
 }
 
 /** Backend base URL — direct calls keep auth and OTP requests consistent. */
-const defaultProdUrl = "https://app.starvnt.com";
 const defaultDevUrl = "http://localhost:4000";
 export const API_BASE = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace(/\/$/, "")
   : import.meta.env.MODE === "production"
-    ? defaultProdUrl
+    ? ""
     : defaultDevUrl;
 
 export const externalApi = makeApi(

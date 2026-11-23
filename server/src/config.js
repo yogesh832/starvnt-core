@@ -18,6 +18,10 @@ function parseOrigins(value) {
   for (const portal of [process.env.CUSTOMER_PORTAL_URL || 'https://starvnt-core.vercel.app', process.env.VENDOR_PORTAL_URL || 'https://vendor.starvnt.com']) {
     try { const url = new URL(portal); if (['https:', 'http:'].includes(url.protocol)) origins.push(url.origin); } catch { /* Ignore invalid configured origins. */ }
   }
+  // Include common deployment preview domains
+  for (const extra of ['https://starvnt-core-sp5l.vercel.app']) {
+    origins.push(extra);
+  }
   return [...new Set(origins)];
 }
 
