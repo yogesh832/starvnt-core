@@ -911,13 +911,10 @@ export default function ExternalLogin() {
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {[
-                              { label: "👤 Customer", email: "customer@starvnt.com", type: "CUSTOMER" },
-                              { label: "📸 Photography", email: "vendor@starvnt.com", type: "VENDOR" },
-                              { label: "🍽️ Catering", email: "catering@starvnt.com", type: "VENDOR" },
-                              { label: "🌸 Decor", email: "decor@starvnt.com", type: "VENDOR" },
-                              { label: "🏰 Venue", email: "venue@starvnt.com", type: "VENDOR" },
-                              { label: "🎵 Sound", email: "dj@starvnt.com", type: "VENDOR" },
-                              { label: "💄 Makeup", email: "makeup@starvnt.com", type: "VENDOR" },
+                              { label: "👤 Ananya (customer@starvnt.com)", email: "customer@starvnt.com", password: "Password123", type: "CUSTOMER" },
+                              { label: "👤 Rahul (customer2@starvnt.com)", email: "customer2@starvnt.com", password: "Password123!", type: "CUSTOMER" },
+                              { label: "👤 Priya (customer3@starvnt.com)", email: "customer3@starvnt.com", password: "Password123!", type: "CUSTOMER" },
+                              { label: "👤 Vikram (customer4@starvnt.com)", email: "customer4@starvnt.com", password: "Password123!", type: "CUSTOMER" },
                             ].map((item) => (
                               <button
                                 key={item.email}
@@ -927,7 +924,7 @@ export default function ExternalLogin() {
                                   setForm((prev) => ({
                                     ...prev,
                                     email: item.email,
-                                    password: "Password123",
+                                    password: item.password,
                                   }));
                                   setEmailOtpSent(true);
                                   setEmailOtpVerified(true);
@@ -1056,13 +1053,10 @@ export default function ExternalLogin() {
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {[
-                              { label: "👤 Customer", email: "customer@starvnt.com", type: "CUSTOMER" },
-                              { label: "📸 Photography", email: "vendor@starvnt.com", type: "VENDOR" },
-                              { label: "🍽️ Catering", email: "catering@starvnt.com", type: "VENDOR" },
-                              { label: "🌸 Decor", email: "decor@starvnt.com", type: "VENDOR" },
-                              { label: "🏰 Venue", email: "venue@starvnt.com", type: "VENDOR" },
-                              { label: "🎵 Sound", email: "dj@starvnt.com", type: "VENDOR" },
-                              { label: "💄 Makeup", email: "makeup@starvnt.com", type: "VENDOR" },
+                              { label: "👤 Ananya (customer@starvnt.com)", email: "customer@starvnt.com", password: "Password123", type: "CUSTOMER" },
+                              { label: "👤 Rahul (customer2@starvnt.com)", email: "customer2@starvnt.com", password: "Password123!", type: "CUSTOMER" },
+                              { label: "👤 Priya (customer3@starvnt.com)", email: "customer3@starvnt.com", password: "Password123!", type: "CUSTOMER" },
+                              { label: "👤 Vikram (customer4@starvnt.com)", email: "customer4@starvnt.com", password: "Password123!", type: "CUSTOMER" },
                             ].map((item) => (
                               <button
                                 key={item.email}
@@ -1072,7 +1066,7 @@ export default function ExternalLogin() {
                                   setForm((prev) => ({
                                     ...prev,
                                     email: item.email,
-                                    password: "Password123",
+                                    password: item.password,
                                   }));
                                   clearLoginError();
                                 }}

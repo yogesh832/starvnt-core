@@ -318,13 +318,22 @@ export default function DevSingleClickAuth() {
           redirectUrl = data.redirectTo || redirectUrl;
         } else {
           // Fallback: standard admin login
-          const fbRes = await fetch(`${apiBase}/api/admin/auth/login`, {
+          let fbRes = await fetch(`${apiBase}/api/admin/auth/login`, {
             method: 'POST',
             credentials: 'include',
             signal: AbortSignal.timeout(10000),
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password: 'Password123!' }),
           });
+          if (fbRes.status === 401) {
+            fbRes = await fetch(`${apiBase}/api/admin/auth/login`, {
+              method: 'POST',
+              credentials: 'include',
+              signal: AbortSignal.timeout(10000),
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password: 'Password123' }),
+            });
+          }
           if (!fbRes.ok) {
             const errData = await fbRes.json().catch(() => ({}));
             throw new Error(errData.message || `Admin login failed with status ${fbRes.status}`);
@@ -354,20 +363,32 @@ export default function DevSingleClickAuth() {
           userToken = data.accessToken;
           redirectUrl = data.redirectTo || redirectUrl;
         } else {
-          // Fallback: standard sign-in with default demo credentials
-          const fbRes = await fetch(`${apiBase}/api/auth/login`, {
+          // Fallback: standard sign-in with default demo credentials (tries Password123 then Password123!)
+          let fbRes = await fetch(`${apiBase}/api/auth/login`, {
             method: 'POST',
             credentials: 'include',
             signal: AbortSignal.timeout(10000),
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: 'Password123', accountType }),
+            body: JSON.stringify({ email, password: 'Password123' }),
           });
+          if (fbRes.status === 401) {
+            fbRes = await fetch(`${apiBase}/api/auth/login`, {
+              method: 'POST',
+              credentials: 'include',
+              signal: AbortSignal.timeout(10000),
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password: 'Password123!' }),
+            });
+          }
           if (!fbRes.ok) {
             const errData = await fbRes.json().catch(() => ({}));
             throw new Error(errData.message || `Sign-in failed with status ${fbRes.status}`);
           }
           const fbData = await fbRes.json();
           userToken = fbData.accessToken;
+          if (fbData.user?.accountType) {
+            redirectUrl = fbData.user.accountType === 'VENDOR' ? '/vendor' : '/customer';
+          }
         }
 
         if (userToken) {
