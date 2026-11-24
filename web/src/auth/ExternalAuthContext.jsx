@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { externalApi } from "../lib/api.js";
 
-import { acceptPortalSession, portalPayload, PORTAL_SURFACE } from "../lib/portalAccess.js";
+import { acceptPortalSession, activePortalSurface, portalPayload, PORTAL_SURFACE } from "../lib/portalAccess.js";
 
 const ExternalAuthContext = createContext(null);
 
@@ -14,7 +14,7 @@ export function ExternalAuthProvider({ children }) {
   const sessionRevision = useRef(0);
   async function storeSession(data, expected = sessionRevision.current) {
     const current = () => expected === sessionRevision.current;
-    const nextUser = await acceptPortalSession(data, externalApi, current);
+    const nextUser = await acceptPortalSession(data, externalApi, current, activePortalSurface());
     if (current()) {
       setUser(nextUser); setSessionError(null);
     }

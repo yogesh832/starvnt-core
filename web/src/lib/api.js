@@ -10,6 +10,10 @@ export function makeApi(base, refreshPath, options = {}) {
   let refreshing = null;
   let generation = 0;
   let sessionBlocked = false;
+  const surfaceHeaders = () => {
+    const surface = typeof options.surface === 'function' ? options.surface() : options.surface;
+    return surface ? { 'X-Starvnt-Surface': surface } : {};
+  };
 
   if (storageKey && typeof window !== "undefined") {
     token = window.localStorage.getItem(storageKey);
@@ -32,7 +36,7 @@ export function makeApi(base, refreshPath, options = {}) {
     const startedGeneration = generation;
     refreshing =
       refreshing ||
-      fetch(refreshPath, { method: "POST", credentials: "include", headers: options.surface ? { "X-Starvnt-Surface": options.surface } : {} })
+      fetch(refreshPath, { method: "POST", credentials: "include", headers: surfaceHeaders() })
         .then(async (r) => {
           if (!r.ok) {
             const data = await r.json().catch(() => ({}));
@@ -62,7 +66,7 @@ export function makeApi(base, refreshPath, options = {}) {
       signal,
       headers: {
         ...(isJsonBody ? { "Content-Type": "application/json" } : {}),
-        ...(options.surface ? { "X-Starvnt-Surface": options.surface } : {}),
+        ...surfaceHeaders(),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
       },
@@ -187,7 +191,16 @@ export const API_BASE = import.meta.env.VITE_API_URL
 export const externalApi = makeApi(
   `${API_BASE}/api`,
   `${API_BASE}/api/auth/refresh`,
-  { storageKey: "starvnt_external_access_token", loginRedirectPath: "/login", surface: 'CUSTOMER' },
+  {
+    storageKey: "starvnt_external_access_token",
+    loginRedirectPath: "/login",
+    surface: () => {
+      if (typeof window === 'undefined' || window.location.hostname !== 'starvnt-core-sp5l.vercel.app') return 'CUSTOMER';
+      const path = window.location.pathname;
+      if (/^\/(?:auth-test|test-auth|testAuth|auth\/test)$/.test(path)) return null;
+      return path === '/vendor' || path.startsWith('/vendor/') ? 'VENDOR' : 'CUSTOMER';
+    },
+  },
 );
 export const adminApi = makeApi(
   `${API_BASE}/api/admin`,

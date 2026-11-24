@@ -1,4 +1,15 @@
 export const PORTAL_SURFACE = 'CUSTOMER';
+// The customer-dev QA deployment hosts the shared quick-auth workbench. Keep
+// its test identities on their matching dashboard without changing the live
+// customer and vendor portal boundaries.
+export const MULTI_SURFACE_TEST_PREVIEW =
+  typeof window !== 'undefined' && window.location.hostname === 'starvnt-core-sp5l.vercel.app';
+const testAuthPath = /^\/(?:auth-test|test-auth|testAuth|auth\/test)$/;
+export function activePortalSurface(path = typeof window !== 'undefined' ? window.location.pathname : '/') {
+  if (!MULTI_SURFACE_TEST_PREVIEW) return PORTAL_SURFACE;
+  if (testAuthPath.test(path)) return null;
+  return path === '/vendor' || path.startsWith('/vendor/') ? 'VENDOR' : PORTAL_SURFACE;
+}
 const configured = () => ({
   CUSTOMER: import.meta.env?.VITE_CUSTOMER_PORTAL_URL,
   VENDOR: import.meta.env?.VITE_VENDOR_PORTAL_URL,
@@ -22,7 +33,7 @@ export function mismatchError(type) {
 export const portalPayload = (payload = {}) => ({ ...payload, accountType: PORTAL_SURFACE });
 export async function acceptPortalSession(data, api, isCurrent = () => true, expectedSurface = PORTAL_SURFACE) {
   if (!data?.user || !isCurrent()) return null;
-  if (data.user.accountType !== expectedSurface) {
+  if (expectedSurface && data.user.accountType !== expectedSurface) {
     api.setToken(null);
     throw mismatchError(data.user.accountType);
   }

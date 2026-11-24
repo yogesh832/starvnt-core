@@ -8,7 +8,7 @@ import { LogoWord } from './components/ui.jsx';
 
 import Landing from './pages/customer/Landing.jsx';
 
-import { PORTAL_SURFACE } from './lib/portalAccess.js';
+import { MULTI_SURFACE_TEST_PREVIEW, PORTAL_SURFACE } from './lib/portalAccess.js';
 
 const ExternalLogin = lazy(() => import('./pages/external/Login.jsx'));
 const CustomerPortal = lazy(() => import('./pages/customer/CustomerPortal.jsx'));
@@ -144,7 +144,7 @@ function ApplicationRoutes() {
           </RequireExternal> : <Navigate to="/vendor" replace />
         }
       />
-      <Route path="/vendor/*" element={PORTAL_SURFACE === 'VENDOR' ? <RequireExternal type="VENDOR"><VendorPortal /></RequireExternal> : <Navigate to="/customer" replace />} />
+      <Route path="/vendor/*" element={PORTAL_SURFACE === 'VENDOR' || MULTI_SURFACE_TEST_PREVIEW ? <RequireExternal type="VENDOR"><VendorPortal /></RequireExternal> : <Navigate to="/customer" replace />} />
 
       {/* Internal domain — fully separate admin experience */}
       <Route
