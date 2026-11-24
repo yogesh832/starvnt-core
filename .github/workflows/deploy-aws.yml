@@ -101,6 +101,12 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --retry 5 --retry-all-errors --retry-delay 5 https://app.starvnt.com/api/health
+          cors_headers=$(curl --fail --silent --show-error --request OPTIONS \
+            --header 'Origin: https://starvnt-core-sp5l.vercel.app' \
+            --header 'Access-Control-Request-Method: GET' \
+            --dump-header - --output /dev/null https://app.starvnt.com/api/health | tr -d '\r')
+          grep -Fxi 'Access-Control-Allow-Origin: https://starvnt-core-sp5l.vercel.app' <<< "$cors_headers"
+          grep -Fxi 'Access-Control-Allow-Credentials: true' <<< "$cors_headers"
           curl --fail --retry 5 --retry-all-errors --retry-delay 5 https://vendor.starvnt.com/
           actual=$(curl --fail --silent https://vendor.starvnt.com/deployment.json | jq -r .commit)
           [[ "$actual" == "$DEPLOY_SHA" ]]

@@ -15,6 +15,10 @@ if (process.env.STARVNT_ENV_FILE) {
 
 function parseOrigins(value) {
   const origins = (value || 'http://localhost:5173').split(',').map(origin => origin.trim()).filter(Boolean);
+  // Approved customer auth test deployment. Origin headers contain the host,
+  // not its /test-auth path; keep this exact host even when CLIENT_ORIGINS is
+  // supplied by the production server's private environment file.
+  origins.push('https://starvnt-core-sp5l.vercel.app');
   for (const portal of [process.env.CUSTOMER_PORTAL_URL || 'https://starvnt-core.vercel.app', process.env.VENDOR_PORTAL_URL || 'https://vendor.starvnt.com']) {
     try { const url = new URL(portal); if (['https:', 'http:'].includes(url.protocol)) origins.push(url.origin); } catch { /* Ignore invalid configured origins. */ }
   }
