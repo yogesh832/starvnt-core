@@ -1,5 +1,6 @@
 import { VendorFinancialProfile } from '../models/VendorFinancialProfile.js';
 import { vendorSeoRoutes } from './vendorSeo.routes.js';
+import { partnerProgramRoutes } from './partnerProgram.routes.js';
 import { searchVendorRecords } from '../services/vendorSearch.service.js';
 import { vendorAgreementRoutes } from '../../foundation/agreement.routes.js';
 import { identityOutcome, publicVerification } from '../../common/verificationPolicy.js';
@@ -105,6 +106,7 @@ async function resolveVendorContext(req, res, next) {
 
 router.use(resolveVendorContext);
 router.use('/seo', vendorSeoRoutes);
+router.use('/partner-program', partnerProgramRoutes);
 router.use('/agreements', vendorAgreementRoutes);
 router.get('/search', async (req, res, next) => {
   try { res.json({ ok: true, ...(await searchVendorRecords(req.vendorId, req.query)) }); }

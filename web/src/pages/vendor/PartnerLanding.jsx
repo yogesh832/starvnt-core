@@ -185,7 +185,7 @@ export default function PartnerLanding() {
             <ul className="partner-founding-perks">
               {[['rocket', <>Early Access<br />to New Features</>], ['star', <>Higher Visibility<br />in Your Category</>], ['coins', <>Platform Fee<br />Benefits*</>], ['support', <>Priority<br />Support</>]].map(([icon, label]) => <li key={icon}><Icon name={icon} /><span>{label}</span></li>)}
             </ul>
-            <div className="partner-founding-action"><Link to={joinUrl} className="partner-button partner-button-gold">{isPartner ? 'Open Your Workspace' : 'Join as a Founding Partner'}<Icon name="arrow" /></Link><small>* Benefits are for a limited period and subject to program terms.</small></div>
+            <div className="partner-founding-action"><Link to={joinUrl} className="partner-button partner-button-gold">{isPartner ? 'Open Your Workspace' : 'Join as a Founding Partner'}<Icon name="arrow" /></Link><small>* Benefits are for a limited period and subject to program terms.</small><Link to="/vendor/partner-program" className="partner-button partner-button-gold">Promo code, offer requests & terms<Icon name="arrow" /></Link><small>AURA6MONTHS: six-month offer request, subject to approved terms and eligibility. No automatic paid renewal.</small></div>
           </div>
         </div>
       </section>

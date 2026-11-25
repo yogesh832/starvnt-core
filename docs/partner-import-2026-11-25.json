@@ -1,0 +1,73 @@
+{
+  "source": "partner.starvnt.com.zip",
+  "sourceDate": "2026-11-25",
+  "developmentBranch": "vendor-dev",
+  "entryPoints": [
+    "/vendor/partner-program",
+    "/vendor/seo",
+    "Partner landing → Founding Partner Program"
+  ],
+  "comparison": {
+    "alreadyPresent": [
+      "Authenticated Vendor OS and persistent MongoDB",
+      "Partner landing and optimized brand assets",
+      "SEO/GEO evidence ledger, readiness scorecards, draft review, growth pack exports",
+      "Versioned approved signup terms and privacy acceptance",
+      "Consent-aware in-app customer campaigns",
+      "Separate customer checkout coupon system"
+    ],
+    "integrated": [
+      "Restored SEO/GEO sidebar access",
+      "Marketing & offers workspace",
+      "AURA6MONTHS normalization and expired/unknown-code validation",
+      "Persistent owner-scoped offer request, replay handling, withdrawal and history",
+      "Four draft legal documents with 51 original clauses and source hash",
+      "Private marketing, keyword, GEO, FAQ, portfolio and 30/60/90-day suggestions from current public-use evidence",
+      "Deduplicated local suggestion additions followed by explicit save/review",
+      "Partner landing link to promotion requests and terms",
+      "Isolated browser verification added to CI"
+    ],
+    "notImported": [
+      "Prototype in-memory backend and header-based tenant authorization",
+      "Synthetic vendor/application/competitor/review data",
+      "Assumed West Bengal geography and unmeasured rankings",
+      "Unapproved paid-plan prices and stated offer value as checkout prices",
+      "Automatic paid subscription activation",
+      "Prototype dependency tree, git repository and build artifacts",
+      "Unreleased Proposal Studio or event ticketing modules"
+    ]
+  },
+  "commercialAndLegalStatus": {
+    "offerCode": "AURA6MONTHS",
+    "proposedDurationMonths": 6,
+    "status": "REQUEST_ONLY_PENDING_COMMERCIAL_APPROVAL",
+    "autoRenewsToPaid": false,
+    "billingOrActivationChanged": false,
+    "legalDocuments": "DRAFT_PENDING_REVIEW",
+    "activeSignupTermsReplaced": false,
+    "requiredBeforeActivation": [
+      "Resolve legal entity, effective date and other draft placeholders",
+      "Approve final eligibility, campaign period, entitlement and commercial terms",
+      "Publish versioned approved documents through the existing signup/legal workflow",
+      "Implement explicit authorized entitlement activation independently from an offer request"
+    ]
+  },
+  "security": [
+    "Existing vendor authentication and organization ownership gate",
+    "No client-selected vendor scope",
+    "Offer requests isolated from customer coupons and service-booking financials",
+    "Revision checks for withdrawal and re-request",
+    "No-store responses",
+    "Legal TypeScript imported through literal AST conversion without executing attachment code",
+    "Marketing suggestions never send messages or publish content"
+  ],
+  "verification": {
+    "focusedBackendTests": "11 passed",
+    "webTests": "43 passed",
+    "productionBuild": "passed",
+    "browserChecks": "17 passed; promo persistence/withdrawal, four legal previews, private suggestions, desktop and 320/390px light/dark layouts",
+    "performanceGuard": "Existing failure reproduced in unchanged HEAD baseline: initial CSS 217466 B exceeds 130000 B. Final integration build measured 224549 B. Budget not weakened or bypassed.",
+    "fullBackendSuite": "346 passed; zero failed. See tmp/partner-import-2026-11-25/full-tests.log.",
+    "artifacts": "tmp/qa/partner-program/ and tmp/partner-import-2026-11-25/"
+  }
+}

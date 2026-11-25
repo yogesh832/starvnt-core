@@ -6,6 +6,7 @@ import { PortfolioItem } from '../models/PortfolioItem.js';
 import { ServiceCoverage } from '../models/ServiceCoverage.js';
 import { validateSeoWorkspace, generateSeoDraft, seoSummary, seoGrowthPack } from '../../common/vendorSeo.js';
 import { SEO_FACTS, SEO_RECORDS, SEO_DRAFT_FIELDS } from '../../common/vendorSeoContract.js';
+import { partnerMarketingSuggestions } from '../../common/partnerMarketing.js';
 
 export const vendorSeoRoutes = Router();
 vendorSeoRoutes.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
@@ -50,6 +51,11 @@ vendorSeoRoutes.post('/generate', h(async (req, res) => {
   const w = await VendorSeoWorkspace.findOne({ vendor: req.vendorId }).lean();
   if (!w || req.body?.revision !== w.revision) return conflict(res);
   res.json({ ok: true, draft: generateSeoDraft(w), method: 'EVIDENCE_TEMPLATE', published: false });
+}));
+vendorSeoRoutes.post('/suggestions', h(async (req, res) => {
+  const workspace = await VendorSeoWorkspace.findOne({ vendor: req.vendorId }).lean();
+  if (!workspace || req.body?.revision !== workspace.revision) return conflict(res);
+  res.json(partnerMarketingSuggestions(workspace));
 }));
 vendorSeoRoutes.post('/review', h(async (req, res) => {
   const data = await payload(req);

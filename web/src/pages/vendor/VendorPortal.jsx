@@ -22,6 +22,7 @@ const Agreements = lazy(() => import('./pages/Agreements.jsx'));
 const BookingWorkflow = lazy(() => import('../../components/BookingWorkflow.jsx'));
 const CustomerGrowth = lazy(() => import('./pages/CustomerGrowth.jsx'));
 const SeoGrowth = lazy(() => import('./pages/SeoGrowth.jsx'));
+const PartnerProgram = lazy(() => import('./pages/PartnerProgram.jsx'));
 const DiscoveryRewards = lazy(() => import('./pages/DiscoveryRewards.jsx'));
 const VendorIdentity = lazy(() => import('./pages/VendorIdentity.jsx'));
 const Academy = lazy(() => import('./pages/Academy.jsx'));
@@ -386,6 +387,8 @@ export default function VendorPortal() {
     { to: 'availability', label: 'Availability', icon: 'availability' },
     { to: 'reviews', label: 'Reviews', icon: 'star' },
     { to: 'analytics', label: 'Analytics', icon: 'reports' },
+    { to: 'seo', label: 'SEO & GEO growth', icon: 'search' },
+    { to: 'partner-program', label: 'Marketing & offers', icon: 'star' },
     { to: 'updates', label: 'Messages & updates', icon: 'bell', badge: badgeCounts.unreadNotificationsCount || badgeCounts.messagesCount || null },
     { to: 'profile', label: 'Profile & Settings', icon: 'profile' },
   ];
@@ -703,6 +706,7 @@ export default function VendorPortal() {
             {VENDOR_QR_ENABLED && <Route path="experience-qr" element={<CustomerGrowth mode="qr" />} />}
             <Route path="growth" element={<CustomerGrowth mode="growth" />} />
             <Route path="seo" element={<SeoGrowth />} />
+            <Route path="partner-program" element={<PartnerProgram />} />
             {/* Share Your Business & Public Ticketing are deferred to Phase 2. */}
             <Route path="share" element={<Navigate to="/vendor/profile/social-links" replace />} />
             <Route path="learning" element={<Academy />} />

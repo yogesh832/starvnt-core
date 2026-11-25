@@ -1,0 +1,1157 @@
+{
+  "source": "partner.starvnt.com.zip/src/data/legalDocuments.ts",
+  "sourceSha256": "383c4af635daba242fb4afc9f88064750bbe399277eb251e1d5163bfdfc49529",
+  "importedOn": "2026-11-25",
+  "notice": "Imported reference drafts. Not active signup documents or approved commercial terms.",
+  "documents": {
+    "terms": {
+      "key": "terms",
+      "documentId": "starvnt-partner-terms",
+      "title": "STARVNT PARTNER TERMS & CONDITIONS",
+      "shortTitle": "Partner Terms & Conditions",
+      "subtitle": "Governing partner applications, verification states, workspace access, AURA+ AI assistance, portfolio licensing, and commercial standards on the STARVNT Partner Growth Gateway.",
+      "version": "1.0-draft",
+      "status": "DRAFT_PENDING_REVIEW",
+      "effectiveDate": "[INSERT APPROVED EFFECTIVE DATE]",
+      "publicationDate": "23 November 2026",
+      "lastUpdated": "23 November 2026",
+      "jurisdiction": "India",
+      "language": "English",
+      "audience": "Event service providers, vendors, agencies, freelancers, venues, photographers, decorators, caterers, planners, makeup artists, entertainment providers, and production teams.",
+      "contactEmailPlaceholder": "[OFFICIAL LEGAL CONTACT EMAIL]",
+      "reviewNotice": "PRE-PUBLICATION LEGAL REVIEW NOTICE: Certain entity details, commercial billing terms, and operational SLAs marked [BUSINESS CONFIRMATION REQUIRED] must be finalized by STARVNT management and reviewed by qualified Indian legal counsel prior to production enforcement.",
+      "clauses": [
+        {
+          "id": "terms-1",
+          "number": "1",
+          "title": "Introduction and Acceptance",
+          "paragraphs": [
+            "These Partner Terms & Conditions (\"Terms\") govern access to and use of the STARVNT Partner Growth Gateway and related partner tools operated under the STARVNT brand by [INSERT REGISTERED LEGAL ENTITY NAME] (\"Company\", \"Platform Operator\", \"we\", \"us\", or \"STARVNT\"), having its registered office at [INSERT REGISTERED OFFICE ADDRESS].",
+            "STARVNT is an Indian event-technology and event-management platform designed to help event professionals establish a structured digital presence, manage client enquiries and quotations, access educational modules, and use AI-assisted business tools (AURA+). The Partner Growth Gateway is the onboarding, evaluation, and preview portal through which prospective and registered event professionals submit applications, inspect category availability, and explore STARVNT workspace capabilities.",
+            "These Terms apply to website visitors, partner applicants, registered partners, and activated partners (collectively, \"you\" or \"Partner\") according to your stage of interaction with the Platform. Partners operate as independent business entities or independent service professionals; nothing in these Terms creates an employment, partnership, joint venture, franchise, fiduciary, or agency relationship between STARVNT and any Partner.",
+            "Acceptance of these Terms occurs only through an explicit, affirmative acceptance mechanism (such as ticking an unticked acceptance checkbox during partner registration or executing a written onboarding addendum). Acceptance of these Terms does not waive any non-waivable statutory rights available to you or to Customers under applicable Indian law."
+          ],
+          "callout": {
+            "tone": "notice",
+            "title": "No Automatic Approval or Guaranteed Business",
+            "body": "Submitting a registration form or accessing the Partner Growth Gateway does not automatically guarantee application approval, KYC clearance, account activation, client enquiries, confirmed bookings, or revenue."
+          }
+        },
+        {
+          "id": "terms-2",
+          "number": "2",
+          "title": "Definitions",
+          "paragraphs": [
+            "For consistency across these Partner Terms & Conditions, the STARVNT Privacy Policy, and supplemental offer or media policies, the following terms carry the meanings stated below:"
+          ],
+          "table": {
+            "headers": [
+              "Defined Term",
+              "Meaning"
+            ],
+            "rows": [
+              [
+                "STARVNT",
+                "The event-technology brand, ecosystem, and partner services operated by the Company."
+              ],
+              [
+                "Company / Platform Operator",
+                "[INSERT REGISTERED LEGAL ENTITY NAME], operating the STARVNT platform in India [BUSINESS CONFIRMATION REQUIRED]."
+              ],
+              [
+                "Platform",
+                "The STARVNT Partner Growth Gateway web application, APIs, partner tools, and future authenticated partner portal routes operated by the Company."
+              ],
+              [
+                "Partner",
+                "An eligible event service provider, vendor, agency, venue operator, or freelance professional registered on or applying to STARVNT."
+              ],
+              [
+                "Partner Account",
+                "A registered partner record and associated operational states maintained by STARVNT. (Note: persistent password/SSO login accounts are currently planned for rollout.)"
+              ],
+              [
+                "Applicant",
+                "An individual or business that has submitted a partner onboarding application or regional waitlist request."
+              ],
+              [
+                "Customer",
+                "An individual, family, corporate entity, or event organizer seeking event services through STARVNT."
+              ],
+              [
+                "Enquiry",
+                "A structured customer request describing an event requirement, date, approximate location, and indicative scope."
+              ],
+              [
+                "Lead",
+                "An inbound customer enquiry or event brief matched or routed to one or more eligible Partners."
+              ],
+              [
+                "Quotation",
+                "A commercial price estimate, service scope, tax summary, and terms prepared by a Partner for a Customer."
+              ],
+              [
+                "Booking",
+                "A confirmed commercial arrangement between a Customer and a Partner for event service delivery, subject to verified confirmation rules."
+              ],
+              [
+                "Event",
+                "A wedding, social gathering, corporate function, exhibition, or other occasion for which Partner services are requested."
+              ],
+              [
+                "Venue",
+                "The physical property, banquet hall, lawn, hotel, or location where an Event is scheduled to take place."
+              ],
+              [
+                "Service Category",
+                "One of STARVNT’s structured event craft classifications (Photographers, Decorators, Caterers, Event Planners, Venues, Makeup Artists, Entertainment, Production)."
+              ],
+              [
+                "Service Area",
+                "A geographic zone, neighborhood, district, or city in which a Partner operates or where STARVNT publishes onboarding availability."
+              ],
+              [
+                "Verification",
+                "STARVNT’s operational review of a Partner’s declared identity, business existence, portfolio authenticity, and category suitability."
+              ],
+              [
+                "KYC",
+                "Know Your Customer / Know Your Business document review conducted via authenticated verification channels where operationally or legally required."
+              ],
+              [
+                "Activation",
+                "Operational enablement of a verified Partner profile for live platform participation after confirming regional and category readiness."
+              ],
+              [
+                "Matching Eligibility",
+                "The operational status confirming that an Activated Partner satisfies all prerequisites to be considered for relevant Customer enquiries."
+              ],
+              [
+                "Partner Workspace",
+                "The desktop and mobile business management interface for enquiries, quotations, bookings, and analytics. (Currently presented as an interactive demo with synthetic data on this Gateway.)"
+              ],
+              [
+                "AURA+",
+                "STARVNT’s AI-powered Event Business Assistant, including the Photo Analyzer and Business Chat tools powered via server-side third-party AI APIs."
+              ],
+              [
+                "AURA+ Subscription",
+                "Plan-based or promotional entitlement granting access to AURA+ capabilities."
+              ],
+              [
+                "Promotional Offer",
+                "A time-bound launch or cohort benefit such as the 6-month complimentary AURA+ offer (code AURA6MONTHS), governed separately from paid plans."
+              ],
+              [
+                "Portfolio Content",
+                "Photographs, videos, logos, brand names, service descriptions, packages, and creative works submitted by a Partner."
+              ],
+              [
+                "Partner Data",
+                "Business, account, verification, commercial, and operational records provided by or generated for a Partner."
+              ],
+              [
+                "Customer Data",
+                "Personal or event-related information relating to a Customer or their guests shared for legitimate event coordination."
+              ],
+              [
+                "Personal Data",
+                "Any data about an individual who is identifiable by or in relation to such data, consistent with the Digital Personal Data Protection Act, 2023."
+              ],
+              [
+                "Payment Gateway",
+                "An RBI-authorized third-party payment aggregator or gateway integrated for commercial settlements, if and when live payment processing is enabled."
+              ],
+              [
+                "Third-Party Service",
+                "External infrastructure, AI, hosting, communication, mapping, or payment services operated by independent third parties."
+              ],
+              [
+                "Suspension",
+                "Temporary restriction of account visibility, enquiry eligibility, or feature access pending review or cure."
+              ],
+              [
+                "Termination",
+                "Permanent closure or deactivation of a Partner’s participation on the Platform."
+              ]
+            ]
+          }
+        },
+        {
+          "id": "terms-3",
+          "number": "3",
+          "title": "Eligibility and Registration",
+          "paragraphs": [
+            "To apply as a Partner on STARVNT, an individual applicant must be at least 18 years of age and legally competent to contract under Section 11 of the Indian Contract Act, 1872. Where the applicant is a company, LLP, partnership firm, proprietorship, or other commercial entity, the person submitting the application represents that they have valid authority to bind that business.",
+            "You must provide accurate, truthful, and current business and contact information during registration (currently: business name, primary contact person name, business email address, 10-digit Indian mobile number, primary service category, operating area, preferred plan tier, and optional promotional code).",
+            "Businesses must hold any licences, permits, food-safety registrations (such as FSSAI for caterers), venue approvals, or local statutory permissions legally required to deliver their declared services in India."
+          ],
+          "bullets": [
+            "GST Registration: GSTIN is requested only where applicable under the Central Goods and Services Tax Act, 2017 and relevant State GST laws. STARVNT does not require a Partner to possess a GST number if the Partner is legally exempt or below applicable statutory turnover thresholds.",
+            "Additional Verification Details: PAN, government-issued identity records, business registration proof, and settlement bank details may be requested during authenticated onboarding or KYC stages only where reasonably necessary and legally permitted.",
+            "Right to Review and Decline: Submitting an application does not guarantee acceptance. STARVNT may request clarifications or lawfully reject applications that are incomplete, misleading, fraudulent, outside active service areas, or non-compliant with eligibility criteria."
+          ]
+        },
+        {
+          "id": "terms-4",
+          "number": "4",
+          "title": "Partner Verification, KYC and Activation",
+          "paragraphs": [
+            "STARVNT maintains strictly separated onboarding and operational states so that Partners always understand their exact standing. Completing one stage never implies completion of the next:"
+          ],
+          "bullets": [
+            "1. Registration Submitted — Initial application received and assigned a reference ID.",
+            "2. Profile Incomplete — Required business description, service areas, pricing ranges, or portfolio details are still pending.",
+            "3. Profile Complete — Core profile fields and starter portfolio information have been submitted.",
+            "4. Verification Pending — Identity, business authenticity, and KYC documents are queued for review through authenticated workflows (Note: live KYC document upload portal is currently planned for production onboarding rollout).",
+            "5. Verification Approved — Submitted identity and business credentials have passed review.",
+            "6. Account Activated — STARVNT operations has enabled the Partner Account based on category fit and regional launch readiness.",
+            "7. Matching Eligible — The Activated Partner meets all current platform criteria to receive relevant enquiries.",
+            "8. Suspended / Restricted — Visibility, promotional benefits, or enquiry access is temporarily restricted pending review or compliance cure.",
+            "9. Rejected / Terminated — Application declined or Partner participation permanently ended."
+          ],
+          "callout": {
+            "tone": "notice",
+            "title": "Strict State Separation & No Unconfirmed SLA",
+            "body": "Profile completion is not identity verification. Verification approval is not account activation. Account activation does not guarantee enquiries. STARVNT does not promise a fixed verification turnaround time until an official operational SLA is published [BUSINESS CONFIRMATION REQUIRED]. Re-verification may be requested where legally or operationally justified, and altered or forged documents may result in immediate rejection or suspension. Partners may request correction of inaccurate account records through Partner Support."
+          }
+        },
+        {
+          "id": "terms-5",
+          "number": "5",
+          "title": "Platform Services and Limitations",
+          "paragraphs": [
+            "STARVNT is being rolled out in structured phases. To maintain strict transparency, these Terms distinguish between currently live Gateway capabilities, interactive demonstration previews, and planned production features:"
+          ],
+          "bullets": [
+            "Currently Live on this Gateway: Partner application intake, regional waitlist registration, Partner Support & Privacy Request submission, interactive Coverage Matrix filtering, canonical shareable URL & SVG QR code preview, and server-proxied AURA+ AI Photo Analyzer & Business Chat (subject to active third-party AI API availability and quotas).",
+            "Interactive Demonstration Previews (Synthetic Data Only): The Partner Workspace preview (Dashboard, Enquiries, Quotations, Bookings, Analytics) currently operates with clearly labelled synthetic illustrative data to demonstrate planned workflows. It is not a live production order-management system.",
+            "Planned / Phased Rollout Modules: Authenticated Partner Login, live KYC document upload vault, live public partner directory hosting at partner.starvnt.com, live customer enquiry routing, live payment gateway checkout, Partner Academy course delivery, verified customer reviews, community forums, and Google Maps location services."
+          ],
+          "callout": {
+            "tone": "warning",
+            "title": "Feature Availability",
+            "body": "Available features vary by partner verification state, geographic rollout, service category, plan entitlements, and external technical dependencies. Demonstration screens must not be interpreted as a representation that all shown modules are live in production today."
+          }
+        },
+        {
+          "id": "terms-6",
+          "number": "6",
+          "title": "Enquiries, Leads and Matching",
+          "paragraphs": [
+            "When live enquiry routing is enabled for Activated and Matching-Eligible Partners, enquiries represent potential customer opportunities only. STARVNT does not guarantee any minimum enquiry volume, response-to-quote conversion rate, booking value, or business revenue.",
+            "Matching and routing logic (whether manual, automated, or hybrid) is currently [BUSINESS CONFIRMATION REQUIRED — live enquiry allocation engine is not yet deployed on this Gateway]. When launched, matching criteria will be disclosed transparently and may account for verified service category, active service area, profile completeness, responsiveness, and capacity.",
+            "STARVNT does not represent a paid lead-exclusivity, guaranteed-lead, or lead-resale model unless explicitly documented in a separately approved commercial schedule."
+          ],
+          "bullets": [
+            "Partners must respond truthfully, courteously, and accurately to legitimate enquiries.",
+            "Partners must never misrepresent customer requirements, manipulate enquiry statuses, or falsely mark an enquiry as confirmed.",
+            "STARVNT may investigate duplicate, automated, fraudulent, or abusive enquiry activity.",
+            "Customer contact details shared via an enquiry may be used strictly to evaluate, quote, and coordinate the requested Event—never for unrelated spam, resale, or unauthorized solicitation."
+          ]
+        },
+        {
+          "id": "terms-7",
+          "number": "7",
+          "title": "Quotations and Pricing",
+          "paragraphs": [
+            "Partners retain sole commercial responsibility for the accuracy, completeness, and legality of every quotation issued to a Customer. Any quotation prepared using STARVNT tools or drafted with AURA+ assistance must clearly specify:"
+          ],
+          "bullets": [
+            "Detailed scope of deliverables, dates, venue assumptions, guest counts, and staffing inclusions.",
+            "Base price, applicable taxes (including GST where the Partner is registered), exclusions, travel/overtime/additional charges, payment milestones, validity period, and cancellation or rescheduling terms.",
+            "No deceptive or inflated reference discounts (\"fake discounts\") or hidden mandatory fees.",
+            "Any post-acceptance scope or price change must be communicated transparently in writing and agreed upon by the Customer before execution."
+          ],
+          "callout": {
+            "tone": "notice",
+            "title": "AI-Assisted Drafts Are Non-Binding",
+            "body": "Quotation drafts, INR ranges, or package tiers generated by AURA+ are illustrative starting points only and do not constitute binding commercial offers unless explicitly reviewed, adjusted, approved, and issued by the Partner."
+          }
+        },
+        {
+          "id": "terms-8",
+          "number": "8",
+          "title": "Bookings and Event Execution",
+          "paragraphs": [
+            "A live commercial booking and payment confirmation workflow is NOT YET IMPLEMENTED on this Gateway. Accordingly, the exact production booking confirmation mechanics (including whether confirmation requires written quote acceptance, advance payment verification, and/or STARVNT operational confirmation) remain [BUSINESS CONFIRMATION REQUIRED] prior to live booking launch.",
+            "Once a Booking is validly confirmed between a Partner and a Customer under approved booking rules:"
+          ],
+          "bullets": [
+            "The Partner is independently responsible for executing the agreed event services with professional skill, safety, punctuality, and adherence to written specifications.",
+            "The Partner must maintain clear pre-event and event-day communication, coordinate with the Venue and co-vendors, and obtain written approval for scope changes.",
+            "Force majeure events (such as severe natural calamities, government-mandated lockdowns, or civil emergencies rendering performance impossible) shall be handled in good faith in accordance with Section 56 of the Indian Contract Act, 1872 and the written cancellation terms disclosed in the accepted quotation.",
+            "Customer complaints and service disputes will follow STARVNT’s documented escalation and grievance channel once live bookings launch, without restricting either party’s statutory remedies."
+          ]
+        },
+        {
+          "id": "terms-9",
+          "number": "9",
+          "title": "Payments, Fees, Subscription and Taxes",
+          "paragraphs": [
+            "STARVNT currently displays a Free Starter tier (₹0) alongside concept paid tiers (Growth at ₹1,999/month + 18% GST and Professional at ₹3,999/month + 18% GST), both explicitly marked as Concept Plans pending final commercial and finance approval. No payment gateway (such as Razorpay or Cashfree) is currently integrated into this Gateway, and no online payments are collected on this application today.",
+            "To prevent any ambiguity prior to commercial launch, STARVNT strictly separates each financial category:"
+          ],
+          "bullets": [
+            "A. Partner Subscription Fees: Currently ₹0 for Starter; concept Growth and Professional fees are not billed until commercial approval, live checkout integration, and explicit Partner opt-in [BUSINESS CONFIRMATION REQUIRED].",
+            "B. Platform Service Fees / Commissions: Whether STARVNT charges any booking commission or transaction fee is [BUSINESS CONFIRMATION REQUIRED]. No hidden commission applies without prior written disclosure.",
+            "C. Customer Payments & D. Partner Payouts: Payment collection architecture (direct Customer-to-Partner vs. regulated payment aggregator split settlement) is [BUSINESS CONFIRMATION REQUIRED]. STARVNT does NOT currently hold escrow funds, operate as an RBI-licensed payment aggregator, or guarantee Customer payments.",
+            "E. Payment Gateway Charges: Applicable third-party gateway convenience or MDR charges will be disclosed prior to checkout once a payment gateway is integrated [BUSINESS CONFIRMATION REQUIRED].",
+            "F. Taxes (GST): Each party is responsible for its own statutory tax compliance. Where STARVNT issues paid subscription invoices, GST (currently 18% where applicable) will be itemized clearly on tax invoices. Partners remain solely responsible for charging and remitting GST on their own event services where required by law.",
+            "G. Refunds, Cancellations & Chargebacks: Exact refund eligibility, cooling-off windows, and chargeback dispute procedures are [BUSINESS CONFIRMATION REQUIRED] before paid checkout goes live.",
+            "H. Promotional Benefits: Promotional access (such as AURA6MONTHS) is tracked independently from paid billing and does not auto-convert into paid charges."
+          ]
+        },
+        {
+          "id": "terms-10",
+          "number": "10",
+          "title": "AURA+ AI Services and AI Disclaimer",
+          "paragraphs": [
+            "AURA+ provides AI-powered business assistance—currently implemented on this Gateway as the AURA+ Photo Analyzer (image-to-package and quotation drafting) and AURA+ Business Chat—via server-side requests to Google’s Gemini API (configured for gemini-4-neon with automatic fallback to gemini-4-hydrogen where quota or billing limits arise)."
+          ],
+          "bullets": [
+            "Indicative Suggestions Only: All AURA+ outputs—including visual audits, INR budget ranges, package tiers, quotation line items, and business replies—are illustrative AI suggestions, not certified market appraisals, legal advice, tax advice, or guaranteed client quotes.",
+            "Mandatory Partner Review: AI models can generate inaccurate, incomplete, outdated, or locally unsuitable estimates. You must independently verify every figure, material specification, seasonal rate, and term before presenting a quote to a Customer.",
+            "No Deceptive Use: You must not present unverified AI outputs as guaranteed deliverables or use AI-generated claims to mislead Customers.",
+            "Upload Rights & Data Hygiene: You confirm that you hold lawful rights and permissions to upload any photograph submitted to AURA+. Do NOT upload identity documents (Aadhaar/PAN/passport), bank details, confidential customer PII, or identifiable portraits of individuals without appropriate consent.",
+            "Third-Party Processing: Prompts and uploaded photographs are transmitted to a third-party AI service provider (Google Gemini API) for inference, as detailed in Section 7 of the STARVNT Privacy Policy. STARVNT does not make unverified claims regarding third-party retention or model training beyond its verified provider configuration."
+          ]
+        },
+        {
+          "id": "terms-11",
+          "number": "11",
+          "title": "AURA+ Promotional Offer",
+          "paragraphs": [
+            "STARVNT’s Founding Partner launch campaign includes a separate promotional benefit governed independently from paid platform plans:"
+          ],
+          "bullets": [
+            "Offer Code & Benefit: Code AURA6MONTHS reserves six (6) months of complimentary AURA+ subscription access at ₹0 subscription charge for eligible verified Founding Partners.",
+            "Promotional Reference Value Disclosure: Current marketing assets display a stated launch reference value of ₹29,994 + GST (while internal legal review notes ₹29,993 + GST as a proposed figure — final reconciled reference value is [BUSINESS CONFIRMATION REQUIRED] and must align with approved standalone AURA+ pricing prior to commercial launch). A promotional reference value is purely an illustrative comparison and is NEVER a cash benefit, credit balance, or guaranteed monetary saving.",
+            "Server-Validated Eligibility & Redemption: Promo code validation occurs on STARVNT’s backend. Submitting a code during registration only reserves eligibility; activation occurs only after Partner verification, account activation, and backend confirmation. Duplicate, automated, or fraudulent redemptions may be rejected or revoked.",
+            "Duration & Expiry Rules: The complimentary period runs for six (6) calendar months from promotional activation. A proposed hard sunset rule (earlier of 6 calendar months from activation or 31 May 2027) is currently a proposed business rule requiring confirmation [BUSINESS CONFIRMATION REQUIRED] and is not yet hardcoded in backend enforcement.",
+            "Strictly Zero Automatic Paid Conversion: Upon expiry of the 6-month complimentary AURA+ period, STARVNT will NEVER automatically enroll you in a paid subscription or charge any payment method without your separate, explicit affirmative consent (consistent with CCPA Guidelines for Prevention and Regulation of Dark Patterns, 2023).",
+            "Modification or Cancellation: STARVNT may modify or close new cohort enrollments prospectively for lawful operational reasons, without unfairly revoking already-activated valid benefits except in cases of fraud or material breach."
+          ]
+        },
+        {
+          "id": "terms-12",
+          "number": "12",
+          "title": "Partner Portfolio, Photographs and Intellectual Property",
+          "paragraphs": [
+            "Partners retain full ownership of their original logos, brand names, photographs, videos, service descriptions, and portfolio materials (\"Portfolio Content\"). By submitting Portfolio Content to STARVNT, you represent and warrant that you own the intellectual property rights or hold valid written licences and permissions (including copyrighted music clearances and client/guest model releases where individuals are identifiable) under the Copyright Act, 1957 and Trade Marks Act, 1999.",
+            "STARVNT strictly separates four distinct content permissions—registering an account NEVER grants blanket consent to all four:"
+          ],
+          "bullets": [
+            "1. Public Partner Profile Display: Necessary non-exclusive, revocable licence to host, resize, and display your approved Portfolio Content on your own STARVNT profile and canonical shareable link/QR preview.",
+            "2. Optional STARVNT Marketing & Advertising Campaigns: Strictly separate, unticked-by-default opt-in permission authorizing STARVNT to feature selected portfolio assets in central STARVNT marketing campaigns. May be withdrawn at any time.",
+            "3. Social Media Features: Governed by explicit opt-in consent and separate from a Partner sharing their own profile link on WhatsApp or social media.",
+            "4. Customer or Guest Images & Testimonials: Named testimonials, portraits, and client event photos featuring identifiable guests require appropriate client/subject permission obtained by the Partner before submission."
+          ],
+          "callout": {
+            "tone": "notice",
+            "title": "Takedown & Infringement Reports",
+            "body": "STARVNT may restrict or remove Portfolio Content that is alleged or found to be unlawful, infringing, plagiarized, or lacking required permissions. Rights holders or affected individuals may submit takedown notices through Partner Support or [OFFICIAL LEGAL CONTACT EMAIL]."
+          }
+        },
+        {
+          "id": "terms-13",
+          "number": "13",
+          "title": "Customer Data and Confidentiality",
+          "paragraphs": [
+            "When live customer enquiries and bookings are active, Partners may receive Customer Data solely to respond to event briefs and execute confirmed services. Partners agree to:"
+          ],
+          "bullets": [
+            "Use Customer Data exclusively for legitimate enquiry, quotation, and Event delivery communications.",
+            "Maintain strict confidentiality and implement reasonable technical and organizational safeguards to prevent unauthorized access, leakage, or misuse.",
+            "Never sell, rent, trade, scrape, or transfer Customer Data to unrelated third parties or unsolicited marketing lists.",
+            "Promptly notify STARVNT upon becoming aware of any suspected unauthorized access, loss, or disclosure involving Customer Data received via STARVNT.",
+            "Delete or securely return Customer Data when no longer needed for the Event or statutory invoicing/tax retention obligations, and respect customer communication opt-outs."
+          ],
+          "callout": {
+            "tone": "notice",
+            "title": "Independent Data Protection Roles",
+            "body": "STARVNT and each Partner do not automatically share the same legal data-protection role for every processing activity. Depending on the interaction, a Partner may act as an independent Data Fiduciary when determining how it processes customer details for offline event execution, billing, or photography delivery."
+          }
+        },
+        {
+          "id": "terms-14",
+          "number": "14",
+          "title": "Google Maps and Location Services",
+          "paragraphs": [
+            "CURRENT IMPLEMENTATION STATUS: The foundational Google Maps JavaScript API React provider (@vis.gl/react-google-maps and MapProvider React Context, configured for India locale) is installed in the application codebase, but remains INACTIVE unless a valid Google Maps API key (VITE_GOOGLE_MAPS_API_KEY) is configured in the deployment environment. Interactive map widgets, Places Autocomplete, Geocoding, Routes, and browser geolocation (navigator.geolocation) are NOT yet mounted in user-facing screens; service areas are currently selected manually from structured regional lists.",
+            "When Google Maps or location features are enabled with an active API key and interactive map interfaces:"
+          ],
+          "bullets": [
+            "Distance, travel duration, and route previews will be indicative third-party estimates only—never a binding guarantee of arrival time, travel feasibility, or travel fees.",
+            "Browser geolocation will be requested only after explicit user action and permission, with manual address entry always available.",
+            "Partners must never submit deceptive locations, and STARVNT will maintain a strict distinction between private residential addresses and approved public business locations.",
+            "Active Google Maps functionality is also subject to Google’s Maps/Google Earth Additional Terms of Service (maps.google.com/help/terms_maps) and Google Privacy Policy (policies.google.com/privacy), and Google Maps content may not be scraped or used to train AI/ML models."
+          ]
+        },
+        {
+          "id": "terms-15",
+          "number": "15",
+          "title": "Partner Conduct and Prohibited Activities",
+          "paragraphs": [
+            "Partners must conduct business ethically and lawfully. The following activities are strictly prohibited on STARVNT:"
+          ],
+          "bullets": [
+            "Submitting false business details, forged KYC/identity records, fake reviews, or plagiarized/stolen portfolio photographs.",
+            "Impersonating another vendor, venue, customer, or STARVNT representative, or making unauthorized claims of STARVNT endorsement or affiliation.",
+            "Publishing misleading advertisements, hidden mandatory fees, or deceptive pricing.",
+            "Unlawful discrimination, harassment, threats, abusive conduct, or unsolicited spam.",
+            "Unauthorized harvesting, scraping, automated crawling, or resale of Customer Data or Partner listings.",
+            "Manipulating enquiry statuses, referral attribution, rankings, or promotional codes (including duplicate redemption of AURA6MONTHS).",
+            "Attempting unauthorized access, introducing malware, bypassing rate limits, or circumventing platform security controls."
+          ],
+          "callout": {
+            "tone": "notice",
+            "title": "Proportionate Enforcement",
+            "body": "STARVNT applies proportionate enforcement based on severity and repeat conduct—ranging from written warnings and content removal to KYC re-verification, temporary restriction, or account termination."
+          }
+        },
+        {
+          "id": "terms-16",
+          "number": "16",
+          "title": "Reviews, Ratings and Testimonials",
+          "paragraphs": [
+            "Live customer reviews and verified rating displays are currently PLANNED / NOT YET IMPLEMENTED on this Gateway. Sample rating references displayed in preview mockups are explicitly labelled as illustrative placeholders.",
+            "Once live reviews are enabled: reviews must originate from genuine, verifiable interactions; STARVNT strictly prohibits paid, fabricated, incentivized-positive, or retaliatory reviews; STARVNT does not guarantee any rating score or positive feedback; and Partners will have a documented support channel to report abusive, defamatory, or fraudulent reviews for moderation review."
+          ]
+        },
+        {
+          "id": "terms-17",
+          "number": "17",
+          "title": "Suspension, Restriction and Termination",
+          "paragraphs": [
+            "STARVNT may impose temporary restrictions, require KYC re-verification, suspend visibility, revoke misused promotional benefits, or terminate a Partner Account on legitimate grounds including material breach of these Terms, suspected fraud, forged documentation, intellectual property infringement, unlawful conduct, or security threats."
+          ],
+          "bullets": [
+            "Notice & Opportunity to Respond: Except where immediate action is legally required or necessary to prevent active fraud, harm, or security compromise, STARVNT will provide reasonable written notice stating the basis of the action and an opportunity to respond or cure via Partner Support.",
+            "Pending Obligations: Termination or suspension does not automatically extinguish a Partner’s existing contractual obligations to Customers for confirmed Events or any undisputed unpaid invoices.",
+            "Voluntary Closure & Appeals: Partners may request account closure at any time via Partner Support, and may appeal a suspension or rejection through our grievance/support review channel.",
+            "Post-Termination Data Handling: Upon termination, public profile visibility is removed while essential compliance, consent, tax, and dispute records are retained solely as set out in Section 13 of the STARVNT Privacy Policy."
+          ]
+        },
+        {
+          "id": "terms-18",
+          "number": "18",
+          "title": "Availability, Maintenance and Technical Limitations",
+          "paragraphs": [
+            "STARVNT strives to maintain reliable platform operations, but does not promise uninterrupted or 100% uptime unless agreed in a separate written Service Level Agreement (SLA). Access may occasionally be impacted by planned maintenance, infrastructure upgrades, network disruptions, third-party hosting or AI API outages (such as Gemini API quota/billing interruptions), synchronization delays, or security incident mitigation."
+          ]
+        },
+        {
+          "id": "terms-19",
+          "number": "19",
+          "title": "Limitation of Liability",
+          "paragraphs": [
+            "To the maximum extent permitted by applicable Indian law:"
+          ],
+          "bullets": [
+            "STARVNT’s responsibility is limited to providing its own platform software and disclosed services with reasonable care.",
+            "Partners are solely responsible for their independent event service delivery, staff, subcontractors, venue safety, food hygiene, equipment, and commercial agreements with Customers.",
+            "STARVNT is not liable for indirect, incidental, consequential, or speculative losses (such as loss of anticipated bookings, lost profits, or reputational loss arising from third-party outages, AI output inaccuracies not verified by the Partner, or independent Customer-Partner disputes).",
+            "Maximum aggregate liability cap for paid services (if and when paid subscriptions launch) is [BUSINESS & LEGAL CONFIRMATION REQUIRED — e.g., capped at subscription fees actually paid by the Partner to STARVNT in the preceding 3 to 6 months].",
+            "Statutory Carve-Out: Nothing in these Terms limits or excludes liability for fraud, wilful misconduct, gross negligence, death or personal injury caused by negligence, or any liability that cannot lawfully be excluded or limited under Indian law."
+          ]
+        },
+        {
+          "id": "terms-20",
+          "number": "20",
+          "title": "Indemnification",
+          "paragraphs": [
+            "To a reasonable and proportionate extent, you agree to indemnify and hold harmless the Company and its officers and employees from third-party claims, direct losses, or statutory penalties directly arising from: (a) fraudulent or forged information or KYC documents submitted by you; (b) your unauthorized upload or infringement of third-party copyright, trademark, or privacy rights in Portfolio Content; (c) your breach of Customer Data confidentiality obligations; (d) unlawful or negligent delivery of your independent event services; or (e) wilful misuse of the Platform or promotional offers—excluding any losses caused by STARVNT’s own negligence or breach."
+          ]
+        },
+        {
+          "id": "terms-21",
+          "number": "21",
+          "title": "Dispute Resolution and Governing Law",
+          "paragraphs": [
+            "These Terms are governed by and construed in accordance with the laws of India.",
+            "Good-Faith Resolution: Before initiating formal legal proceedings, both parties agree to attempt good-faith resolution by submitting a written notice of dispute to STARVNT’s Support / Grievance channel and allowing thirty (30) calendar days for review and discussion.",
+            "Jurisdiction & Escalation: Exclusive court jurisdiction and any optional arbitration seat (for example, courts at Kolkata, West Bengal) are [BUSINESS & LEGAL CONFIRMATION REQUIRED — must be aligned with the verified registered office address of the Company]. Nothing in this clause unlawfully restricts statutory remedies available before appropriate Indian courts, consumer commissions, or regulatory bodies."
+          ]
+        },
+        {
+          "id": "terms-22",
+          "number": "22",
+          "title": "Changes to Terms",
+          "paragraphs": [
+            "STARVNT may update these Terms to reflect new product capabilities, legal changes, or operational refinements. Each version carries a distinct version number, publication date, and effective date.",
+            "For material changes affecting Partner rights, fees, or obligations, STARVNT will provide advance notice via the Platform and/or registered email before the new effective date and will require fresh affirmative acceptance where legally or contractually required. If you do not agree to updated Terms, you may discontinue use of the Platform and request account closure prior to the effective date."
+          ]
+        },
+        {
+          "id": "terms-23",
+          "number": "23",
+          "title": "Contact and Grievance Redressal",
+          "paragraphs": [
+            "For legal notices, contractual queries, takedown requests, or Partner grievances, please use the official channels below (placeholders marked below must be populated with verified corporate details prior to commercial launch):"
+          ],
+          "table": {
+            "headers": [
+              "Contact Field",
+              "Verified Value / Confirmation Placeholder"
+            ],
+            "rows": [
+              [
+                "Legal Entity Name",
+                "[INSERT REGISTERED LEGAL ENTITY NAME — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Entity Type",
+                "[Proprietorship / Partnership / LLP / Private Limited — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Registered Office Address",
+                "[INSERT REGISTERED OFFICE ADDRESS — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Operating Business Address",
+                "[INSERT OPERATING BUSINESS ADDRESS — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Official Legal Email",
+                "[OFFICIAL LEGAL CONTACT EMAIL — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Official Support Email",
+                "partners@starvnt.com [VERIFY ACTIVE MONITORED INBOX]"
+              ],
+              [
+                "Grievance Officer / Contact Designation",
+                "[INSERT DESIGNATION & NAME ONCE FORMALLY APPOINTED — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Grievance Email",
+                "[OFFICIAL GRIEVANCE CONTACT EMAIL — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Official Support Phone",
+                "[INSERT APPROVED PHONE NUMBER OR REMOVE IF EMAIL-ONLY]"
+              ],
+              [
+                "Acknowledgement Timeline",
+                "[CONFIRM SLA — e.g., within 48 hours where IT/E-Commerce Rules apply]"
+              ],
+              [
+                "Resolution Timeline",
+                "[CONFIRM SLA — e.g., within 15–30 days in line with applicable Indian rules]"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    "privacy": {
+      "key": "privacy",
+      "documentId": "starvnt-privacy-policy",
+      "title": "STARVNT PRIVACY POLICY",
+      "shortTitle": "Privacy Policy",
+      "subtitle": "Transparent explanation of how STARVNT collects, uses, processes, shares, protects, retains, and deletes personal data across the STARVNT Partner Growth Gateway.",
+      "version": "1.0-draft",
+      "status": "DRAFT_PENDING_REVIEW",
+      "effectiveDate": "[INSERT APPROVED EFFECTIVE DATE]",
+      "publicationDate": "23 November 2026",
+      "lastUpdated": "23 November 2026",
+      "jurisdiction": "India",
+      "language": "English",
+      "audience": "Website visitors, partner applicants, registered and activated partners, customers, event organizers, support requesters, and AURA+ AI users.",
+      "contactEmailPlaceholder": "[PRIVACY REQUEST EMAIL]",
+      "reviewNotice": "PRE-PUBLICATION PRIVACY & LEGAL NOTICE: This policy accurately reflects the verified technical state of the STARVNT Partner Growth Gateway as of 23 November 2026. Items marked [BUSINESS CONFIRMATION REQUIRED] or [RETENTION PERIOD TO BE APPROVED] require final sign-off by STARVNT leadership and Indian privacy counsel before commercial publication.",
+      "clauses": [
+        {
+          "id": "privacy-1",
+          "number": "1",
+          "title": "Introduction",
+          "paragraphs": [
+            "This Privacy Policy explains how [INSERT REGISTERED LEGAL ENTITY NAME] (\"STARVNT\", \"Company\", \"we\", \"us\", or \"our\"), with registered office at [INSERT REGISTERED OFFICE ADDRESS], collects, uses, stores, discloses, protects, retains, and deletes personal information in connection with the STARVNT Partner Growth Gateway and related services.",
+            "STARVNT is guided by core data-protection principles: purpose limitation, data minimization, clear standalone notice, explicit granular consent, accuracy, storage limitation, reasonable security safeguards, and accountability.",
+            "This Privacy Policy should be read alongside the STARVNT Partner Terms & Conditions. Accepting the Partner Terms & Conditions is NOT treated as blanket consent for optional marketing or optional portfolio promotional use."
+          ]
+        },
+        {
+          "id": "privacy-2",
+          "number": "2",
+          "title": "Scope and User Categories",
+          "paragraphs": [
+            "This Privacy Policy applies to the STARVNT Partner Growth Gateway web application and associated backend APIs. Different user groups provide different categories of information depending on the features they use:"
+          ],
+          "bullets": [
+            "Website Visitors browsing public information, coverage availability, plans, and FAQs.",
+            "Partner Applicants submitting onboarding applications or regional expansion waitlist requests.",
+            "Registered & Activated Partners managing profiles, portfolios, enquiries, quotations, and bookings (as production workspace modules roll out).",
+            "Users of AURA+ AI Tools submitting event prompts or uploading venue/decor/catering photos for automated suggestions.",
+            "Support & Privacy Requesters submitting tickets, privacy rights requests, or grievances.",
+            "Customers & Event Organizers (applicable when customer-facing discovery, enquiries, and booking features launch)."
+          ]
+        },
+        {
+          "id": "privacy-3",
+          "number": "3",
+          "title": "Personal Information Collected (Verified Inventory)",
+          "paragraphs": [
+            "We describe both the data currently collected by live endpoints on this Gateway and data categories designated for planned production workflows (explicitly labelled so we never overstate or understate actual collection):"
+          ],
+          "bullets": [
+            "A. Account & Application Information (LIVE): Contact person name, business email address, 10-digit Indian mobile number, application reference ID, submission timestamp, operational state flags, and consent version records. (Login credentials/passwords are NOT currently collected because user authentication is not yet implemented on this Gateway; when implemented, plaintext passwords will never be stored or exposed.)",
+            "B. Business Information (LIVE): Business name, primary service category, operating region, preferred plan tier, optional promotional code, and preview business name/area entered in the QR Studio. (Website/social links, GSTIN where applicable, and PAN are PLANNED for full onboarding.)",
+            "C. KYC & Verification Information (PLANNED — NOT COLLECTED ON THIS GATEWAY YET): Identity documents, business registration proof, verification metadata, and review outcomes will be collected only via authenticated verification workflows once deployed and will never be exposed on public partner profiles.",
+            "D. Location Information (PARTIAL / MANUAL ONLY): Currently limited to manually selected operating region and user-typed city/area strings (for example, in the AURA+ Photo Analyzer or QR preview). While the MapProvider SDK wrapper (@vis.gl/react-google-maps) is installed in the codebase, it remains inactive without a configured VITE_GOOGLE_MAPS_API_KEY, and precise latitude/longitude, Google Places inputs, and browser geolocation are NOT currently collected on user-facing screens.",
+            "E. Portfolio & Media (PARTIAL): Photographs temporarily uploaded by users into the AURA+ Photo Analyzer for server-side AI inference. Persistent partner portfolio galleries, videos, and logos are PLANNED for full partner profiles.",
+            "F. Commercial & Transaction Information (DEMO / PLANNED): Partner Workspace enquiries, quotations, and bookings currently use synthetic illustrative demo data in browser state only. Live payment processing, invoices, and transaction references are NOT currently active; STARVNT does not collect or store payment card numbers.",
+            "G. Communication & Consent Information (LIVE): Support ticket submissions (name, email, topic, message), regional waitlist submissions (business name, email, phone, category, region), privacy/grievance requests, and structured consent/withdrawal audit records.",
+            "H. Technical Information (VERIFIED MINIMAL): Standard HTTP request metadata received by our Express server during API requests and server error/warning logs (excluding sensitive personal payloads). STARVNT does NOT currently operate third-party ad trackers, behavioral analytics scripts, or invasive device fingerprinting."
+          ]
+        },
+        {
+          "id": "privacy-4",
+          "number": "4",
+          "title": "Purpose of Data Processing",
+          "paragraphs": [
+            "STARVNT processes personal data solely for specific, explicit, and lawful purposes:"
+          ],
+          "table": {
+            "headers": [
+              "Purpose",
+              "Data Categories",
+              "Reason & Current Status"
+            ],
+            "rows": [
+              [
+                "Partner application & waitlist intake",
+                "Contact & business data",
+                "Record partner onboarding interest, validate eligibility, and notify applicants when regional cohorts open (LIVE)."
+              ],
+              [
+                "Consent & legal recordkeeping",
+                "Consent metadata & timestamps",
+                "Maintain auditable evidence of Terms acceptance, Privacy notice acknowledgement, and optional opt-in/withdrawal choices (LIVE)."
+              ],
+              [
+                "Partner verification (KYC)",
+                "Business & KYC data",
+                "Verify partner authenticity and eligibility via authenticated review queues (PLANNED)."
+              ],
+              [
+                "Public profile & QR preview",
+                "Business name, category, service area",
+                "Generate canonical shareable partner URLs and SVG QR codes (LIVE preview; public directory PLANNED)."
+              ],
+              [
+                "Enquiry, quotation & booking management",
+                "Partner & customer commercial data",
+                "Facilitate event briefs, itemized quotes, and confirmed event execution (DEMO / PLANNED)."
+              ],
+              [
+                "Payments & invoicing",
+                "Transaction & tax data",
+                "Process approved subscriptions or bookings and issue GST-compliant invoices where applicable (PLANNED)."
+              ],
+              [
+                "AURA+ AI Business Assistant",
+                "User prompts & uploaded event photos",
+                "Provide AI-generated visual audits, INR package tiers, and quotation drafts via server-side Gemini API proxy (LIVE)."
+              ],
+              [
+                "Location & mapping services",
+                "Manual region/city (Google Maps planned)",
+                "Match coverage availability; future Google Maps features when enabled (MANUAL LIVE / MAPS PLANNED)."
+              ],
+              [
+                "Partner support & privacy redressal",
+                "Contact, ticket & request details",
+                "Respond to onboarding questions, privacy rights requests, and grievances (LIVE)."
+              ],
+              [
+                "Security & platform integrity",
+                "Minimal technical/operational logs",
+                "Prevent abuse, validate inputs, and protect service reliability (LIVE)."
+              ],
+              [
+                "Optional promotional communications",
+                "Contact details & channel preferences",
+                "Send STARVNT updates/offers ONLY where explicit opt-in consent is granted (OPT-IN ONLY)."
+              ],
+              [
+                "Legal & regulatory compliance",
+                "Relevant statutory records",
+                "Comply with lawful government orders, tax rules, and applicable Indian laws."
+              ]
+            ]
+          }
+        },
+        {
+          "id": "privacy-5",
+          "number": "5",
+          "title": "Lawful Basis, Notice and Consent (Indian Legal Framework)",
+          "paragraphs": [
+            "As of 23 November 2026, India’s personal data protection framework is in a statutory transition period:"
+          ],
+          "bullets": [
+            "Information Technology Act, 2000 & IT (SPDI) Rules, 2011: Currently in force during the transition window, governing reasonable security practices and sensitive personal data.",
+            "Digital Personal Data Protection Act, 2023 (DPDP Act) & DPDP Rules, 2025 (notified by MeitY on 14 November 2025): Operating under a staggered commencement schedule—administrative/DPBI provisions commenced 14 November 2025, Consent Manager provisions commenced 14 November 2026, and core Data Fiduciary compliance obligations (including Rule 3 standalone itemized notices, Data Principal rights, and 72-hour breach notifications) are scheduled to commence on 14 May 2027.",
+            "Our Consent Standard Today: STARVNT is designing its consent architecture ahead of full DPDP enforcement—providing clear, itemized notices, unticked-by-default checkboxes, strict separation between required contractual/onboarding acceptance and optional marketing/portfolio permissions, and straightforward consent withdrawal.",
+            "Effect of Withdrawal: You may withdraw optional consent (such as promotional communications or central portfolio marketing) at any time with ease comparable to giving consent. Withdrawal stops future processing for that optional purpose without invalidating lawful processing carried out prior to withdrawal. Where a statutory \"certain legitimate use\" or legal obligation applies under Indian law, processing continues only to the extent strictly permitted by law."
+          ]
+        },
+        {
+          "id": "privacy-6",
+          "number": "6",
+          "title": "Third-Party Service Providers (Verified Audit)",
+          "paragraphs": [
+            "We disclose ONLY third-party services verified as active in the current codebase, and explicitly mark planned categories so no provider is misrepresented as active:"
+          ],
+          "table": {
+            "headers": [
+              "Provider / Category",
+              "Status",
+              "Data Shared & Purpose",
+              "Role & Cross-Border Note"
+            ],
+            "rows": [
+              [
+                "Google AI / Gemini API (@google/genai)",
+                "ACTIVE (Server-Side)",
+                "User text prompts, city/category context, and uploaded event photos sent to /api/aura/analyze-image and /api/aura/chat for AI inference.",
+                "External AI service provider. Data may be processed on Google Cloud servers outside India. Subject to Google API Terms & Privacy Policy."
+              ],
+              [
+                "Google Fonts (fonts.googleapis.com)",
+                "ACTIVE (Frontend CSS)",
+                "Browser requests font stylesheets (DM Sans, Plus Jakarta Sans, JetBrains Mono), exposing standard IP/user-agent headers to Google.",
+                "Static web font delivery."
+              ],
+              [
+                "Cloud Hosting Infrastructure",
+                "ACTIVE (Deployment Environment)",
+                "Hosts Node.js/Express application and serves web assets; currently uses in-memory arrays (resets on restart) with no external production database connected yet.",
+                "Infrastructure processor [CONFIRM PRODUCTION HOST REGION BEFORE LAUNCH]."
+              ],
+              [
+                "Database & File Storage Providers",
+                "PLANNED / NOT ACTIVE",
+                "No persistent database or KYC file storage bucket is connected in this build.",
+                "To be disclosed with region and DPA details prior to production launch."
+              ],
+              [
+                "Google Maps Platform (@vis.gl/react-google-maps)",
+                "INSTALLED INFRASTRUCTURE (Inactive Without API Key)",
+                "MapProvider React Context is installed in the codebase but does NOT load Google Maps scripts unless VITE_GOOGLE_MAPS_API_KEY is configured; no interactive map/Places/geolocation screens are mounted yet.",
+                "When activated with an API key, browser requests go to Google LLC (may process outside India) under Google Maps End User Terms & Google Privacy Policy."
+              ],
+              [
+                "Payment Gateways (e.g., Razorpay / Cashfree)",
+                "PLANNED / NOT ACTIVE",
+                "No payment gateway is integrated in this build.",
+                "Will be disclosed prior to enabling paid checkout."
+              ],
+              [
+                "Analytics / Error Monitoring / Email ESPs",
+                "PLANNED / NOT ACTIVE",
+                "No third-party analytics SDKs, ad pixels, or external email automation pipelines are active in this build.",
+                "Will be disclosed prior to activation."
+              ]
+            ]
+          }
+        },
+        {
+          "id": "privacy-7",
+          "number": "7",
+          "title": "AURA+ AI and Gemini Processing",
+          "paragraphs": [
+            "When you use AURA+ Photo Analyzer or AURA+ Business Chat, your prompts, event context (category, guest count, city), and uploaded image bytes are sent over HTTPS to STARVNT’s backend server (/api/aura/*), which forwards them server-side to Google’s Gemini API (gemini-4-neon, with automatic fallback to gemini-4-hydrogen on quota/billing limits)."
+          ],
+          "bullets": [
+            "What STARVNT’s Server Does: In the current codebase, uploaded images and prompts are held only in volatile request memory to complete the API call and return the structured JSON or text response. STARVNT’s application server does NOT write uploaded AURA+ photos to local disk or a persistent database.",
+            "What We Cannot Unilaterally Guarantee: External API data handling, transient abuse-monitoring logs, and retention practices on Google’s Gemini API infrastructure depend on Google’s applicable API tier terms (paid vs. free-tier developer API terms). Until STARVNT confirms an enterprise/paid Zero-Data-Retention contractual arrangement [TECHNICAL & LEGAL CONFIRMATION REQUIRED], STARVNT does NOT claim that third-party AI inputs are never retained or never processed under Google’s standard API terms.",
+            "Service Unavailability: If the AI provider is unavailable or API credits/quotas are exhausted, AURA+ returns a clear error notice and never fabricates fake AI results."
+          ],
+          "callout": {
+            "tone": "warning",
+            "title": "Important User Safety Warning for AURA+ Uploads",
+            "body": "Do NOT upload government IDs (Aadhaar, PAN, passport), bank statements, confidential client contact sheets, medical/sensitive personal data, or identifiable photographs of guests or children without lawful rights and permissions."
+          }
+        },
+        {
+          "id": "privacy-8",
+          "number": "8",
+          "title": "Google Maps and Geolocation Privacy",
+          "paragraphs": [
+            "The foundational Google Maps JavaScript API React provider (@vis.gl/react-google-maps and MapProvider) is installed in the application codebase (configured for Indian locale), but remains inactive unless VITE_GOOGLE_MAPS_API_KEY is configured, and no interactive map views, Places searches, coordinate pickers, or browser geolocation (navigator.geolocation) prompts are mounted in user-facing UI yet. Currently, users select service regions manually from a dropdown list or type city/area names.",
+            "When Google Maps or geolocation features are activated in user-facing screens: browser geolocation will only be requested after explicit user permission, manual location entry will remain available, private residential addresses will never be published automatically, public business location pins will follow explicit partner visibility controls, and Google’s independent processing will be governed by Google’s Maps End User Terms and Google Privacy Policy (over which STARVNT does not exercise exclusive control)."
+          ]
+        },
+        {
+          "id": "privacy-9",
+          "number": "9",
+          "title": "Public Profile and Visibility Controls",
+          "paragraphs": [
+            "When live public partner profiles launch (currently previewed in the Visibility & QR Studio), STARVNT enforces a clear boundary between public directory information and confidential private records:"
+          ],
+          "table": {
+            "headers": [
+              "Publicly Visible (Only Where Approved & Enabled)",
+              "Strictly Private (Never Exposed Publicly)"
+            ],
+            "rows": [
+              [
+                "Business name, logo, and business description",
+                "Passwords, session tokens, and authentication secrets"
+              ],
+              [
+                "Approved service categories and operating service areas",
+                "Private KYC / identity documents (PAN, Aadhaar, licences)"
+              ],
+              [
+                "Approved business portfolio photographs & captions",
+                "Private residential addresses and home coordinates"
+              ],
+              [
+                "Public business address (only if expressly enabled)",
+                "Private customer contact details and event briefs"
+              ],
+              [
+                "Approved public business contact channels & profile URL",
+                "Bank/payment credentials, internal KYC review notes, security logs, and confidential support tickets"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "privacy-10",
+          "number": "10",
+          "title": "Marketing Consent and Social Sharing",
+          "paragraphs": [
+            "STARVNT separates essential service communications from optional promotional communications and portfolio marketing:"
+          ],
+          "bullets": [
+            "Essential Platform Service Notices (Non-Marketing): Application receipts, KYC/verification status updates, security alerts, legal/policy notices, and support ticket replies.",
+            "Optional Promotional Communications (Unticked Opt-In Only): Promotional emails, promotional SMS, and promotional WhatsApp messages are sent ONLY if you explicitly opt in and select those specific channels. You can opt out or withdraw consent at any time.",
+            "Optional Portfolio & Social Media Marketing (Separate Opt-In Only): Using your selected portfolio photos in STARVNT central social media posts or paid advertisements requires a separate, unticked-by-default opt-in.",
+            "Self-Sharing Does Not Equal Ad Licence: Copying your canonical STARVNT profile link or sharing your own profile via WhatsApp NEVER grants STARVNT permission to use your portfolio in advertisements.",
+            "Third-Party Marketing: STARVNT does NOT sell or rent Partner or Customer contact details to unrelated third-party marketers."
+          ]
+        },
+        {
+          "id": "privacy-11",
+          "number": "11",
+          "title": "Cookies and Similar Technologies (Verified Technical Audit)",
+          "paragraphs": [
+            "Based on a direct audit of the current STARVNT Partner Growth Gateway codebase:"
+          ],
+          "bullets": [
+            "HTTP Cookies Set by STARVNT: NONE. Our Express server does not currently set authentication cookies, session cookies, analytics cookies, or advertising cookies.",
+            "Browser Storage (localStorage / sessionStorage): NONE used to store personal data, tracking IDs, or consent evidence. Consent records are validated and stored server-side.",
+            "Third-Party Tracking Pixels / Analytics SDKs: NONE installed.",
+            "Future Cookie Governance: If essential session cookies or optional analytics cookies are introduced in future releases, STARVNT will update this table with exact cookie names, purposes, and durations and present a compliant preference manager separating essential cookies from optional categories."
+          ]
+        },
+        {
+          "id": "privacy-12",
+          "number": "12",
+          "title": "Data Sharing and Disclosure",
+          "paragraphs": [
+            "STARVNT does NOT sell personal information. Personal data may be disclosed strictly on a need-to-know basis:"
+          ],
+          "bullets": [
+            "With Customers or Partners solely to coordinate legitimate event enquiries or confirmed Bookings (when live workflows launch).",
+            "With authorized STARVNT personnel bound by confidentiality obligations for onboarding review, support, and platform security.",
+            "With contracted technical service providers (currently Google Gemini API for AURA+ inference and cloud hosting infrastructure) strictly to deliver requested functionality.",
+            "With regulated payment providers where applicable once live billing is enabled.",
+            "With Indian law-enforcement, courts, tax authorities, or regulators when legally compelled under applicable law.",
+            "In connection with a lawful merger, acquisition, or corporate restructuring, subject to equivalent data-protection safeguards and advance notice where required."
+          ]
+        },
+        {
+          "id": "privacy-13",
+          "number": "13",
+          "title": "Data Retention and Deletion",
+          "paragraphs": [
+            "CURRENT PROTOTYPE STORAGE NOTE: In this current Gateway build, submitted partner applications, waitlist entries, support tickets, consent records, and privacy requests are held in volatile server memory and clear upon server restart. Prior to production database deployment, STARVNT leadership and Indian legal counsel must formally approve the retention schedule below:"
+          ],
+          "table": {
+            "headers": [
+              "Data Category",
+              "Purpose of Retention",
+              "Proposed Retention Status",
+              "Deletion / Anonymization"
+            ],
+            "rows": [
+              [
+                "Partner application & account records",
+                "Manage onboarding, verification states, and account lifecycle",
+                "[RETENTION PERIOD TO BE APPROVED] (Internal recommendation: active account life + up to 3 years post-closure unless statutory dispute/tax hold applies)",
+                "Erasure or anonymization upon verified closure request, subject to statutory holds."
+              ],
+              [
+                "KYC & verification documents (Planned)",
+                "Verify partner identity and prevent fraud",
+                "[RETENTION PERIOD TO BE APPROVED] (Internal recommendation: minimum period legally required; delete promptly after rejection/closure where permitted)",
+                "Secure deletion after approved retention expiry."
+              ],
+              [
+                "Invoices, GST & payment records (Planned)",
+                "Comply with Indian tax, GST, and accounting statutes",
+                "[RETENTION PERIOD TO BE APPROVED] (Verify statutory CGST/Income Tax periods with Chartered Accountant & counsel)",
+                "Retained only for mandatory statutory period, then purged/archived securely."
+              ],
+              [
+                "Support tickets & grievance logs",
+                "Resolve disputes and evidence grievance redressal",
+                "[RETENTION PERIOD TO BE APPROVED] (Internal recommendation: 2–3 years after ticket closure)",
+                "Anonymized or deleted after expiry."
+              ],
+              [
+                "AURA+ uploaded photos & prompts",
+                "Generate real-time AI suggestions",
+                "Not persisted by STARVNT server in current build; third-party API retention subject to verified Gemini API tier terms [TECHNICAL CONFIRMATION REQUIRED]",
+                "User may clear browser preview immediately; no server gallery stored currently."
+              ],
+              [
+                "Consent & withdrawal audit logs",
+                "Demonstrate lawful notice, opt-in, and withdrawal compliance",
+                "[RETENTION PERIOD TO BE APPROVED] (Internal recommendation: duration of processing + statutory limitation period)",
+                "Protected immutable audit log; purged when statutory limitation expires."
+              ],
+              [
+                "Security & ICT server logs",
+                "Detect intrusions and comply with applicable cyber directions",
+                "[RETENTION PERIOD TO BE APPROVED] (Evaluate CERT-In 180-day ICT log retention applicability with legal counsel)",
+                "Rolling automatic rotation and deletion."
+              ],
+              [
+                "Backups (Planned)",
+                "Disaster recovery when production DB launches",
+                "[RETENTION PERIOD TO BE APPROVED] (Internal recommendation: encrypted rolling 30–90 day backups)",
+                "Overwritten on rolling backup cycle."
+              ]
+            ]
+          }
+        },
+        {
+          "id": "privacy-14",
+          "number": "14",
+          "title": "Data Security (Implemented vs. Planned Controls)",
+          "paragraphs": [
+            "STARVNT does not claim security certifications (such as ISO/IEC 27001 or SOC 2) that have not been independently audited and obtained. Below is an honest breakdown of verified technical safeguards versus planned production controls:"
+          ],
+          "bullets": [
+            "Implemented in Current Build: Server-side API key isolation (GEMINI_API_KEY stays strictly in server environment variables, never shipped to browser bundles); strict server-side input validation and payload size limits; safe React text rendering (preventing untrusted HTML injection); immutable in-memory consent event recording; and minimization of personal data in server logs.",
+            "Planned for Production Rollout: Persistent encrypted database storage (encryption at rest), authenticated user sessions with salted password hashing (bcrypt/scrypt) or OAuth/Firebase Auth, granular Role-Based Access Control (RBAC) for admin/KYC queues, API rate limiting, automated encrypted backups, centralized security monitoring, and documented staff access reviews."
+          ]
+        },
+        {
+          "id": "privacy-15",
+          "number": "15",
+          "title": "Data Breach and Security Incident Response",
+          "paragraphs": [
+            "While STARVNT implements reasonable technical safeguards, no internet transmission or electronic storage system can be guaranteed 100% immune from security incidents.",
+            "If a security incident or personal data breach is detected, STARVNT’s incident response workflow involves rapid identification, internal escalation, containment, forensic investigation, remediation, and timely notifications to affected individuals and relevant Indian authorities (such as CERT-In under the 2022 Directions where applicable, and the Data Protection Board of India and affected Data Principals upon commencement of Section 8(6) of the DPDP Act, 2023 and Rule 7 of the DPDP Rules, 2025). Exact internal reporting workflows and statutory notification deadlines must be confirmed with legal counsel prior to full commercial launch."
+          ]
+        },
+        {
+          "id": "privacy-16",
+          "number": "16",
+          "title": "User Privacy Rights and How to Exercise Them",
+          "paragraphs": [
+            "Subject to applicable Indian law in force (including rights progressively taking effect under the DPDP Act, 2023 and existing correction/withdrawal rights under the IT SPDI Rules, 2011), you may request to:"
+          ],
+          "bullets": [
+            "Access a summary of personal data processed about you and the identities of entities with whom it has been shared.",
+            "Correct, complete, or update inaccurate or misleading personal data.",
+            "Request erasure of personal data no longer necessary for the specified purpose (unless retention is required by law).",
+            "Withdraw optional consent (such as promotional communications or central portfolio marketing) at any time.",
+            "Lodge a privacy grievance with STARVNT’s Grievance Officer / privacy contact.",
+            "Nominate another individual to exercise your Data Principal rights in the event of death or incapacity (once applicable DPDP Act Section 14 provisions commence)."
+          ],
+          "callout": {
+            "tone": "notice",
+            "title": "How to Submit a Privacy or Grievance Request",
+            "body": "Submit a structured request directly through the Privacy & Grievance Request form in the FAQs & Support section of this Gateway (POST /api/legal/privacy-request) or email [PRIVACY REQUEST EMAIL] (currently routed alongside partners@starvnt.com pending dedicated inbox confirmation). We may verify your identity using proportionate account/application details before fulfilling access or deletion requests, without creating unreasonable barriers."
+          }
+        },
+        {
+          "id": "privacy-17",
+          "number": "17",
+          "title": "Children’s Data",
+          "paragraphs": [
+            "The STARVNT Partner Growth Gateway is a commercial platform intended strictly for adult business partners and event professionals aged 18 years or older. We do not knowingly invite or solicit persons under 18 years of age to create partner accounts. STARVNT has NOT implemented automated age-verification or verifiable parental-consent mechanisms; if we learn that personal data of a child under 18 has been submitted without legally valid parental/guardian consent, please contact [PRIVACY REQUEST EMAIL] so we can promptly review and delete it."
+          ]
+        },
+        {
+          "id": "privacy-18",
+          "number": "18",
+          "title": "International Data Processing",
+          "paragraphs": [
+            "STARVNT does NOT claim that all data is stored exclusively within India. Certain verified third-party services—specifically Google’s Gemini API used for AURA+ inference and cloud deployment infrastructure—may process or route data on servers located outside India. Under Section 16 of the DPDP Act, 2023, cross-border processing is permitted except to countries or territories notified as restricted by the Central Government of India. STARVNT will review hosting regions and transfer safeguards against applicable Indian notifications prior to production database deployment."
+          ]
+        },
+        {
+          "id": "privacy-19",
+          "number": "19",
+          "title": "Third-Party Websites and External Links",
+          "paragraphs": [
+            "This Gateway may include links to external services (such as WhatsApp share links, Google AI Studio billing links, or future payment and map providers). External websites and third-party services operate under their own independent privacy policies and terms. STARVNT does not control and cannot make unsupported assurances regarding the independent privacy practices of external platforms."
+          ]
+        },
+        {
+          "id": "privacy-20",
+          "number": "20",
+          "title": "Grievance Redressal and Privacy Contact",
+          "paragraphs": [
+            "For privacy rights requests, consent withdrawal assistance, or data-protection grievances, please contact the designated channel below (all corporate placeholders require official confirmation before publication):"
+          ],
+          "table": {
+            "headers": [
+              "Grievance / Privacy Contact Field",
+              "Status / Value"
+            ],
+            "rows": [
+              [
+                "Legal Entity Name",
+                "[INSERT REGISTERED LEGAL ENTITY NAME — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Registered Office Address",
+                "[INSERT REGISTERED OFFICE ADDRESS — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Privacy Contact Email",
+                "[PRIVACY REQUEST EMAIL — BUSINESS CONFIRMATION REQUIRED]"
+              ],
+              [
+                "Grievance Officer Name & Designation",
+                "[NOT YET FORMALLY APPOINTED — APPOINT & PUBLISH NAME BEFORE PRODUCTION LAUNCH]"
+              ],
+              [
+                "Online Request Channel",
+                "FAQs & Support Desk → Privacy & Grievance Request tab (Active on this Gateway)"
+              ],
+              [
+                "Acknowledgement & Resolution Timelines",
+                "[CONFIRM OFFICIAL SLA WITH INDIAN LEGAL COUNSEL — aligned with applicable IT Rules / DPDP Rules]"
+              ],
+              [
+                "Regulatory Escalation",
+                "Where unsatisfied with internal grievance redressal once DPDP adjudicatory provisions are fully applicable, Data Principals may escalate to the Data Protection Board of India (DPBI) in accordance with notified procedures."
+              ]
+            ]
+          }
+        },
+        {
+          "id": "privacy-21",
+          "number": "21",
+          "title": "Policy Changes and Version History",
+          "paragraphs": [
+            "We maintain a version identifier, publication date, and effective date on this Privacy Policy (currently Version 1.0-draft, updated 23 November 2026). Material changes affecting how personal data is collected, shared, or used will be communicated clearly through the Platform and/or email prior to taking effect, and fresh affirmative consent will be obtained where legally required. Prior published versions will be archived for reference upon commercial launch."
+          ]
+        }
+      ]
+    },
+    "offer": {
+      "key": "offer",
+      "documentId": "starvnt-aura-offer-terms",
+      "title": "AURA+ 6-MONTH FOUNDING PARTNER OFFER TERMS",
+      "shortTitle": "AURA+ Offer Terms",
+      "subtitle": "Standalone promotional rules governing promo code AURA6MONTHS, cohort eligibility, server-side validation, and zero automatic paid conversion.",
+      "version": "1.0-draft",
+      "status": "DRAFT_PENDING_REVIEW",
+      "effectiveDate": "[INSERT APPROVED EFFECTIVE DATE]",
+      "publicationDate": "23 November 2026",
+      "lastUpdated": "23 November 2026",
+      "jurisdiction": "India",
+      "language": "English",
+      "audience": "Eligible Founding Partner applicants applying within active launch categories and regions.",
+      "contactEmailPlaceholder": "[OFFICIAL LEGAL CONTACT EMAIL]",
+      "reviewNotice": "COMMERCIAL CONFIRMATION NOTICE: Promotional reference value reconciliation (₹29,994 + GST vs ₹29,993 + GST) and final hard-expiry date (proposed 31 May 2027) require business sign-off before production launch.",
+      "clauses": [
+        {
+          "id": "offer-1",
+          "number": "1",
+          "title": "Offer Summary & Promo Code AURA6MONTHS",
+          "paragraphs": [
+            "Eligible Founding Partners who submit promo code AURA6MONTHS during onboarding registration reserve six (6) calendar months of complimentary AURA+ Business Assistant subscription access at ₹0 subscription charge, subject to Partner Verification and Account Activation.",
+            "Stated promotional reference value is currently displayed on launch badges as ₹29,994 + GST (with ₹29,993 + GST noted for commercial reconciliation — [BUSINESS CONFIRMATION REQUIRED]). Promotional reference values are non-cash illustrative comparisons only and cannot be redeemed for cash, credit, or refund."
+          ]
+        },
+        {
+          "id": "offer-2",
+          "number": "2",
+          "title": "Server-Side Validation, Activation & Expiry",
+          "paragraphs": [
+            "Redemption of AURA6MONTHS is validated by STARVNT’s backend. Entering a code on the frontend does not guarantee entitlement until confirmed by the server and until the Partner completes Verification and Account Activation.",
+            "A proposed expiry cap—ending on the earlier of six (6) calendar months from activation or 31 May 2027—is currently pending final commercial confirmation [BUSINESS CONFIRMATION REQUIRED] and will be disclosed clearly prior to activation."
+          ]
+        },
+        {
+          "id": "offer-3",
+          "number": "3",
+          "title": "Strict Separation From Paid Plans & Zero Auto-Renewal",
+          "paragraphs": [
+            "The 6-month complimentary AURA+ Founding Offer is completely independent of STARVNT’s paid subscription tiers (Growth and Professional). No payment instrument is collected to redeem AURA6MONTHS, and promotional access will NEVER auto-convert into a paid subscription or recurring charge without your separate, explicit written consent."
+          ]
+        },
+        {
+          "id": "offer-4",
+          "number": "4",
+          "title": "Offer Integrity, Misuse & Revocation",
+          "paragraphs": [
+            "Limit one (1) promotional redemption per verified legal business entity unless expressly authorized in writing. Duplicate applications, fabricated business identities, or breach of the Partner Terms & Conditions may result in rejection or revocation of promotional access."
+          ]
+        }
+      ]
+    },
+    "media": {
+      "key": "media",
+      "documentId": "starvnt-portfolio-media-rights",
+      "title": "STARVNT PORTFOLIO & CLIENT MEDIA RIGHTS POLICY",
+      "shortTitle": "Portfolio Media Rights",
+      "subtitle": "Clear separation between public partner profile display, optional STARVNT marketing campaigns, client/guest permissions, and copyright takedown rights.",
+      "version": "1.0-draft",
+      "status": "DRAFT_PENDING_REVIEW",
+      "effectiveDate": "[INSERT APPROVED EFFECTIVE DATE]",
+      "publicationDate": "23 November 2026",
+      "lastUpdated": "23 November 2026",
+      "jurisdiction": "India",
+      "language": "English",
+      "audience": "Event photographers, decorators, caterers, venues, planners, makeup artists, and agencies submitting portfolio media.",
+      "contactEmailPlaceholder": "[OFFICIAL LEGAL CONTACT EMAIL]",
+      "reviewNotice": "CONTENT RIGHTS NOTICE: Account registration never grants blanket advertising rights over partner portfolios. Marketing consent is always optional, unticked by default, and revocable.",
+      "clauses": [
+        {
+          "id": "media-1",
+          "number": "1",
+          "title": "Ownership & Creator Responsibility",
+          "paragraphs": [
+            "Partners and rightful creators retain 100% ownership of their original photographs, videos, designs, logos, and captions. Before uploading any media to a STARVNT profile or to AURA+ Photo Analyzer, the Partner confirms they hold all necessary copyright licences (including music/creative elements) and client/guest permissions under Indian law."
+          ]
+        },
+        {
+          "id": "media-2",
+          "number": "2",
+          "title": "Four Strictly Separated Media Permissions",
+          "paragraphs": [
+            "STARVNT never bundles marketing or advertising rights into basic account registration:"
+          ],
+          "bullets": [
+            "1. Own Public Profile Display: Used solely to render your portfolio on your own STARVNT partner profile and canonical QR/profile route.",
+            "2. Optional STARVNT Central Marketing & Ads: Requires a separate, unticked-by-default opt-in checkbox specifically authorizing selected portfolio assets for approved STARVNT promotional activities. Revocable at any time.",
+            "3. Partner Self-Sharing: Sharing your own profile URL on WhatsApp or social media does not grant STARVNT paid-ad or campaign rights.",
+            "4. Testimonials & Performance Claims: Named quotes, portraits, ratings, and performance metrics are published only with separate written consent and verifiable baselines."
+          ]
+        },
+        {
+          "id": "media-3",
+          "number": "3",
+          "title": "Withdrawal of Permission & Takedown Procedure",
+          "paragraphs": [
+            "Partners may withdraw optional portfolio marketing permission at any time through consent controls or Partner Support. Withdrawal stops new promotional usage prospectively (reasonable operational notice applies to already-scheduled campaigns). Copyright owners or identifiable event guests may request removal of unauthorized media through Partner Support or [OFFICIAL LEGAL CONTACT EMAIL]."
+          ]
+        }
+      ]
+    }
+  }
+}

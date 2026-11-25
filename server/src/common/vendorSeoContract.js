@@ -10,7 +10,7 @@ export const SEO_RECORDS = {
   research: 'Business identity research', keyword: 'Keyword research', competitor: 'Competitor comparison',
   technical: 'Technical SEO audit', local: 'Local SEO / Google Business Profile', geo: 'AI search visibility research',
   faq: 'Evidence-backed FAQ', portfolio: 'Portfolio image / project SEO', architecture: 'Platform architecture',
-  automation: 'Automation requirement', action: '30 / 60 / 90-day action', measurement: 'KPI / monthly report',
+  automation: 'Automation requirement', marketing: 'Marketing content draft', action: '30 / 60 / 90-day action', measurement: 'KPI / monthly report',
 };
 export const SEO_DRAFT_FIELDS = {
   title: 'SEO title', metaDescription: 'Meta description', h1: 'H1 heading', headings: 'H2 / H3 structure',

@@ -42,6 +42,12 @@ jobs:
         run: |
           VITE_API_URL=http://127.0.0.1:4117 npm run build -w web -- --outDir ../tmp/qa/vendor-business-dashboard/site
           node server/scripts/verify-vendor-business-dashboard.js
+      # Partner workflows use their own ephemeral database and API origin.
+      # They cannot turn draft offer terms into live billing entitlements.
+      - name: Verify Partner marketing, promotion requests and legal drafts
+        run: |
+          VITE_API_URL=http://127.0.0.1:4121 npm run build -w web -- --outDir ../tmp/qa/partner-program/site
+          node server/scripts/verify-partner-program.js
       - name: Build production container images
         run: |
           docker build --tag starvnt-backend:ci --file deploy/aws/Dockerfile.backend .
