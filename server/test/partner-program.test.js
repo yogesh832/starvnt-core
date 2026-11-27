@@ -9,15 +9,16 @@ import { ExternalUser } from '../src/external/models/ExternalUser.js';
 import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
 import { PartnerOfferRequest } from '../src/external/models/PartnerOfferRequest.js';
+import { VendorAuraPromotion } from '../src/external/models/VendorAuraPromotion.js';
 import { VendorSeoWorkspace } from '../src/external/models/VendorSeoWorkspace.js';
 import { signExternalAccessToken } from '../src/external/utils/tokens.js';
-import { PARTNER_OFFER_NOTICE_VERSION, validatePartnerPromo } from '../src/common/partnerProgram.js';
+import { PARTNER_OFFER_NOTICE_VERSION, addCalendarMonths, validatePartnerPromo } from '../src/common/partnerProgram.js';
 import { partnerMarketingSuggestions } from '../src/common/partnerMarketing.js';
 import { validateSeoWorkspace } from '../src/common/vendorSeo.js';
 import { SEO_DRAFT_FIELDS } from '../src/common/vendorSeoContract.js';
 
 let app, mongo;
-before(async () => { mongo = await MongoMemoryServer.create(); await Promise.all([externalConn.openUri(mongo.getUri('partner_program')), adminConn.openUri(mongo.getUri('partner_program_admin'))]); app = createApp(); await PartnerOfferRequest.init(); }, { timeout: 120000 });
+before(async () => { mongo = await MongoMemoryServer.create(); await Promise.all([externalConn.openUri(mongo.getUri('partner_program')), adminConn.openUri(mongo.getUri('partner_program_admin'))]); app = createApp(); await Promise.all([PartnerOfferRequest.init(), VendorAuraPromotion.init()]); }, { timeout: 120000 });
 after(async () => { await Promise.all([externalConn.close(), adminConn.close()]); await mongo?.stop(); });
 async function fixture(accountType = 'VENDOR') {
   const owner = await ExternalUser.create({ fullName: 'Private Owner', email: `${randomUUID()}@example.test`, accountType });
@@ -31,12 +32,36 @@ const claim = (revision = 0) => ({ code: ' aura6months ', acknowledged: true, no
 const emptyDraft = () => Object.fromEntries(Object.keys(SEO_DRAFT_FIELDS).map(key => [key, '']));
 const evidence = () => Object.entries({ businessName: 'Example Studio', category: 'Photography', services: 'Wedding photographs', serviceArea: 'Pune' }).map(([field, value]) => ({ id: randomUUID(), field, value, sourceUrl: 'https://example.com/business', observedAt: new Date().toISOString().slice(0, 10), identityConfirmed: true, publicUseApproved: true }));
 
-test('promo rules normalize the imported code, reject expired/unknown codes and never promise activation', () => {
+test('promo rules normalize the code, reject expired/unknown codes and never promise paid renewal', () => {
   const known = validatePartnerPromo(' aura6months ');
-  assert.equal(known.durationMonths, 6); assert.equal(known.autoRenewsToPaid, false); assert.equal(known.status, 'REQUEST_ONLY');
+  assert.equal(known.durationMonths, 6); assert.equal(known.autoRenewsToPaid, false); assert.equal(known.status, 'AVAILABLE');
   assert.equal(validatePartnerPromo('AURA2025').status, 'EXPIRED');
   assert.equal(validatePartnerPromo('madeup').recognized, false);
   assert.throws(() => validatePartnerPromo({ code: 'AURA6MONTHS' }));
+});
+test('six calendar months clamp month-end dates', () => {
+  assert.equal(addCalendarMonths('2026-08-31T12:00:00.000Z', 6).toISOString(), '2027-02-28T12:00:00.000Z');
+});
+test('vendor redeems Aura once, sees dates, and cannot extend by replaying the code', async () => {
+  const vendor = await fixture(), other = await fixture();
+  await request(app).post('/api/vendor/partner-program/redeem').set(auth(vendor)).send({ code: 'WRONG' }).expect(400);
+  const result = await request(app).post('/api/vendor/partner-program/redeem').set(auth(vendor)).send({ code: ' aura6months ', vendor: String(other.vendor._id), durationMonths: 99 }).expect(201);
+  assert.equal(result.body.entitlement.status, 'ACTIVE');
+  assert.equal(result.body.entitlement.autoRenewsToPaid, false);
+  const started = new Date(result.body.entitlement.startedAt);
+  assert.equal(result.body.entitlement.expiresAt, addCalendarMonths(started, 6).toISOString());
+  const replay = await request(app).post('/api/vendor/partner-program/redeem').set(auth(vendor)).send({ code: 'AURA6MONTHS' }).expect(200);
+  assert.equal(replay.body.replay, true);
+  assert.equal(replay.body.entitlement.expiresAt, result.body.entitlement.expiresAt);
+  assert.equal(await VendorAuraPromotion.countDocuments({ vendor: vendor.vendor._id }), 1);
+  const view = await request(app).get('/api/vendor/partner-program').set(auth(vendor)).expect(200);
+  assert.equal(view.body.entitlement.status, 'ACTIVE');
+  const isolated = await request(app).get('/api/vendor/partner-program').set(auth(other)).expect(200);
+  assert.equal(isolated.body.entitlement, null);
+  await VendorAuraPromotion.collection.updateOne({ vendor: vendor.vendor._id }, { $set: { expiresAt: new Date('2020-01-01') } });
+  const expired = await request(app).get('/api/vendor/partner-program').set(auth(vendor)).expect(200);
+  assert.equal(expired.body.entitlement.status, 'EXPIRED');
+  assert.equal((await request(app).post('/api/vendor/partner-program/redeem').set(auth(vendor)).send({ code: 'AURA6MONTHS' }).expect(200)).body.entitlement.status, 'EXPIRED');
 });
 test('program and draft legal documents require vendor ownership; drafts do not become active terms', async () => {
   const a = await fixture(), b = await fixture('CUSTOMER');
@@ -73,6 +98,7 @@ test('offer requests are persistent, isolated, replay safe and withdrawable with
   assert.deepEqual(await VendorOrganization.findById(f.vendor._id).lean(), original);
 });
 test('restricted organizations cannot request offers', async () => { const f = await fixture(); await VendorOrganization.updateOne({ _id: f.vendor._id }, { $set: { isRestricted: true } }); await request(app).post('/api/vendor/partner-program/request').set(auth(f)).send(claim()).expect(403); });
+test('restricted organizations cannot redeem Aura', async () => { const f = await fixture(); await VendorOrganization.updateOne({ _id: f.vendor._id }, { $set: { isRestricted: true } }); await request(app).post('/api/vendor/partner-program/redeem').set(auth(f)).send({ code: 'AURA6MONTHS' }).expect(403); });
 test('marketing templates require current public-use evidence and return reviewable, schema-valid private records', () => {
   assert.throws(() => partnerMarketingSuggestions({ evidence: [] }));
   const input = { revision: 0, evidence: evidence(), draft: emptyDraft(), records: [] };

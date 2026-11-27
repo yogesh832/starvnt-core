@@ -388,7 +388,7 @@ export default function VendorPortal() {
     { to: 'reviews', label: 'Reviews', icon: 'star' },
     { to: 'analytics', label: 'Analytics', icon: 'reports' },
     { to: 'seo', label: 'SEO & GEO growth', icon: 'search' },
-    { to: 'partner-program', label: 'Marketing & offers', icon: 'star' },
+    { to: 'partner-program', label: 'Plans & free Aura+', icon: 'star' },
     { to: 'updates', label: 'Messages & updates', icon: 'bell', badge: badgeCounts.unreadNotificationsCount || badgeCounts.messagesCount || null },
     { to: 'profile', label: 'Profile & Settings', icon: 'profile' },
   ];
