@@ -580,7 +580,7 @@ export default function HomePage({ firstName }) {
   if (loading) return <CustomerDashboardSkeleton />;
   return (
     <div className="space-y-5">
-      <MyProposalCard preferEventId={current?.id} />
+      <MyProposalCard eventId={current?.id || null} event={current} />
       {current ? <Workspace firstName={firstName} event={current} key={current.id} /> : <Welcome firstName={firstName} onEventChanged={() => refresh()} />}
     </div>
   );

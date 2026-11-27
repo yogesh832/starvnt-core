@@ -200,6 +200,7 @@ export default function EventPage() {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <BackLink to="/customer/events">All events</BackLink>
+        <MyProposalCard eventId={event.id} event={event} />
         <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={() => setEditing(true)}><LocationDetails event={event} /></CustomerEventSummary>
         <UnderstandingCard understanding={understanding} event={event} onChanged={reload} editing={editing} onEditingChange={setEditing} />
         <EventReferences eventId={event.id} />
@@ -215,6 +216,7 @@ export default function EventPage() {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <BackLink to="/customer/events">All events</BackLink>
+        <MyProposalCard eventId={event.id} event={event} />
         <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments}><LocationDetails event={event} /></CustomerEventSummary>
         <div className="bg-white rounded-3xl shadow-sm p-6 text-center">
           <div className="text-3xl">🎉</div>
@@ -232,7 +234,7 @@ export default function EventPage() {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       <BackLink to="/customer/events">All events</BackLink>
-      <MyProposalCard eventId={event.id} />
+      <MyProposalCard eventId={event.id} event={event} />
       <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={editable ? () => setEditing(value => !value) : undefined}><LocationDetails event={event} /></CustomerEventSummary>
       {event.status === 'in_progress' && (
         <Link to={`/customer/events/${event.id}/event-day`} className="flex items-center gap-2 rounded-2xl bg-red-50 text-red-600 px-4 py-3 text-sm font-bold">

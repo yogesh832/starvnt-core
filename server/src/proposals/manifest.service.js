@@ -59,7 +59,8 @@ export function validateManifestContent({ eventInfo, requirements }, eventType) 
 }
 
 /** Builds a new manifest version from live Core event data. Aura+ never writes here. */
-export async function buildManifest(eventId, { actor = 'SYSTEM' } = {}) {
+/** Manifest content computed from Core data, without saving a new manifest. */
+export async function manifestContent(eventId) {
   const event = await CustomerEvent.findById(eventId).lean();
   if (!event) throw proposalError('EVENT_NOT_FOUND', 'Event not found.', 404);
   const reqs = await EventRequirement.find({ event: event._id }).lean();
@@ -82,7 +83,11 @@ export async function buildManifest(eventId, { actor = 'SYSTEM' } = {}) {
   const requirements = reqs.map((r) => requirementEntry(event.eventType, r)).filter(Boolean)
     .sort((a, b) => a.category.localeCompare(b.category));
   const validation = validateManifestContent({ eventInfo, requirements }, event.eventType);
+  return { event, eventInfo, requirements, validation, contentHash: hashOf({ eventInfo, requirements }) };
+}
 
+export async function buildManifest(eventId, { actor = 'SYSTEM', actorType = 'ADMIN' } = {}) {
+  const { event, eventInfo, requirements, validation, contentHash } = await manifestContent(eventId);
   const latest = await EventManifest.findOne({ event: event._id }).sort({ version: -1 }).select('version').lean();
   const manifest = await EventManifest.create({
     customer: event.customer,
@@ -91,10 +96,10 @@ export async function buildManifest(eventId, { actor = 'SYSTEM' } = {}) {
     eventInfo,
     requirements,
     validation,
-    contentHash: hashOf({ eventInfo, requirements }),
+    contentHash,
     createdBy: String(actor),
   });
-  await recordBusinessAudit({ actorId: String(actor), actorType: 'ADMIN', action: 'MANIFEST_BUILT', resourceType: 'EventManifest', resourceId: String(manifest._id), referenceId: String(event._id), toState: `DRAFT/${validation.status}`, why: 'Manifest built from Core event data', source: 'PROPOSAL_STUDIO' });
+  await recordBusinessAudit({ actorId: String(actor), actorType, action: 'MANIFEST_BUILT', resourceType: 'EventManifest', resourceId: String(manifest._id), referenceId: String(event._id), toState: `DRAFT/${validation.status}`, why: 'Manifest built from Core event data', source: 'PROPOSAL_STUDIO' });
   return manifest;
 }
 

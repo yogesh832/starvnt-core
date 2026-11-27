@@ -5,6 +5,7 @@ import { agreementForVendor, vendorDecideAgreement } from './agreement.service.j
 import { listCustomerProposals, getCustomerVersion, decideAsCustomer, raiseChangeRequest, customerPdfVersion, logAccess } from './proposal.service.js';
 import { readStoredPdf } from './render.service.js';
 import { askAboutProposal } from './assistant.service.js';
+import { ensureCustomerPreview } from './preview.service.js';
 import multer from 'multer';
 import { VisualAsset } from './models.js';
 import { uploadCustomerReference, readAssetFile } from './assets.service.js';
@@ -41,6 +42,10 @@ export const customerProposalRoutes = express.Router();
 customerProposalRoutes.use('/proposals', requireExternalAuth, requireAccountType('CUSTOMER'));
 const me = (req) => req.externalUser._id;
 
+customerProposalRoutes.post('/proposals/preview', handle(async (req, res) => {
+  if (!req.body?.eventId) throw proposalError('EVENT_REQUIRED', 'Choose an event.', 400);
+  res.json(await ensureCustomerPreview(me(req), req.body.eventId));
+}));
 customerProposalRoutes.get('/proposals', handle(async (req, res) => {
   res.json({ proposals: await listCustomerProposals(me(req)) });
 }));
