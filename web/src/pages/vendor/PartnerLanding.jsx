@@ -182,10 +182,11 @@ export default function PartnerLanding() {
           <div className="partner-founding-copy">
             <h2 id="partner-founding-title"><Icon name="crown" />Founding Partner Program</h2>
             <p>Be part of STARVNT’s launch community and<br className="partner-desktop-break" /> get exclusive, early access benefits.</p>
+            <div className="partner-aura-offer"><strong>Partner plans are coming. Get six months of Aura+ free.</strong><span>Activate with <b>AURA6MONTHS</b> in your workspace. Your six months start on activation, with no card or automatic paid renewal.</span></div>
             <ul className="partner-founding-perks">
               {[['rocket', <>Early Access<br />to New Features</>], ['star', <>Higher Visibility<br />in Your Category</>], ['coins', <>Platform Fee<br />Benefits*</>], ['support', <>Priority<br />Support</>]].map(([icon, label]) => <li key={icon}><Icon name={icon} /><span>{label}</span></li>)}
             </ul>
-            <div className="partner-founding-action"><Link to={joinUrl} className="partner-button partner-button-gold">{isPartner ? 'Open Your Workspace' : 'Join as a Founding Partner'}<Icon name="arrow" /></Link><small>* Benefits are for a limited period and subject to program terms.</small></div>
+            <div className="partner-founding-action"><Link to={joinUrl} className="partner-button partner-button-gold">{isPartner ? 'Open Your Workspace' : 'Join as a Founding Partner'}<Icon name="arrow" /></Link><small>* Benefits are for a limited period and subject to program terms.</small><Link to="/vendor/partner-program" className="partner-button partner-button-gold">Get 6 months of Aura+ free<Icon name="arrow" /></Link></div>
           </div>
         </div>
       </section>
