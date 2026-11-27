@@ -209,6 +209,7 @@ export default function EventPage() {
         <BackLink to="/customer/events">All events</BackLink>
         {!error && data?.event && <EventLibraryLinks eventId={data.event.id} />}
         <Link className="customer-primary-action" to={'/customer/events/new?draft=' + encodeURIComponent(event.id)}>Continue guided planning</Link>
+        <MyProposalCard eventId={event.id} event={event} />
         <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={() => setEditing(true)}><LocationDetails event={event} /></CustomerEventSummary>
         <UnderstandingCard understanding={understanding} event={event} onChanged={reload} editing={editing} onEditingChange={setEditing} />
         <EventReferences eventId={event.id} />
@@ -225,6 +226,7 @@ export default function EventPage() {
       <BackLink to="/customer/events">All events</BackLink>
       <h1 className="text-xl font-extrabold text-navy">{event.status === 'cancelled' ? 'This event is cancelled' : `Your ${event.eventTypeLabel?.toLowerCase() || 'event'} is complete`}</h1>
       <EventLibraryLinks eventId={event.id} />
+      <MyProposalCard eventId={event.id} event={event} />
       <section className="customer-home-panel space-y-3"><div className="flex flex-wrap items-center gap-3"><h2 className="font-bold">{event.title || event.eventTypeLabel || 'Event'}</h2><EventStatusPill status={event.status} /></div><dl className="grid sm:grid-cols-3 gap-3 text-sm"><div><dt className="text-muted">Event date</dt><dd>{formatDate(event.eventDate) || 'Not set'}</dd></div><div><dt className="text-muted">Location</dt><dd>{event.city || event.location?.city || 'Not set'}</dd></div><div><dt className="text-muted">Guests</dt><dd>{event.guestCount ?? 'Not set'}</dd></div></dl><LocationDetails event={event} /></section>
       <PostEventRecords event={event} bookings={bookings} payments={payments} />
       <div className="flex flex-wrap gap-3"><Link className="customer-primary-action" to="/customer/events/new">Plan another event</Link><Link className="customer-secondary-action" to="/customer/aura?new=1">Plan with Aura+</Link></div>
@@ -236,7 +238,7 @@ export default function EventPage() {
     <div className="max-w-6xl mx-auto space-y-4">
       <BackLink to="/customer/events">All events</BackLink>
       {!error && data?.event && <EventLibraryLinks eventId={data.event.id} />}
-      <MyProposalCard eventId={event.id} />
+      <MyProposalCard eventId={event.id} event={event} />
       <CustomerEventSummary event={event} summary={summary} steps={steps} payments={payments} onEdit={editable ? () => setEditing(value => !value) : undefined}><LocationDetails event={event} /></CustomerEventSummary>
       {event.status === 'in_progress' && (
         <Link to={`/customer/events/${event.id}/event-day`} className="flex items-center gap-2 rounded-2xl bg-red-50 text-red-600 px-4 py-3 text-sm font-bold">

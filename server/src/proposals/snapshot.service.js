@@ -10,8 +10,10 @@ export function toCustomerSnapshot({ manifest, agreements = [], commercial = nul
   const info = manifest.eventInfo || {};
   const agreementByCategory = new Map(agreements.map((a) => [a.category, a]));
 
+  // A preliminary preview also lists services the customer has chosen but vendors
+  // have not confirmed yet (shown as "vendor confirmation pending"). FINAL never does.
   const services = manifest.requirements
-    .filter((r) => r.status === 'included')
+    .filter((r) => r.status === 'included' || (kind !== 'FINAL' && r.status === 'pending'))
     .map((r) => {
       const a = agreementByCategory.get(r.category);
       return {

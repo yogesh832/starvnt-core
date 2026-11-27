@@ -75,6 +75,7 @@ export const customerApi = {
   createContractDocument: (body) => externalApi.call('/customer/documents/contracts', { method: 'POST', body }),
   downloadDocument: (id) => externalApi.raw(`/customer/documents/${encodeURIComponent(id)}/download`).then(r => r.blob()),
   proposals: () => externalApi.call('/customer/proposals'),
+  proposalPreview: (eventId) => externalApi.call('/customer/proposals/preview', { method: 'POST', body: { eventId } }),
   proposalAsset: (id, version, assetId) => externalApi.raw(`/customer/proposals/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/assets/${encodeURIComponent(assetId)}`).then(r => r.blob()),
   eventReferences: (eventId) => externalApi.call(`/customer/events/${encodeURIComponent(eventId)}/references`),
   uploadReference: (eventId, form) => externalApi.call(`/customer/events/${encodeURIComponent(eventId)}/references`, { method: 'POST', body: form }),

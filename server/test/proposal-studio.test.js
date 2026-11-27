@@ -10,6 +10,7 @@ import { ExternalUser } from '../src/external/models/ExternalUser.js';
 import { ExternalSession } from '../src/external/models/ExternalSession.js';
 import { VendorOrganization } from '../src/external/models/VendorOrganization.js';
 import { Quote } from '../src/external/models/Quote.js';
+import { vendorPriceFixture } from './helpers/vendorPriceFixture.js';
 import { AdminUser } from '../src/admin/models/AdminUser.js';
 import { AdminSession } from '../src/admin/models/AdminSession.js';
 import { CoreBooking } from '../src/admin/models/CoreBooking.js';
@@ -304,6 +305,7 @@ test('G8 invalid requirements block, and preliminary previews are watermarked an
   assert.equal(r.reasons[0].code, 'MANIFEST_INVALID');
 
   const event = await CustomerEvent.create({ customer: user._id, eventType: 'birthday', title: 'Aarav turns 5', eventDate: '2027-03-10', city: 'Pune', guestCount: 60, status: 'planning' });
+  await vendorPriceFixture(event, 'decor');
   await EventRequirement.create([{ event: event._id, category: 'decor', status: 'confirmed', preferences: { theme: 'Space' } }, { event: event._id, category: 'cake', status: 'confirmed' }]);
   const m = await request(app).post(`${S}/events/${event._id}/manifest`).set(auth(maker)).expect(201);
   await request(app).post(`${S}/manifests/${m.body.manifest._id}/freeze`).set(auth(maker)).expect(200);

@@ -10,6 +10,7 @@ import { currentAgreements } from './agreement.service.js';
 import { toCustomerSnapshot, snapshotHash } from './snapshot.service.js';
 import { approvedVisualsFor } from './assets.service.js';
 import { proposalError } from './utils.js';
+import { requireVendorPriceForPdf } from './vendorPricing.service.js';
 
 const CUSTOMER_VISIBLE = ['SENT_TO_CUSTOMER', 'CUSTOMER_VIEWED', 'CHANGE_REQUESTED', 'CUSTOMER_APPROVED', 'CUSTOMER_DECLINED', 'SUPERSEDED'];
 const OPEN_FOR_DECISION = ['SENT_TO_CUSTOMER', 'CUSTOMER_VIEWED'];
@@ -46,10 +47,11 @@ async function moveVersion(version, to, { actor, reason, set = {} }) {
   return updated;
 }
 
-/** Watermarked concept from whatever exists today. No gate; never approvable. */
+/** Watermarked concept after a vendor submits a positive event price; never approvable. */
 export async function createPreliminary(eventId, { actor, theme }) {
   const manifest = await EventManifest.findOne({ event: eventId, status: { $in: ['FROZEN', 'DRAFT'] } }).sort({ version: -1 }).lean();
   if (!manifest) throw proposalError('MANIFEST_REQUIRED', 'Build the event manifest before a preliminary preview.');
+  await requireVendorPriceForPdf(eventId);
   const proposal = await ensureProposal(eventId);
   const agreements = await currentAgreements(eventId);
   const approved = agreements.filter((a) => a.status === 'APPROVED');

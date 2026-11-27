@@ -480,10 +480,10 @@ export default function HomePage({ firstName }) {
   if (error && !events.length) return <div role="alert" className="customer-home-panel"><h1>Your workspace is temporarily unavailable.</h1><p>{errorText(error)}</p><button className="customer-secondary-action" onClick={refresh}>Try again</button></div>;
   if (!events.length) return <WelcomeHome firstName={firstName} />;
   if (!current) return <div className="customer-home-panel"><h1>Select an event to continue.</h1><Link to="/customer/events">Open My Events</Link></div>;
-  if (['completed', 'cancelled'].includes(current.status)) return <PastEventHome event={current} events={events} />;
+  if (['completed', 'cancelled'].includes(current.status)) return <div className="space-y-5"><MyProposalCard eventId={current.id} event={current} /><PastEventHome event={current} events={events} /></div>;
   return (
     <div className="space-y-5">
-      <MyProposalCard preferEventId={current.id} />
+      <MyProposalCard eventId={current.id} event={current} />
       <Workspace firstName={firstName} event={current} key={current.id} />
     </div>
   );

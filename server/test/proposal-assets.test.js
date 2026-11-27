@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import request from 'supertest';
 import sharp from 'sharp';
+import { vendorPriceFixture } from './helpers/vendorPriceFixture.js';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { externalConn, adminConn } from '../src/db/index.js';
 import { createApp } from '../src/app.js';
@@ -49,6 +50,7 @@ test('vendor photos and AI concepts need approval and carry fixed source labels 
   const { user, token } = await customer();
   const intruder = await customer();
   const event = await CustomerEvent.create({ customer: user._id, eventType: 'wedding', title: 'Reception', eventDate: '2027-05-10', city: 'Kolkata', guestCount: 200, status: 'planning', theme: 'Royal Luxury' });
+  await vendorPriceFixture(event, 'decor');
   await EventRequirement.create([{ event: event._id, category: 'decor', status: 'confirmed', preferences: { theme: 'Royal Luxury' } }, { event: event._id, category: 'catering', status: 'confirmed' }]);
   const m = await request(app).post(`${S}/events/${event._id}/manifest`).set(auth(admin)).expect(201);
   await request(app).post(`${S}/manifests/${m.body.manifest._id}/freeze`).set(auth(admin)).expect(200);

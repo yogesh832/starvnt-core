@@ -10,6 +10,7 @@ import { evaluateGate } from './gate.service.js';
 import { composeProposalHtml, footerTemplate, headerTemplate, PRELIMINARY_WATERMARK } from './composer.js';
 import { recordRenderFailure, recordRenderResult } from './proposal.service.js';
 import { proposalError } from './utils.js';
+import { requireVendorPriceForPdf } from './vendorPricing.service.js';
 import { VisualAsset } from './models.js';
 import { readAssetFile } from './assets.service.js';
 
@@ -194,6 +195,8 @@ export async function renderProposalVersion(versionId, { forbiddenValues } = {})
   const preliminary = version.kind !== 'FINAL';
 
   try {
+    // Recheck in the worker: a quote can expire or be withdrawn after request.
+    await requireVendorPriceForPdf(version.event);
     let internalValues = forbiddenValues;
     if (!preliminary) {
       // Approvals can lapse between request and render (e.g. an agreement expires).

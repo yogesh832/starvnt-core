@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, Empty, PageSkeleton, Tabs, useLoad } from './customerUi.jsx';
@@ -113,13 +113,89 @@ export function EventReferences({ eventId }) {
  * With `eventId` it shows only that event's proposal (event page); `preferEventId`
  * picks the matching one but falls back to the latest (Home).
  */
-export function MyProposalCard({ eventId = null, preferEventId = null }) {
-  const { data } = useLoad(() => customerApi.proposals().catch(() => ({ proposals: [] })), []);
+const PREP_STEPS = [
+  ['Event details', 'Date, place, guests and services you need'],
+  ['Vendors confirm', 'Each vendor approves scope and price in writing'],
+  ['Pricing approved', 'STARVNT finance approves your package'],
+  ['Proposal ready', 'You review, ask Aura+ and approve'],
+];
+
+/** Shown on every event until STARVNT shares a proposal for it. Never fabricates content. */
+function ProposalPreparingCard({ event, eventId }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(null); // 'view' | 'pdf'
+  const [error, setError] = useState(null);
+  const detailsDone = event && event.status !== 'draft';
+  const current = detailsDone ? 1 : 0;
+  const open = async (mode) => {
+    setBusy(mode); setError(null);
+    try {
+      const p = await Promise.race([
+        customerApi.proposalPreview(eventId),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('This is taking longer than usual. Please try again in a minute.')), 100000)),
+      ]);
+      if (mode === 'pdf') await openPdf(p.proposalId, p.version, true, 'starvnt-proposal-v' + p.version + '.pdf');
+      else navigate('/customer/proposals/' + p.proposalId);
+    } catch (err) {
+      setError({ message: errorText(err), problems: err?.data?.problems || [] });
+    } finally { setBusy(null); }
+  };
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[#E7DCCB] bg-[#FBF6EE] shadow-sm dark:border-gray-800 dark:bg-[#161926]">
+      <div className="p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em]" style={{ color: WINE }}>My event proposal</div>
+            <h2 className="mt-1 truncate font-serif text-xl font-bold text-navy dark:text-white">{event?.title || 'Your proposal'}</h2>
+            <p className="mt-1 text-xs text-muted dark:text-slate-400">
+              {detailsDone
+                ? 'Your proposal PDF becomes available after a vendor submits a price for this event. The final proposal follows confirmed vendors and approved pricing.'
+                : 'Complete your event details and wait for a vendor price before generating your proposal PDF.'}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button type="button" disabled={Boolean(busy)} onClick={() => open('view')} className="rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-60" style={{ background: WINE }}>{busy === 'view' ? 'Preparing…' : 'View proposal'}</button>
+            <button type="button" disabled={Boolean(busy)} onClick={() => open('pdf')} className="rounded-xl border border-[#E7DCCB] bg-white px-4 py-2 text-sm font-bold text-navy disabled:opacity-60">{busy === 'pdf' ? 'Preparing…' : 'PDF'}</button>
+            <Link to={`/customer/aura?event=${encodeURIComponent(eventId || '')}&ask=${encodeURIComponent('When will my event proposal be ready?')}`} className="rounded-xl border border-[#E7DCCB] bg-white px-4 py-2 text-sm font-bold text-navy">Ask Aura+</Link>
+          </div>
+        </div>
+        {busy && <p className="mt-3 text-xs font-semibold" style={{ color: WINE }}>Preparing your preliminary proposal. This takes a few seconds…</p>}
+        {error && (
+          <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+            <p className="font-bold">{error.message}</p>
+            {error.problems.length > 0 && <ul className="mt-1 list-disc pl-4">{error.problems.map((p) => <li key={p}>{p}</li>)}</ul>}
+          </div>
+        )}
+        <ol className="mt-4 grid gap-2 sm:grid-cols-4">
+          {PREP_STEPS.map(([title, sub], i) => {
+            const state = i < current ? 'done' : i === current ? 'now' : 'next';
+            return (
+              <li key={title} className={`rounded-xl border p-3 text-xs ${state === 'now' ? 'border-[#B8925A] bg-white' : 'border-[#E7DCCB] bg-white/60'} dark:bg-white/5`}>
+                <div className="flex items-center gap-2 font-bold text-navy dark:text-white">
+                  <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] ${state === 'done' ? 'bg-emerald-600 text-white' : state === 'now' ? 'text-white' : 'bg-gray-200 text-gray-600'}`} style={state === 'now' ? { background: WINE } : undefined}>{state === 'done' ? '✓' : i + 1}</span>
+                  {title}
+                </div>
+                <p className="mt-1 text-muted dark:text-slate-400">{sub}</p>
+                {state === 'now' && <p className="mt-1 font-bold" style={{ color: WINE }}>In progress</p>}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * With `eventId`: that event's proposal, or a "being prepared" card (event page, Home).
+ * Without: the latest shared proposal, or nothing.
+ */
+export function MyProposalCard({ eventId = null, event = null }) {
+  const { data, loading } = useLoad(() => customerApi.proposals().catch(() => ({ proposals: [] })), [eventId]);
   const list = data?.proposals || [];
-  const proposal = eventId
-    ? list.find((p) => String(p.eventId) === String(eventId))
-    : list.find((p) => preferEventId && String(p.eventId) === String(preferEventId)) || list[0];
-  if (!proposal) return null;
+  const proposal = eventId ? list.find((p) => String(p.eventId) === String(eventId)) : list[0];
+  if (loading && !data) return null;
+  if (!proposal) return eventId ? <ProposalPreparingCard event={event} eventId={eventId} /> : null;
   return (
     <section className="overflow-hidden rounded-2xl border border-[#E7DCCB] bg-[#FBF6EE] shadow-sm dark:border-gray-800 dark:bg-[#161926]">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
