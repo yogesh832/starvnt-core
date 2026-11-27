@@ -158,8 +158,8 @@ function Bubble({ m, onAction }) {
   return (
     <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
       {!mine && (
-        <span className={`w-7 h-7 rounded-full text-white grid place-items-center shrink-0 mt-0.5 ${m.source === 'knowledge_base' ? 'bg-navy' : 'bg-gradient-to-br from-primary to-[#9b6dff]'}`}>
-          {m.source === 'knowledge_base' ? '?' : <Icon name="aura" size={13} />}
+        <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-[#9b6dff] text-white grid place-items-center shrink-0 mt-0.5">
+          <Icon name="aura" size={13} />
         </span>
       )}
       <div className={`min-w-0 max-w-[85%] ${mine ? 'items-end' : 'items-start'} flex flex-col gap-1.5 [overflow-wrap:anywhere]`}>
@@ -170,7 +170,6 @@ function Bubble({ m, onAction }) {
         >
           {m.content}
         </div>
-        {!mine && m.source === 'knowledge_base' && <span className="text-[10px] font-semibold text-muted">STARVNT Help · product guide</span>}
         {!mine && m.actions?.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {m.actions.map((a) => (
@@ -596,7 +595,6 @@ export default function VendorAura({ open, onClose, onOpen, page, userId, prompt
                     ...last,
                     content: event.reply,
                     actions: event.actions || [],
-                    source: event.source || 'aura',
                   };
                 }
                 return next;

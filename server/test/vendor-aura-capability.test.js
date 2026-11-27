@@ -24,19 +24,6 @@ import { signExternalAccessToken } from '../src/external/utils/tokens.js';
 
 let app, mongo;
 const key = () => crypto.randomUUID();
-test('routine Vendor OS help bypasses the model and keeps its source in history', async t => {
-  const f = await fixture();
-  let modelCalls = 0;
-  registerLlmAdapter({ async chat() { modelCalls += 1; throw new Error('model should not run'); } });
-  t.after(() => registerLlmAdapter(null));
-  const sessionId = key();
-  const response = await request(app).post('/api/vendor/aura/chat').set(auth(f.token)).send({ sessionId, message: 'Where do I add a service?' }).expect(200);
-  assert.equal(response.body.source, 'knowledge_base');
-  assert.equal(response.body.knowledgeId, 'services-add');
-  assert.equal(modelCalls, 0);
-  const history = await request(app).get(`/api/vendor/aura/sessions/${sessionId}`).set(auth(f.token)).expect(200);
-  assert.equal(history.body.messages.at(-1).source, 'knowledge_base');
-});
 test('signed-in Aura chat diagnostics omit conversation, vendor profile and provider error details', async t => {
   const f = await fixture();
   const sensitive = 'AABPS1234D PRIVATE_CONTACT_9876543210';
