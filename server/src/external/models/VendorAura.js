@@ -22,6 +22,7 @@ const vendorAuraMessageSchema = new Schema(
     role: { type: String, enum: ['user', 'model'], required: true },
     content: { type: String, required: true, maxlength: 4000 },
     actions: { type: [{ label: String, to: String, _id: false }], default: [] },
+    source: { type: String, enum: ['aura', 'knowledge_base'], default: 'aura' },
   },
   { timestamps: { createdAt: true, updatedAt: false }, collection: 'vendor_aura_messages' }
 );

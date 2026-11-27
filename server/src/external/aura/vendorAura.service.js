@@ -15,6 +15,7 @@ import { vendorAuraActivity } from '../../common/auraActivity.service.js';
 import { activityAnswer } from '../../common/auraActivityAnswer.js';
 import { enquiryAnswer } from './enquiryAnswer.js';
 import { capabilityIntake } from './capabilityIntake.js';
+import { vendorKnowledgeAnswer, shouldHandoffToAura } from './vendorKnowledgeBase.js';
 
 /**
  * Vendor Aura+ chat. It answers from the vendor's own data and suggests pages.
@@ -125,7 +126,7 @@ async function ensureSession(sid, vendorId, userId) {
 }
 
 function serialize(m) {
-  return { role: m.role, content: m.content, actions: m.actions || [], createdAt: m.createdAt };
+  return { role: m.role, content: m.content, actions: m.actions || [], source: m.source || 'aura', createdAt: m.createdAt };
 }
 
 const pendingView = (p, language = 'en') => (p ? { kind: p.kind, summary: describeAction(p, language), isUpdate: Boolean(p.isUpdate) } : null);
@@ -208,10 +209,10 @@ export function nextStepText(activation, vendor, language = 'en') {
   };
 }
 
-async function saveTurn(sessionId, text, reply, actions, pending, language = 'en') {
+async function saveTurn(sessionId, text, reply, actions, pending, language = 'en', source = 'aura') {
   await VendorAuraMessage.insertMany([
     { session: sessionId, role: 'user', content: text },
-    { session: sessionId, role: 'model', content: reply, actions },
+    { session: sessionId, role: 'model', content: reply, actions, source },
   ]);
   await VendorAuraSession.updateOne({ _id: sessionId }, { $set: { updatedAt: new Date(), pending: pending ? { ...pending, idempotencyKey: pending.idempotencyKey || crypto.randomUUID() } : null, language } });
 }
@@ -243,6 +244,10 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
   const session = await ensureSession(sessionId, vendor._id, user._id);
   const recent = await VendorAuraMessage.find({ session: sessionId }).sort({ createdAt: -1, _id: -1 }).limit(HISTORY).lean();
   const history = recent.reverse().map(m => ({role:m.role,content:m.content}));
+  const lastAssistant = [...recent].reverse().find(m => m.role === 'model');
+  const continuingAura = lastAssistant?.source !== 'knowledge_base'
+    && (/\?\s*$/.test(lastAssistant?.content || '') || recent.some(m => m.role === 'model' && /team size|equipment|active service|which service|service to update|उपकरण|सेवा|সার্ভিস/i.test(m.content)))
+    && text.length < 100;
   const language = conversationLanguage(text, history, session.language);
   if (locationSelection !== undefined) {
     const location = normalizeVendorLocation(locationSelection);
@@ -327,6 +332,15 @@ export async function chat({ vendor, user, sessionId, message, page, confirm, lo
     tracker.markContextEnd();
     await saveTurn(sessionId, text, operational.reply, operational.actions, session.pending, language);
     return { ...operational, activity, pending: pendingView(session.pending, language), language, fallback: false, profileUpdated: false };
+  }
+  // Routine product help is served from the versioned local catalogue. Requests
+  // to review a case, perform work or decide a next step continue to Aura.
+  if (!shouldHandoffToAura(text) && !continuingAura) {
+    const known = vendorKnowledgeAnswer(text);
+    const reply = known?.reply || (language === 'hi' ? 'मैं Vendor OS के पेज और काम करने का तरीका समझा सकती हूँ। कृपया Profile, Services, Enquiries, Quotes, Bookings, Payments या Reviews में से विषय बताइए। किसी मामले की समीक्षा या कार्रवाई चाहिए तो उसे साफ़ लिखिए।' : language === 'bn' ? 'আমি Vendor OS-এর পৃষ্ঠা ও কাজের পদ্ধতি বুঝিয়ে দিতে পারি। Profile, Services, Enquiries, Quotes, Bookings, Payments বা Reviews-এর মধ্যে বিষয়টি বলুন। কোনো রিভিউ বা কাজ চাইলে স্পষ্ট করে লিখুন।' : 'I can help with Vendor OS pages and workflows. Please name the area you need help with, such as profile, services, enquiries, quotes, bookings, payments or reviews. For a review, action or next-step recommendation, ask Aura directly.');
+    const actions = known?.actions || [{ label: 'Open dashboard', to: '/vendor/dashboard' }];
+    await saveTurn(sessionId, text, reply, actions, null, language, 'knowledge_base');
+    return { reply, actions, source: 'knowledge_base', knowledgeId: known?.id || null, activity, pending: null, language, fallback: false, profileUpdated: false };
   }
   const context = await buildVendorContext(vendor, { page: typeof page === 'string' ? page : null });
   context.activity = activity;
