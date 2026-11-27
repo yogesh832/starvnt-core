@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { proposalRouteContext, resolveEventProposal } from './proposalRouteState.js';
+import './proposal.css';
 import Icon from '../../components/Icon.jsx';
 import { customerApi, errorText } from './customerApi.js';
 import { BackLink, Empty, PageSkeleton, Tabs, useLoad } from './customerUi.jsx';
@@ -22,15 +24,21 @@ function StatusChip({ status, kind }) {
 }
 
 async function openPdf(proposalId, version, download, filename) {
-  const blob = await customerApi.proposalPdf(proposalId, version);
+  // Open during the click gesture; opening after an awaited fetch is blocked
+  // by browsers with strict popup protection.
+  const preview = download ? null : window.open('about:blank', '_blank');
+  if (preview) preview.opener = null;
+  let blob;
+  try { blob = await customerApi.proposalPdf(proposalId, version); }
+  catch (error) { preview?.close(); throw error; }
   const url = URL.createObjectURL(blob);
-  if (download) {
+  if (download || !preview) {
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.click();
   } else {
-    window.open(url, '_blank', 'noopener');
+    preview.location.replace(url);
   }
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
@@ -145,7 +153,7 @@ function ProposalPreparingCard({ event, eventId }) {
       <div className="p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em]" style={{ color: WINE }}>My event proposal</div>
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.18em]" style={{ color: 'var(--proposal-text-accent, #5B1F2E)' }}>My event proposal</div>
             <h2 className="mt-1 truncate font-serif text-xl font-bold text-navy dark:text-white">{event?.title || 'Your proposal'}</h2>
             <p className="mt-1 text-xs text-muted dark:text-slate-400">
               {detailsDone
@@ -159,7 +167,7 @@ function ProposalPreparingCard({ event, eventId }) {
             <Link to={`/customer/aura?event=${encodeURIComponent(eventId || '')}&ask=${encodeURIComponent('When will my event proposal be ready?')}`} className="rounded-xl border border-[#E7DCCB] bg-white px-4 py-2 text-sm font-bold text-navy">Ask Aura+</Link>
           </div>
         </div>
-        {busy && <p className="mt-3 text-xs font-semibold" style={{ color: WINE }}>Preparing your preliminary proposal. This takes a few seconds…</p>}
+        {busy && <p className="mt-3 text-xs font-semibold" style={{ color: 'var(--proposal-text-accent, #5B1F2E)' }}>Preparing your preliminary proposal. This takes a few seconds…</p>}
         {error && (
           <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
             <p className="font-bold">{error.message}</p>
@@ -176,7 +184,7 @@ function ProposalPreparingCard({ event, eventId }) {
                   {title}
                 </div>
                 <p className="mt-1 text-muted dark:text-slate-400">{sub}</p>
-                {state === 'now' && <p className="mt-1 font-bold" style={{ color: WINE }}>In progress</p>}
+                {state === 'now' && <p className="mt-1 font-bold" style={{ color: 'var(--proposal-text-accent, #5B1F2E)' }}>In progress</p>}
               </li>
             );
           })}
@@ -200,7 +208,7 @@ export function MyProposalCard({ eventId = null, event = null }) {
     <section className="overflow-hidden rounded-2xl border border-[#E7DCCB] bg-[#FBF6EE] shadow-sm dark:border-gray-800 dark:bg-[#161926]">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em]" style={{ color: WINE }}>My event proposal</div>
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em]" style={{ color: 'var(--proposal-text-accent, #5B1F2E)' }}>My event proposal</div>
           <h2 className="mt-1 truncate font-serif text-xl font-bold text-navy dark:text-white">{proposal.eventTitle}</h2>
           <p className="mt-1 text-xs text-muted dark:text-slate-400">
             {proposal.proposalNumber} · Version {proposal.version}
@@ -229,7 +237,7 @@ export function MyProposalCard({ eventId = null, event = null }) {
 function Section({ title, children }) {
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-[#161926]">
-      <h2 className="font-serif text-lg font-bold" style={{ color: WINE }}>{title}</h2>
+      <h2 className="font-serif text-lg font-bold" style={{ color: 'var(--proposal-text-accent, #5B1F2E)' }}>{title}</h2>
       <div className="mt-3 text-sm text-navy dark:text-slate-200">{children}</div>
     </section>
   );
@@ -264,7 +272,7 @@ function Services({ s, proposalId, version }) {
           {svc.items.length > 0 && <ul className="list-disc space-y-1 pl-5">{svc.items.map((i) => <li key={i.name}>{i.name}{i.quantity > 1 ? ` × ${i.quantity}${i.unit ? ` ${i.unit}` : ''}` : ''}</li>)}</ul>}
           {svc.deliverables.length > 0 && <p className="mt-3"><span className="font-bold">Deliverables:</span> {svc.deliverables.join('; ')}</p>}
           {svc.exclusions.length > 0 && <p className="mt-1 text-muted"><span className="font-bold">Not included:</span> {svc.exclusions.join('; ')}</p>}
-          {!svc.confirmed && <p className="mt-2 inline-block rounded-lg border px-2 py-1 text-xs font-bold" style={{ color: WINE, borderColor: WINE }}>Vendor confirmation pending</p>}
+          {!svc.confirmed && <p className="mt-2 inline-block rounded-lg border px-2 py-1 text-xs font-bold" style={{ color: 'var(--proposal-text-accent, #5B1F2E)', borderColor: WINE }}>Vendor confirmation pending</p>}
         </Section>
       ))}
     </div>
@@ -350,7 +358,7 @@ function AskAura({ proposalId, canChange, onDraftChange }) {
             <p className="font-semibold text-navy dark:text-white">You: {m.q}</p>
             <p className="rounded-xl bg-[#FBF6EE] p-3 text-navy dark:bg-white/5 dark:text-slate-200">{m.answer}</p>
             {m.suggestedChange && canChange && (
-              <div className="text-xs text-muted">{m.suggestedChange.note} <button type="button" className="font-bold underline" style={{ color: WINE }} onClick={() => onDraftChange(m.suggestedChange.message)}>Prepare change request</button></div>
+              <div className="text-xs text-muted">{m.suggestedChange.note} <button type="button" className="font-bold underline" style={{ color: 'var(--proposal-text-accent, #5B1F2E)' }} onClick={() => onDraftChange(m.suggestedChange.message)}>Prepare change request</button></div>
             )}
           </div>
         ))}
@@ -387,6 +395,7 @@ function ChangeForm({ proposalId, version, onDone, initial = '' }) {
 
 export default function ProposalPage() {
   const { id } = useParams();
+  const { pathname } = useLocation();
   const [params, setParams] = useSearchParams();
   const version = params.get('v');
   const eventParam = params.get('event');
@@ -394,26 +403,11 @@ export default function ProposalPage() {
 
   // Resolve target proposal ID
   const { data: resolution, loading: resolving, error: resolveError } = useLoad(async () => {
-    if (proposalParam) return { proposalId: proposalParam };
-    if (id && id.startsWith('PRP-')) return { proposalId: id };
-
-    const res = await customerApi.proposals().catch(() => ({ proposals: [] }));
-    const list = res.proposals || [];
-    const targetEventId = eventParam || (id && !id.startsWith('PRP-') ? id : null);
-
-    let match = null;
-    if (targetEventId) {
-      match = list.find((p) => String(p.eventId) === String(targetEventId));
-    } else if (list.length > 0) {
-      match = list[0];
-    }
-
-    return {
-      proposalId: match?.proposalId || (id && id.startsWith('PRP-') ? id : null),
-      targetEventId,
-      hasProposals: list.length > 0,
-    };
-  }, [id, eventParam, proposalParam]);
+    const context = proposalRouteContext(pathname, { id, eventParam, proposalParam });
+    if (context.proposalId) return context;
+    const res = await customerApi.proposals();
+    return resolveEventProposal(context, res.proposals || []);
+  }, [pathname, id, eventParam, proposalParam]);
 
   const proposalId = resolution?.proposalId;
   const { data, error, loading, reload } = useLoad(
@@ -428,6 +422,7 @@ export default function ProposalPage() {
   const [actionError, setActionError] = useState('');
 
   if (resolving || (proposalId && loading && !data)) return <PageSkeleton title="Loading your proposal…" />;
+  if (resolveError) return <Empty title="Proposal unavailable">{errorText(resolveError)}</Empty>;
 
   if (!proposalId && !resolving) {
     return (
@@ -481,7 +476,7 @@ export default function ProposalPage() {
       )}
 
       <header className="rounded-2xl border border-[#E7DCCB] bg-[#FBF6EE] p-6 text-center dark:border-gray-800 dark:bg-[#161926]">
-        <div className="text-[11px] font-extrabold uppercase tracking-[0.3em]" style={{ color: WINE }}>STARVNT Proposal Studio</div>
+        <div className="text-[11px] font-extrabold uppercase tracking-[0.3em]" style={{ color: 'var(--proposal-text-accent, #5B1F2E)' }}>STARVNT Proposal Studio</div>
         <h1 className="mt-2 font-serif text-2xl font-bold text-navy sm:text-3xl dark:text-white">{s.event.title || `${s.event.typeLabel} Experience`}</h1>
         <p className="mt-1 text-sm text-muted">{data.proposalNumber} · Version {data.version}</p>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2"><StatusChip status={data.status} kind={data.kind} /></div>
@@ -499,8 +494,8 @@ export default function ProposalPage() {
         { key: 'history', label: 'History' },
       ]} />
 
-      {tab === 'overview' && <Overview s={s} proposalId={id} version={data.version} />}
-      {tab === 'services' && <Services s={s} proposalId={id} version={data.version} />}
+      {tab === 'overview' && <Overview s={s} proposalId={proposalId} version={data.version} />}
+      {tab === 'services' && <Services s={s} proposalId={proposalId} version={data.version} />}
       {tab === 'budget' && <Budget s={s} />}
       {tab === 'terms' && <Terms s={s} />}
       {tab === 'pending' && <Pending s={s} />}
